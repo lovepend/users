@@ -1,16 +1,8 @@
 {
   "users": [
     {
-      "id": "user01",
-      "password": "01"
-    },
-    {
-      "id": "user11",
-      "password": "02"
-    },
-    {
-      "id": "user21",
-      "password": "03"
+      "id": "ulmocam",
+      "password": "1027"
     }
   ]
 }
