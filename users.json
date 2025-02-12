@@ -2,9 +2,9 @@
   "users": [
     {
       "id": "ulmocam",
-      "password": "1027",
-      "min": "52 ",
-      "sec": "00"
+      "password": "1027"
+      "min": "59 ",
+      "sec": "50"
     }
   ]
 }
