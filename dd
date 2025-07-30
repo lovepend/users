@@ -1,0 +1,85 @@
+EDP 고도화 이담 일정 관리										Note. 개발 담당자는 업무 Load에 따라 변경 될수 있음
+No	Scope	개발 항목 상세 NO	Title	"상태 (WBS 기준)
+Only 참조"	"담당자 (WBS 기준)
+Only 참조"	"Pi 
+완료 유무"	"이담 
+개발 Plan"	"이담 
+개발 유무"	"이담
+담당 개발자"	Remark
+1	Custom Page개발(조선/공통)	-	1) Custom Page 공통	완료	이동권	완료	4/7/2025	완료	박성규	~Ing (실시간 반영)
+2	Custom Page개발(조선/공통)	060	2) SPS	개발	조순제	진행중		개발	김경부	Check List 기능 개발 
+3	Custom Page개발(조선/공통)	059	2) Equip Master	완료	이창국	완료		완료	박성규	Dll 개발 후 진행
+4	Custom Page개발(조선/공통)	059	3) Equip Master PDF Control	미착수	이창국	미착수		미착수	박성규	Dll 개발 후 진행
+5	Custom Page개발(조선/공통)	??	4) SEIS	개발	이진영	미착수		미착수	정동진	
+6	Custom Page개발(조선/공통)	110	5) LO Chart	미착수	이창국	미착수		미착수	김경부	
+7	Custom Page개발(해양)	159	1) MMS	개발	심성도	진행중		개발	박형석	Setup 화면 개발 중
+8	Custom Page개발(해양)	200	2) CSM	개발	최준철	진행중		개발	이진호	Adapter 및 Broker 개발 이후 Data 비교 기능 개발
+9	Custom Page개발(해양)	090	3) ISO	개발	심성도	미착수		미착수	이진호	
+10	Custom Page개발(해양)	081	4) Equipment & Specialty ITEM Catalogue	개발	천봉경	미착수		미착수	박성규	
+11	Custom Page개발(해양)	??	5) Ex. Register	미착수	이동권	미착수		미착수	미지정	
+12	Data Schema & Setup		1) Relation	완료	이동권	완료		완료	이진호	V1.0.06.19 Setup 화면 개발 완료 / 실제 화면단에서 기능 개발
+13	Data Schema & Setup	063	2) Project 유사율	미착수	이동권	미착수		미착수	박성규	
+14	Data Schema & Setup	??	3) Data Copy	완료	이동권	완료		완료	이진호	V1.0.07.17
+15	Data Schema & Setup	??	4) Project Join 테이블	완료	이동권	완료	6/19/2025	완료	박성규/최우영	V1.0.06.19
+16	Data Schema & Setup	??	5) Adapter Setup 고도화	완료	이진영	완료	4/18/2025	완료	정동진	V1.0.04.10
+17	Data Schema & Setup	073,182	6) Data Validation, Schema Setup 고도화	완료	이동권	완료	4/25/2025	완료	ALL	V1.0.04.10
+18	Data Schema & Setup	180	7) Data Schema Change	완료	이동권	완료	4/25/2025	완료	ALL	V1.0.04.10
+19	Data Schema & Setup	??	8) Series선 Schema 개발	지연	이동권	미착수		미착수	정동진	
+20	Common Controls	165	1) Spread List/Item 복합	지연	김국진	진행중		개발	김경부/최우영	
+21	Common Controls	??	2) 사용자정의 함수(Macro)	완료	김국진	완료		완료	-	V1.0.06.19
+22	Common Controls	164	3) Class별 Cell Color및 Read only, Status	완료	김국진	완료	4/7/2025	완료	최우영	V1.0.04.10
+23	Common Controls	167	4) 열순서 고정 / 단축키 / 기타 편의 기능	완료	김국진	완료	4/7/2025	완료	최우영	V1.0.04.10
+24	Common Controls	183	5) Spread Bi	개발	김국진	완료	5/15/2025	개발	최우영	
+25	Common Controls	??	6) Relation Viewer	개발	이동권	진행중	6/19/2025	개발	이진호	Worksheet 화면에서 기능 반영 개발
+26	Common Controls	114	7) Importer 고도화	완료	김국진	진행중		개발	정동진/최우영	SEP팀에서 기본적으로 요구하는 기능은 완료 / 추가 Pi 반영은 아직
+27	Common Controls	201	8) UI개선	개발	김국진	진행중		개발	ALL	~Ing (실시간 반영)
+28	Common Controls	??	9) MDR Setup 기능 개발	지연	"김국진
+/도성록"	미착수		미착수	미지정	
+29	Common Controls	??	10) Status, Color 공통 모듈화	완료	김국진	완료		완료	박성규	
+30	Report	161	1) 공통 컨트롤 개선 요청 사항 및 안정화	개발	김국진	미착수		미착수	김경부	
+31	Report	??	1) Report Setup 화면 개발	지연	도성록	미착수		미착수	김경부	
+32	Report	??	2) In-Consistency Report	지연	도성록	미착수		미착수	김경부	
+33	Report	??	3) Data Schema Change Report	지연	도성록	미착수		미착수	김경부	
+34	Mailing	064	1) Mailing Report Setup 화면 개발	지연	도성록	미착수		미착수	박성규	
+35	Data Dashboard	056	1) Data Dash Board 개발	지연	도성록	미착수		미착수	박성규	
+36	Data Dashboard	056	2) Dash board Warning기능 개발	지연	도성록	미착수		미착수	박성규	
+37	Intelligent 2D Viewer	034,043	2) Importer 개발	개발	조승태	진행중		개발	박형석	UI 구성 중
+38	3D Viewer	128	2) Importer 개발	미착수	조승태	진행중		개발	박형석	UI 구성 중
+39	Comment 협업	041,042	1) Comments Web Viewer 개발 및 Embedding	지연	조승태	미착수		미착수	미지정	
+40	Add (25-04-01)	161	161_S-EDP 개발 협의 항목	개발	김국진	완료	5/16/2025	개발	ALL	진행중
+41	Add (25-04-01)	Adapter	Adapter Mapping	완료	이진영	완료		완료	정동진	V1.0.04.17
+42	Add (25-04-01)	Adapter	Adapter Custom	완료	이진영	완료		완료	정동진	V1.0.04.17
+43	Add (25-02-04)	Status	Status (공통모듈)	완료	김국진	완료		완료	최우영	V1.0.04.10
+44	Add (25-04-01)	Register	복합 Register	완료	이동권	완료	4/30/2025	완료	이진호/최우영	V1.0.05.29
+45	Add (25-04-01)	PBS	PBS  Setup	완료	이동권	완료	4/18/2025	완료	정동진	V1.0.04.24
+46	Add (25-04-01)	PBS	PBS  Filter	완료	이동권	완료	4/25/2025	완료	최우영	V1.0.05.08
+47	Add (25-04-01)	Register	Register Value Limitation (Min/Max 설정) 	완료	이동권	완료	4/18/2025	완료	최우영	V1.0.04.17
+48	Add (25-04-01)	Master Attribute	Number형 Attribute에 String 입력 가능 기능	완료	이동권	완료	4/18/2025	완료	최우영	V1.0.05.22
+49	Add (25-04-01)	Save	Row 단위 Refresh 기능	완료	김국진	완료	4/18/2025	완료	최우영	V1.0.04.17
+50	Add (25-04-18)	Common Data	계산되는 Cell 하늘색/값 안보이는 현상	완료	김국진	완료	4/18/2025	완료	최우영	
+51	Add (25-04-18)	Tagtype	Tag Split	개발	이동권	진행중		개발	최우영	Pi 필요
+52	Add (25-05-15)	Template	Template Design / Grid 화면에서 칼럼 순서 고도화	완료	이동권	완료	5/15/2025	완료	김경부	V1.0.05.15
+53	Add (25-05-15)	Com Register	복합 Register UOM 표현 방법 및 공통 UOM 표현	개발	이동권	진행중		미착수	최우영	Pi 필요
+54	Add (25-05-15)	Register	Register Attribute Value Map (Pub & Work) 필터	완료	이동권	완료	5/15/2025	완료	-	V1.0.05.15
+55	Add (25-05-15)	Register	Register Attribute Value Map Like 문 추가	완료	이동권	완료	5/22/2025	완료	이진호	V1.0.05.22
+56	Add (25-05-15)	Register	Register 하위 Class 세분화 기능	완료	이동권	완료	5/29/2025	완료	이진호	V1.0.06.19
+57	Add (25-04-18)	Common Data	CommonClass ID 및 Tag NO 변경 (Class Desc / Item NO)	완료	김국진	완료	5/15/2025	완료	최우영/김경부	V1.0.05.15
+58	Add (25-05-15)	Spread List	Spread List 수식 참조값 (Class ID 기준으로 입력)	완료	김국진	완료	5/15/2025	완료	최우영	결론 : Class ID로 수식 함수 정의 할것 
+59	Add (25-04-18)	Caseset	Caseset Join Table 기능 개발	완료	이동권	완료	6/19/2025	완료	최우영	V1.0.06.19
+60	Add (25-05-08)	Manual	Manual 추가 및 구성 개발	완료	이동권	완료	5/15/2025	완료	박성규	V1.0.05.15
+61	Add (25-05-08)	Report	Report (역순으로 찾아가기)	완료	이동권	완료		완료	박성규	
+62	Add (25-05-15)	Register	Register Attribute Value Map PBS Attribute 추가	완료	이동권	완료	5/22/2025	완료	이진호	V1.0.05.22
+63	Add (25-05-15)	Tagtype	같은 Attribute를 Tag Type에서 다르게 Reg Exp 사용	완료	이동권	완료	5/22/2025	완료	이진호	V1.0.05.29
+64	Add (25-05-15)	Mail	Mail 및 결제 시스템 개발	미착수	이동권	미착수	6/30/2025	개발	박성규	보안 이슈로 개발팀 확인 필요
+65	Add (25-05-28)	Save	Save 및 Publish 진행시 200 넘을시 전체 진행	완료	이동권	완료	5/29/2025	완료	최우영	V1.0.05.29
+66	Add (25-06-04)	Grid	Grid / Spread Filter 일괄 해제 기능 요정	미착수	이동권	미착수		미착수	최우영	개발 유무 검토 필요 (Pass) "F5 사용"
+67	Add (25-06-04)	Join	Project Data Join 	완료	이동권	완료	6/19/2025	완료	박성규/최우영	V1.0.06.19
+68	Add (25-06-04)	Copy	Project Data Copy	완료	이동권	완료		완료	박성규/최우영	V1.0.07.17
+69	Add (25-06-11)	개발	Report - Validation 기능 개발	개발	이동권	진행중		미착수	최우영/김경부	
+70	Add (25-06-11)	WorkSheet	선택된 영역에 대해서 Pub / Work Data 우선 반영 기능	완료	이동권	완료	6/19/2025	완료	최우영/김경부	V1.0.06.19
+71	Add (25-06-11)	Common Data	Pub (Delete : Flag) Data 반영 (Status 포함)	개발	이동권	진행중	6/26/2025	미착수	최우영/김경부	V1.0.06.26
+72	Add (25-06-12)	Common Data	Spread Ctrl+Enter	완료	이동권	완료	6/26/2025	완료	최우영/김경부	V1.0.06.26
+73	Add (25-06-12)	Common Data	Save or Pub 실패시 Log 이력 	미착수	이동권	미착수	6/26/2025	미착수	-	
+74	Add (25-06-12)	Register	Register Attribute Value Map에서 Work Pub Data Filtter 문제	미착수	이동권	미착수		미착수	-	
+75	Add (25-07-10)	Adapter	Adapter 및 broker 반영 (구분해서 데이터 입력)	완료	이진영	완료	6/26/2025	완료	최우영	V1.0.07.17
+76	Add (25-07-17)	Adapter	Broker에서 URL 호출	개발	이진영	완료	7/17/2025	개발	최우영	V1.0.07.24
