@@ -1,114 +1,24 @@
-import { fileURLToPath, URL } from 'url'
+import pdfkit
+import os
 
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
-import vueJsx from '@vitejs/plugin-vue-jsx'
-import os from 'os'
-import fs from 'fs'
-import path from 'path'
-import { execSync } from 'child_process'
+# 1. HTML 파일들이 있는 경로 설정
+html_dir = './out'  # JSDoc 빌드 결과 폴더
+html_files = [os.path.join(html_dir, f) for f in os.listdir(html_dir) if f.endswith('.html')]
 
-const buildDir = 'dist'
-const d = new Date()
-const version =
-  d.getFullYear() + '.' + (d.getMonth() + 1) + '.' + d.getDate() + '.' + d.getHours() + '.' + d.getMinutes()
+# 2. 메인 파일(index.html)을 가장 앞으로 정렬 (선택 사항)
+html_files.sort() 
 
-// https://vitejs.dev/config/
-export default defineConfig({
-  base: '/portal-test/',
-  plugins: [
-    vue({
-      template: {
-        compilerOptions: {
-          // 여기에서 Web Component 태그 이름을 지정합니다.
-          // 지정된 이름은 Vue 컴포넌트로 해석되지 않고 그대로 DOM 요소로 처리됩니다.
-          isCustomElement: tag => ['tab-manager', 'svg-sidebar', 'mini-viewer'].includes(tag),
-        },
-      },
-    }),
-    vueJsx(),
-    {
-      name: 'build-meta-information',
-      closeBundle() {
-        try {
-          const fileName = 'build-meta.json'
-          const buildPath = path.resolve(__dirname, buildDir)
-          const filePath = path.join(buildPath, fileName)
-          let gitCommit = ''
-          let gitBranch = ''
-          try {
-            gitCommit = execSync('git rev-parse HEAD').toString().trim()
-            gitBranch = execSync('git rev-parse --abbrev-ref HEAD').toString().trim()
-          } catch (error) {
-            console.warn(`[Vite Plugin Error] Get Git Information`)
-          }
-          const meta = {
-            buildTime: d.toLocaleString(),
-            gitCommit,
-            gitBranch,
-            nodeVersion: process.version,
-            mode: process.env.NODE_ENV || 'production',
-            builtBy: os.userInfo().username,
-          }
-          if (!fs.existsSync(buildPath)) {
-            fs.mkdirSync(buildPath, { recursive: true })
-          }
-          fs.writeFileSync(filePath, JSON.stringify(meta, null, 2))
-          console.log(`[Vite] Write build-meta to ${filePath}`)
-        } catch (err) {
-          console.error(`[Vite Plugin Error] Write build-meta: `, err)
-        }
-      },
-    },
-  ],
-  esbuild: {
-    // minify시 css unicode깨짐 오류로 minify 분리 사용
-    charset: 'utf8',
-  },
-  css: {
-    // minify시 css unicode깨짐 오류로 minify 분리 사용
-    transformer: 'postcss',
-  },
-  build: {
-    // minify시 css unicode깨짐 오류로 minify 분리 사용
-    minify: 'terser',
-    cssMinify: false,
-    // 청크 크기 제한 증가로 분할 최소화
-    chunkSizeWarningLimit: 1000,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          // 라이브러리 청크 분리 최적화
-          if (id.includes('node_modules')) {
-            return 'vendor'
-          }
-        },
-        entryFileNames: `[name].${version}.js`,
-        chunkFileNames: `[name].${version}.js`,
-        assetFileNames: `[name].${version}.[ext]`,
-      },
-    },
-  },
-  resolve: {
-    alias: {
-      '@': fileURLToPath(new URL('./src', import.meta.url)),
-    },
-    extensions: ['.js', '.ts', '.vue'], // 확장자 자동 해석 설정
-  },
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://sedpwebapi.ship.samsung.co.kr:81/api',
-        changeOrigin: true,
-        rewrite: path => path.replace(/^\/api/, ''),
-        secure: false,
-        ws: true,
-      },
-    },
-  },
-  optimizeDeps: {
-    exclude: ['vue-demi'],
-  },
-  assetsInclude: ['**/*.xlsx', '**/*.pdf'],
-  publicDir: 'public', // 기본값은 'public'이지만 명시적으로 설정
-})
+# 3. PDF 변환 옵션 설정
+options = {
+    'enable-local-file-access': None, # 로컬 CSS/이미지 허용
+    'encoding': "UTF-8",
+    'margin-top': '0.75in',
+    'footer-right': '[page] of [topage]',
+}
+
+# 4. 변환 실행 (리스트를 통째로 넣으면 하나로 합쳐집니다)
+pdfkit.from_file(html_files, 'jsdoc_documentation.pdf', options=options)
+
+
+
+pip install pdfkit
