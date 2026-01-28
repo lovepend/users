@@ -1,24 +1,16 @@
-import pdfkit
-import os
-
-# 1. HTML 파일들이 있는 경로 설정
-html_dir = './out'  # JSDoc 빌드 결과 폴더
-html_files = [os.path.join(html_dir, f) for f in os.listdir(html_dir) if f.endswith('.html')]
-
-# 2. 메인 파일(index.html)을 가장 앞으로 정렬 (선택 사항)
-html_files.sort() 
-
-# 3. PDF 변환 옵션 설정
-options = {
-    'enable-local-file-access': None, # 로컬 CSS/이미지 허용
-    'encoding': "UTF-8",
-    'margin-top': '0.75in',
-    'footer-right': '[page] of [topage]',
-}
-
-# 4. 변환 실행 (리스트를 통째로 넣으면 하나로 합쳐집니다)
-pdfkit.from_file(html_files, 'jsdoc_documentation.pdf', options=options)
-
-
-
-pip install pdfkit
+' 폼 내부의 확인 버튼 클릭 시 예시
+Private Sub btnOk_Click()
+    Dim selectedDates As String
+    ' (가정) 리스트박스나 캘린더에서 선택된 날짜들을 루프 돌며 합침
+    For i = 0 To ListBox1.ListCount - 1
+        If ListBox1.Selected(i) Then
+            selectedDates = selectedDates & ListBox1.List(i) & ", "
+        End If
+    Next i
+    
+    ' 마지막 쉼표 제거 후 셀에 입력
+    If Len(selectedDates) > 0 Then
+        ActiveCell.Value = Left(selectedDates, Len(selectedDates) - 2)
+    End If
+    Unload Me
+End Sub
