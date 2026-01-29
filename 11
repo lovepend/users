@@ -1,65 +1,74 @@
 {
-      field: 'UOM_ID',
-      headerName: 'UOM',
-      minWidth: 80,
-      flex: 1,
-      headerTooltip: 'Please select UOMGroup first.',
-      cellClass: params => {
-        const dataItem = params.data
-        const valType = dataItem?.VAL_TYPE
-        // VAL_TYPE이 'NUMBER'일 때만 편집 가능 (클래스 없음), 아니면 'agReadOnly' 클래스 적용
-        return valType === VAL_TYPES.NUMBER.VALUE ? '' : 'agReadOnly'
-      },
-      editable: params => {
-        const dataItem = params.data
-        if (dataItem && dataItem.PROJ_NO === currentProjNo.value) {
-          const valType = dataItem.VAL_TYPE
-          // VAL_TYPE이 'NUMBER'일 때만 편집 가능하도록 설정
-          return valType === VAL_TYPES.NUMBER.VALUE
-        }
-        return false
-      },
-      cellRenderer: params => {
-        const dataItem = params.data
-        const uomGroup = dataItem?.UOM_GROUP
-        const valType = dataItem?.VAL_TYPE
-        const displayValue = params.valueFormatted || params.value || ''
-        if (!dataItem || dataItem.PROJ_NO !== currentProjNo.value) {
-          return displayValue
-        }
-        // UOM_GROUP이 있거나 VAL_TYPE이 'NUMBER'일 때 'dropbox' 스타일로 렌더링
-        if (uomGroup || valType === VAL_TYPES.NUMBER.VALUE) {
-          return makeComboRender(displayValue)
-        }
-        return displayValue // 그 외의 경우 displayValue 반환
-      },
-      singleClickEdit: true,
-      cellEditorPopup: true,
-      cellEditorPopupPosition: 'over',
-      // 편집 가능할 때는 무조건 agDropBoxEditor를 사용
-      cellEditor: 'agDropBoxEditor',
-      valueFormatter: function (params) {
-        const value = params.value
-        if (!value) { return }
-        return uomListRef.value?.find(({ UOM_ID, SYMBOL }) => UOM_ID === value || SYMBOL === value)?.SYMBOL
-      },
-      cellEditorParams: function (params) {
-        // 이 파라미터는 editable이 true일 때만 호출.
-        const dataItem = params.data
-        const uomGroup = dataItem?.UOM_GROUP
-        let valueList = []
+  field: 'UOM_ID',
+  headerName: 'UOM',
+  minWidth: 80,
+  flex: 1,
+  headerTooltip: 'Please select UOMGroup first.',
+  cellClass: params => {
+    const dataItem = params.data
+    const valType = dataItem?.VAL_TYPE
+    return valType === VAL_TYPES.NUMBER.VALUE ? '' : 'agReadOnly'
+  },
+  editable: params => {
+    const dataItem = params.data
+    if (dataItem && dataItem.PROJ_NO === currentProjNo.value) {
+      const valType = dataItem.VAL_TYPE
+      return valType === VAL_TYPES.NUMBER.VALUE
+    }
+    return false
+  },
+  cellRenderer: params => {
+    const dataItem = params.data
+    const uomGroup = dataItem?.UOM_GROUP
+    const valType = dataItem?.VAL_TYPE
+    // valueFormatter가 적용된 SYMBOL 값을 우선 표시
+    const displayValue = params.valueFormatted || params.value || ''
+    
+    if (!dataItem || dataItem.PROJ_NO !== currentProjNo.value) {
+      return displayValue
+    }
+    if (uomGroup || valType === VAL_TYPES.NUMBER.VALUE) {
+      return makeComboRender(displayValue)
+    }
+    return displayValue
+  },
+  singleClickEdit: true,
+  cellEditorPopup: true,
+  cellEditorPopupPosition: 'over',
+  cellEditor: 'agDropBoxEditor',
+  
+  // 1. 화면에 보여줄 때: ID를 SYMBOL로 변환
+  valueFormatter: function (params) {
+    const value = params.value
+    if (!value) return ''
+    const found = uomListRef.value?.find(item => item.UOM_ID === value || item.SYMBOL === value)
+    return found ? found.SYMBOL : value
+  },
 
-        // UOM_GROUP이 있을 때 valueList 생성 로직 실행
-        if (dataItem && uomGroup) {
-          valueList = uomListRef.value?.filter(({ GROUP }) => GROUP === uomGroup).map(({ SYMBOL }) => SYMBOL) ?? []
-        }
+  // 2. 저장할 때: 선택된 SYMBOL을 다시 ID로 변환하여 field('UOM_ID')에 저장
+  valueParser: function (params) {
+    const newValue = params.newValue
+    const found = uomListRef.value?.find(item => item.SYMBOL === newValue)
+    return found ? found.UOM_ID : newValue
+  },
 
-        // 'NUMBER'일 때 agDropBoxEditor 파라미터
-        return {
-          listData: valueList, // 위에서 필터링된 valueList를 listData로 사용
-          placeholder: 'Select Code',
-          popupDropBoxHeight: 130,
-        }
-      },
-      tooltipValueGetter: params => params.valueFormatted,
-    },
+  cellEditorParams: function (params) {
+    const dataItem = params.data
+    const uomGroup = dataItem?.UOM_GROUP
+    let valueList = []
+
+    // 3. 사용자에게는 SYMBOL 리스트를 보여줌
+    if (dataItem && uomGroup) {
+      valueList = uomListRef.value
+        ?.filter(({ GROUP }) => GROUP === uomGroup)
+        .map(({ SYMBOL }) => SYMBOL) ?? []
+    }
+
+    return {
+      listData: valueList,
+      placeholder: 'Select Code',
+      popupDropBoxHeight: 130,
+    }
+  },
+  tooltipValueGetter: params => params.valueFormatted,
+}
