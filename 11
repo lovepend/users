@@ -1,43 +1,52 @@
 case 'attribute_map_tab':
+  // 1. 그리드 편집을 종료하고 현재 입력된 데이터를 확정
   gridApi_MapAttr.value.stopEditing()
+
   gridApi_MapAttr.value.forEachNode(node => {
     const mapAttrId = node.data.ATT_ID
-    const operator = node.data.OPER // 현재 연산자 가져오기
+    const operator = node.data.OPER // 현재 선택된 연산자 (EQUALS, IN, RANGE 등)
     
-    // 마스터어트리뷰트에서 해당 ATT_ID의 VAL_TYPE 조회
+    // 마스터 어트리뷰트 리스트에서 현재 항목의 상세 정보(데이터 타입) 가져오기
     const masterAttr = allAttributeList.value.find(attr => attr.ATT_ID === mapAttrId)
     const isMasterAttrNumberType = masterAttr && masterAttr.VAL_TYPE === 'NUMBER'
     const isMasterAttrListType = masterAttr && masterAttr.VAL_TYPE === 'LIST'
     
-    // Attributes Map에서 해당 ATT_ID의 UOM_ID 값이 있는지 확인
+    // 현재 선택된 행의 UOM(단위) 정보 확인
     const linkedAttr = lastSelectecRegiData.value.LNK_ATT
       ? lastSelectecRegiData.value.LNK_ATT.find(item => item.ATT_ID === mapAttrId)
       : null
     const hasUomId = linkedAttr && linkedAttr.UOM_ID
     const currentUomId = hasUomId ? linkedAttr.UOM_ID : null
 
-    // UOM_ID가 있을 때는 반드시 Master Attribute가 VAL_TYPE이 NUMBER or LIST 여야 함
+    /**
+     * [유효성 검사 1] UOM이 설정된 경우 데이터 타입 제한
+     * UOM(단위)이 연결되어 있다면 해당 속성은 반드시 NUMBER 또는 LIST 타입이어야 함
+     */
     if (hasUomId && !(isMasterAttrNumberType || isMasterAttrListType)) {
       failMsg.push(`The Value Type for that ${mapAttrId} must be "NUMBER" or "LIST".`)
       failCount++
       return 
     }
 
+    /**
+     * [유효성 검사 2] 숫자 형식 및 IN 연산자 조건 검사
+     */
     if (hasUomId && (isMasterAttrNumberType || isMasterAttrListType)) {
       const rawValueToValidate = String(node.data.VALUE || '') 
 
-      // 1. 숫자/소수점/쉼표/공백 형식 정규식 검증
+      // 정규 표현식: 숫자, 소수점, 쉼표, 공백이 적절히 조합된 리스트 형식인지 검사
+      // 예: "0.1, 0.2" (통과), "0.1.1" (실패)
       const numberCommaAndSpaceRegex = /^\s*[0-9]+(?:\.[0-9]+)?(?:\s*,\s*[0-9]+(?:\.[0-9]+)?)*\s*$/
       
       if (rawValueToValidate.trim() !== '') {
-        // 기본 형식 검사
+        // 기본 숫자 패턴 일치 여부 확인
         if (!numberCommaAndSpaceRegex.test(rawValueToValidate)) {
           failMsg.push(`For attribute ${mapAttrId}, the 'VALUE' must contain only numbers and commas.`)
           failCount++
           return 
         }
 
-        // [추가 포인트] IN 연산자일 때 최소 2개 이상의 값(쉼표 포함)이 있는지 검사
+        // [핵심 수정] IN 연산자는 반드시 2개 이상의 값을 나열해야 함 (쉼표 필수 포함)
         if (operator === 'IN' && !rawValueToValidate.includes(',')) {
           failMsg.push(`For 'IN' operator in attribute ${mapAttrId}, at least two values separated by a comma are required.`)
           failCount++
@@ -46,7 +55,9 @@ case 'attribute_map_tab':
       }
     }
 
-    // NEW_TAG_YN이 false일 때는 DEF_VAL 검사X
+    /**
+     * [유효성 검사 3] 필수값(Default Value) 체크
+     */
     if (lastSelectecRegiData.value.NEW_TAG_YN !== false) {
       if (mapAttrId && mappedLnkAttDefValues.has(mapAttrId)) {
         const defVal = mappedLnkAttDefValues.get(mapAttrId)
@@ -57,7 +68,10 @@ case 'attribute_map_tab':
       }
     }
 
-    // VAL_TYPE이 'BOOL' 처리
+    /**
+     * [데이터 가공 1] BOOL 타입 처리
+     * boolean 값을 백엔드 저장 형식인 문자열 "true"/"false"로 통일
+     */
     const val_type = linkedAttrTypeMap.get(node.data.ATT_ID)
     if (val_type === 'BOOL') {
       const value = node.data.VALUE
@@ -72,26 +86,36 @@ case 'attribute_map_tab':
       }
     }
 
+    /**
+     * [데이터 가공 2] 연산자 및 UOM 변환 처리 (저장 전 최종 데이터 생성)
+     */
     let rawValue = node.data.VALUE
     let transformedValue = rawValue 
 
     if (_.isNil(node.data.VALUE) || _.isEmpty(node.data.VALUE)) {
+      // Not Equal(NE)이 아닐 때 값이 비어있으면 에러
       if (node.data.OPER !== 'NE') {
         failMsg.push("'VALUE' should be not empty.(Except for 'Not Equal')")
         failCount++
       }
     } else {
-      // 데이터 변환 로직
+      /**
+       * [수정 포인트] 데이터 전처리
+       * 사용자가 입력한 문자열("0.1, 0.2")을 로직 처리가 용이하도록 배열로 변환
+       */
       let valueToProcess = rawValue;
       if (operator === 'IN' && typeof rawValue === 'string') {
+        // 모든 공백 제거 후 쉼표로 분리하여 배열 생성
         valueToProcess = rawValue.replace(/\s/g, '').split(',');
       }
 
+      // --- IN 연산자일 때 UOM 변환 로직 ---
       if (operator === 'IN' && isMasterAttrNumberType) {
         if (Array.isArray(valueToProcess)) {
           let convertedValues = []
           for (const val of valueToProcess) {
             const numericVal = parseFloat(val)
+            // UOM 팩터값이 있으면 숫자를 나누어 변환하고, 없으면 원본 그대로 문자열화
             if (!isNaN(numericVal) && hasUomId && currentUomId && allUomFactors.has(currentUomId)) {
               const factor = allUomFactors.get(currentUomId)
               convertedValues.push(String(numericVal / factor))
@@ -99,12 +123,15 @@ case 'attribute_map_tab':
               convertedValues.push(String(val))
             }
           }
+          // 변환된 숫자 배열을 다시 쉼표 문자열로 합쳐서 최종값 생성
           transformedValue = convertedValues.join(',')
         } else {
           failMsg.push(`'VALUE' for IN operator should be a comma-separated list for attribute ${mapAttrId}.`)
           failCount++
         }
-      } else if (operator === 'RANGE' && isMasterAttrNumberType) {
+      } 
+      // --- RANGE 연산자 처리 (형식: 시작~끝) ---
+      else if (operator === 'RANGE' && isMasterAttrNumberType) {
         const rangeParts = String(rawValue).split('~')
         if (rangeParts.length === 2 && !isNaN(parseFloat(rangeParts[0])) && !isNaN(parseFloat(rangeParts[1]))) {
           let convertedStart = rangeParts[0].trim()
@@ -120,8 +147,11 @@ case 'attribute_map_tab':
           failMsg.push(`'VALUE' for RANGE operator should be in 'start~end' format for attribute ${mapAttrId}.`)
           failCount++
         }
-      } else if (isMasterAttrNumberType) {
+      } 
+      // --- 일반 숫자형 단일 값 처리 ---
+      else if (isMasterAttrNumberType) {
         let singleVal = Array.isArray(rawValue) ? rawValue[0] : rawValue
+        // 단일 연산자인데 쉼표나 물결이 포함되면 에러 처리
         if (String(singleVal).includes(',') || String(singleVal).includes('~')) {
           failMsg.push(
             `'VALUE' for attribute ${mapAttrId} with operator '${operator}' must be a single number without ',' or '~'.`
@@ -136,7 +166,9 @@ case 'attribute_map_tab':
             transformedValue = String(singleVal)
           }
         }
-      } else {
+      } 
+      // --- 그 외 문자열 타입 처리 ---
+      else {
         if (Array.isArray(rawValue)) {
           transformedValue = rawValue.join(',')
         } else {
@@ -145,8 +177,13 @@ case 'attribute_map_tab':
       }
     }
 
+    // 에러가 하나라도 있으면 저장 리스트에 담지 않고 패스
     if (failCount > 0) return
+
+    // 유효성 검사를 통과하고 최종 가공된 데이터를 전송용 리스트에 삽입
     selectedRows.push({ ATT_ID: mapAttrId, OPER: operator, VALUE: transformedValue })
   })
+
+  // 최종 결과물을 마스터 데이터 구조에 반영
   lastSelectecRegiData.value.MAP_ATT = selectedRows
   break
