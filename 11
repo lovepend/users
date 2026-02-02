@@ -26,15 +26,23 @@ case 'attribute_map_tab':
     if (hasUomId && (isMasterAttrNumberType || isMasterAttrListType)) {
       const rawValueToValidate = String(node.data.VALUE || '') 
 
-      // 정규 표현식: 숫자, 소수점, 쉼표, 공백 허용 및 연속된 소수점 포함 숫자 나열 검증
+      // 1. 숫자/소수점/쉼표/공백 형식 정규식 검증
       const numberCommaAndSpaceRegex = /^\s*[0-9]+(?:\.[0-9]+)?(?:\s*,\s*[0-9]+(?:\.[0-9]+)?)*\s*$/
       
-      if (rawValueToValidate.trim() !== '' && !numberCommaAndSpaceRegex.test(rawValueToValidate)) {
-        failMsg.push(
-          `For attribute ${mapAttrId}, due to its UOM association, the 'VALUE' must contain only numbers.`
-        )
-        failCount++
-        return 
+      if (rawValueToValidate.trim() !== '') {
+        // 기본 형식 검사
+        if (!numberCommaAndSpaceRegex.test(rawValueToValidate)) {
+          failMsg.push(`For attribute ${mapAttrId}, the 'VALUE' must contain only numbers and commas.`)
+          failCount++
+          return 
+        }
+
+        // [추가 포인트] IN 연산자일 때 최소 2개 이상의 값(쉼표 포함)이 있는지 검사
+        if (operator === 'IN' && !rawValueToValidate.includes(',')) {
+          failMsg.push(`For 'IN' operator in attribute ${mapAttrId}, at least two values separated by a comma are required.`)
+          failCount++
+          return
+        }
       }
     }
 
@@ -73,16 +81,13 @@ case 'attribute_map_tab':
         failCount++
       }
     } else {
-      // --- 데이터 변환 로직 시작 ---
-      
-      // [수정 포인트] IN 연산자일 때 문자열이 들어오면 공백 제거 후 배열로 변환
+      // 데이터 변환 로직
       let valueToProcess = rawValue;
       if (operator === 'IN' && typeof rawValue === 'string') {
         valueToProcess = rawValue.replace(/\s/g, '').split(',');
       }
 
       if (operator === 'IN' && isMasterAttrNumberType) {
-        // 이제 배열인 경우(또는 위에서 변환된 경우) 처리
         if (Array.isArray(valueToProcess)) {
           let convertedValues = []
           for (const val of valueToProcess) {
@@ -96,7 +101,6 @@ case 'attribute_map_tab':
           }
           transformedValue = convertedValues.join(',')
         } else {
-          // 배열이 아니거나 변환에 실패한 경우
           failMsg.push(`'VALUE' for IN operator should be a comma-separated list for attribute ${mapAttrId}.`)
           failCount++
         }
@@ -117,7 +121,6 @@ case 'attribute_map_tab':
           failCount++
         }
       } else if (isMasterAttrNumberType) {
-        // 단일 숫자 처리
         let singleVal = Array.isArray(rawValue) ? rawValue[0] : rawValue
         if (String(singleVal).includes(',') || String(singleVal).includes('~')) {
           failMsg.push(
@@ -134,7 +137,6 @@ case 'attribute_map_tab':
           }
         }
       } else {
-        // 그 외 일반 타입
         if (Array.isArray(rawValue)) {
           transformedValue = rawValue.join(',')
         } else {
