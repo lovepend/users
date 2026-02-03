@@ -1,0 +1,78 @@
+  const onCellValueChanged = function (params) {
+    const grid = params.api
+    const node = params.node
+    const dataItem = params.data
+    const field = params.colDef.field
+    const oldValue = params.oldValue
+    const newValue = params.newValue
+    const source = params.source
+
+    const excludedFields = [''] // 제외할 필드 목록
+    // 모든 필드에 대해 trim 적용
+    if (dataItem) {
+      Object.keys(dataItem).forEach(key => {
+        if (typeof dataItem[key] === 'string' && !excludedFields.includes(key)) {
+          dataItem[key] = dataItem[key].trim()
+        }
+      })
+    }
+
+    if (field === 'VALUE' || field === 'PRNT_VALUE') {
+      let isDuplicate = false
+      const isParent = field === 'PRNT_VALUE'
+      const field1 = field
+      const field2 = isParent ? 'VALUE' : 'PRNT_VALUE'
+      const newVal1 = newValue ?? ''
+      const newVal2 = dataItem[field2] ?? ''
+      const compVal1 = String(newVal1).trim().toUpperCase()
+      const compVal2 = String(newVal2).trim().toUpperCase()
+      grid.forEachNode(n => {
+        if (n.data && n.id !== node.id) {
+          const baseVal1 = String(n.data[field1] ?? '')
+            .trim()
+            .toUpperCase()
+          const baseVal2 = String(n.data[field2] ?? '')
+            .trim()
+            .toUpperCase()
+          if (baseVal1 === compVal1 && baseVal2 === compVal2) {
+            isDuplicate = true
+          }
+        }
+      })
+      if (isDuplicate) {
+        dataItem[field] = oldValue
+        grid.stopEditing()
+        grid.redrawRows()
+        sAlert.Warning(
+          'A combination of ' +
+            `'PRNT_VALUE' ('${isParent ? newVal1 : newVal2}') and ` +
+            `'VALUE' ('${isParent ? newVal2 : newVal1}') already exists.`
+        )
+        return
+      }
+    }
+    // if (field === 'VALUE') {
+    //   let isDuplicate = false;
+    //   const compareVal = String(newValue ?? '').trim().toUpperCase()
+    //   grid.forEachNode((n) => {
+    //     if (n.data && n.id !== node.id) {
+    //       const baseVal = String(n.data[field] ?? '').trim().toUpperCase()
+    //       if (baseVal === compareVal) {
+    //         isDuplicate = true;
+    //       }
+    //     }
+    //   })
+    //   if (isDuplicate) {
+    //     dataItem[field] = oldValue
+    //     grid.stopEditing()
+    //     grid.redrawRows()
+    //     sAlert.Warning('This is the use of duplicate Value.')
+    //     return
+    //   }
+    // }
+
+    isEditedRef.value = true
+    if (!source) {
+      return
+    } // 코드에 의한 변경은 처리하지 않음
+  }
