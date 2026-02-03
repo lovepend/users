@@ -1,78 +1,84 @@
-  const onCellValueChanged = function (params) {
-    const grid = params.api
-    const node = params.node
-    const dataItem = params.data
-    const field = params.colDef.field
-    const oldValue = params.oldValue
-    const newValue = params.newValue
-    const source = params.source
+const onCellValueChanged = function (params) {
+  const grid = params.api;
+  const node = params.node;
+  const dataItem = params.data;
+  const field = params.colDef.field;
+  const oldValue = params.oldValue;
+  const newValue = params.newValue;
+  const source = params.source;
 
-    const excludedFields = [''] // 제외할 필드 목록
-    // 모든 필드에 대해 trim 적용
-    if (dataItem) {
-      Object.keys(dataItem).forEach(key => {
-        if (typeof dataItem[key] === 'string' && !excludedFields.includes(key)) {
-          dataItem[key] = dataItem[key].trim()
-        }
-      })
-    }
+  // 1. 코드에 의한 변경(API 호출 등)은 로직을 타지 않도록 방어
+  if (!source && source !== 'edit') {
+    return;
+  }
 
-    if (field === 'VALUE' || field === 'PRNT_VALUE') {
-      let isDuplicate = false
-      const isParent = field === 'PRNT_VALUE'
-      const field1 = field
-      const field2 = isParent ? 'VALUE' : 'PRNT_VALUE'
-      const newVal1 = newValue ?? ''
-      const newVal2 = dataItem[field2] ?? ''
-      const compVal1 = String(newVal1).trim().toUpperCase()
-      const compVal2 = String(newVal2).trim().toUpperCase()
-      grid.forEachNode(n => {
-        if (n.data && n.id !== node.id) {
-          const baseVal1 = String(n.data[field1] ?? '')
-            .trim()
-            .toUpperCase()
-          const baseVal2 = String(n.data[field2] ?? '')
-            .trim()
-            .toUpperCase()
-          if (baseVal1 === compVal1 && baseVal2 === compVal2) {
-            isDuplicate = true
+  const excludedFields = ['']; // trim 제외 필드 목록
+  
+  // 2. 모든 필드에 대해 기본적으로 trim 적용 (공백 제거)
+  if (dataItem) {
+    Object.keys(dataItem).forEach(key => {
+      if (typeof dataItem[key] === 'string' && !excludedFields.includes(key)) {
+        dataItem[key] = dataItem[key].trim();
+      }
+    });
+  }
+
+  // 3. 'VALUE'(값) 또는 'PRNT_VALUE'(부모값)가 변경되었을 때 유니크 검사 수행
+  if (field === 'VALUE' || field === 'PRNT_VALUE') {
+    let isDuplicate = false;
+
+    // 현재 행의 최신 값들을 가져옴 (방금 수정한 값 포함)
+    const currentVal = String(dataItem['VALUE'] ?? '').trim().toUpperCase();
+    const currentPrnt = String(dataItem['PRNT_VALUE'] ?? '').trim().toUpperCase();
+
+    // VALUE가 비어있다면 검사할 필요가 없음 (필수값 여부는 별도 처리)
+    if (currentVal === '') return;
+
+    // 그리드의 모든 노드를 순회하며 중복 체크
+    grid.forEachNode(n => {
+      // 자기 자신(현재 수정 중인 행)은 제외하고 데이터가 있는 행만 비교
+      if (n.data && n.id !== node.id) {
+        const targetVal = String(n.data['VALUE'] ?? '').trim().toUpperCase();
+        const targetPrnt = String(n.data['PRNT_VALUE'] ?? '').trim().toUpperCase();
+
+        /* [유니크 검증 로직]
+           - 부모값(PRNT_VALUE)이 있으면: 부모값과 값이 모두 같아야 중복
+           - 부모값(PRNT_VALUE)이 없으면: 값(VALUE)만 같아도 중복
+        */
+        if (currentPrnt !== '') {
+          // 케이스 A: 부모값이 존재하는 경우 (조합 유니크)
+          if (targetPrnt === currentPrnt && targetVal === currentVal) {
+            isDuplicate = true;
+          }
+        } else {
+          // 케이스 B: 부모값이 없는 경우 (값 단독 유니크)
+          // 상대방도 부모값이 없는 상태에서 값만 같은지 확인
+          if (targetPrnt === '' && targetVal === currentVal) {
+            isDuplicate = true;
           }
         }
-      })
-      if (isDuplicate) {
-        dataItem[field] = oldValue
-        grid.stopEditing()
-        grid.redrawRows()
-        sAlert.Warning(
-          'A combination of ' +
-            `'PRNT_VALUE' ('${isParent ? newVal1 : newVal2}') and ` +
-            `'VALUE' ('${isParent ? newVal2 : newVal1}') already exists.`
-        )
-        return
       }
-    }
-    // if (field === 'VALUE') {
-    //   let isDuplicate = false;
-    //   const compareVal = String(newValue ?? '').trim().toUpperCase()
-    //   grid.forEachNode((n) => {
-    //     if (n.data && n.id !== node.id) {
-    //       const baseVal = String(n.data[field] ?? '').trim().toUpperCase()
-    //       if (baseVal === compareVal) {
-    //         isDuplicate = true;
-    //       }
-    //     }
-    //   })
-    //   if (isDuplicate) {
-    //     dataItem[field] = oldValue
-    //     grid.stopEditing()
-    //     grid.redrawRows()
-    //     sAlert.Warning('This is the use of duplicate Value.')
-    //     return
-    //   }
-    // }
+    });
 
-    isEditedRef.value = true
-    if (!source) {
-      return
-    } // 코드에 의한 변경은 처리하지 않음
+    // 4. 중복이 발견된 경우 처리
+    if (isDuplicate) {
+      // 값을 이전 값으로 되돌림
+      dataItem[field] = oldValue;
+      
+      // 편집 중단 및 행 다시 그리기
+      grid.stopEditing();
+      grid.redrawRows();
+
+      // 경고 메시지 출력
+      const msg = currentPrnt !== '' 
+        ? `부모값('${currentPrnt}')과 값('${currentVal}')의 조합이 이미 존재합니다.`
+        : `입력하신 값('${currentVal}')이 이미 존재합니다.`;
+      
+      sAlert.Warning(msg);
+      return;
+    }
   }
+
+  // 데이터가 변경되었음을 알리는 플래그 설정
+  isEditedRef.value = true;
+};
