@@ -1,84 +1,399 @@
-const onCellValueChanged = function (params) {
-  const grid = params.api;
-  const node = params.node;
-  const dataItem = params.data;
-  const field = params.colDef.field;
-  const oldValue = params.oldValue;
-  const newValue = params.newValue;
-  const source = params.source;
+  // 어댑터 맵핑 목록 Grid -> defaultColDef
+  const defaultColDef_MapAdapter = ref({
+    filter: 'agMultiColumnFilter',
+    floatingFilter: true,
+    filterParams: agMultiColumnFilterParams,
+    editable: false,
+    sortable: false,
+  })
 
-  // 1. 코드에 의한 변경(API 호출 등)은 로직을 타지 않도록 방어
-  if (!source && source !== 'edit') {
-    return;
+  // 어트리뷰트 맵핑 목록 Grid -> defaultColDef
+  const defaultColDef_MapAttr = ref({
+    filter: 'agMultiColumnFilter',
+    floatingFilter: true,
+    filterParams: agMultiColumnFilterParams,
+    editable: false,
+    sortable: false,
+  })
+
+  // Class 매핑 Gird -> defaultColDef
+  const defaultColDef_MapClass = ref({
+    filter: 'agMultiColumnFilter',
+    floatingFilter: true,
+    filterParams: agMultiColumnFilterParams,
+    editable: false,
+    sortable: false,
+  })
+
+  // Template 매핑 Gird -> defaultColDef
+  const defaultColDef_MapTmpl = ref({
+    filter: 'agMultiColumnFilter',
+    floatingFilter: true,
+    filterParams: agMultiColumnFilterParams,
+    editable: false,
+    sortable: false,
+  })
+
+  // Relation 매핑 Grid -> defaultColDef
+  const defaultColDef_MapRel = ref({
+    filter: 'agMultiColumnFilter',
+    floatingFilter: true,
+    filterParams: agMultiColumnFilterParams,
+    editable: true,
+    sortable: false,
+  })
+
+  // EP 데이터 목록 Grid -> defaultColDef
+  const defaultColDef_EPAttr = {
+    filter: 'agMultiColumnFilter',
+    floatingFilter: true,
+    filterParams: agMultiColumnFilterParams,
+    editable: false,
+    sortable: false,
   }
 
-  const excludedFields = ['']; // trim 제외 필드 목록
-  
-  // 2. 모든 필드에 대해 기본적으로 trim 적용 (공백 제거)
-  if (dataItem) {
-    Object.keys(dataItem).forEach(key => {
-      if (typeof dataItem[key] === 'string' && !excludedFields.includes(key)) {
-        dataItem[key] = dataItem[key].trim();
-      }
-    });
+  // 툴(Source) 어댑터 데이터 목록 Grid -> defaultColDef
+  const defaultColDef_ToolAttr = {
+    filter: 'agMultiColumnFilter',
+    floatingFilter: true,
+    filterParams: agMultiColumnFilterParams,
+    editable: false,
+    sortable: false,
   }
 
-  // 3. 'VALUE'(값) 또는 'PRNT_VALUE'(부모값)가 변경되었을 때 유니크 검사 수행
-  if (field === 'VALUE' || field === 'PRNT_VALUE') {
-    let isDuplicate = false;
+  const loadingOverlayComponentParams = {
+    loadingMessage: 'Loading...',
+  }
+  const statusBar = {
+    statusPanels: [
+      { statusPanel: 'agTotalRowCountComponent' },
+      { statusPanel: 'agFilteredRowCountComponent' },
+      { statusPanel: 'agSelectedRowCountComponent' },
+    ],
+  }
 
-    // 현재 행의 최신 값들을 가져옴 (방금 수정한 값 포함)
-    const currentVal = String(dataItem['VALUE'] ?? '').trim().toUpperCase();
-    const currentPrnt = String(dataItem['PRNT_VALUE'] ?? '').trim().toUpperCase();
-
-    // VALUE가 비어있다면 검사할 필요가 없음 (필수값 여부는 별도 처리)
-    if (currentVal === '') return;
-
-    // 그리드의 모든 노드를 순회하며 중복 체크
-    grid.forEachNode(n => {
-      // 자기 자신(현재 수정 중인 행)은 제외하고 데이터가 있는 행만 비교
-      if (n.data && n.id !== node.id) {
-        const targetVal = String(n.data['VALUE'] ?? '').trim().toUpperCase();
-        const targetPrnt = String(n.data['PRNT_VALUE'] ?? '').trim().toUpperCase();
-
-        /* [유니크 검증 로직]
-           - 부모값(PRNT_VALUE)이 있으면: 부모값과 값이 모두 같아야 중복
-           - 부모값(PRNT_VALUE)이 없으면: 값(VALUE)만 같아도 중복
-        */
-        if (currentPrnt !== '') {
-          // 케이스 A: 부모값이 존재하는 경우 (조합 유니크)
-          if (targetPrnt === currentPrnt && targetVal === currentVal) {
-            isDuplicate = true;
-          }
-        } else {
-          // 케이스 B: 부모값이 없는 경우 (값 단독 유니크)
-          // 상대방도 부모값이 없는 상태에서 값만 같은지 확인
-          if (targetPrnt === '' && targetVal === currentVal) {
-            isDuplicate = true;
-          }
+  // 어댑터 맵핑 목록 Grid -> columnDefs
+  const colDefs_MapAdapter = ref([
+    { checkboxSelection: true, filter: false, suppressHeaderMenuButton: true, maxWidth: 35 },
+    {
+      field: 'MAP_ID',
+      headerName: 'Adapter Map ID',
+      flex: 1,
+      minWidth: 120,
+      editable: params => {
+        return projectPermissions.value.some(
+          el =>
+            isProjectAdmin.value ||
+            ((params.data.EP_ID === '' || el.EP_ID === params.data.EP_ID) && el.Role === 'Manager')
+        )
+      },
+    },
+    {
+      field: 'EP_ID',
+      headerName: 'EP',
+      flex: 0.5,
+      minWidth: 50,
+      cellEditor: 'agRichSelectCellEditor',
+      cellEditorParams: function (params) {
+        const epIds = projectPermissions.value
+          .filter(el => isProjectAdmin.value || el.Role === 'Manager')
+          .map(el => el.EP_ID)
+        return {
+          values: epIds,
+          valueListGap: 5,
+          allowTyping: true,
+          filterList: true,
+          highlightMatch: true,
+          valueListMaxHeight: 220,
         }
-      }
-    });
+      },
+      editable: params => {
+        return projectPermissions.value.some(
+          el =>
+            isProjectAdmin.value ||
+            ((params.data.EP_ID === '' || el.EP_ID === params.data.EP_ID) && el.Role === 'Manager')
+        )
+      },
+    },
+    {
+      field: 'REG_TYPE_ID',
+      headerName: 'Register ID',
+      flex: 1,
+      minWidth: 100,
+      cellEditor: 'agRichSelectCellEditor',
+      cellEditorParams: function (params) {
+        const regTypeIds = allRegisterList.value
+          .filter(item => item.EP_ID === params.data.EP_ID)
+          .map(item => item.REG_TYPE_ID)
 
-    // 4. 중복이 발견된 경우 처리
-    if (isDuplicate) {
-      // 값을 이전 값으로 되돌림
-      dataItem[field] = oldValue;
-      
-      // 편집 중단 및 행 다시 그리기
-      grid.stopEditing();
-      grid.redrawRows();
+        return {
+          values: regTypeIds,
+          valueListGap: 5,
+          allowTyping: true,
+          filterList: true,
+          highlightMatch: true,
+          valueListMaxHeight: 120,
+        }
+      },
+      valueFormatter: params => {
+        const targetObject = allRegisterList.value.find(item => item.REG_TYPE_ID === params.value)
 
-      // 경고 메시지 출력
-      const msg = currentPrnt !== '' 
-        ? `부모값('${currentPrnt}')과 값('${currentVal}')의 조합이 이미 존재합니다.`
-        : `입력하신 값('${currentVal}')이 이미 존재합니다.`;
-      
-      sAlert.Warning(msg);
-      return;
-    }
-  }
+        return targetObject ? `(${targetObject.REG_TYPE_ID}) ${targetObject.REG_DESC}` : ''
+      },
+      cellRenderer: params => {
+        return (
+          `<a href="` +
+          import.meta.env.BASE_URL +
+          `register-mapping-setup?reg_type_id=${params.value}&proj_no=${route.query.proj_no}&ep_id=${route.query.ep_id}" target="_blank">` +
+          params.value +
+          `</a>`
+        )
+      },
+      editable: params => {
+        return projectPermissions.value.some(
+          el =>
+            isProjectAdmin.value ||
+            ((params.data.EP_ID === '' || el.EP_ID === params.data.EP_ID) && el.Role === 'Manager')
+        )
+      },
+    },
+    {
+      field: 'REG_DESC',
+      headerName: 'Register Desc.',
+      editable: false,
+      flex: 1.5,
+      minWidth: 120,
+      valueGetter: function (params) {
+        const item = allRegisterList.value.find(i => i.REG_TYPE_ID === params.data.REG_TYPE_ID)
 
-  // 데이터가 변경되었음을 알리는 플래그 설정
-  isEditedRef.value = true;
-};
+        return item ? item.REG_DESC : ''
+      },
+    },
+    {
+      field: 'DESC',
+      headerName: 'Adapter Name',
+      editable: params => {
+        return projectPermissions.value.some(
+          el =>
+            isProjectAdmin.value ||
+            ((params.data.EP_ID === '' || el.EP_ID === params.data.EP_ID) && el.Role === 'Manager')
+        )
+      },
+      flex: 1.5,
+      minWidth: 120,
+    },
+    {
+      field: 'CMPLX_YN',
+      headerName: 'Complex',
+      editable: false,
+      maxWidth: 75,
+      valueGetter: function (params) {
+        const item = allRegisterList.value.find(i => i.REG_TYPE_ID === params.data.REG_TYPE_ID)
+
+        params.data.CMPLX_YN = item?.CMPLX_YN
+
+        return item?.CMPLX_YN ? 'Y' : 'N'
+      },
+    },
+
+    {
+      field: 'SCOPES',
+      headerName: 'Scopes',
+      flex: 1,
+      minWidth: 100,
+      cellEditor: 'AgMultiSelectEditor',
+      cellEditorParams: function (params) {
+        let scopeOptions = []
+        if (ToolAttrListRef.value && ToolAttrListRef.value.length > 0) {
+          const uniqueScopes = new Set(
+            ToolAttrListRef.value
+              .map(item => item.SCOPE)
+              .filter(scope => scope !== undefined && scope !== null && scope !== '')
+          )
+          scopeOptions = Array.from(uniqueScopes)
+        }
+
+        return {
+          listData: scopeOptions,
+          isMultiple: true,
+          isPushNew: true,
+          placeholder: 'Select or type Scopes',
+        }
+      },
+      singleClickEdit: true,
+      cellEditorPopup: true,
+      cellEditorPopupPosition: 'over',
+      valueFormatter: params => {
+        if (Array.isArray(params.value)) {
+          return params.value.join(', ')
+        }
+        return params.value || ''
+      },
+      cellRenderer: function (param) {
+        const displayValue = Array.isArray(param.value) ? param.value.join(', ') : param.value
+        return makeComboRender({ ...param, value: displayValue }, 'dropbox')
+      },
+      // filter: 'agMultiColumnFilter'는 defaultColDef에서 이미 적용. 여기서 명시X
+      filterParams: {
+        // filterParams만 재정의
+        filters: [
+          {
+            filter: 'agTextColumnFilter',
+            display: 'inline', // 'accordion', 'inline', 'subMenu' 등
+            filterParams: {
+              buttons: ['reset'],
+            },
+          },
+          {
+            filter: 'agSetColumnFilter',
+            display: 'inline',
+            filterParams: {
+              array: true,
+              valueFormatter: params => {
+                return params.value
+              },
+              buttons: ['reset'],
+            },
+          },
+        ],
+      },
+      editable: params => {
+        return projectPermissions.value.some(
+          el =>
+            isProjectAdmin.value ||
+            ((params.data.EP_ID === '' || el.EP_ID === params.data.EP_ID) && el.Role === 'Manager')
+        )
+      },
+    },
+    {
+      field: 'CATEGORY',
+      headerName: 'Map Type',
+      flex: 0.5,
+      minWidth: 80,
+      cellEditor: 'agRichSelectCellEditor',
+      cellEditorParams: function (params) {
+        return {
+          values: ['TOOL', 'BROKER', 'CUSTOM'],
+          valueListGap: 5,
+          allowTyping: true,
+          filterList: true,
+          highlightMatch: true,
+          valueListMaxHeight: 220,
+        }
+      },
+      editable: params => {
+        return projectPermissions.value.some(
+          el =>
+            isProjectAdmin.value ||
+            ((params.data.EP_ID === '' || el.EP_ID === params.data.EP_ID) && el.Role === 'Manager')
+        )
+      },
+    },
+    {
+      field: 'TOOL_ID',
+      headerName: 'Tool(Source) ID',
+      flex: 1.5,
+      minWidth: 50,
+      cellEditor: 'agRichSelectCellEditor',
+      cellEditorParams: function (params) {
+        let toolIds = []
+
+        if (params.data.CATEGORY === 'TOOL') {
+          toolIds = allToolList.value.map(item => item.TOOL_ID)
+        } else if (params.data.CATEGORY === 'BROKER') {
+          toolIds = [...new Set(allBrokerList.value.map(item => item.GROUP))]
+        } else if (params.data.CATEGORY === 'CUSTOM') {
+          toolIds = allCustomList.value.map(item => item.CUS_ID)
+        }
+
+        return {
+          values: toolIds,
+          valueListGap: 5,
+          allowTyping: true,
+          filterList: true,
+          highlightMatch: true,
+          valueListMaxHeight: 220,
+        }
+      },
+      editable: params => {
+        return projectPermissions.value.some(
+          el =>
+            isProjectAdmin.value ||
+            ((params.data.EP_ID === '' || el.EP_ID === params.data.EP_ID) && el.Role === 'Manager')
+        )
+      },
+    },
+    {
+      field: 'TOOL_TYPE',
+      headerName: 'Item Type',
+      flex: 1.5,
+      minWidth: 50,
+      cellEditor: 'AgMultiSelectEditor',
+      cellEditorParams: function (params) {
+        let toolTypes = []
+
+        if (params.data.CATEGORY === 'TOOL') {
+          const toolItem = allToolList.value.find(item => item.TOOL_ID === params.data.TOOL_ID)
+          toolTypes = toolItem ? toolItem.TOOL_TYPES.map(item => item) : []
+        } else if (params.data.CATEGORY === 'BROKER') {
+          toolTypes = allBrokerList.value.filter(item => item.GROUP === params.data.TOOL_ID).map(item => item.NAME)
+        } else if (params.data.CATEGORY === 'CUSTOM') {
+          const customItem = allCustomList.value.find(item => item.CUS_ID === params.data.TOOL_ID)
+          toolTypes = customItem ? customItem.SOURCES.map(item => item.SRC_NM) : []
+        }
+
+        return {
+          values: toolTypes,
+          valueListGap: 5,
+          allowTyping: true,
+          filterList: true,
+          highlightMatch: true,
+          valueListMaxHeight: 220,
+          listData: toolTypes,
+          isMultiple: false,
+          isPushNew: true,
+          isCloseBox: true,
+          placeholder: 'Select Tool Type',
+        }
+      },
+      singleClickEdit: true,
+      cellEditorPopup: true,
+      cellEditorPopupPosition: 'over',
+      cellRenderer: function (param) {
+        return makeComboRender(param, 'dropbox')
+      },
+      editable: params => {
+        return projectPermissions.value.some(
+          el =>
+            isProjectAdmin.value ||
+            ((params.data.EP_ID === '' || el.EP_ID === params.data.EP_ID) && el.Role === 'Manager')
+        )
+      },
+    },
+    {
+      field: 'Broker_Action',
+      headerName: 'Broker_Action',
+      minWidth: 100,
+      initialWidth: 200,
+      flex: 1,
+      editable: false,
+      cellEditorParams: function (params) {
+        let toolTypes = []
+
+        if (params.data.CATEGORY === 'BROKER') {
+          const toolItem = allToolList.value.find(item => item.TOOL_ID === params.data.TOOL_ID)
+          toolTypes = allBrokerList.value.filter(item => item.GROUP === params.data.TOOL_ID).map(item => item.NAME)
+        }
+
+        return {
+          values: toolIds,
+          valueListGap: 5,
+          allowTyping: true,
+          filterList: true,
+          highlightMatch: true,
+          valueListMaxHeight: 220,
+        }
+      },
+    },
+    { field: '_id', hide: true },
+  ])
