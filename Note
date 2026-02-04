@@ -4,24 +4,36 @@
       minWidth: 150,
       flex: 1,
       editable: false,
-      // valueGetter를 사용하여 true/false 논리값으로 변환하여 반환
       valueGetter: function (params) {
         const data = params.data;
-        
+
+        // [LOG 1] 현재 행의 기본 정보 출력
+        console.log(`[Broker_Action Check] Category: ${data.CATEGORY}, ToolID: ${data.TOOL_ID}, ToolType: ${data.TOOL_TYPE}`);
+
         if (data.CATEGORY === 'BROKER' && data.TOOL_ID && data.TOOL_TYPE) {
+          
+          // [LOG 2] 비교 대상인 allBrokerList의 전체 개수 확인 (데이터가 비어있는지 체크용)
+          console.log(`[Broker_Action Check] allBrokerList Count: ${allBrokerList.value?.length}`);
+
           const brokerItem = allBrokerList.value.find(
             item => item.GROUP === data.TOOL_ID && item.NAME === data.TOOL_TYPE
           );
 
           if (brokerItem) {
-            // 값이 'Y'이면 true, 아니면 false를 반환하도록 설정
             const isRowBased = brokerItem.ROW_BASED_YN === 'Y';
             const isMenuVisible = brokerItem.MENU_VISIBLE_YN === 'Y';
             
-            // 두 값을 객체나 문자열 형태로 합쳐서 표현 (불리언 기반)
-            return `Row:${isRowBased} / Menu:${isMenuVisible}`;
+            const result = `Row:${isRowBased} / Menu:${isMenuVisible}`;
+            
+            // [LOG 3] 매칭 성공 시 데이터 출력
+            console.log(`[Broker_Action Check] 매칭 성공! 결과: ${result}`, brokerItem);
+            
+            return result;
+          } else {
+            // [LOG 4] 조건은 맞지만 리스트에서 찾지 못한 경우
+            console.warn(`[Broker_Action Check] 일치하는 브로커 아이템을 찾을 수 없습니다. (GROUP: ${data.TOOL_ID}, NAME: ${data.TOOL_TYPE})`);
           }
         }
-        return false; // 데이터가 없으면 기본값 false
+        return false;
       },
     },
