@@ -1,31 +1,24 @@
-{
-      field: 'Broker_Action',
-      headerName: 'Broker Action (Row/Menu)',
-      minWidth: 150,
-      initialWidth: 200,
-      flex: 1,
-      editable: false,
-      // valueGetter를 사용하여 실시간으로 데이터를 계산해서 보여줍니다.
-      valueGetter: function (params) {
-        const data = params.data;
-        
-        // 조건: Map Type이 BROKER이고, Tool ID와 Item Type이 모두 존재할 때
-        if (data.CATEGORY === 'BROKER' && data.TOOL_ID && data.TOOL_TYPE) {
-          // 전체 브로커 리스트에서 GROUP(Tool ID)과 NAME(Item Type)이 일치하는 항목을 찾음
-          const brokerItem = allBrokerList.value.find(
-            item => item.GROUP === data.TOOL_ID && item.NAME === data.TOOL_TYPE
-          );
-
-          if (brokerItem) {
-            const rowBased = brokerItem.ROW_BASED_YN || 'N';
-            const menuVisible = brokerItem.MENU_VISIBLE_YN || 'N'; // 오타 수정: VISIBLE
-            
-            // 원하는 형식으로 데이터 표현 (예: R:Y / M:N)
-            return `Row:${rowBased} / Menu:${menuVisible}`;
-          }
-        }
-        return ''; // 조건이 맞지 않으면 빈 값
+// 1. ROW_BASED 여부 체크박스 형태
+    {
+      headerName: 'Row Based',
+      field: 'isRowBased', // 가상 필드
+      maxWidth: 100,
+      valueGetter: params => {
+        const item = allBrokerList.value.find(i => i.GROUP === params.data.TOOL_ID && i.NAME === params.data.TOOL_TYPE);
+        return item?.ROW_BASED_YN === 'Y'; // 결과는 true 또는 false
       },
-      // 필터링이나 데이터 관리 시에도 위에서 계산된 값을 사용하게 함
-      valueFormatter: params => params.value
+      cellRenderer: 'agCheckboxRenderer', // AG Grid 기본 체크박스 렌더러
+      cellClass: 'grid-cell-centered'
+    },
+    // 2. MENU_VISIBLE 여부 체크박스 형태
+    {
+      headerName: 'Menu Visible',
+      field: 'isMenuVisible',
+      maxWidth: 110,
+      valueGetter: params => {
+        const item = allBrokerList.value.find(i => i.GROUP === params.data.TOOL_ID && i.NAME === params.data.TOOL_TYPE);
+        return item?.MENU_VISIBLE_YN === 'Y'; // 결과는 true 또는 false
+      },
+      cellRenderer: 'agCheckboxRenderer',
+      cellClass: 'grid-cell-centered'
     },
