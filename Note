@@ -1,24 +1,27 @@
-// 1. ROW_BASED 여부 체크박스 형태
-    {
-      headerName: 'Row Based',
-      field: 'isRowBased', // 가상 필드
-      maxWidth: 100,
-      valueGetter: params => {
-        const item = allBrokerList.value.find(i => i.GROUP === params.data.TOOL_ID && i.NAME === params.data.TOOL_TYPE);
-        return item?.ROW_BASED_YN === 'Y'; // 결과는 true 또는 false
+{
+      field: 'Broker_Action',
+      headerName: 'Broker Action (Row/Menu)',
+      minWidth: 150,
+      flex: 1,
+      editable: false,
+      // valueGetter를 사용하여 true/false 논리값으로 변환하여 반환
+      valueGetter: function (params) {
+        const data = params.data;
+        
+        if (data.CATEGORY === 'BROKER' && data.TOOL_ID && data.TOOL_TYPE) {
+          const brokerItem = allBrokerList.value.find(
+            item => item.GROUP === data.TOOL_ID && item.NAME === data.TOOL_TYPE
+          );
+
+          if (brokerItem) {
+            // 값이 'Y'이면 true, 아니면 false를 반환하도록 설정
+            const isRowBased = brokerItem.ROW_BASED_YN === 'Y';
+            const isMenuVisible = brokerItem.MENU_VISIBLE_YN === 'Y';
+            
+            // 두 값을 객체나 문자열 형태로 합쳐서 표현 (불리언 기반)
+            return `Row:${isRowBased} / Menu:${isMenuVisible}`;
+          }
+        }
+        return false; // 데이터가 없으면 기본값 false
       },
-      cellRenderer: 'agCheckboxRenderer', // AG Grid 기본 체크박스 렌더러
-      cellClass: 'grid-cell-centered'
-    },
-    // 2. MENU_VISIBLE 여부 체크박스 형태
-    {
-      headerName: 'Menu Visible',
-      field: 'isMenuVisible',
-      maxWidth: 110,
-      valueGetter: params => {
-        const item = allBrokerList.value.find(i => i.GROUP === params.data.TOOL_ID && i.NAME === params.data.TOOL_TYPE);
-        return item?.MENU_VISIBLE_YN === 'Y'; // 결과는 true 또는 false
-      },
-      cellRenderer: 'agCheckboxRenderer',
-      cellClass: 'grid-cell-centered'
     },
