@@ -1,42 +1,55 @@
 {
-      field: 'Broker_Action',
-      headerName: 'Broker Action (Row/Menu)',
-      minWidth: 150,
-      flex: 1,
-      editable: false,
-      valueGetter: function (params) {
-        const data = params.data;
+  field: 'Broker_Action',
+  headerName: 'Broker Action (Row/Menu)',
+  minWidth: 150,
+  initialWidth: 200,
+  flex: 1,
+  editable: false, // 브로커 리스트에서 가져오는 참조값이므로 수정 불가
+  sortable: true,
+  filter: 'agTextColumnFilter',
+  
+  // [핵심] valueGetter: Tool ID와 Type을 키값으로 allBrokerList에서 실시간 매칭
+  valueGetter: function (params) {
+    const data = params.data;
 
-        // [LOG 1] 현재 행이 브로커 타입인지 확인
-        if (data.CATEGORY === 'BROKER') {
-          console.log(`%c[Broker Check] 찾는 중... GROUP: ${data.TOOL_ID}, NAME: ${data.TOOL_TYPE}`, 'color: #2196F3; font-weight: bold;');
-          
-          if (data.TOOL_ID && data.TOOL_TYPE) {
-            const brokerItem = allBrokerList.value.find(
-              item => item.GROUP === data.TOOL_ID && item.NAME === data.TOOL_TYPE
-            );
+    // 1. 기본 조건 확인 (브로커 타입이고 필수 값이 있을 때만 실행)
+    if (data && data.CATEGORY === 'BROKER' && data.TOOL_ID && data.TOOL_TYPE) {
+      
+      // 2. 외부 테이블(allBrokerList)에서 TOOL_ID(GROUP)와 TOOL_TYPE(NAME)으로 검색
+      const brokerItem = allBrokerList.value.find(item => 
+        String(item.GROUP).trim() === String(data.TOOL_ID).trim() && 
+        String(item.NAME).trim() === String(data.TOOL_TYPE).trim()
+      );
 
-            if (brokerItem) {
-              // [LOG 2] 찾은 아이템의 원본 필드값 출력
-              console.log(
-                `%c[Success] 데이터 발견!`, 'color: #4CAF50; font-weight: bold;',
-                `\n - 원본 ROW_BASED_YN: [%c${brokerItem.ROW_BASED_YN}%c]`, 'color: orange;', '',
-                `\n - 원본 MENU_VISIBLE_YN: [%c${brokerItem.MENU_VISIBLE_YN}%c]`, 'color: orange;', ''
-              );
+      // 디버깅용 로그 (필요 없으면 삭제하세요)
+      // console.log(`[Matching] ID: ${data.TOOL_ID}, Type: ${data.TOOL_TYPE}, Found:`, brokerItem);
 
-              const isRowBased = brokerItem.ROW_BASED_YN === 'Y';
-              const isMenuVisible = brokerItem.MENU_VISIBLE_YN === 'Y';
-              
-              return `Row:${isRowBased} / Menu:${isMenuVisible}`;
-            } else {
-              // [LOG 3] 조건은 맞지만 리스트에 없는 경우 (데이터 불일치)
-              console.warn(
-                `[Fail] 일치하는 데이터를 찾지 못함.`,
-                `목록에 (GROUP:${data.TOOL_ID}, NAME:${data.TOOL_TYPE}) 조합이 있는지 확인 필요.`
-              );
-            }
-          }
-        }
-        return false;
-      },
-    },
+      if (brokerItem) {
+        // 3. 찾은 아이템에서 YN 값을 불리언(true/false) 문자열로 변환
+        const isRowBased = brokerItem.ROW_BASED_YN === 'Y';
+        const isMenuVisible = brokerItem.MENU_VISIBLE_YN === 'Y';
+        
+        // 화면에 보여줄 텍스트 포맷
+        return `Row:${isRowBased} / Menu:${isMenuVisible}`;
+      } else {
+        // 매칭되는 데이터가 테이블에 없는 경우
+        return 'No Match';
+      }
+    }
+    
+    // 브로커가 아니거나 값이 미선택된 경우 빈 값 표시
+    return '';
+  },
+
+  // 툴팁 설정 (앞서 설명드린 두 줄 표현 등 활용 가능)
+  tooltipValueGetter: (params) => {
+    if (!params.value || params.value === 'No Match') return '데이터를 선택하거나 브로커 설정을 확인하세요.';
+    return `상세 상태: ${params.value}`;
+  },
+
+  // 셀의 스타일을 값에 따라 다르게 주고 싶을 때 (선택 사항)
+  cellStyle: params => {
+    if (params.value === 'No Match') return { color: '#f44336', fontWeight: 'bold' }; // 매칭 실패시 빨간색
+    return null;
+  }
+}
