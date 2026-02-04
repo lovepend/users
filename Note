@@ -1,30 +1,43 @@
- {
-      field: 'Broker_Action',
-      headerName: 'Broker Action (Row/Menu)',
-      minWidth: 150,
-      initialWidth: 200,
-      flex: 1,
-      editable: false,
-      sortable: true,
-      filter: 'agTextColumnFilter',
+{
+  field: 'Broker_Action',
+  headerName: 'Broker Action (Row/Menu)',
+  minWidth: 150,
+  initialWidth: 200,
+  flex: 1,
+  editable: false,
+  sortable: true,
+  
+  // [수정된 부분] YN 값에 따라 O / X 로 변환하여 표시
+  valueGetter: function (params) {
+    const data = params.data;
 
-      // valueGetter: Tool ID와 Type을 키값으로 allBrokerList에서 실시간 매칭
-      valueGetter: function (params) {
-        const data = params.data
+    if (data && data.CATEGORY === 'BROKER' && data.TOOL_ID && data.TOOL_TYPE) {
+      // 1. 외부 리스트(allBrokerList)에서 데이터 찾기
+      const brokerItem = allBrokerList.value.find(item => 
+        String(item.GROUP).trim() === String(data.TOOL_ID).trim() && 
+        String(item.NAME).trim() === String(data.TOOL_TYPE).trim()
+      );
 
-        // 1. 기본 조건 확인 (브로커 타입이고 필수 값이 있을 때만 실행)
-        if (data && data.CATEGORY === 'BROKER' && data.TOOL_ID && data.TOOL_TYPE) {
-          // 2. 외부 테이블(allBrokerList)에서 TOOL_ID(GROUP)와 TOOL_TYPE(NAME)으로 검색
-          const brokerItem = allBrokerList.value.find(
-            item =>
-              String(item.GROUP).trim() === String(data.TOOL_ID).trim() &&
-              String(item.NAME).trim() === String(data.TOOL_TYPE).trim()
-          )
-          if (brokerItem) {
-            return `Row:${brokerItem.ROW_BASED_YN} / Menu:${brokerItem.MENU_VISIBLE_YN}`
-          }
-        }
-        // 브로커가 아니거나 값이 미선택된 경우 빈 값 표시
-        return ''
-      },
-    },
+      if (brokerItem) {
+        // 2. Y 여부에 따라 O 또는 X 결정
+        const rowOuch = brokerItem.ROW_BASED_YN === 'Y' ? 'O' : 'X';
+        const menuOuch = brokerItem.MENU_VISIBLE_YN === 'Y' ? 'O' : 'X';
+        
+        // 3. 최종 출력 형태 (예: Row: O / Menu: X)
+        return `Row: ${rowOuch} / Menu: ${menuOuch}`;
+      } else {
+        return '미등록 브로커'; // 매칭 데이터 없을 때
+      }
+    }
+    return ''; // 조건 안 맞으면 빈 값
+  },
+
+  // 시각적으로 강조하고 싶을 때 (선택사항)
+  cellStyle: params => {
+    if (params.value && params.value.includes('X')) {
+      // X가 하나라도 포함되어 있으면 글자색을 약간 흐리게 하거나 붉은색 계열로 표시
+      return { color: '#555', fontSize: '12px' };
+    }
+    return { fontWeight: 'bold', color: '#2e7d32' }; // 둘 다 O인 경우 초록색 계열
+  }
+}
