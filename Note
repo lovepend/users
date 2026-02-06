@@ -1,11 +1,17 @@
-    cellRenderer: params => {
-        return (
-          `<a href="` +
-          import.meta.env.BASE_URL +
-          `register-mapping-setup?reg_type_id=${params.value}&proj_no=${route.query.proj_no}&ep_id=${route.query.ep_id}" target="_blank">` +
-          params.value +
-          `</a>`
-        )
-        //  cellRenderer: function (param) {
-        return makeComboRender(param, 'dropbox')
-      },
+cellRenderer: params => {
+  // 1. 링크 HTML 문자열 생성
+  const baseUrl = import.meta.env.BASE_URL;
+  const { proj_no, ep_id } = route.query;
+  
+  const linkHtml = `
+    <a href="${baseUrl}register-mapping-setup?reg_type_id=${params.value}&proj_no=${proj_no}&ep_id=${ep_id}" 
+       target="_blank" 
+       style="color: inherit; text-decoration: underline;">
+       ${params.value}
+    </a>
+  `;
+
+  // 2. 생성한 링크 문자열을 드롭박스 렌더러로 감싸서 리턴
+  // params의 value를 링크가 포함된 html로 교체하여 전달합니다.
+  return makeComboRender({ ...params, value: linkHtml }, 'dropbox');
+},
