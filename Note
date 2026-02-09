@@ -3,27 +3,36 @@ const insertRows = function (rowCount) {
   grid.stopEditing()
   grid.setGridOption('loading', true)
 
-  // 1. 현재 적용된 필터 모델 가져오기
+  // 1. 필터 모델 가져오기 및 콘솔 출력
   const filterModel = grid.getFilterModel()
+  
+  console.log('======= [AG-GRID FILTER DEBUG] =======')
+  if (Object.keys(filterModel).length === 0) {
+    console.log('현재 적용된 필터가 없습니다.')
+  } else {
+    console.table(filterModel) // 테이블 형태로 깔끔하게 출력
+    console.log('전체 구조:', filterModel)
+  }
+  console.log('======================================')
+
   const filterDefaults = {}
 
-  console.log('현재 적용된 필터 상세:', filterModel) // 어떤 구조로 들어오는지 콘솔에서 확인 가능합니다.
-
+  // 2. 값 추출 (추출 로직 보강)
   Object.keys(filterModel).forEach((colId) => {
     const model = filterModel[colId]
-
-    // Case A: Set Filter (체크박스 형태)
+    
+    // Set Filter (체크박스)일 때
     if (model.filterType === 'set') {
       filterDefaults[colId] = model.values[0]
     } 
-    // Case B: Simple Filter (Text, Number, Date 등)
+    // 일반 필터 (Text, Number 등)
     else {
-      // 단일 조건일 때 (filter 속성이 직접 있는 경우)
+      // 단일 조건일 때
       if (model.filter !== undefined) {
         filterDefaults[colId] = model.filter
       } 
-      // 복합 조건(AND/OR) 또는 최신 버전의 조건부 필터인 경우
-      else if (model.condition1 && model.condition1.filter !== undefined) {
+      // AND/OR 복합 조건일 때
+      else if (model.condition1) {
         filterDefaults[colId] = model.condition1.filter
       }
     }
@@ -33,8 +42,8 @@ const insertRows = function (rowCount) {
   for (let i = 0; i < rowCount; i++) {
     const newId = `new_${Math.random().toString(36).substring(2, 12)}`
     
-    // 기본값 객체
-    const baseRow = {
+    // 3. 필터 값을 기본값으로 세팅
+    const newRow = {
       STATUS: 'A',
       PROJ_NO: currentProjNo.value,
       ATT_ID: null,
@@ -44,23 +53,19 @@ const insertRows = function (rowCount) {
       IGN_LIST_VAL: false,
       CRTER_NO: userInfo.value?.UserID,
       _id: newId,
+      ...filterDefaults  // 추출된 필터 값들을 새 행에 병합
     }
-
-    // 기본값 위에 필터값을 덮어씌움
-    const newRow = Object.assign({}, baseRow, filterDefaults)
+    
     addRows.push(newRow)
   }
 
+  // 이후 로직 동일...
   if (addRows.length > 0) {
     const lastIndex = grid.getDisplayedRowCount()
-    // 필터링된 상태에서도 추가된 행이 바로 보이게 하려면 applyTransaction을 사용
     const result = grid.applyTransaction({ add: addRows, addIndex: lastIndex })
     
     grid.refreshCells({ force: true, suppressFlash: true })
-    grid.setNodesSelected({
-      nodes: result.add,
-      newValue: true,
-    })
+    grid.setNodesSelected({ nodes: result.add, newValue: true })
     grid.ensureIndexVisible(lastIndex, 'bottom')
   }
   grid.setGridOption('loading', false)
