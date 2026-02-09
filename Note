@@ -1,34 +1,19 @@
-There was an error committing your changes: File could not be edited
-/**
- * [STEP 1] 그리드 초기화 옵션 (매우 중요)
- * 그리드 정의 시 이 옵션들이 포함되어야 신규 행이 사라지지 않습니다.
- */
-const gridOptions = {
-  // 외부 필터 기능을 활성화합니다.
-  isExternalFilterPresent: () => true,
-
-  // 각 행이 화면에 보일지 말지를 결정하는 최종 관문입니다.
-  doesExternalFilterPass: (node) => {
-    // 1. 신규 행(STATUS: 'A')은 필터 조건이 뭐든 간에 무조건 'Pass'해서 보여줍니다.
-    if (node.data && node.data.STATUS === 'A') {
-      return true;
-    }
-    // 2. 기존 행들은 그리드가 이미 내부적으로 필터링한 결과를 그대로 따릅니다.
-    return true; 
-  }
-};
-
-/**
- * [STEP 2] 행 추가 함수
- */
 const insertRows = function (rowCount) {
   const grid = gridRef.value;
   if (!grid) return;
 
   grid.stopEditing();
-  
-  // 로딩바를 보여주면 사용자가 동작 중임을 더 확실히 인지합니다.
   grid.setGridOption('loading', true);
+
+  // --- [핵심] Step 2 내부에서만 처리하는 필터 우회 로직 ---
+  // 1. 외부 필터 로직을 함수 내에서 동적으로 주입합니다.
+  grid.setGridOption('isExternalFilterPresent', () => true);
+  grid.setGridOption('doesExternalFilterPass', (node) => {
+    // 신규 행(STATUS 'A')은 무조건 통과, 나머지는 기본 필터 유지(true)
+    if (node.data && node.data.STATUS === 'A') return true;
+    return true; 
+  });
+  // --------------------------------------------------
 
   const addRows = [];
   const numRows = parseInt(rowCount) || 1;
@@ -36,7 +21,7 @@ const insertRows = function (rowCount) {
   for (let i = 0; i < numRows; i++) {
     const newId = `new_${Math.random().toString(36).substring(2, 12)}`;
     addRows.push({
-      STATUS: 'A', // 이 값이 'A'여서 doesExternalFilterPass를 통과하게 됩니다.
+      STATUS: 'A',
       PROJ_NO: currentProjNo.value,
       ATT_ID: null,
       CL_ID: null,
@@ -45,16 +30,15 @@ const insertRows = function (rowCount) {
       IGN_LIST_VAL: false,
       CRTER_NO: userInfo.value?.UserID,
       _id: newId,
-      // 필터 값은 일부러 비워둡니다 (빈 행 추가)
+      // 필터 값은 비워둠 (빈 행)
     });
   }
 
   if (addRows.length > 0) {
-    // 트랜잭션으로 행 추가 (addIndex 없이 물리적 맨 뒤로)
+    // 행 추가
     const result = grid.applyTransaction({ add: addRows });
     
-    // ★ 핵심: 트랜잭션 직후 필터 상태를 강제로 다시 계산하게 합니다.
-    // 이때 doesExternalFilterPass가 실행되면서 신규 행이 화면에 "짠" 하고 나타납니다.
+    // 필터 변경 알림 (이때 위에서 정의한 doesExternalFilterPass가 실행됨)
     grid.onFilterChanged();
     
     grid.refreshCells({ force: true, suppressFlash: true });
@@ -63,24 +47,19 @@ const insertRows = function (rowCount) {
       const newNode = result.add[0];
       grid.setNodesSelected({ nodes: [newNode], newValue: true });
       
-      // 화면 하단으로 스크롤 이동
       const lastIdx = grid.getDisplayedRowCount() - 1;
       grid.ensureIndexVisible(lastIdx, 'bottom');
 
-      // 사용자가 바로 타이핑할 수 있도록 특정 셀에 포커스+편집모드
+      // 즉시 편집 모드 진입
       setTimeout(() => {
-        grid.setFocusedCell(newNode.rowIndex, 'GROUP'); // 'GROUP' 컬럼으로 포커스
+        grid.setFocusedCell(newNode.rowIndex, 'GROUP');
         grid.startEditingCell({
           rowIndex: newNode.rowIndex,
           colKey: 'GROUP'
         });
-      }, 100);
+      }, 50);
     }
   }
   
   grid.setGridOption('loading', false);
 };
-
-// 버튼 핸들러
-const onCreateRows = () => insertRows(1);
-const onCreateMultiRows = (count) => insertRows(typeof count === 'number' ? count : 1);
