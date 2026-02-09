@@ -8,65 +8,70 @@ const insertRows = function (rowCount) {
   const filterModel = grid.getFilterModel();
   const filterDefaults = {};
 
-  // 1. 아까 본 JSON 구조상 배열로 전달되어야 하는 특정 컬럼 정의
-  // 여기에 배열 구조가 필요한 컬럼 ID들을 명시합니다.
-  const ARRAY_COLUMNS = ['GROUP']; 
-
   /**
-   * 필터 모델에서 값을 추출하는 함수
+   * 필터 모델의 구조를 스스로 판단하여 배열/단일값을 리턴하는 함수
    */
-  const extractValue = (m, colId) => {
-    if (!m || typeof m !== 'object') return null;
+  const autoDetectAndExtract = (m) => {
+    if (!m || typeof m !== 'object') return { value: null, isArray: false };
 
-    let foundValue = null;
-
-    // Multi Filter 대응 (filterModels 배열 파고들기)
-    if (m.filterType === 'multi' && Array.isArray(m.filterModels)) {
-      const active = m.filterModels.find(f => f !== null);
-      foundValue = extractValue(active, colId);
-    } 
-    // Set Filter 대응 (values 배열)
-    else if (Array.isArray(m.values)) {
-      foundValue = m.values;
-    }
-    // 복합 조건 대응
-    else if (m.condition1) {
-      foundValue = extractValue(m.condition1, colId);
-    }
-    // 일반 텍스트/숫자 필터 대응
-    else {
-      foundValue = m.filter !== undefined ? m.filter : (m.value !== undefined ? m.value : null);
+    // 1. Set Filter 구조 (values 배열이 있음) -> 배열 확정
+    if (Array.isArray(m.values)) {
+      return { value: m.values, isArray: true };
     }
 
-    if (foundValue === null) return null;
+    // 2. Multi Filter 구조 (filterType이 multi이거나 filterModels가 있음)
+    if (m.filterType === 'multi' || Array.isArray(m.filterModels)) {
+      const active = (m.filterModels || []).find(f => f !== null);
+      const extracted = autoDetectAndExtract(active);
+      // 부모가 multi이므로 자식이 단일값이라도 배열로 감싸서 리턴 (배열 성격 유지)
+      return { value: extracted.value, isArray: true };
+    }
 
-    // 2. 대문자 변환 처리 함수
-    const toUpper = (val) => (typeof val === 'string' ? val.trim().toUpperCase() : val);
+    // 3. 복합 조건 (conditions)
+    if (Array.isArray(m.conditions)) {
+      const extracted = autoDetectAndExtract(m.conditions[0]);
+      return extracted;
+    }
+    if (m.condition1) return autoDetectAndExtract(m.condition1);
 
-    // 3. ARRAY_COLUMNS에 정의된 항목은 무조건 배열로 리턴
-    if (ARRAY_COLUMNS.includes(colId)) {
-      const arr = Array.isArray(foundValue) ? foundValue : [foundValue];
-      return arr.map(toUpper);
-    } 
+    // 4. 일반 단일 필터 (filter 속성)
+    if (m.filter !== undefined) {
+      return { value: m.filter, isArray: false };
+    }
     
-    // 4. 그 외의 항목은 단일 값으로 리턴 (배열이면 첫번째 요소만)
-    return Array.isArray(foundValue) ? toUpper(foundValue[0]) : toUpper(foundValue);
+    // 5. 기타 value 속성
+    if (m.value !== undefined) {
+      return { value: m.value, isArray: false };
+    }
+
+    return { value: null, isArray: false };
   };
 
   // 모든 필터 모델 순회
   Object.keys(filterModel).forEach((colId) => {
-    const finalVal = extractValue(filterModel[colId], colId);
-    if (finalVal !== null) {
-      filterDefaults[colId] = finalVal;
+    const { value, isArray } = autoDetectAndExtract(filterModel[colId]);
+
+    if (value !== null) {
+      // 대문자 변환 헬퍼
+      const toUpper = (v) => (typeof v === 'string' ? v.trim().toUpperCase() : v);
+
+      if (isArray) {
+        // 배열 구조로 판명된 경우: 무조건 배열 형태로 리턴
+        const arr = Array.isArray(value) ? value : [value];
+        filterDefaults[colId] = arr.map(toUpper);
+      } else {
+        // 단일 구조로 판명된 경우: 단일 값으로 리턴
+        filterDefaults[colId] = toUpper(value);
+      }
     }
   });
 
-  console.log('추출된 데이터 구조 확인:', filterDefaults);
+  console.log('자동 감지된 필터 결과:', filterDefaults);
 
   const addRows = [];
-  const count = parseInt(rowCount) || 1;
+  const numRows = parseInt(rowCount) || 1;
 
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < numRows; i++) {
     const newId = `new_${Math.random().toString(36).substring(2, 12)}`;
     const newRow = {
       STATUS: 'A',
@@ -78,15 +83,13 @@ const insertRows = function (rowCount) {
       IGN_LIST_VAL: false,
       CRTER_NO: userInfo.value?.UserID,
       _id: newId,
-      ...filterDefaults // 컬럼 성격에 따라 배열 혹은 단일값 주입
+      ...filterDefaults 
     };
     addRows.push(newRow);
   }
 
   if (addRows.length > 0) {
-    // 인덱스 없이 추가하여 항상 맨 뒤에 생성
     const result = grid.applyTransaction({ add: addRows });
-    
     grid.refreshCells({ force: true, suppressFlash: true });
     
     if (result.add && result.add.length > 0) {
@@ -95,24 +98,5 @@ const insertRows = function (rowCount) {
       grid.ensureIndexVisible(lastIdx, 'bottom');
     }
   }
-  
   grid.setGridOption('loading', false);
-};
-
-// 핸들러 정의 (순서 유지)
-const onCreateRows = function () {
-  if (!currentProjNo.value) {
-    sAlert.Warning(`Project를 선택해주세요`);
-    return;
-  }
-  insertRows(1);
-};
-
-const onCreateMultiRows = function (rowCount) {
-  if (!currentProjNo.value) {
-    sAlert.Warning(`Project를 선택해주세요`);
-    return;
-  }
-  const num = typeof rowCount === 'number' ? rowCount : 1;
-  insertRows(num);
 };
