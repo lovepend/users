@@ -1,20 +1,50 @@
-cellRenderer: params => {
-  // 1. 기본 정보 추출
-  const baseUrl = import.meta.env.BASE_URL;
-  const { proj_no, ep_id } = route.query;
-  const val = params.value || '';
-  
-  // 2. 파란색 하이퍼링크 HTML 구성
-  // - color: #0000EE (표준 링크 파란색)
-  // - text-decoration: underline (밑줄)
-  const linkHtml = `
-    <a href="${baseUrl}register-mapping-setup?reg_type_id=${val}&proj_no=${proj_no}&ep_id=${ep_id}" 
-       target="_blank" 
-       style="color: #0000EE; text-decoration: underline; font-weight: 500;">
-       ${val}
-    </a>
-  `;
+  const onCreateRows = function () {
+    if (!currentProjNo.value) {
+      sAlert.Warning(`Project를  선택해주세요`)
+      return
+    }
 
-  // 3. 링크가 포함된 HTML을 드롭박스 UI 안에 렌더링
-  return makeComboRender({ ...params, value: linkHtml }, 'dropbox');
-},
+    insertRows(1)
+  }
+
+  const onCreateMultiRows = function (rowCount) {
+    if (!currentProjNo.value) {
+      sAlert.Warning(`Project를  선택해주세요`)
+      return
+    }
+
+    insertRows(rowCount)
+  }
+
+  const insertRows = function (rowCount) {
+    const grid = gridRef.value
+    grid.stopEditing()
+    grid.setGridOption('loading', true)
+
+    const addRows = []
+    for (let i = 0; i < rowCount; i++) {
+      const newId = `new_${Math.random().toString(36).substring(2, 12)}`
+      addRows.push({
+        STATUS: 'A',
+        PROJ_NO: currentProjNo.value,
+        ATT_ID: null,
+        CL_ID: null,
+        VAL_TYPE: VAL_TYPES.STRING.VALUE,
+        RDON_YN: false,
+        IGN_LIST_VAL: false,
+        CRTER_NO: userInfo.value?.UserID,
+        _id: newId,
+      })
+    }
+    if (addRows.length > 0) {
+      const lastIndex = grid.getDisplayedRowCount()
+      const result = grid.applyTransaction({ add: addRows, addIndex: lastIndex })
+      grid.refreshCells({ force: true, suppressFlash: true })
+      grid.setNodesSelected({
+        nodes: result.add,
+        newValue: true,
+      })
+      grid.ensureIndexVisible(lastIndex, 'bottom')
+    }
+    grid.setGridOption('loading', false)
+  }
