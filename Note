@@ -1,3 +1,25 @@
+/**
+ * 1. 그리드 옵션 설정 (그리드 초기화 시 적용되어야 함)
+ * 이 설정이 있어야 빈 행이 필터에 의해 숨겨지지 않습니다.
+ */
+const gridOptions = {
+  // 외부 필터 사용 여부
+  isExternalFilterPresent: () => true,
+
+  // 필터 통과 조건 정의
+  doesExternalFilterPass: (node) => {
+    // 신규 추가된 행(STATUS가 'A')은 필터 조건과 상관없이 무조건 보여줌
+    if (node.data && node.data.STATUS === 'A') {
+      return true;
+    }
+    // 기존 행들은 그리드의 기본 필터 로직을 따르도록 함 (이미 필터링된 결과만 들어옴)
+    return true; 
+  }
+};
+
+/**
+ * 2. 행 추가 함수 (빈 값으로 추가)
+ */
 const insertRows = function (rowCount) {
   const grid = gridRef.value;
   if (!grid) return;
@@ -5,76 +27,13 @@ const insertRows = function (rowCount) {
   grid.stopEditing();
   grid.setGridOption('loading', true);
 
-  const filterModel = grid.getFilterModel();
-  const filterDefaults = {};
-
-  /**
-   * 필터 모델의 구조를 스스로 판단하여 배열/단일값을 리턴하는 함수
-   */
-  const autoDetectAndExtract = (m) => {
-    if (!m || typeof m !== 'object') return { value: null, isArray: false };
-
-    // 1. Set Filter 구조 (values 배열이 있음) -> 배열 확정
-    if (Array.isArray(m.values)) {
-      return { value: m.values, isArray: true };
-    }
-
-    // 2. Multi Filter 구조 (filterType이 multi이거나 filterModels가 있음)
-    if (m.filterType === 'multi' || Array.isArray(m.filterModels)) {
-      const active = (m.filterModels || []).find(f => f !== null);
-      const extracted = autoDetectAndExtract(active);
-      // 부모가 multi이므로 자식이 단일값이라도 배열로 감싸서 리턴 (배열 성격 유지)
-      return { value: extracted.value, isArray: true };
-    }
-
-    // 3. 복합 조건 (conditions)
-    if (Array.isArray(m.conditions)) {
-      const extracted = autoDetectAndExtract(m.conditions[0]);
-      return extracted;
-    }
-    if (m.condition1) return autoDetectAndExtract(m.condition1);
-
-    // 4. 일반 단일 필터 (filter 속성)
-    if (m.filter !== undefined) {
-      return { value: m.filter, isArray: false };
-    }
-    
-    // 5. 기타 value 속성
-    if (m.value !== undefined) {
-      return { value: m.value, isArray: false };
-    }
-
-    return { value: null, isArray: false };
-  };
-
-  // 모든 필터 모델 순회
-  Object.keys(filterModel).forEach((colId) => {
-    const { value, isArray } = autoDetectAndExtract(filterModel[colId]);
-
-    if (value !== null) {
-      // 대문자 변환 헬퍼
-      const toUpper = (v) => (typeof v === 'string' ? v.trim().toUpperCase() : v);
-
-      if (isArray) {
-        // 배열 구조로 판명된 경우: 무조건 배열 형태로 리턴
-        const arr = Array.isArray(value) ? value : [value];
-        filterDefaults[colId] = arr.map(toUpper);
-      } else {
-        // 단일 구조로 판명된 경우: 단일 값으로 리턴
-        filterDefaults[colId] = toUpper(value);
-      }
-    }
-  });
-
-  console.log('자동 감지된 필터 결과:', filterDefaults);
-
   const addRows = [];
   const numRows = parseInt(rowCount) || 1;
 
   for (let i = 0; i < numRows; i++) {
     const newId = `new_${Math.random().toString(36).substring(2, 12)}`;
-    const newRow = {
-      STATUS: 'A',
+    addRows.push({
+      STATUS: 'A', // 신규 행임을 나타내는 플래그
       PROJ_NO: currentProjNo.value,
       ATT_ID: null,
       CL_ID: null,
@@ -83,20 +42,51 @@ const insertRows = function (rowCount) {
       IGN_LIST_VAL: false,
       CRTER_NO: userInfo.value?.UserID,
       _id: newId,
-      ...filterDefaults 
-    };
-    addRows.push(newRow);
+      // 필터 값(filterDefaults)을 주입하지 않음 -> 빈 칸으로 생성
+    });
   }
 
   if (addRows.length > 0) {
+    // 3. 행 추가 (인덱스 없이 마지막에 추가)
     const result = grid.applyTransaction({ add: addRows });
+    
+    // 4. 필터 상태 강제 업데이트
+    // doesExternalFilterPass를 다시 타게 하여 새 행을 화면에 유지시킴
+    grid.onFilterChanged();
+    
     grid.refreshCells({ force: true, suppressFlash: true });
     
+    // 추가된 행으로 포커스 이동 및 편집 시작
     if (result.add && result.add.length > 0) {
-      grid.setNodesSelected({ nodes: result.add, newValue: true });
+      const newNode = result.add[0];
+      grid.setNodesSelected({ nodes: [newNode], newValue: true });
+      
+      // 화면 하단으로 스크롤
       const lastIdx = grid.getDisplayedRowCount() - 1;
       grid.ensureIndexVisible(lastIdx, 'bottom');
+
+      // 사용자가 바로 입력할 수 있게 첫 번째 컬럼에 포커스
+      grid.setFocusedCell(newNode.rowIndex, 'GROUP'); 
     }
   }
+  
   grid.setGridOption('loading', false);
+};
+
+// 버튼 핸들러
+const onCreateRows = function () {
+  if (!currentProjNo.value) {
+    sAlert.Warning(`Project를 선택해주세요`);
+    return;
+  }
+  insertRows(1);
+};
+
+const onCreateMultiRows = function (rowCount) {
+  if (!currentProjNo.value) {
+    sAlert.Warning(`Project를 선택해주세요`);
+    return;
+  }
+  const count = (typeof rowCount === 'number') ? rowCount : 1;
+  insertRows(count);
 };
