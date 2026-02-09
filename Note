@@ -6,39 +6,51 @@ const insertRows = function (rowCount) {
   const filterModel = grid.getFilterModel()
   const filterDefaults = {}
 
-  // Multi Filter 및 Nested 구조를 모두 파고드는 함수
-  const getDeepValue = (m) => {
-    if (!m || typeof m !== 'object') return null
+  // 값을 찾을 때까지 수단과 방법을 가리지 않는 함수
+  const findValueAnywhere = (obj) => {
+    if (!obj || typeof obj !== 'object') return null;
 
-    // 1. Multi Filter 대응: filterModels 배열이 있으면 유효한 첫 번째 요소를 탐색
-    if (m.filterType === 'multi' && Array.isArray(m.filterModels)) {
-      const activeFilter = m.filterModels.find(f => f !== null);
-      return getDeepValue(activeFilter);
+    // 1. "filter" 키가 직접 있으면 즉시 반환 (가장 확실한 값)
+    if (obj.filter !== undefined) return obj.filter;
+    
+    // 2. "values" 배열이 있으면 (Set Filter) 첫 번째 값 반환
+    if (Array.isArray(obj.values) && obj.values.length > 0) return obj.values[0];
+
+    // 3. "filterModels" 배열이 있으면 (Multi Filter) 내부를 순회하며 재귀 탐색
+    if (Array.isArray(obj.filterModels)) {
+      for (const subModel of obj.filterModels) {
+        const val = findValueAnywhere(subModel);
+        if (val !== null) return val;
+      }
     }
 
-    // 2. 복합 조건 (AND/OR) 대응
-    if (Array.isArray(m.conditions) && m.conditions.length > 0) {
-      return getDeepValue(m.conditions[0]);
+    // 4. "conditions" 배열이 있으면 (복합 필터) 내부를 순회하며 재귀 탐색
+    if (Array.isArray(obj.conditions)) {
+      for (const cond of obj.conditions) {
+        const val = findValueAnywhere(cond);
+        if (val !== null) return val;
+      }
     }
-    if (m.condition1) return getDeepValue(m.condition1);
 
-    // 3. Set Filter 대응
-    if (Array.isArray(m.values)) return m.values[0];
+    // 5. "condition1" 또는 "condition2"가 있으면 탐색
+    if (obj.condition1) return findValueAnywhere(obj.condition1);
+    if (obj.condition2) return findValueAnywhere(obj.condition2);
 
-    // 4. 실제 값 추출 (보내주신 로그의 "filter" 키 포함)
-    return m.filter !== undefined ? m.filter : 
-           m.value !== undefined ? m.value : 
-           m.filterFrom !== undefined ? m.filterFrom :
-           m.dateFrom !== undefined ? m.dateFrom : null;
-  }
+    // 6. 기타 다른 명칭의 값들 체크
+    return obj.value !== undefined ? obj.value :
+           obj.filterFrom !== undefined ? obj.filterFrom :
+           obj.dateFrom !== undefined ? obj.dateFrom : null;
+  };
 
-  // 필터 모델 순회 및 값 추출
+  // 모든 필터 컬럼 순회
   Object.keys(filterModel).forEach((colId) => {
-    const extractedValue = getDeepValue(filterModel[colId]);
-    if (extractedValue !== null && extractedValue !== undefined) {
-      filterDefaults[colId] = extractedValue;
+    const val = findValueAnywhere(filterModel[colId]);
+    if (val !== null && val !== undefined) {
+      filterDefaults[colId] = val;
     }
   });
+
+  console.log('최종 추출 결과 (filterDefaults):', filterDefaults);
 
   const addRows = []
   for (let i = 0; i < rowCount; i++) {
@@ -53,13 +65,10 @@ const insertRows = function (rowCount) {
       IGN_LIST_VAL: false,
       CRTER_NO: userInfo.value?.UserID,
       _id: newId,
-      ...filterDefaults // 이제 GROUP: "test" 가 자동으로 들어갑니다.
+      ...filterDefaults // 추출된 값 자동 주입
     }
     addRows.push(newRow)
   }
-
-  // 디버깅 로그
-  console.log('추출된 필터 결과:', filterDefaults);
 
   if (addRows.length > 0) {
     const lastIndex = grid.getDisplayedRowCount()
