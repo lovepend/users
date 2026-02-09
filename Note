@@ -9,58 +9,48 @@ const insertRows = function (rowCount) {
   const filterDefaults = {};
 
   /**
-   * 필터 모델에서 모든 값을 찾아 '배열'로 반환하는 함수
+   * 필터 구조에 따라 단일 값 또는 배열을 영리하게 추출하는 함수
    */
-  const getFilterValuesAsArray = (m) => {
-    if (!m || typeof m !== 'object') return [];
+  const getSmartFilterValue = (m) => {
+    if (!m || typeof m !== 'object') return null;
 
-    let values = [];
-
-    // 1. Set Filter (이미 values 배열을 가지고 있음)
+    // 1. 배열 구조인 경우 (Set Filter 등) -> 배열로 유지 및 대문자 변환
     if (Array.isArray(m.values)) {
-      values = m.values;
-    }
-    // 2. Multi Filter (보내주신 로그 구조: filterModels 배열 존재)
-    else if (m.filterType === 'multi' && Array.isArray(m.filterModels)) {
-      m.filterModels.forEach(subModel => {
-        if (subModel) {
-          const subValues = getFilterValuesAsArray(subModel);
-          values = values.concat(subValues);
-        }
-      });
-    }
-    // 3. 복합 조건 (conditions 배열)
-    else if (Array.isArray(m.conditions)) {
-      m.conditions.forEach(cond => {
-        const condValues = getFilterValuesAsArray(cond);
-        values = values.concat(condValues);
-      });
-    }
-    // 4. 단일 텍스트 필터 (filter 키가 있는 경우)
-    else if (m.filter !== undefined) {
-      values.push(m.filter);
-    }
-    // 5. 기타 value 속성
-    else if (m.value !== undefined) {
-      values.push(m.value);
+      return m.values.map(v => (typeof v === 'string' ? v.trim().toUpperCase() : v));
     }
 
-    // 중복 제거 및 모든 문자열을 대문자로 변환하여 반환
-    return [...new Set(values)].map(v => 
-      (typeof v === 'string' ? v.trim().toUpperCase() : v)
-    );
+    // 2. Multi Filter 구조인 경우
+    if (m.filterType === 'multi' && Array.isArray(m.filterModels)) {
+      // 유효한 필터 모델 하나를 찾아 그 내부 값을 재귀적으로 탐색
+      const active = m.filterModels.find(f => f !== null);
+      return getSmartFilterValue(active);
+    }
+
+    // 3. 복합 조건 (AND/OR) 구조
+    if (Array.isArray(m.conditions)) {
+      return getSmartFilterValue(m.conditions[0]);
+    }
+    if (m.condition1) return getSmartFilterValue(m.condition1);
+
+    // 4. 일반적인 단일 값 구조 (Text, Number 등) -> 단일 값으로 반환 및 대문자
+    const res = m.filter !== undefined ? m.filter : 
+                m.value !== undefined ? m.value : null;
+
+    if (res !== null && typeof res === 'string') {
+      return res.trim().toUpperCase();
+    }
+    return res;
   };
 
-  // 모든 필터 컬럼 순회하며 배열로 값 추출
+  // 필터 모델 순회
   Object.keys(filterModel).forEach((colId) => {
-    const valArray = getFilterValuesAsArray(filterModel[colId]);
-    if (valArray.length > 0) {
-      // 결과가 단일 값이라도 저장 액션을 위해 [ "TEST" ] 형태로 저장
-      filterDefaults[colId] = valArray;
+    const smartVal = getSmartFilterValue(filterModel[colId]);
+    if (smartVal !== null && smartVal !== undefined) {
+      filterDefaults[colId] = smartVal;
     }
   });
 
-  console.log('최종 추출된 배열 필터값:', filterDefaults);
+  console.log('추출된 필터 데이터 (구조 유지):', filterDefaults);
 
   const addRows = [];
   const numRows = parseInt(rowCount) || 1;
@@ -77,13 +67,13 @@ const insertRows = function (rowCount) {
       IGN_LIST_VAL: false,
       CRTER_NO: userInfo.value?.UserID,
       _id: newId,
-      ...filterDefaults // 이제 GROUP: ["TEST"] 와 같은 형식으로 주입됩니다.
+      ...filterDefaults // 필터 구조에 맞춰 주입
     };
     addRows.push(newRow);
   }
 
   if (addRows.length > 0) {
-    // addIndex를 제거하여 전체 데이터의 마지막에 추가 (필터 해제 시 중간 끼임 방지)
+    // 필터 해제 시 중간 끼임 방지를 위해 인덱스 없이 추가 (물리적 맨 뒤)
     const result = grid.applyTransaction({ add: addRows });
     
     grid.refreshCells({ force: true, suppressFlash: true });
@@ -98,7 +88,7 @@ const insertRows = function (rowCount) {
   grid.setGridOption('loading', false);
 };
 
-// 핸들러 선언 순서 유지
+// 핸들러 선언 순서
 const onCreateRows = function () {
   if (!currentProjNo.value) {
     sAlert.Warning(`Project를 선택해주세요`);
