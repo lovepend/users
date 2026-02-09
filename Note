@@ -1,70 +1,14 @@
-const insertRows = function (rowCount) {
-  const grid = gridRef.value
-  grid.stopEditing()
-  grid.setGridOption('loading', true)
-
-  const filterModel = grid.getFilterModel()
-  const filterDefaults = {}
-
-  console.log('검토 중인 필터 모델 상세:', filterModel) // 모델 구조를 다시 한번 확인
-
-  Object.keys(filterModel).forEach((colId) => {
-    const model = filterModel[colId]
-    
-    // 1. 재귀적으로 값을 찾아내는 함수
-    const getValueFromModel = (m) => {
-      if (!m) return null
-      
-      // Set Filter (배열 형태)
-      if (Array.isArray(m.values)) return m.values[0]
-      
-      // 일반적인 값 위치들 (우선순위 순서대로 체크)
-      // AG-Grid 버전이나 설정에 따라 filter, value, filterFrom 중 하나에 들어있음
-      return m.filter !== undefined ? m.filter : 
-             m.value !== undefined ? m.value : 
-             m.filterFrom !== undefined ? m.filterFrom :
-             m.dateFrom !== undefined ? m.dateFrom : null
+{
+    "GROUP": {
+        "filterType": "multi",
+        "filterModels": [
+            {
+                "filterType": "text",
+                "type": "contains",
+                "filter": "test"
+            },
+            null,
+            null
+        ]
     }
-
-    // 2. 복합 조건(condition1, condition2)이 있는지 확인 후 추출
-    if (model.condition1) {
-      filterDefaults[colId] = getValueFromModel(model.condition1)
-    } else if (model.conditions && model.conditions.length > 0) {
-      filterDefaults[colId] = getValueFromModel(model.conditions[0])
-    } else {
-      filterDefaults[colId] = getValueFromModel(model)
-    }
-  })
-
-  const addRows = []
-  for (let i = 0; i < rowCount; i++) {
-    const newId = `new_${Math.random().toString(36).substring(2, 12)}`
-    
-    const newRow = {
-      STATUS: 'A',
-      PROJ_NO: currentProjNo.value,
-      ATT_ID: null,
-      CL_ID: null,
-      VAL_TYPE: VAL_TYPES.STRING.VALUE,
-      RDON_YN: false,
-      IGN_LIST_VAL: false,
-      CRTER_NO: userInfo.value?.UserID,
-      _id: newId,
-      ...filterDefaults // 필터링된 컬럼값들을 자동으로 주입
-    }
-    addRows.push(newRow)
-  }
-
-  console.log('최종 추출된 필터 기본값들:', filterDefaults)
-  console.log('실제 추가될 데이터들:', addRows)
-
-  if (addRows.length > 0) {
-    const lastIndex = grid.getDisplayedRowCount()
-    const result = grid.applyTransaction({ add: addRows, addIndex: lastIndex })
-    
-    grid.refreshCells({ force: true, suppressFlash: true })
-    grid.setNodesSelected({ nodes: result.add, newValue: true })
-    grid.ensureIndexVisible(lastIndex, 'bottom')
-  }
-  grid.setGridOption('loading', false)
 }
