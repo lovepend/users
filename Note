@@ -3,32 +3,37 @@ const insertRows = function (rowCount) {
   grid.stopEditing()
   grid.setGridOption('loading', true)
 
-  // 1. 현재 적용된 필터 모델 가져오기 및 디버깅 출력
+  // 1. 현재 적용된 모든 필터 정보 가져오기
   const filterModel = grid.getFilterModel()
-  
-  console.log('======= [1단계: 현재 필터 모델 정보] =======')
-  console.dir(filterModel) // 상세 객체 구조 확인용
-
   const filterDefaults = {}
 
-  // 2. 필터 모델에서 기본값 추출
+  // 2. 필터 모델을 순회하며 자동으로 값 추출
   Object.keys(filterModel).forEach((colId) => {
     const model = filterModel[colId]
     
-    // Set 필터(체크박스)인 경우
-    if (model.filterType === 'set') {
-      filterDefaults[colId] = model.values[0]
-    } 
-    // 일반 필터(텍스트, 숫자 등)인 경우
-    else {
-      // 단일 조건
-      if (model.filter !== undefined) {
-        filterDefaults[colId] = model.filter
-      } 
-      // 복합 조건 (AND/OR)
-      else if (model.condition1) {
-        filterDefaults[colId] = model.condition1.filter
-      }
+    // 필터 타입별로 데이터를 추출하는 내부 함수
+    const extractValue = (m) => {
+      if (!m) return null
+      
+      // Set Filter (체크박스 선택형)
+      if (m.filterType === 'set') return m.values ? m.values[0] : null
+      
+      // 일반 필터 (Text, Number, Date)
+      // equals(일치) 조건일 때 가장 확실하게 값을 채울 수 있음
+      if (m.filter !== undefined) return m.filter
+      
+      // 범위 필터 (Date/Number Range)의 경우 시작값이라도 채움
+      if (m.dateFrom) return m.dateFrom
+      if (m.filterFrom) return m.filterFrom
+      
+      return null
+    }
+
+    // 복합 조건(AND/OR) 처리 혹은 단일 조건 처리
+    if (model.condition1) {
+      filterDefaults[colId] = extractValue(model.condition1)
+    } else {
+      filterDefaults[colId] = extractValue(model)
     }
   })
 
@@ -36,7 +41,8 @@ const insertRows = function (rowCount) {
   for (let i = 0; i < rowCount; i++) {
     const newId = `new_${Math.random().toString(36).substring(2, 12)}`
     
-    const newRow = {
+    // 기본 고정값 세팅
+    const baseRow = {
       STATUS: 'A',
       PROJ_NO: currentProjNo.value,
       ATT_ID: null,
@@ -46,19 +52,21 @@ const insertRows = function (rowCount) {
       IGN_LIST_VAL: false,
       CRTER_NO: userInfo.value?.UserID,
       _id: newId,
-      ...filterDefaults // 추출된 필터 값 적용
     }
-    
+
+    // 3. 필터에서 추출된 값을 병합 (자동으로 컬럼명 매칭)
+    const newRow = { ...baseRow, ...filterDefaults }
     addRows.push(newRow)
   }
 
-  // 3. 생성된 로우 데이터 콘솔 출력
-  console.log('======= [2단계: 실제 추가될 로우 데이터] =======')
-  console.table(addRows) // 추가될 행들을 테이블 형식으로 한눈에 확인
-  console.log('상세 데이터:', addRows)
+  // 디버깅용 로그
+  console.log('추출된 필터 기본값:', filterDefaults)
+  console.log('최종 생성된 행 데이터:', addRows)
 
   if (addRows.length > 0) {
     const lastIndex = grid.getDisplayedRowCount()
+    // 필터링된 상태에서 새 행을 추가하면 필터 조건에 맞지 않을 경우 행이 사라짐
+    // 이를 방지하기 위해 applyTransaction을 사용
     const result = grid.applyTransaction({ add: addRows, addIndex: lastIndex })
     
     grid.refreshCells({ force: true, suppressFlash: true })
@@ -68,7 +76,5 @@ const insertRows = function (rowCount) {
     })
     grid.ensureIndexVisible(lastIndex, 'bottom')
   }
-  
-  console.log('======= [디버깅 종료] =======')
   grid.setGridOption('loading', false)
 }
