@@ -1,42 +1,118 @@
-[
-  {
-    "_id": "string",
-    "CRTER_NO": "string",
-    "CRTE_DTM": "2026-02-09T05:39:35.170Z",
-    "CHGER_NO": "string",
-    "CHGE_DTM": "2026-02-09T05:39:35.170Z",
-    "DELETED": true,
-    "DEL_USER": "string",
-    "DEL_DTM": "2026-02-09T05:39:35.170Z",
-    "PROJ_NO": "string",
-    "ATT_ID": "string",
-    "DESC": "string",
-    "GROUP": [
-      "string"
-    ],
-    "REMARK": "string",
-    "VAL_TYPE": "BOOL",
-    "IGN_LIST_VAL": true,
-    "ALLOW_STRS": [
-      "string"
-    ],
-    "CL_ID": "string",
-    "UOM_ID": "string",
-    "DEF_VAL": "string",
-    "CFIHOS_ID": "string",
-    "CFIHOS_NAME": "string",
-    "SEQ": 0,
-    "FORMAT": "string",
-    "REG_EXPS": "string",
-    "REL_ID": "string",
-    "EDIT_PAGE_URL": "string",
-    "REL_DIR": "LEFT",
-    "REL_CLS_ID": "string",
-    "ATTRIBUTES": [
-      {
-        "NAME": "string",
-        "VALUE": "string"
-      }
-    ]
+const insertRows = function (rowCount) {
+  const grid = gridRef.value;
+  if (!grid) return;
+
+  grid.stopEditing();
+  grid.setGridOption('loading', true);
+
+  const filterModel = grid.getFilterModel();
+  const filterDefaults = {};
+
+  // 1. 아까 본 JSON 구조상 배열로 전달되어야 하는 특정 컬럼 정의
+  // 여기에 배열 구조가 필요한 컬럼 ID들을 명시합니다.
+  const ARRAY_COLUMNS = ['GROUP']; 
+
+  /**
+   * 필터 모델에서 값을 추출하는 함수
+   */
+  const extractValue = (m, colId) => {
+    if (!m || typeof m !== 'object') return null;
+
+    let foundValue = null;
+
+    // Multi Filter 대응 (filterModels 배열 파고들기)
+    if (m.filterType === 'multi' && Array.isArray(m.filterModels)) {
+      const active = m.filterModels.find(f => f !== null);
+      foundValue = extractValue(active, colId);
+    } 
+    // Set Filter 대응 (values 배열)
+    else if (Array.isArray(m.values)) {
+      foundValue = m.values;
+    }
+    // 복합 조건 대응
+    else if (m.condition1) {
+      foundValue = extractValue(m.condition1, colId);
+    }
+    // 일반 텍스트/숫자 필터 대응
+    else {
+      foundValue = m.filter !== undefined ? m.filter : (m.value !== undefined ? m.value : null);
+    }
+
+    if (foundValue === null) return null;
+
+    // 2. 대문자 변환 처리 함수
+    const toUpper = (val) => (typeof val === 'string' ? val.trim().toUpperCase() : val);
+
+    // 3. ARRAY_COLUMNS에 정의된 항목은 무조건 배열로 리턴
+    if (ARRAY_COLUMNS.includes(colId)) {
+      const arr = Array.isArray(foundValue) ? foundValue : [foundValue];
+      return arr.map(toUpper);
+    } 
+    
+    // 4. 그 외의 항목은 단일 값으로 리턴 (배열이면 첫번째 요소만)
+    return Array.isArray(foundValue) ? toUpper(foundValue[0]) : toUpper(foundValue);
+  };
+
+  // 모든 필터 모델 순회
+  Object.keys(filterModel).forEach((colId) => {
+    const finalVal = extractValue(filterModel[colId], colId);
+    if (finalVal !== null) {
+      filterDefaults[colId] = finalVal;
+    }
+  });
+
+  console.log('추출된 데이터 구조 확인:', filterDefaults);
+
+  const addRows = [];
+  const count = parseInt(rowCount) || 1;
+
+  for (let i = 0; i < count; i++) {
+    const newId = `new_${Math.random().toString(36).substring(2, 12)}`;
+    const newRow = {
+      STATUS: 'A',
+      PROJ_NO: currentProjNo.value,
+      ATT_ID: null,
+      CL_ID: null,
+      VAL_TYPE: (typeof VAL_TYPES !== 'undefined') ? VAL_TYPES.STRING.VALUE : 'STRING',
+      RDON_YN: false,
+      IGN_LIST_VAL: false,
+      CRTER_NO: userInfo.value?.UserID,
+      _id: newId,
+      ...filterDefaults // 컬럼 성격에 따라 배열 혹은 단일값 주입
+    };
+    addRows.push(newRow);
   }
-]
+
+  if (addRows.length > 0) {
+    // 인덱스 없이 추가하여 항상 맨 뒤에 생성
+    const result = grid.applyTransaction({ add: addRows });
+    
+    grid.refreshCells({ force: true, suppressFlash: true });
+    
+    if (result.add && result.add.length > 0) {
+      grid.setNodesSelected({ nodes: result.add, newValue: true });
+      const lastIdx = grid.getDisplayedRowCount() - 1;
+      grid.ensureIndexVisible(lastIdx, 'bottom');
+    }
+  }
+  
+  grid.setGridOption('loading', false);
+};
+
+// 핸들러 정의 (순서 유지)
+const onCreateRows = function () {
+  if (!currentProjNo.value) {
+    sAlert.Warning(`Project를 선택해주세요`);
+    return;
+  }
+  insertRows(1);
+};
+
+const onCreateMultiRows = function (rowCount) {
+  if (!currentProjNo.value) {
+    sAlert.Warning(`Project를 선택해주세요`);
+    return;
+  }
+  const num = typeof rowCount === 'number' ? rowCount : 1;
+  insertRows(num);
+};
