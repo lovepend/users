@@ -9,48 +9,58 @@ const insertRows = function (rowCount) {
   const filterDefaults = {};
 
   /**
-   * 필터 구조에 따라 단일 값 또는 배열을 영리하게 추출하는 함수
+   * 필터 모델의 원래 구조(배열/단일)를 분석해서 값을 추출하는 함수
    */
-  const getSmartFilterValue = (m) => {
+  const getFilterValueByStructure = (m) => {
     if (!m || typeof m !== 'object') return null;
 
-    // 1. 배열 구조인 경우 (Set Filter 등) -> 배열로 유지 및 대문자 변환
+    // 1. [배열 구조] Set Filter 등 values 배열이 명시된 경우
     if (Array.isArray(m.values)) {
+      // 배열 형태 그대로 유지하면서 내부 값만 대문자로 변환
       return m.values.map(v => (typeof v === 'string' ? v.trim().toUpperCase() : v));
     }
 
-    // 2. Multi Filter 구조인 경우
+    // 2. [Multi Filter 구조] 보내준 로그처럼 filterType이 multi인 경우
     if (m.filterType === 'multi' && Array.isArray(m.filterModels)) {
-      // 유효한 필터 모델 하나를 찾아 그 내부 값을 재귀적으로 탐색
-      const active = m.filterModels.find(f => f !== null);
-      return getSmartFilterValue(active);
+      // 배열 내부에서 실제 값이 들어있는 모델 하나를 찾음
+      const activeModel = m.filterModels.find(f => f !== null);
+      // 찾은 모델을 다시 재귀 호출하여 배열이면 배열, 단일이면 단일로 가져옴
+      return getFilterValueByStructure(activeModel);
     }
 
-    // 3. 복합 조건 (AND/OR) 구조
-    if (Array.isArray(m.conditions)) {
-      return getSmartFilterValue(m.conditions[0]);
+    // 3. [복합 조건] conditions나 condition1이 있는 경우
+    if (Array.isArray(m.conditions) && m.conditions[0]) {
+      return getFilterValueByStructure(m.conditions[0]);
     }
-    if (m.condition1) return getSmartFilterValue(m.condition1);
-
-    // 4. 일반적인 단일 값 구조 (Text, Number 등) -> 단일 값으로 반환 및 대문자
-    const res = m.filter !== undefined ? m.filter : 
-                m.value !== undefined ? m.value : null;
-
-    if (res !== null && typeof res === 'string') {
-      return res.trim().toUpperCase();
+    if (m.condition1) {
+      return getFilterValueByStructure(m.condition1);
     }
-    return res;
+
+    // 4. [단일 구조] 일반적인 텍스트/숫자 필터인 경우
+    if (m.filter !== undefined) {
+      const val = m.filter;
+      return typeof val === 'string' ? val.trim().toUpperCase() : val;
+    }
+
+    // 5. 기타 value 속성 (단일 값)
+    if (m.value !== undefined) {
+      const val = m.value;
+      return typeof val === 'string' ? val.trim().toUpperCase() : val;
+    }
+
+    return null;
   };
 
-  // 필터 모델 순회
+  // 필터 모델 순회하여 컬럼별 값 추출
   Object.keys(filterModel).forEach((colId) => {
-    const smartVal = getSmartFilterValue(filterModel[colId]);
-    if (smartVal !== null && smartVal !== undefined) {
-      filterDefaults[colId] = smartVal;
+    const originalStructuredValue = getFilterValueByStructure(filterModel[colId]);
+    if (originalStructuredValue !== null) {
+      filterDefaults[colId] = originalStructuredValue;
     }
   });
 
-  console.log('추출된 필터 데이터 (구조 유지):', filterDefaults);
+  // 콘솔로 구조 확인: 배열인지 단일값인지 꼭 체크해봐!
+  console.log('구조 유지 필터 데이터:', filterDefaults);
 
   const addRows = [];
   const numRows = parseInt(rowCount) || 1;
@@ -67,13 +77,13 @@ const insertRows = function (rowCount) {
       IGN_LIST_VAL: false,
       CRTER_NO: userInfo.value?.UserID,
       _id: newId,
-      ...filterDefaults // 필터 구조에 맞춰 주입
+      ...filterDefaults // 컬럼별로 배열 혹은 단일값이 그대로 들어감
     };
     addRows.push(newRow);
   }
 
   if (addRows.length > 0) {
-    // 필터 해제 시 중간 끼임 방지를 위해 인덱스 없이 추가 (물리적 맨 뒤)
+    // 필터 해제 시 데이터가 꼬이지 않도록 addIndex 없이 물리적 끝에 추가
     const result = grid.applyTransaction({ add: addRows });
     
     grid.refreshCells({ force: true, suppressFlash: true });
@@ -88,7 +98,7 @@ const insertRows = function (rowCount) {
   grid.setGridOption('loading', false);
 };
 
-// 핸들러 선언 순서
+// 핸들러 순서 (에러 방지용)
 const onCreateRows = function () {
   if (!currentProjNo.value) {
     sAlert.Warning(`Project를 선택해주세요`);
