@@ -1,117 +1,42 @@
-const insertRows = function (rowCount) {
-  const grid = gridRef.value;
-  if (!grid) return;
-
-  grid.stopEditing();
-  grid.setGridOption('loading', true);
-
-  const filterModel = grid.getFilterModel();
-  const filterDefaults = {};
-
-  /**
-   * 필터 모델의 원래 구조(배열/단일)를 분석해서 값을 추출하는 함수
-   */
-  const getFilterValueByStructure = (m) => {
-    if (!m || typeof m !== 'object') return null;
-
-    // 1. [배열 구조] Set Filter 등 values 배열이 명시된 경우
-    if (Array.isArray(m.values)) {
-      // 배열 형태 그대로 유지하면서 내부 값만 대문자로 변환
-      return m.values.map(v => (typeof v === 'string' ? v.trim().toUpperCase() : v));
-    }
-
-    // 2. [Multi Filter 구조] 보내준 로그처럼 filterType이 multi인 경우
-    if (m.filterType === 'multi' && Array.isArray(m.filterModels)) {
-      // 배열 내부에서 실제 값이 들어있는 모델 하나를 찾음
-      const activeModel = m.filterModels.find(f => f !== null);
-      // 찾은 모델을 다시 재귀 호출하여 배열이면 배열, 단일이면 단일로 가져옴
-      return getFilterValueByStructure(activeModel);
-    }
-
-    // 3. [복합 조건] conditions나 condition1이 있는 경우
-    if (Array.isArray(m.conditions) && m.conditions[0]) {
-      return getFilterValueByStructure(m.conditions[0]);
-    }
-    if (m.condition1) {
-      return getFilterValueByStructure(m.condition1);
-    }
-
-    // 4. [단일 구조] 일반적인 텍스트/숫자 필터인 경우
-    if (m.filter !== undefined) {
-      const val = m.filter;
-      return typeof val === 'string' ? val.trim().toUpperCase() : val;
-    }
-
-    // 5. 기타 value 속성 (단일 값)
-    if (m.value !== undefined) {
-      const val = m.value;
-      return typeof val === 'string' ? val.trim().toUpperCase() : val;
-    }
-
-    return null;
-  };
-
-  // 필터 모델 순회하여 컬럼별 값 추출
-  Object.keys(filterModel).forEach((colId) => {
-    const originalStructuredValue = getFilterValueByStructure(filterModel[colId]);
-    if (originalStructuredValue !== null) {
-      filterDefaults[colId] = originalStructuredValue;
-    }
-  });
-
-  // 콘솔로 구조 확인: 배열인지 단일값인지 꼭 체크해봐!
-  console.log('구조 유지 필터 데이터:', filterDefaults);
-
-  const addRows = [];
-  const numRows = parseInt(rowCount) || 1;
-
-  for (let i = 0; i < numRows; i++) {
-    const newId = `new_${Math.random().toString(36).substring(2, 12)}`;
-    const newRow = {
-      STATUS: 'A',
-      PROJ_NO: currentProjNo.value,
-      ATT_ID: null,
-      CL_ID: null,
-      VAL_TYPE: (typeof VAL_TYPES !== 'undefined') ? VAL_TYPES.STRING.VALUE : 'STRING',
-      RDON_YN: false,
-      IGN_LIST_VAL: false,
-      CRTER_NO: userInfo.value?.UserID,
-      _id: newId,
-      ...filterDefaults // 컬럼별로 배열 혹은 단일값이 그대로 들어감
-    };
-    addRows.push(newRow);
+[
+  {
+    "_id": "string",
+    "CRTER_NO": "string",
+    "CRTE_DTM": "2026-02-09T05:39:35.170Z",
+    "CHGER_NO": "string",
+    "CHGE_DTM": "2026-02-09T05:39:35.170Z",
+    "DELETED": true,
+    "DEL_USER": "string",
+    "DEL_DTM": "2026-02-09T05:39:35.170Z",
+    "PROJ_NO": "string",
+    "ATT_ID": "string",
+    "DESC": "string",
+    "GROUP": [
+      "string"
+    ],
+    "REMARK": "string",
+    "VAL_TYPE": "BOOL",
+    "IGN_LIST_VAL": true,
+    "ALLOW_STRS": [
+      "string"
+    ],
+    "CL_ID": "string",
+    "UOM_ID": "string",
+    "DEF_VAL": "string",
+    "CFIHOS_ID": "string",
+    "CFIHOS_NAME": "string",
+    "SEQ": 0,
+    "FORMAT": "string",
+    "REG_EXPS": "string",
+    "REL_ID": "string",
+    "EDIT_PAGE_URL": "string",
+    "REL_DIR": "LEFT",
+    "REL_CLS_ID": "string",
+    "ATTRIBUTES": [
+      {
+        "NAME": "string",
+        "VALUE": "string"
+      }
+    ]
   }
-
-  if (addRows.length > 0) {
-    // 필터 해제 시 데이터가 꼬이지 않도록 addIndex 없이 물리적 끝에 추가
-    const result = grid.applyTransaction({ add: addRows });
-    
-    grid.refreshCells({ force: true, suppressFlash: true });
-    
-    if (result.add && result.add.length > 0) {
-      grid.setNodesSelected({ nodes: result.add, newValue: true });
-      const lastIdx = grid.getDisplayedRowCount() - 1;
-      grid.ensureIndexVisible(lastIdx, 'bottom');
-    }
-  }
-  
-  grid.setGridOption('loading', false);
-};
-
-// 핸들러 순서 (에러 방지용)
-const onCreateRows = function () {
-  if (!currentProjNo.value) {
-    sAlert.Warning(`Project를 선택해주세요`);
-    return;
-  }
-  insertRows(1);
-};
-
-const onCreateMultiRows = function (rowCount) {
-  if (!currentProjNo.value) {
-    sAlert.Warning(`Project를 선택해주세요`);
-    return;
-  }
-  const count = (typeof rowCount === 'number') ? rowCount : 1;
-  insertRows(count);
-};
+]
