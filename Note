@@ -3,35 +3,29 @@ const insertRows = function (rowCount) {
   grid.stopEditing()
   grid.setGridOption('loading', true)
 
-  // 1. 필터 모델 가져오기 및 콘솔 출력
+  // 1. 현재 적용된 필터 모델 가져오기 및 디버깅 출력
   const filterModel = grid.getFilterModel()
   
-  console.log('======= [AG-GRID FILTER DEBUG] =======')
-  if (Object.keys(filterModel).length === 0) {
-    console.log('현재 적용된 필터가 없습니다.')
-  } else {
-    console.table(filterModel) // 테이블 형태로 깔끔하게 출력
-    console.log('전체 구조:', filterModel)
-  }
-  console.log('======================================')
+  console.log('======= [1단계: 현재 필터 모델 정보] =======')
+  console.dir(filterModel) // 상세 객체 구조 확인용
 
   const filterDefaults = {}
 
-  // 2. 값 추출 (추출 로직 보강)
+  // 2. 필터 모델에서 기본값 추출
   Object.keys(filterModel).forEach((colId) => {
     const model = filterModel[colId]
     
-    // Set Filter (체크박스)일 때
+    // Set 필터(체크박스)인 경우
     if (model.filterType === 'set') {
       filterDefaults[colId] = model.values[0]
     } 
-    // 일반 필터 (Text, Number 등)
+    // 일반 필터(텍스트, 숫자 등)인 경우
     else {
-      // 단일 조건일 때
+      // 단일 조건
       if (model.filter !== undefined) {
         filterDefaults[colId] = model.filter
       } 
-      // AND/OR 복합 조건일 때
+      // 복합 조건 (AND/OR)
       else if (model.condition1) {
         filterDefaults[colId] = model.condition1.filter
       }
@@ -42,7 +36,6 @@ const insertRows = function (rowCount) {
   for (let i = 0; i < rowCount; i++) {
     const newId = `new_${Math.random().toString(36).substring(2, 12)}`
     
-    // 3. 필터 값을 기본값으로 세팅
     const newRow = {
       STATUS: 'A',
       PROJ_NO: currentProjNo.value,
@@ -53,20 +46,29 @@ const insertRows = function (rowCount) {
       IGN_LIST_VAL: false,
       CRTER_NO: userInfo.value?.UserID,
       _id: newId,
-      ...filterDefaults  // 추출된 필터 값들을 새 행에 병합
+      ...filterDefaults // 추출된 필터 값 적용
     }
     
     addRows.push(newRow)
   }
 
-  // 이후 로직 동일...
+  // 3. 생성된 로우 데이터 콘솔 출력
+  console.log('======= [2단계: 실제 추가될 로우 데이터] =======')
+  console.table(addRows) // 추가될 행들을 테이블 형식으로 한눈에 확인
+  console.log('상세 데이터:', addRows)
+
   if (addRows.length > 0) {
     const lastIndex = grid.getDisplayedRowCount()
     const result = grid.applyTransaction({ add: addRows, addIndex: lastIndex })
     
     grid.refreshCells({ force: true, suppressFlash: true })
-    grid.setNodesSelected({ nodes: result.add, newValue: true })
+    grid.setNodesSelected({
+      nodes: result.add,
+      newValue: true,
+    })
     grid.ensureIndexVisible(lastIndex, 'bottom')
   }
+  
+  console.log('======= [디버깅 종료] =======')
   grid.setGridOption('loading', false)
 }
