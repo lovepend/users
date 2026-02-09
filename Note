@@ -1,3 +1,7 @@
+/**
+ * AG-Grid 행 추가 공통 함수
+ * @param {number} rowCount 추가할 행의 개수
+ */
 const insertRows = function (rowCount) {
   const grid = gridRef.value;
   if (!grid) return;
@@ -5,81 +9,117 @@ const insertRows = function (rowCount) {
   grid.stopEditing();
   grid.setGridOption('loading', true);
 
+  // 1. 현재 적용된 필터 모델 가져오기
   const filterModel = grid.getFilterModel();
   const filterDefaults = {};
 
-  const findValueAnywhere = (obj) => {
+  // 2. 어떤 필터 구조든 파고들어 값을 대문자로 추출하는 내부 함수
+  const findValueAndUpper = (obj) => {
     if (!obj || typeof obj !== 'object') return null;
     let result = null;
 
-    if (obj.filter !== undefined) result = obj.filter;
-    else if (Array.isArray(obj.values)) result = obj.values[0];
-    else if (Array.isArray(obj.filterModels)) {
+    // Multi Filter 구조 대응 (배열 내부 탐색)
+    if (Array.isArray(obj.filterModels)) {
       for (const sub of obj.filterModels) {
-        const val = findValueAnywhere(sub);
+        const val = findValueAndUpper(sub);
         if (val !== null) { result = val; break; }
       }
-    } else if (Array.isArray(obj.conditions)) {
+    } 
+    // 복합 조건 (AND/OR) 대응
+    else if (Array.isArray(obj.conditions)) {
       for (const cond of obj.conditions) {
-        const val = findValueAnywhere(cond);
+        const val = findValueAndUpper(cond);
         if (val !== null) { result = val; break; }
       }
-    } else {
-      result = obj.condition1 ? findValueAnywhere(obj.condition1) :
-               obj.value !== undefined ? obj.value : null;
+    } 
+    // 단일 조건 및 기타 속성 대응
+    else {
+      result = obj.filter !== undefined ? obj.filter :
+               obj.value !== undefined ? obj.value :
+               obj.condition1 ? findValueAndUpper(obj.condition1) :
+               Array.isArray(obj.values) ? obj.values[0] : null;
     }
 
-    // ★ 대문자 변환 처리: 확실하게 문자열임을 확인하고 변환
-    if (result !== null && result !== undefined) {
-      const stringVal = String(result).trim();
-      return stringVal.toUpperCase(); // 무조건 대문자로 변환
+    // 문자열이면 대문자로 변환 (숫자 등은 그대로 유지)
+    if (result !== null && typeof result === 'string') {
+      return result.trim().toUpperCase();
     }
     return result;
   };
 
+  // 3. 필터 모델을 순회하며 컬럼별 기본값 생성
   Object.keys(filterModel).forEach((colId) => {
-    const val = findValueAnywhere(filterModel[colId]);
+    const val = findValueAndUpper(filterModel[colId]);
     if (val !== null) {
       filterDefaults[colId] = val;
     }
   });
 
-  // 콘솔로 변환된 값 최종 확인
-  console.log('대문자로 변환된 필터값들:', filterDefaults);
+  // 디버깅: 추출된 대문자 필터값 확인
+  console.log('추출된 필터 기본값(대문자):', filterDefaults);
 
+  // 4. 새 로우 객체 생성
   const addRows = [];
-  const count = parseInt(rowCount) || 1;
+  const numRows = parseInt(rowCount) || 1;
 
-  for (let i = 0; i < count; i++) {
+  for (let i = 0; i < numRows; i++) {
     const newId = `new_${Math.random().toString(36).substring(2, 12)}`;
-    
-    // 1. 기본 객체 생성
-    let newRow = {
+    const newRow = {
       STATUS: 'A',
       PROJ_NO: currentProjNo.value,
       ATT_ID: null,
       CL_ID: null,
-      VAL_TYPE: VAL_TYPES.STRING.VALUE,
+      VAL_TYPE: (typeof VAL_TYPES !== 'undefined') ? VAL_TYPES.STRING.VALUE : 'STRING',
       RDON_YN: false,
       IGN_LIST_VAL: false,
       CRTER_NO: userInfo.value?.UserID,
       _id: newId,
+      ...filterDefaults // 필터링된 값이 있으면 대문자로 덮어씌움
     };
-
-    // 2. 필터 기본값을 명시적으로 할당 (덮어쓰기)
-    // 스프레드 연산자(...filterDefaults)가 baseRow의 속성보다 뒤에 와야 함
-    newRow = { ...newRow, ...filterDefaults };
-    
     addRows.push(newRow);
   }
 
+  // 5. 그리드에 데이터 추가
   if (addRows.length > 0) {
-    const lastIndex = grid.getDisplayedRowCount();
-    const result = grid.applyTransaction({ add: addRows, addIndex: lastIndex });
+    // addIndex를 지정하지 않으면 데이터의 물리적 맨 끝에 추가됩니다.
+    // 필터가 걸린 상태에서 시각적으로 마지막에 보이게 하려면 addIndex 사용 가능하나,
+    // 필터를 풀었을 때 중간에 끼는 현상을 막으려면 인덱스 없이 추가하는 것이 좋습니다.
+    const result = grid.applyTransaction({ add: addRows });
     
     grid.refreshCells({ force: true, suppressFlash: true });
-    grid.setNodesSelected({ nodes: result.add, newValue: true });
-    grid.ensureIndexVisible(lastIndex, 'bottom');
+    
+    // 추가된 행 선택 및 스크롤 이동
+    if (result.add && result.add.length > 0) {
+      grid.setNodesSelected({ nodes: result.add, newValue: true });
+      const lastDisplayedIndex = grid.getDisplayedRowCount() - 1;
+      grid.ensureIndexVisible(lastDisplayedIndex, 'bottom');
+    }
   }
+  
   grid.setGridOption('loading', false);
+};
+
+/**
+ * 단일 행 추가 버튼 핸들러
+ */
+const onCreateRows = function () {
+  if (!currentProjNo.value) {
+    sAlert.Warning(`Project를 선택해주세요`);
+    return;
+  }
+  insertRows(1);
+};
+
+/**
+ * 다중 행 추가 버튼 핸들러
+ * @param {number|object} rowCount 숫자값이거나 이벤트 객체일 수 있음
+ */
+const onCreateMultiRows = function (rowCount) {
+  if (!currentProjNo.value) {
+    sAlert.Warning(`Project를 선택해주세요`);
+    return;
+  }
+  // 파라미터가 숫자가 아닌 경우(이벤트 객체 등)를 대비해 기본값 1 설정
+  const count = (typeof rowCount === 'number') ? rowCount : 1;
+  insertRows(count);
 };
