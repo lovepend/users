@@ -7,17 +7,25 @@ const insertRows = function (rowCount) {
   const filterModel = grid.getFilterModel()
   const filterDefaults = {}
 
-  // 필터 모델에서 단순 일치 조건(Set Filter 또는 Simple Filter의 equals) 추출
+  console.log('현재 적용된 필터 상세:', filterModel) // 어떤 구조로 들어오는지 콘솔에서 확인 가능합니다.
+
   Object.keys(filterModel).forEach((colId) => {
     const model = filterModel[colId]
-    
-    // Set Filter인 경우 (여러 값 선택 가능하므로 첫 번째 값 사용 혹은 무시 가능)
-    if (model.filterType === 'set' && model.values.length > 0) {
+
+    // Case A: Set Filter (체크박스 형태)
+    if (model.filterType === 'set') {
       filterDefaults[colId] = model.values[0]
     } 
-    // 일반 텍스트/숫자 필터인 경우 (완전 일치 조건일 때만)
-    else if (model.filter === 'equals' || model.type === 'equals') {
-      filterDefaults[colId] = model.filter
+    // Case B: Simple Filter (Text, Number, Date 등)
+    else {
+      // 단일 조건일 때 (filter 속성이 직접 있는 경우)
+      if (model.filter !== undefined) {
+        filterDefaults[colId] = model.filter
+      } 
+      // 복합 조건(AND/OR) 또는 최신 버전의 조건부 필터인 경우
+      else if (model.condition1 && model.condition1.filter !== undefined) {
+        filterDefaults[colId] = model.condition1.filter
+      }
     }
   })
 
@@ -25,8 +33,8 @@ const insertRows = function (rowCount) {
   for (let i = 0; i < rowCount; i++) {
     const newId = `new_${Math.random().toString(36).substring(2, 12)}`
     
-    // 2. 기본 객체 생성
-    const newRow = {
+    // 기본값 객체
+    const baseRow = {
       STATUS: 'A',
       PROJ_NO: currentProjNo.value,
       ATT_ID: null,
@@ -36,16 +44,16 @@ const insertRows = function (rowCount) {
       IGN_LIST_VAL: false,
       CRTER_NO: userInfo.value?.UserID,
       _id: newId,
-      ...filterDefaults // 3. 필터링된 값을 덮어쓰기 (스프레드 연산자)
     }
-    
+
+    // 기본값 위에 필터값을 덮어씌움
+    const newRow = Object.assign({}, baseRow, filterDefaults)
     addRows.push(newRow)
   }
 
   if (addRows.length > 0) {
-    // 필터링된 상태에서 새 행이 보이지 않을 수 있으므로, 
-    // 보통 맨 위에 추가하거나 현재 표시된 행 개수를 기준으로 index 설정
     const lastIndex = grid.getDisplayedRowCount()
+    // 필터링된 상태에서도 추가된 행이 바로 보이게 하려면 applyTransaction을 사용
     const result = grid.applyTransaction({ add: addRows, addIndex: lastIndex })
     
     grid.refreshCells({ force: true, suppressFlash: true })
