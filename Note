@@ -19,29 +19,24 @@
 
         .main-container { position: relative; height: calc(100% - 35px); width: 100%; }
 
-        /* [편집 모드] textarea */
         textarea {
             position: absolute; width: 100%; height: 100%; 
             padding: 20px; box-sizing: border-box;
             background: var(--bg-color); color: #d4d4d4;
             font-size: 14px; line-height: 1.6; font-family: inherit;
             border: none; outline: none; resize: none;
-            z-index: 2;
-            white-space: pre;
-            overflow: auto;
+            z-index: 2; white-space: pre; overflow: auto;
         }
 
-        /* [보기 모드] 프리즘 영역 */
         #code-display {
             position: absolute; width: 100%; height: 100%;
             z-index: 1; display: none; overflow: auto;
             background: var(--bg-color);
         }
 
-        /* ★★★ 라인 넘버 겹침 해결 핵심 CSS ★★★ */
+        /* 라인 넘버 레이아웃 수정 */
         pre[class*="language-"].line-numbers {
             margin: 0 !important;
-            /* 1. 패딩을 넉넉히 주어 숫자와 코드 사이 간격 확보 (기존 3.8em -> 4.5em) */
             padding: 20px 20px 20px 4.5em !important; 
             background: var(--bg-color) !important;
             height: 100% !important;
@@ -56,21 +51,11 @@
             font-family: inherit !important;
         }
 
-        /* 2. 숫자 박스 자체를 왼쪽 벽에 바짝 붙이고 너비 고정 */
         .line-numbers .line-numbers-rows {
-            left: 0 !important;                   /* 왼쪽 끝에 붙임 */
-            width: 3.5em !important;              /* 숫자 영역 너비 */
-            letter-spacing: -1px;
-            border-right: 1px solid #3c3c3c !important; /* 숫자와 코드 사이 구분선 */
-            padding-top: 20px !important;         /* pre의 padding-top과 일치시켜야 줄이 맞음 */
-        }
-
-        /* 숫자 개별 스타일 */
-        .line-numbers-rows > span:before {
-            display: block;
-            text-align: center !important;        /* 숫자 가운데 정렬 */
-            padding-right: 5px;
-            color: #858585;                       /* VSC 느낌의 어두운 숫자색 */
+            left: 0 !important;
+            width: 3.5em !important;
+            border-right: 1px solid #3c3c3c !important;
+            padding-top: 20px !important;
         }
     </style>
 </head>
@@ -87,7 +72,7 @@
 <div class="main-container">
     <textarea id="editor" spellcheck="false" placeholder="Loading..."></textarea>
     <div id="code-display">
-        <pre class="line-numbers"><code id="highlight-area" class="language-javascript"></code></pre>
+        <pre id="pre-area" class="line-numbers"><code id="highlight-area" class="language-javascript"></code></pre>
     </div>
 </div>
 
@@ -99,11 +84,11 @@
     const editor = document.getElementById('editor');
     const codeDisplay = document.getElementById('code-display');
     const highlightArea = document.getElementById('highlight-area');
+    const preArea = document.getElementById('pre-area');
     const editBtn = document.getElementById('editBtn');
     const saveBtn = document.getElementById('saveBtn');
     
-    // 로컬스토리지 키 (새로운 세션으로 테스트)
-    const STORAGE_KEY = 'note_v4_final_wrapped';
+    const STORAGE_KEY = 'note_v5_final_fix';
 
     window.onload = async () => {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -114,7 +99,7 @@
                 const response = await fetch('./data.txt');
                 if (response.ok) editor.value = await response.text();
             } catch (e) {
-                editor.value = "// Sample Code\nfunction hello() {\n    console.log('world');\n}\n// 줄바꿈이 잘 되는지 확인해보세요!";
+                editor.value = "// 코드를 입력해 보세요.";
             }
         }
         setMode(false);
@@ -123,6 +108,12 @@
     function updateHighlight() {
         highlightArea.textContent = editor.value;
         Prism.highlightElement(highlightArea);
+
+        // ★ [핵심 해결책] 하이라이팅 직후 라인 넘버를 강제로 다시 계산합니다.
+        // Prism 플러그인의 버그성 동작을 막기 위해 10ms 정도 뒤에 강제 Resize 이벤트를 줍니다.
+        setTimeout(() => {
+            window.dispatchEvent(new Event('resize'));
+        }, 10);
     }
 
     function setMode(isEdit) {
@@ -133,6 +124,7 @@
             editBtn.textContent = "View";
             editor.focus();
         } else {
+            // 보기에 들어가기 전에 업데이트
             updateHighlight();
             editor.style.display = "none";
             codeDisplay.style.display = "block";
