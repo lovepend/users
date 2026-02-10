@@ -1,189 +1,197 @@
-<script>
-  import { shallowRef } from 'vue'
-  import { ApiCommon } from '@/utils/axios/api-common'
-  import vSelect from 'vue-select'
-  import { useEmployees } from '@/stores/app-employees'
-  import { debounce } from 'lodash-es' // lodash-es 또는 lodash 설치 필요
+import GC from '@mescius/spread-sheets-designer'
+import { ApiCommon } from '@/utils/axios/api-common'
+import { throttle as _throttle } from 'lodash-es'
+import { useEmployees } from '@/stores/app-employees'
+const { setEmployeeInfo } = useEmployees()
 
-  const { setEmployeeInfo } = useEmployees()
+const _EditorType = 'UserEditor'
+const _EditorWidth = 300
+const _EditorHeight = 65
 
-  export default {
-    name: 'AgUserEditor',
-    components: { vSelect },
-    props: {
-      params: { type: Object, default: () => ({}) },
-    },
-    setup(props) {
-      return {
-        containerRef: shallowRef(null),
-        vSelectRef: shallowRef(null),
-        vModelRef: shallowRef(null),
-        vOptionsRef: shallowRef([]),
-        vValue: shallowRef(null),
+function UserSelectCellType(FIELD, NAME_FIELD, DEPT_FIELD) {
+  this.field = FIELD
+  this.nameField = NAME_FIELD
+  this.deptField = DEPT_FIELD
+  this.name = ''
+  this.searchID = 0
+}
+UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
+UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
+  // if (value) { GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, value, x, y, w, h, style, options]); }
+
+  const sheet = options.sheet
+  const row = options.row
+  // const col = options.col
+  let data = sheet.getDataItem(row)
+  if (!data) {
+    const dataSource = sheet.getDataSource()
+    if (dataSource && !Array.isArray(dataSource)) {
+      data = dataSource.getSource()
+    }
+  }
+  const name = data?.[this.nameField] ?? ''
+  const dept = data?.[this.deptField] ?? ''
+  const deptV = dept ? `(${dept})` : ''
+  const text = !data ? '' : `${name}${deptV}`
+  GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, text, x, y, w, h, style, options])
+  return
+}
+UserSelectCellType.prototype.updateEditor = function (editorContext /*cellStyle, cellRect*/) {
+  if (editorContext) {
+    editorContext.parentNode.style.width = '100%'
+    editorContext.parentNode.style.height = '100%'
+    return { width: _EditorWidth, height: _EditorHeight }
+  }
+}
+UserSelectCellType.prototype.isEditingValueChanged = function (oldValue, newValue) {
+  return newValue !== oldValue
+}
+UserSelectCellType.prototype.createEditorElement = function () {
+  let userOptions = []
+  let userIndex = {}
+
+  // WRAPPER
+  const wrapper = document.createElement('div')
+  wrapper.setAttribute('gcUIElement', 'gcEditingInput')
+  wrapper.setAttribute('EditorType', _EditorType)
+  wrapper.className = 'spread-user-editor w-100 h-100 p-1 v-select'
+  wrapper.style.backgroundColor = 'white'
+  wrapper.style.overflow = 'hidden'
+
+  // HEADER
+  const header = document.createElement('div')
+  header.className = 'w-100'
+
+  // TITLE
+  const title = document.createElement('span')
+  title.className = ''
+  title.innerText = 'Search User'
+
+  // COMBO_BOX
+  const combo = document.createElement('div')
+  combo.className = 'cursor-text px-2 py-1 d-flex border border-1 border-light rounded-2'
+
+  // SEARCH_INPUT
+  const search = document.createElement('input')
+  search.className = 'border-0'
+  search.style.flex = 'auto'
+  search.style.outline = 'none'
+  search.type = 'text'
+  search.autocomplete = 'off'
+  search.placeholder = 'Name to search for. ex)홍길동 / ㅎㄱㄷ'
+  search.setAttribute('aria-autocomplete', 'list')
+  search.addEventListener('focus', function () {
+    listbox.style.opacity = 1
+    listbox.style.visibility = 'visible'
+  })
+  search.addEventListener('blur', function () {
+    listbox.style.opacity = 0
+    listbox.style.visibility = 'hidden'
+  })
+  search.addEventListener(
+    'input',
+    _throttle(e => {
+      if (!e.target) {
+        return
       }
-    },
-    mounted() {
-      this.vModelRef = this.params?.editorSelected
-      this.vOptionsRef = this.params?.editorOptions ?? []
-      this.vValue = this.getInitialValue()
-      setTimeout(() => {
-        this.vSelectRef?.searchEl.focus()
-      }, 1)
-    },
-    methods: {
-      getValue() {
-        return this.vValue
-      },
-      getInitialValue() {
-        return this.params?.value
-      },
-      onClosePopup() {
-        try {
-          if (this.params) {
-            this.params.stopEditing()
-          }
-        } catch (e) {
-          // ignore
-        }
-      },
-      setValue(USER_ID) {
-        const newValue = String(USER_ID ?? '')
-        this.vValue = newValue === '' ? null : newValue
-      },
-      getSelectedValue() {
-        return this.vModelRef?.code
-      },
-      onKeydown(event) {
-        if (event.key === 'Escape' || event.key === 'ESC') {
-          event.preventDefault()
-          const userId = this.getInitialValue()
-          this.setValue(userId)
-          this.onClosePopup()
-        } else if (event.key === 'Enter') {
-          event.preventDefault()
-          event.stopPropagation()
-          const userId = this.getSelectedValue()
-          if (userId) {
-            this.setValue(userId)
-            this.onClosePopup()
-          }
-        }
-      },
+      if (!e.isComposing) {
+        e.target.value = this.name
+        return
+      }
 
-      /**
-       * debounce를 적용하여 타이핑 중 빈번한 API 호출을 방지하고
-       * 한글 조합(IME)이 완료될 시간을 확보합니다.
-       */
-      onSearch: debounce(async function (search, loading) {
-        // 공백 제거 후 검색어 확인
-        const userName = String(search ?? '').trim()
-        
-        // 검색어가 너무 짧으면 호출하지 않음 (한글 1자도 검색하려면 1로 수정 가능)
-        if (userName.length < 1) {
-          this.vOptionsRef = []
+      listbox.innerHTML = ''
+      const userName = String(e.target.value ?? '').replaceAll(' ', '')
+      if (userName.length < 2) {
+        return
+      }
+
+      this.name = e.target.value
+      const currentID = (this.searchID += 1)
+      ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: userName }).then(response => {
+        if (currentID !== this.searchID) {
           return
         }
+        userOptions = []
+        userIndex = {}
+        const itemList = []
+        response?.forEach((item, index) => {
+          if (!item.EMP_NO) {
+            return
+          } // UserID가 있는 항목만 필터링
+          const code = item.EMP_NO
+          const label = `${item.EMP_NM ?? ''}(${item.DEPT_NAME ?? ''})`
+          const userInfo = { ...item, code, label }
+          setEmployeeInfo(userInfo)
 
-        try {
-          loading(true)
-          
-          // API 호출: '박정철' 입력 시 조합이 완료된 userName이 전달됨
-          const response = (await ApiCommon.postOfficeFindEmployee({ 
-            Type: 'Name', 
-            Keyword: userName 
-          })) ?? []
+          const listitem = document.createElement('li')
+          listitem.className = 'vs__dropdown-option'
+          listitem.innerText = label
+          listitem.setAttribute('option-id', index)
+          itemList.push(listitem)
 
-          const options = response
-            .filter(item => item.EMP_NO)
-            .map(item => ({
-              ...item,
-              code: item.EMP_NO,
-              label: `${item.EMP_NM ?? ''}(${item.DEPT_NAME ?? ''})`,
-            }))
+          userOptions.push(userInfo)
+          userIndex[index] = userInfo
+        })
+        listbox.append(...itemList)
+      })
+    }, 300)
+  )
 
-          // 데이터 스토어 업데이트 (불필요한 루프 제거)
-          if (options.length > 0) {
-            setEmployeeInfo(options)
-          }
+  // INDICATOR_ICON
+  const indicator = document.createElement('i')
+  indicator.className = 'fa fa-angle-down align-self-center'
 
-          this.vOptionsRef = options
-        } catch (error) {
-          console.error('Search Error:', error)
-          this.vOptionsRef = []
-        } finally {
-          loading(false)
-        }
-      }, 300), // 300ms 대기 후 실행
-
-      onSelected(item) {
-        this.setValue(item?.code)
-        // 선택 후 포커스를 컨테이너로 옮겨 팝업이 바로 닫히지 않도록 제어 가능
-        setTimeout(() => this.containerRef?.focus(), 1)
-      },
-      dropdownShouldOpen(vselect) {
-        return !vselect.loading && vselect.open
-      },
-    },
-  }
-</script>
-
-<template>
-  <div ref="containerRef" class="p-1 bg-white ag-user-editor-container" tabindex="0" @keydown="onKeydown">
-    <div class="d-flex flex-row my-1 justify-content-between">
-      <span class="badge bg-info">ESC - 취소 / Enter - 선택</span>
-      <span class="badge bg-dark" style="cursor: pointer" @click="onClosePopup">X</span>
-    </div>
-    <vSelect
-      ref="vSelectRef"
-      v-model="vModelRef"
-      :options="vOptionsRef"
-      :taggable="false"
-      :filterable="false" 
-      :placeholder="'검색어 입력 (예: 박정철)'"
-      :dropdown-should-open="dropdownShouldOpen"
-      @option:selected="onSelected"
-      @search="onSearch"
-      class="w-100 ag-user-editor-select"
-    >
-      <template #no-options="{ searching }">
-        <template v-if="searching">검색 결과가 없습니다.</template>
-        <template v-else>이름을 입력해 주세요.</template>
-      </template>
-    </vSelect>
-  </div>
-</template>
-
-<style scoped lang="scss">
-  .ag-user-editor-container {
-    border: 1px solid #a8beed;
-    min-width: 300px;
-    width: auto;
-    height: auto;
-    outline: none;
-  }
-  :deep().ag-user-editor-select {
-    .vs__dropdown-toggle {
-      .vs__selected-options {
-        flex-wrap: wrap !important;
-        .vs__search {
-          color: #555;
-        }
-      }
+  // SELECT_BOX
+  const listbox = document.createElement('ul')
+  listbox.className = 'vs__dropdown-menu rounded-2 position-fixed'
+  listbox.style.top = 'unset'
+  listbox.style.left = 'unset'
+  listbox.style.width = '290px'
+  listbox.style.opacity = 0
+  listbox.style.visibility = 'hidden'
+  listbox.style.transition = 'opacity 0.2s linear, visibility 0s linear 0.2s'
+  listbox.setAttribute('EditorUses', 'list')
+  listbox.addEventListener('click', function (e) {
+    if (e.target && e.target.nodeName === 'LI') {
+      const optionId = e.target.getAttribute('option-id')
+      const optionText = e.target.innerText
+      const userInfo = userIndex?.[optionId]
+      search.value = optionText
+      editorVal.value = userInfo?.code
     }
-    &.vs--searching .vs__search {
-      color: #000 !important;
-    }
-    .vs__dropdown-menu {
-      padding: 0.5rem !important;
-      border-radius: 5px;
-      border: 1px solid rgb(168, 190, 237);
-      background-color: #fff;
-      max-height: 200px;
-      overflow-x: hidden;
-      .vs__dropdown-option--selected {
-        background: #d9e5ff;
-        color: #000000;
-      }
+  })
+
+  // HIDDEN_VALUE
+  const editorVal = document.createElement('input')
+  editorVal.type = 'text'
+  editorVal.style.display = 'none'
+  editorVal.disabled = true
+  editorVal.readonly = true
+  editorVal.setAttribute('EditorUses', 'value')
+
+  // CREATE_EDITOR
+  header.appendChild(title)
+  combo.appendChild(search)
+  combo.appendChild(indicator)
+  wrapper.appendChild(header)
+  wrapper.appendChild(combo)
+  wrapper.appendChild(listbox)
+  wrapper.appendChild(editorVal)
+  return wrapper
+}
+UserSelectCellType.prototype.getEditorValue = function (editorContext) {
+  if (editorContext && editorContext.getAttribute('EditorType') === _EditorType) {
+    const valNode = editorContext.querySelector('[editoruses="value"]')
+    return valNode.value
+  }
+}
+UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
+  if (editorContext && editorContext.getAttribute('EditorType') === _EditorType) {
+    if (value) {
+      const valNode = editorContext.querySelector('[editoruses="value"]')
+      valNode.value = value
     }
   }
-</style>
+}
+
+export default UserSelectCellType
