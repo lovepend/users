@@ -19,7 +19,7 @@
 
         .main-container { position: relative; height: calc(100% - 35px); width: 100%; }
 
-        /* [편집 모드] textarea 설정 */
+        /* [편집 모드] textarea */
         textarea {
             position: absolute; width: 100%; height: 100%; 
             padding: 20px; box-sizing: border-box;
@@ -27,45 +27,50 @@
             font-size: 14px; line-height: 1.6; font-family: inherit;
             border: none; outline: none; resize: none;
             z-index: 2;
-            white-space: pre; /* 원본 줄바꿈 유지 */
+            white-space: pre;
             overflow: auto;
         }
 
-        /* [보기 모드] 프리즘 영역 설정 */
+        /* [보기 모드] 프리즘 영역 */
         #code-display {
             position: absolute; width: 100%; height: 100%;
             z-index: 1; display: none; overflow: auto;
             background: var(--bg-color);
         }
 
-        /* ★★★ [중요] 줄바꿈 강제 CSS ★★★ */
-        /* Prism의 기본 설정을 완전히 덮어씌웁니다. */
-        pre[class*="language-"] {
+        /* ★★★ 라인 넘버 겹침 해결 핵심 CSS ★★★ */
+        pre[class*="language-"].line-numbers {
             margin: 0 !important;
-            padding: 20px 20px 20px 3.8em !important;
+            /* 1. 패딩을 넉넉히 주어 숫자와 코드 사이 간격 확보 (기존 3.8em -> 4.5em) */
+            padding: 20px 20px 20px 4.5em !important; 
             background: var(--bg-color) !important;
             height: 100% !important;
             box-sizing: border-box !important;
-            
-            /* 가로 스크롤을 없애고 아래로 떨어뜨리는 핵심 속성 */
-            white-space: pre-wrap !important;       /* CSS3 줄바꿈 보존 */
-            word-wrap: break-word !important;      /* 긴 단어 줄바꿈 */
-            overflow-wrap: break-word !important; 
-            word-break: break-all !important;      /* 한글/코드 가리지 않고 줄바꿈 */
+            white-space: pre-wrap !important;
+            word-break: break-all !important;
         }
 
         code[class*="language-"] {
-            /* 코드 내부 태그도 줄바꿈 허용 */
             white-space: pre-wrap !important;
             word-break: break-all !important;
             font-family: inherit !important;
         }
 
-        /* 라인 넘버 위치 보정 */
+        /* 2. 숫자 박스 자체를 왼쪽 벽에 바짝 붙이고 너비 고정 */
         .line-numbers .line-numbers-rows {
-            padding-top: 20px !important;
-            left: 0 !important;
-            border-right: 1px solid #444 !important;
+            left: 0 !important;                   /* 왼쪽 끝에 붙임 */
+            width: 3.5em !important;              /* 숫자 영역 너비 */
+            letter-spacing: -1px;
+            border-right: 1px solid #3c3c3c !important; /* 숫자와 코드 사이 구분선 */
+            padding-top: 20px !important;         /* pre의 padding-top과 일치시켜야 줄이 맞음 */
+        }
+
+        /* 숫자 개별 스타일 */
+        .line-numbers-rows > span:before {
+            display: block;
+            text-align: center !important;        /* 숫자 가운데 정렬 */
+            padding-right: 5px;
+            color: #858585;                       /* VSC 느낌의 어두운 숫자색 */
         }
     </style>
 </head>
@@ -97,7 +102,8 @@
     const editBtn = document.getElementById('editBtn');
     const saveBtn = document.getElementById('saveBtn');
     
-    const STORAGE_KEY = 'vsc_note_final_fixed';
+    // 로컬스토리지 키 (새로운 세션으로 테스트)
+    const STORAGE_KEY = 'note_v4_final_wrapped';
 
     window.onload = async () => {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -108,14 +114,13 @@
                 const response = await fetch('./data.txt');
                 if (response.ok) editor.value = await response.text();
             } catch (e) {
-                editor.value = "// Sample Code\nfunction hello() {\n    console.log('world');\n}";
+                editor.value = "// Sample Code\nfunction hello() {\n    console.log('world');\n}\n// 줄바꿈이 잘 되는지 확인해보세요!";
             }
         }
         setMode(false);
     };
 
     function updateHighlight() {
-        // textContent를 써서 줄바꿈 기호를 정확히 전달
         highlightArea.textContent = editor.value;
         Prism.highlightElement(highlightArea);
     }
