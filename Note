@@ -10,9 +10,8 @@
         :root { --bg-color: #1e1e1e; --header-bg: #2d2d2d; --accent-color: #007acc; }
         body, html { margin: 0; padding: 0; height: 100%; background-color: var(--bg-color); color: #ccc; font-family: 'Consolas', monospace; overflow: hidden; }
         
-        .top-bar { height: 35px; background: var(--header-bg); display: flex; justify-content: space-between; align-items: center; padding: 0 15px; border-bottom: 1px solid #3e3e3e; }
+        .top-bar { height: 35px; background: var(--header-bg); display: flex; justify-content: space-between; align-items: center; padding: 0 15px; border-bottom: 1px solid #3e3e3e; box-sizing: border-box; }
         .logo { font-size: 11px; color: #858585; letter-spacing: 1px; }
-        
         .btn-group { display: flex; gap: 6px; }
         button { background: #3c3c3c; color: #fff; border: 1px solid #454545; padding: 2px 10px; border-radius: 2px; cursor: pointer; font-size: 11px; height: 22px; }
         button#saveBtn { background: var(--accent-color); border: none; }
@@ -20,44 +19,48 @@
 
         .main-container { position: relative; height: calc(100% - 35px); width: 100%; }
 
-        /* 에디터 공통 스타일 */
-        textarea, #code-display, pre {
-            position: absolute; width: 100%; height: 100%; 
-            margin: 0; padding: 0;
-            box-sizing: border-box; font-size: 14px; line-height: 1.6; 
-            tab-size: 4; border: none; outline: none;
-        }
-
-        /* 입력 창: 줄바꿈 허용 */
+        /* 입력 창 스타일 */
         textarea {
-            padding: 15px;
-            background: var(--bg-color);
-            color: #d4d4d4;
+            position: absolute; width: 100%; height: 100%; 
+            padding: 20px; box-sizing: border-box;
+            background: var(--bg-color); color: #d4d4d4;
+            font-size: 14px; line-height: 1.6; font-family: inherit;
+            border: none; outline: none; resize: none;
             z-index: 2;
-            resize: none;
-            white-space: pre; /* 줄바꿈 유지 */
-            overflow-wrap: normal;
+            white-space: pre; /* 입력할 때 줄바꿈 유지 */
             overflow: auto;
         }
 
-        /* 보기 창: VSC 스타일 하이라이팅 및 줄바꿈 */
+        /* 보기 창 스타일 */
         #code-display {
-            z-index: 1;
-            display: none;
+            position: absolute; width: 100%; height: 100%;
+            z-index: 1; display: none; overflow: auto;
             background: var(--bg-color);
         }
 
-        /* Prism pre 태그 오버라이드: 줄바꿈(pre-wrap) 핵심 설정 */
-        pre[class*="language-"].line-numbers {
-            padding: 15px 15px 15px 3.8em !important;
+        /* [핵심] Prism 라이브러리 강제 줄바꿈 설정 */
+        pre[class*="language-"] {
+            margin: 0 !important;
+            padding: 20px 20px 20px 3.8em !important; /* 패딩 넉넉히 */
             background: var(--bg-color) !important;
-            white-space: pre-wrap !important; /* 이 코드가 줄바꿈을 적용합니다 */
-            word-break: break-all !important;
-            overflow: auto;
+            height: 100% !important;
+            box-sizing: border-box !important;
+            
+            /* 이 3줄이 줄바꿈을 강제합니다 */
+            white-space: pre-wrap !important; 
+            word-break: break-all !important; 
+            overflow-wrap: anywhere !important;
         }
 
         code[class*="language-"] {
-            white-space: pre-wrap !important; /* 코드 태그에도 줄바꿈 적용 */
+            white-space: pre-wrap !important; /* 코드 태그 줄바꿈 */
+            font-family: inherit !important;
+        }
+
+        /* 라인 넘버 색상 조정 */
+        .line-numbers .line-numbers-rows {
+            border-right: 1px solid #444 !important;
+            padding-top: 20px !important; /* pre의 패딩과 맞춰야 함 */
         }
     </style>
 </head>
@@ -81,8 +84,6 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
 
 <script>
     const editor = document.getElementById('editor');
@@ -91,8 +92,7 @@
     const editBtn = document.getElementById('editBtn');
     const saveBtn = document.getElementById('saveBtn');
     
-    const STORAGE_KEY = 'vsc_v2_note_data';
-    const FILE_URL = './data.txt';
+    const STORAGE_KEY = 'note_v3_final';
 
     window.onload = async () => {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -100,18 +100,19 @@
             editor.value = saved;
         } else {
             try {
-                const response = await fetch(FILE_URL);
+                // data.txt가 있을 경우 대비
+                const response = await fetch('./data.txt');
                 if (response.ok) editor.value = await response.text();
             } catch (e) {
-                editor.value = "// 코드를 입력하세요.";
+                editor.value = "이곳에 코드를 입력하세요.\n줄바꿈 테스트입니다.";
             }
         }
         setMode(false);
     };
 
     function updateHighlight() {
-        // innerText를 사용하면 HTML 엔티티 변환을 Prism이 알아서 안전하게 처리합니다.
-        highlightArea.innerText = editor.value;
+        // innerText 대신 textContent를 사용해 줄바꿈을 더 원시적으로 보존합니다.
+        highlightArea.textContent = editor.value;
         Prism.highlightElement(highlightArea);
     }
 
@@ -144,12 +145,14 @@
     editBtn.addEventListener('click', () => setMode(editor.style.display === "none"));
     saveBtn.addEventListener('click', save);
 
+    // 단축키
     window.addEventListener('keydown', (e) => {
         const isCtrl = e.ctrlKey || e.metaKey;
         if (isCtrl && e.key.toLowerCase() === 'e') { e.preventDefault(); setMode(editor.style.display === "none"); }
         if (isCtrl && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
     });
 
+    // 탭 키
     editor.addEventListener('keydown', function(e) {
         if (e.key === 'Tab') {
             e.preventDefault();
