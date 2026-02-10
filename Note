@@ -1,1 +1,169 @@
-"{\"version\":\"18.2.2\",\"name\":\"\",\"docProps\":{\"docPropsCore\":{\"creator\":\"공화훈\",\"lastModifiedBy\":\"공화훈\",\"lastPrinted\":\"2025-07-23T04:43:50Z\",\"created\":\"2024-05-23T00:27:04Z\",\"modified\":\"2025-11-06T23:48:26Z\"},\"docPropsApp\":{\"Application\":\"Microsoft Excel\",\"DocSecurity\":\"0\",\"ScaleCrop\":\"false\",\"HeadingPairs\":{\"size\":4,\"baseType\":\"variant\",\"workbookInfoArray\":[{\"elementType\":\"vt:lpstr\",\"value\":\"워크시트\"},{\"elementType\":\"vt:i4\",\"value\":\"1\"},{\"elementType\":\"vt:lpstr\",\"value\":\"이름이 지정된 범위\"},{\"elementType\":\"vt:i4\",\"value\":\"1\"}]},\"TitlesOfParts\":{\"size\":2,\"baseType\":\"lpstr\",\"sheetsNameArray\":[\"Control valve\",\"'Control valve'!Print_Area\"]},\"Company\":\"\",\"LinksUpToDate\":\"false\",\"SharedDoc\":\"false\",\"HyperlinksChanged\":\"false\",\"AppVersion\":\"16.0300\"}},\"sheetCount\":1,\"tabStripRatio\":0.6,\"allowDynamicArray\":true,\"iterativeCalculation\":false,\"iterativeCalculationMaximumIterations\":100,\"
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>간단 메모장 (다크 모드)</title>
+    <style>
+        /* 기본 스타일 및 다크 모드 설정 */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a; /* 어두운 배경 */
+            color: #e0e0e0; /* 밝은 텍스트 */
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 90%;
+            max-width: 800px;
+            background-color: #2c2c2c; /* 컨테이너 배경 */
+            padding: 25px;
+            border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        h1 {
+            color: #76c7c0; /* 제목 색상 */
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 2.2em;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        button {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease, transform 0.2s ease;
+            color: #ffffff;
+            font-weight: bold;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        button#editBtn {
+            background-color: #5cb85c; /* 편집 버튼 */
+        }
+        button#editBtn:hover {
+            background-color: #4cae4c;
+            transform: translateY(-2px);
+        }
+
+        button#saveBtn {
+            background-color: #0275d8; /* 저장 버튼 */
+        }
+        button#saveBtn:hover {
+            background-color: #025aa5;
+            transform: translateY(-2px);
+        }
+
+        textarea {
+            width: calc(100% - 20px); /* 패딩 고려 */
+            height: 400px;
+            padding: 15px;
+            border: 1px solid #444; /* 어두운 테두리 */
+            border-radius: 8px;
+            background-color: #3a3a3a; /* 텍스트 영역 배경 */
+            color: #f0f0f0; /* 텍스트 영역 글씨색 */
+            font-size: 1.1em;
+            line-height: 1.6;
+            resize: vertical; /* 수직 크기 조절 허용 */
+            transition: border-color 0.3s ease, background-color 0.3s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #76c7c0; /* 포커스 시 테두리 색상 */
+            box-shadow: 0 0 0 3px rgba(118, 199, 192, 0.3);
+        }
+
+        textarea:disabled {
+            background-color: #2a2a2a; /* 비활성화 시 배경 */
+            color: #b0b0b0;
+            cursor: not-allowed;
+            border-style: dashed; /* 비활성화 시 점선 테두리 */
+        }
+
+        footer {
+            margin-top: 30px;
+            font-size: 0.9em;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>나만의 간단 노트</h1>
+        
+        <div class="button-group">
+            <button id="editBtn">편집</button>
+            <button id="saveBtn">저장</button>
+        </div>
+
+        <textarea id="myTextArea" placeholder="여기에 텍스트를 입력하거나 붙여넣으세요."></textarea>
+    </div>
+
+    <footer>
+        &copy; 2024 Simple Note. All rights reserved.
+    </footer>
+
+    <script>
+        const myTextArea = document.getElementById('myTextArea');
+        const editBtn = document.getElementById('editBtn');
+        const saveBtn = document.getElementById('saveBtn');
+        const localStorageKey = 'simpleNoteContent';
+
+        // 페이지 로드 시 저장된 내용 불러오기
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedContent = localStorage.getItem(localStorageKey);
+            if (savedContent) {
+                myTextArea.value = savedContent;
+            }
+            // 초기 상태는 읽기 전용 (보기 모드)
+            myTextArea.disabled = true;
+            editBtn.textContent = '편집'; // 초기에는 편집 버튼으로 표시
+            saveBtn.disabled = true; // 저장 버튼 비활성화
+        });
+
+        // 편집 버튼 클릭 이벤트
+        editBtn.addEventListener('click', () => {
+            if (myTextArea.disabled) {
+                myTextArea.disabled = false; // 편집 활성화
+                myTextArea.focus();
+                editBtn.textContent = '보기'; // 편집 모드에서는 "보기" 버튼으로 변경
+                saveBtn.disabled = false; // 저장 버튼 활성화
+            } else {
+                // 편집 중이었다면 보기 모드로 전환
+                myTextArea.disabled = true; // 읽기 전용
+                editBtn.textContent = '편집'; // 보기 모드에서는 "편집" 버튼으로 변경
+                saveBtn.disabled = true; // 저장 버튼 비활성화
+            }
+        });
+
+        // 저장 버튼 클릭 이벤트
+        saveBtn.addEventListener('click', () => {
+            localStorage.setItem(localStorageKey, myTextArea.value);
+            alert('내용이 성공적으로 저장되었습니다!');
+            
+            // 저장 후 자동으로 보기 모드로 전환
+            myTextArea.disabled = true;
+            editBtn.textContent = '편집';
+            saveBtn.disabled = true;
+        });
+    </script>
+</body>
+</html>
