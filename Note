@@ -25,7 +25,8 @@
         }
 
         textarea {
-            padding: 10px 20px; box-sizing: border-box;
+            padding: 10px 20px 10px 55px; /* 에디터에서도 숫자 영역만큼 띄움 */
+            box-sizing: border-box;
             background: var(--bg-color); color: #d4d4d4;
             font-size: 14px; line-height: 1.6; font-family: inherit;
             resize: none; white-space: pre; overflow: auto;
@@ -38,11 +39,10 @@
         }
         #code-display.active { visibility: visible; z-index: 20; }
 
-        /* ★★★ 라인 넘버 및 코드 겹침 방지 핵심 설정 ★★★ */
+        /* --- Prism 레이아웃 핵심 수정 --- */
         pre[class*="language-"].line-numbers {
             margin: 0 !important;
-            /* 왼쪽 패딩을 5em으로 늘려 숫자가 들어갈 공간을 충분히 확보 */
-            padding: 10px 20px 10px 5em !important; 
+            padding: 10px 20px 10px 55px !important; /* 숫자 바를 위한 공간 55px 확보 */
             background: var(--bg-color) !important;
             height: 100% !important;
             box-sizing: border-box !important;
@@ -54,21 +54,26 @@
             white-space: pre-wrap !important;
             word-break: break-all !important;
             font-family: inherit !important;
+            position: relative;
         }
 
-        /* 왼쪽 숫자 바(Bar) 스타일 */
+        /* 숫자 라인 위치 강제 조정 */
         .line-numbers .line-numbers-rows {
-            left: 0 !important;             /* 왼쪽 끝 바짝 붙임 */
-            width: 4em !important;          /* 숫자 영역 너비 고정 */
-            border-right: 1px solid #3c3c3c !important; /* 구분선 */
-            padding-top: 10px !important;    /* 상단 패딩 10px 유지 */
-            background-color: rgba(255,255,255,0.02); /* 숫자 영역 배경 살짝 구분 */
+            position: absolute;
+            pointer-events: none;
+            top: 10px !important;      /* 패딩 탑 10px 고정 */
+            left: -45px !important;    /* 왼쪽으로 확 밀어냄 (음수값 사용) */
+            width: 40px !important;    /* 숫자 영역 너비 고정 */
+            letter-spacing: -1px;
+            border-right: 1px solid #444 !important; /* 구분선 */
+            user-select: none;
         }
 
-        /* 개별 숫자 위치 미세 조정 */
+        /* 개별 숫자 텍스트 정렬 */
         .line-numbers-rows > span:before {
-            padding-right: 12px !important; /* 숫자와 구분선 사이 간격 */
-            text-align: right !important;   /* 숫자를 오른쪽 정렬하여 선에 가깝게 */
+            padding-right: 8px !important;
+            text-align: right !important;
+            color: #757575 !important;
         }
     </style>
 </head>
@@ -100,14 +105,14 @@
     const editBtn = document.getElementById('editBtn');
     const saveBtn = document.getElementById('saveBtn');
     
-    const STORAGE_KEY = 'vsc_note_v7_final';
+    const STORAGE_KEY = 'vsc_note_v8_final_layout';
 
     window.onload = async () => {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             editor.value = saved;
         } else {
-            editor.value = "// Sample Code\nfunction hello() {\n    console.log('줄바꿈과 라인 넘버 테스트');\n}";
+            editor.value = "// 코드를 복사 붙여넣기 해보세요.\nfunction test() {\n    console.log('Line numbers fixed');\n}";
         }
         setMode(false);
     };
@@ -116,10 +121,10 @@
         highlightArea.textContent = editor.value;
         Prism.highlightElement(highlightArea);
         
-        // 렌더링 직후 위치 재계산 강제 실행 (겹침 현상 방지)
+        // 렌더링 후 레이아웃 깨짐 방지
         setTimeout(() => {
             window.dispatchEvent(new Event('resize'));
-        }, 30);
+        }, 50);
     }
 
     function setMode(isEdit) {
