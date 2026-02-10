@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Note</title>
+    <title>Note</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
     <style>
@@ -27,8 +27,8 @@
 <div class="top-bar">
     <div class="logo">NOTE</div>
     <div class="btn-group">
-        <button id="editBtn">Edit</button>
-        <button id="saveBtn" disabled>Save</button>
+        <button id="editBtn">Edit (Ctrl+E)</button>
+        <button id="saveBtn" disabled>Save (Ctrl+S)</button>
     </div>
 </div>
 
@@ -41,52 +41,35 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
 
 <script>
-    /**
-     * [방법] npoint.io를 이용한 저장
-     * 1. https://www.npoint.io/ 에 접속해서 '그냥' 아무거나 넣고 저장 버튼을 한번 누르세요.
-     * 2. 생성된 URL의 마지막 고유 ID(예: 8e5f...)를 아래 BIN_ID에 넣으세요.
-     */
-    const BIN_ID = "여기에_npoint_ID를_넣으세요"; 
-    const API_URL = `https://api.npoint.io/${BIN_ID}`;
-
     const editor = document.getElementById('editor');
     const codeDisplay = document.getElementById('code-display');
     const highlightArea = document.getElementById('highlight-area');
+    const editBtn = document.getElementById('editBtn');
     const saveBtn = document.getElementById('saveBtn');
+    
+    const STORAGE_KEY = 'my_local_note_data';
+    const FILE_URL = './data.txt'; // 배포할 때 같이 올릴 파일명
 
-    async function loadData() {
-        if (BIN_ID === "여기에_npoint_ID를_넣으세요") {
-            editor.placeholder = "npoint ID를 설정해주세요.";
-            return;
-        }
-        try {
-            const res = await fetch(API_URL);
-            const data = await res.json();
-            editor.value = data.text || "";
-            updateHighlight();
-            setMode(false);
-        } catch (e) {
-            console.error("Load failed", e);
-        }
-    }
-
-    async function saveData() {
-        saveBtn.textContent = "Saving...";
-        try {
-            const res = await fetch(API_URL, {
-                method: "POST", // 또는 PATCH
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ text: editor.value })
-            });
-            if (res.ok) {
-                saveBtn.textContent = "Saved!";
-                setTimeout(() => { saveBtn.textContent = "Save"; setMode(false); }, 800);
+    // 초기화: 서버 파일 로드 vs 로컬 저장소 로드
+    window.onload = async () => {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        
+        if (saved) {
+            // 1. 브라우저에 저장된 내역이 있으면 그걸 우선으로 불러옴
+            editor.value = saved;
+        } else {
+            // 2. 저장된 내역이 없으면 서버에 같이 올린 data.txt를 읽어옴
+            try {
+                const response = await fetch(FILE_URL);
+                if (response.ok) {
+                    editor.value = await response.text();
+                }
+            } catch (e) {
+                editor.value = "Welcome! 수정 후 저장하세요.";
             }
-        } catch (e) {
-            alert("저장 실패! npoint ID를 확인하세요.");
-            saveBtn.textContent = "Error";
         }
-    }
+        setMode(false); // 초기 상태는 보기 모드
+    };
 
     function updateHighlight() {
         highlightArea.innerText = editor.value;
@@ -98,24 +81,36 @@
             editor.style.display = "block";
             codeDisplay.style.display = "none";
             saveBtn.disabled = false;
+            editBtn.textContent = "View";
             editor.focus();
         } else {
             updateHighlight();
             editor.style.display = "none";
             codeDisplay.style.display = "block";
             saveBtn.disabled = true;
+            editBtn.textContent = "Edit";
         }
     }
 
-    document.getElementById('editBtn').addEventListener('click', () => setMode(editor.style.display === "none"));
-    saveBtn.addEventListener('click', saveData);
+    function save() {
+        if (editor.style.display === "none") return;
+        // 브라우저 로컬 저장소에 저장
+        localStorage.setItem(STORAGE_KEY, editor.value);
+        saveBtn.textContent = "Saved!";
+        setTimeout(() => {
+            saveBtn.textContent = "Save";
+            setMode(false);
+        }, 600);
+    }
 
-    window.onload = loadData;
+    editBtn.addEventListener('click', () => setMode(editor.style.display === "none"));
+    saveBtn.addEventListener('click', save);
 
+    // 단축키 및 탭 키 처리 (기존과 동일)
     window.addEventListener('keydown', (e) => {
         const isCtrl = e.ctrlKey || e.metaKey;
-        if (isCtrl && e.key.toLowerCase() === 's') { e.preventDefault(); saveData(); }
         if (isCtrl && e.key.toLowerCase() === 'e') { e.preventDefault(); setMode(editor.style.display === "none"); }
+        if (isCtrl && e.key.toLowerCase() === 's') { e.preventDefault(); save(); }
     });
 
     editor.addEventListener('keydown', function(e) {
