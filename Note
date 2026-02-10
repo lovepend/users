@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Simple Cloud Note</title>
+    <title>Simple Note</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
     <style>
@@ -20,76 +20,70 @@
         textarea { background: var(--bg-color); color: #d4d4d4; z-index: 2; resize: none; }
         #code-display { z-index: 1; display: none; overflow: auto; }
         pre[class*="language-"].line-numbers { margin: 0; padding: 15px 15px 15px 3.8em; height: 100%; background: var(--bg-color) !important; }
-        .status { position: fixed; bottom: 5px; right: 15px; font-size: 10px; color: #555; z-index: 100; }
     </style>
 </head>
 <body class="line-numbers">
 
 <div class="top-bar">
-    <div class="logo">CLOUD NOTE</div>
+    <div class="logo">NOTE</div>
     <div class="btn-group">
         <button id="editBtn">Edit</button>
-        <button id="saveBtn" disabled>Save to Server</button>
+        <button id="saveBtn" disabled>Save</button>
     </div>
 </div>
 
 <div class="main-container">
-    <textarea id="editor" spellcheck="false" placeholder="Loading content..."></textarea>
+    <textarea id="editor" spellcheck="false" placeholder="Loading..."></textarea>
     <div id="code-display"><pre class="line-numbers"><code id="highlight-area" class="language-javascript"></code></pre></div>
 </div>
-
-<div class="status" id="sync-status">Syncing...</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
 
 <script>
-    // === [서버 설정] ===
-    // 나만의 고유한 닉네임을 적으세요 (이 이름이 DB 키가 됩니다)
-    const USER_ID = "my-unique-note-2026"; 
-    const API_URL = `https://api.keyvalue.xyz/693c0631/${USER_ID}`; // 무료 Key-Value 저장소
-    // ==================
+    /**
+     * [방법] npoint.io를 이용한 저장
+     * 1. https://www.npoint.io/ 에 접속해서 '그냥' 아무거나 넣고 저장 버튼을 한번 누르세요.
+     * 2. 생성된 URL의 마지막 고유 ID(예: 8e5f...)를 아래 BIN_ID에 넣으세요.
+     */
+    const BIN_ID = "여기에_npoint_ID를_넣으세요"; 
+    const API_URL = `https://api.npoint.io/${BIN_ID}`;
 
     const editor = document.getElementById('editor');
     const codeDisplay = document.getElementById('code-display');
     const highlightArea = document.getElementById('highlight-area');
     const saveBtn = document.getElementById('saveBtn');
-    const status = document.getElementById('sync-status');
 
-    // 서버에서 데이터 불러오기
     async function loadData() {
+        if (BIN_ID === "여기에_npoint_ID를_넣으세요") {
+            editor.placeholder = "npoint ID를 설정해주세요.";
+            return;
+        }
         try {
             const res = await fetch(API_URL);
-            if (res.ok) {
-                const content = await res.text();
-                editor.value = content || "";
-                status.textContent = "Cloud Synced";
-            }
+            const data = await res.json();
+            editor.value = data.text || "";
             updateHighlight();
             setMode(false);
         } catch (e) {
-            status.textContent = "Load Failed";
+            console.error("Load failed", e);
         }
     }
 
-    // 서버로 저장하기
     async function saveData() {
         saveBtn.textContent = "Saving...";
         try {
             const res = await fetch(API_URL, {
-                method: "POST",
-                body: editor.value
+                method: "POST", // 또는 PATCH
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ text: editor.value })
             });
             if (res.ok) {
                 saveBtn.textContent = "Saved!";
-                status.textContent = "Last saved: " + new Date().toLocaleTimeString();
-                setTimeout(() => {
-                    saveBtn.textContent = "Save to Server";
-                    setMode(false);
-                }, 800);
+                setTimeout(() => { saveBtn.textContent = "Save"; setMode(false); }, 800);
             }
         } catch (e) {
-            alert("Save Failed!");
+            alert("저장 실패! npoint ID를 확인하세요.");
             saveBtn.textContent = "Error";
         }
     }
@@ -118,14 +112,12 @@
 
     window.onload = loadData;
 
-    // 단축키
     window.addEventListener('keydown', (e) => {
         const isCtrl = e.ctrlKey || e.metaKey;
         if (isCtrl && e.key.toLowerCase() === 's') { e.preventDefault(); saveData(); }
         if (isCtrl && e.key.toLowerCase() === 'e') { e.preventDefault(); setMode(editor.style.display === "none"); }
     });
 
-    // 탭 키 처리
     editor.addEventListener('keydown', function(e) {
         if (e.key === 'Tab') {
             e.preventDefault();
