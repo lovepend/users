@@ -3,207 +3,99 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Note</title>
+    <title>Simple Cloud Note</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.css" rel="stylesheet" />
     <style>
-        :root {
-            --bg-color: #1e1e1e;
-            --header-bg: #2d2d2d;
-            --border-color: #3e3e3e;
-            --accent-color: #007acc;
-            --text-color: #cccccc;
-        }
-
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-            overflow: hidden;
-        }
-
-        /* 얇고 컴팩트한 상단 바 */
-        .top-bar {
-            height: 35px;
-            background-color: var(--header-bg);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 0 15px;
-            border-bottom: 1px solid var(--border-color);
-            box-sizing: border-box;
-        }
-
-        .logo {
-            font-size: 12px;
-            color: #858585;
-            letter-spacing: 1px;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 6px;
-        }
-
-        button {
-            background-color: #3c3c3c;
-            color: #ffffff;
-            border: 1px solid #454545;
-            padding: 2px 10px;
-            border-radius: 2px;
-            cursor: pointer;
-            font-size: 11px;
-            height: 22px;
-            transition: 0.1s;
-        }
-
-        button:hover {
-            background-color: #505050;
-        }
-
-        button#saveBtn {
-            background-color: var(--accent-color);
-            border: none;
-        }
-
-        button#saveBtn:hover {
-            background-color: #1a8ad4;
-        }
-
-        button:disabled {
-            opacity: 0.3;
-            cursor: default;
-        }
-
-        /* 메인 에디터 영역 (화면 가득) */
-        .main-container {
-            position: relative;
-            height: calc(100% - 35px); /* 상단 바 제외 전체 */
-            width: 100%;
-        }
-
-        textarea, #code-display {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            margin: 0;
-            padding: 10px;
-            box-sizing: border-box;
-            font-size: 14px;
-            line-height: 1.6;
-            tab-size: 4;
-            border: none;
-            outline: none;
-        }
-
-        textarea {
-            background: var(--bg-color);
-            color: #d4d4d4;
-            resize: none;
-            z-index: 2;
-            display: block;
-        }
-
-        #code-display {
-            z-index: 1;
-            display: none;
-            overflow: auto;
-        }
-
-        /* Prism.js 스타일 커스텀 */
-        pre[class*="language-"].line-numbers {
-            margin: 0;
-            padding: 10px 10px 10px 3.8em;
-            height: 100%;
-            box-sizing: border-box;
-            background: var(--bg-color) !important;
-        }
-
-        /* 스크롤바 커스텀 (VSC 스타일) */
-        ::-webkit-scrollbar {
-            width: 10px;
-            height: 10px;
-        }
-        ::-webkit-scrollbar-thumb {
-            background: #424242;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #4f4f4f;
-        }
-        ::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        /* 단축키 힌트 */
-        .status-bar {
-            position: fixed;
-            bottom: 0;
-            right: 15px;
-            font-size: 10px;
-            color: #666;
-            z-index: 100;
-            background: var(--bg-color);
-            padding: 2px 5px;
-        }
+        :root { --bg-color: #1e1e1e; --header-bg: #2d2d2d; --accent-color: #007acc; }
+        body, html { margin: 0; padding: 0; height: 100%; background-color: var(--bg-color); color: #ccc; font-family: 'Consolas', monospace; overflow: hidden; }
+        .top-bar { height: 35px; background: var(--header-bg); display: flex; justify-content: space-between; align-items: center; padding: 0 15px; border-bottom: 1px solid #3e3e3e; }
+        .logo { font-size: 11px; color: #858585; letter-spacing: 1px; }
+        .btn-group { display: flex; gap: 6px; }
+        button { background: #3c3c3c; color: #fff; border: 1px solid #454545; padding: 2px 10px; border-radius: 2px; cursor: pointer; font-size: 11px; height: 22px; }
+        button#saveBtn { background: var(--accent-color); border: none; }
+        button:disabled { opacity: 0.3; }
+        .main-container { position: relative; height: calc(100% - 35px); width: 100%; }
+        textarea, #code-display { position: absolute; width: 100%; height: 100%; padding: 15px; box-sizing: border-box; font-size: 14px; line-height: 1.6; border: none; outline: none; tab-size: 4; }
+        textarea { background: var(--bg-color); color: #d4d4d4; z-index: 2; resize: none; }
+        #code-display { z-index: 1; display: none; overflow: auto; }
+        pre[class*="language-"].line-numbers { margin: 0; padding: 15px 15px 15px 3.8em; height: 100%; background: var(--bg-color) !important; }
+        .status { position: fixed; bottom: 5px; right: 15px; font-size: 10px; color: #555; z-index: 100; }
     </style>
 </head>
 <body class="line-numbers">
 
 <div class="top-bar">
-    <div class="logo">NOTE</div>
+    <div class="logo">CLOUD NOTE</div>
     <div class="btn-group">
-        <button id="editBtn">Edit (Ctrl+E)</button>
-        <button id="saveBtn" disabled>Save (Ctrl+S)</button>
+        <button id="editBtn">Edit</button>
+        <button id="saveBtn" disabled>Save to Server</button>
     </div>
 </div>
 
 <div class="main-container">
-    <textarea id="editor" spellcheck="false" placeholder="Enter code here..."></textarea>
-    
-    <div id="code-display">
-        <pre class="line-numbers"><code id="highlight-area" class="language-javascript"></code></pre>
-    </div>
+    <textarea id="editor" spellcheck="false" placeholder="Loading content..."></textarea>
+    <div id="code-display"><pre class="line-numbers"><code id="highlight-area" class="language-javascript"></code></pre></div>
 </div>
 
-<div class="status-bar">
-    UTF-8 | Spaces: 4 | Ctrl+E to Toggle
-</div>
+<div class="status" id="sync-status">Syncing...</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/line-numbers/prism-line-numbers.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-css.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markup.min.js"></script>
 
 <script>
+    // === [서버 설정] ===
+    // 나만의 고유한 닉네임을 적으세요 (이 이름이 DB 키가 됩니다)
+    const USER_ID = "my-unique-note-2026"; 
+    const API_URL = `https://api.keyvalue.xyz/693c0631/${USER_ID}`; // 무료 Key-Value 저장소
+    // ==================
+
     const editor = document.getElementById('editor');
     const codeDisplay = document.getElementById('code-display');
     const highlightArea = document.getElementById('highlight-area');
-    const editBtn = document.getElementById('editBtn');
     const saveBtn = document.getElementById('saveBtn');
-    
-    const STORAGE_KEY = 'vsc_fullscreen_note';
+    const status = document.getElementById('sync-status');
 
-    window.onload = () => {
-        const saved = localStorage.getItem(STORAGE_KEY);
-        if (saved) {
-            editor.value = saved;
+    // 서버에서 데이터 불러오기
+    async function loadData() {
+        try {
+            const res = await fetch(API_URL);
+            if (res.ok) {
+                const content = await res.text();
+                editor.value = content || "";
+                status.textContent = "Cloud Synced";
+            }
             updateHighlight();
+            setMode(false);
+        } catch (e) {
+            status.textContent = "Load Failed";
         }
-        setMode(false); // 초기 상태: 보기 모드
-    };
+    }
+
+    // 서버로 저장하기
+    async function saveData() {
+        saveBtn.textContent = "Saving...";
+        try {
+            const res = await fetch(API_URL, {
+                method: "POST",
+                body: editor.value
+            });
+            if (res.ok) {
+                saveBtn.textContent = "Saved!";
+                status.textContent = "Last saved: " + new Date().toLocaleTimeString();
+                setTimeout(() => {
+                    saveBtn.textContent = "Save to Server";
+                    setMode(false);
+                }, 800);
+            }
+        } catch (e) {
+            alert("Save Failed!");
+            saveBtn.textContent = "Error";
+        }
+    }
 
     function updateHighlight() {
-        const code = editor.value
-            .replace(/&/g, "&amp;")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-        highlightArea.innerHTML = code;
+        highlightArea.innerText = editor.value;
         Prism.highlightElement(highlightArea);
     }
 
@@ -211,56 +103,37 @@
         if (isEdit) {
             editor.style.display = "block";
             codeDisplay.style.display = "none";
-            editBtn.textContent = "View";
             saveBtn.disabled = false;
             editor.focus();
         } else {
             updateHighlight();
             editor.style.display = "none";
             codeDisplay.style.display = "block";
-            editBtn.textContent = "Edit";
             saveBtn.disabled = true;
         }
     }
 
-    function save() {
-        if (editor.style.display === "none") return;
-        localStorage.setItem(STORAGE_KEY, editor.value);
-        const originalText = saveBtn.textContent;
-        saveBtn.textContent = "Saved!";
-        setTimeout(() => {
-            saveBtn.textContent = "Save";
-            setMode(false);
-        }, 600);
-    }
+    document.getElementById('editBtn').addEventListener('click', () => setMode(editor.style.display === "none"));
+    saveBtn.addEventListener('click', saveData);
 
-    editBtn.addEventListener('click', () => setMode(editor.style.display === "none"));
-    saveBtn.addEventListener('click', save);
+    window.onload = loadData;
 
     // 단축키
     window.addEventListener('keydown', (e) => {
         const isCtrl = e.ctrlKey || e.metaKey;
-        if (isCtrl && e.key.toLowerCase() === 'e') {
-            e.preventDefault();
-            setMode(editor.style.display === "none");
-        }
-        if (isCtrl && e.key.toLowerCase() === 's') {
-            e.preventDefault();
-            save();
-        }
+        if (isCtrl && e.key.toLowerCase() === 's') { e.preventDefault(); saveData(); }
+        if (isCtrl && e.key.toLowerCase() === 'e') { e.preventDefault(); setMode(editor.style.display === "none"); }
     });
 
-    // 탭 입력 지원
+    // 탭 키 처리
     editor.addEventListener('keydown', function(e) {
         if (e.key === 'Tab') {
             e.preventDefault();
             const start = this.selectionStart;
-            const end = this.selectionEnd;
-            this.value = this.value.substring(0, start) + "    " + this.value.substring(end);
+            this.value = this.value.substring(0, start) + "    " + this.value.substring(this.selectionEnd);
             this.selectionStart = this.selectionEnd = start + 4;
         }
     });
 </script>
-
 </body>
 </html>
