@@ -1,5 +1,4 @@
 <template>
-  <!-- BEGIN panel -->
   <div class="panel mb-0">
     <div class="panel-heading border-bottom h-50px" style="background-color: var(--bg07)">
       <span class="fs-2 fw-bold" style="color: var(--basic02)">{{ $t('ReleasedNote_vue.title') }}</span>
@@ -13,18 +12,17 @@
         @change="handleFileUpload($event)"
         ref="fileInput"
       />
-      <button class="btn btn-xs btn-gray float-end align-items-center shadow-none me-2 mt-1" @click="ExportExcel">
-        {{ $t('ReleasedNote_vue.import') }}
-      </button>
       <button class="btn btn-xs btn-gray float-end align-items-center shadow-none me-2 mt-1" @click="importExcel">
         {{ $t('ReleasedNote_vue.import') }}
+      </button>
+      <button class="btn btn-xs btn-primary float-end align-items-center shadow-none me-2 mt-1" @click="ExportExcel">
+        버전다운
       </button>
     </div>
     <div class="panel-body py-2 overflow-auto" style="height: calc(100vh - 150px); background-color: var(--bg14)">
       <div class="pt-2 ps-3">
         <template v-if="releaseNotesGrouped.length > 0">
           <div v-for="(versionGroup, groupIndex) in releaseNotesGrouped" :key="groupIndex">
-            <!-- 버전 헤더 -->
             <span class="fs-3" style="color: var(--txt04)">{{ $t('ReleasedNote_vue.version') }}</span>
             <span class="fs-3 ms-1" style="color: var(--txt04)">{{ versionGroup.version }}</span>
             <span class="fs-5 ps-2" style="color: var(--txt02)">{{ $t('ReleasedNote_vue.update') }}...</span>
@@ -63,8 +61,7 @@
       </div>
     </div>
   </div>
-  <!-- END panel -->
-</template>
+  </template>
 
 <script setup lang="ts">
   import { ref, onMounted } from 'vue'
@@ -141,11 +138,61 @@
   }
 
   /**
+   * Released Note: 파일 서버에서 엑셀 파일 다운로드 (Export)
+   */
+  const ExportExcel = async function () {
+    if (!fileId.value) {
+      SEF.setToast('다운로드할 파일 ID가 없습니다.', 'err')
+      return
+    }
+
+    try {
+      const options = {
+        responseType: 'blob', // binary 데이터 처리를 위해 필수
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: '*/*',
+          FileToken: 'frontserver@sh',
+        },
+      }
+      const bodyData = {
+        id: fileId.value,
+      }
+
+      // api/File/Get 호출
+      await axiosWrapper.postAll(urlList.gfi, bodyData, options).then((blobData: any) => {
+        // 1. 헤더에서 파일명 추출
+        const contentDisposition = blobData.headers['content-disposition']
+        let filename = 'ReleasedNote_Download.xlsx'
+        if (contentDisposition) {
+          const match = contentDisposition.match(/filename="([^"]+)"/)
+          if (match) filename = match[1]
+        }
+
+        // 2. Blob 데이터를 이용해 가상 링크 생성 및 다운로드 실행
+        const url = window.URL.createObjectURL(new Blob([blobData.data]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', filename)
+        
+        document.body.appendChild(link)
+        link.click()
+        
+        // 3. 뒷정리
+        document.body.removeChild(link)
+        window.URL.revokeObjectURL(url)
+        
+        SEF.setToast('파일 다운로드가 완료되었습니다.', 'info')
+      })
+    } catch (error) {
+      console.error('ExportExcel 오류:', error)
+      SEF.setToast('파일 다운로드 중 오류가 발생했습니다.', 'err')
+    }
+  }
+
+  /**
    * Released Note: Import Excel File Input Click
    */
-  const ExportExcel = function () {
-    // Api api/File/Get 이용해서 파일 다운로드 받기
-  }
   const importExcel = function () {
     // Import할 폴더 경로 열기
     fileInput.value.click()
@@ -291,7 +338,7 @@
 
 <style scoped>
   .description-text {
-    white-space: pre-wrap; /*  줄바꿈 처리  */
+    white-space: pre-wrap; /* 줄바꿈 처리  */
     word-break: break-word; /* 긴 단어도 줄 바꿈 가능하게 */
   }
 
