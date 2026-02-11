@@ -1,143 +1,197 @@
-import { ref, shallowRef } from 'vue'
+import GC from '@mescius/spread-sheets-designer'
 import { ApiCommon } from '@/utils/axios/api-common'
-import vSelect from 'vue-select'
+import { throttle as _throttle } from 'lodash-es'
 import { useEmployees } from '@/stores/app-employees'
-import { debounce } from 'lodash-es'
-
 const { setEmployeeInfo } = useEmployees()
 
-export default {
-  name: 'SpreadUserEditor',
-  components: { vSelect },
-  props: {
-    params: { type: Object, default: () => ({}) },
-  },
-  // 템플릿 부분을 template 속성으로 정의합니다.
-  template: `
-    <div 
-      ref="containerRef" 
-      class="p-1 bg-white ag-user-editor-container" 
-      tabindex="0" 
-      @keydown="onKeydown"
-    >
-      <div class="d-flex flex-row my-1 justify-content-between">
-        <span class="badge bg-info">ESC:취소 / Enter:선택</span>
-        <span class="badge bg-dark" style="cursor: pointer" @click="onClosePopup">X</span>
-      </div>
+const _EditorType = 'UserEditor'
+const _EditorWidth = 300
+const _EditorHeight = 65
 
-      <vSelect
-        ref="vSelectRef"
-        v-model="vModelRef"
-        :options="vOptionsRef"
-        :filterable="false" 
-        :placeholder="'이름 검색...'"
-        :dropdown-should-open="dropdownShouldOpen"
-        @option:selected="onSelected"
-        @search="onSearch"
-        @keydown.stop
-        class="w-100 ag-user-editor-select"
-      >
-        <template #no-options="{ searching }">
-          <span v-if="searching" style="font-size: 0.8rem;">검색 결과가 없습니다.</span>
-          <span v-else style="font-size: 0.8rem;">이름을 입력해 주세요.</span>
-        </template>
-      </vSelect>
-    </div>
-  `,
-  setup(props) {
-    return {
-      containerRef: shallowRef(null),
-      vSelectRef: shallowRef(null),
-      vModelRef: ref(null),
-      vOptionsRef: ref([]),
-      vValue: ref(null),
+function UserSelectCellType(FIELD, NAME_FIELD, DEPT_FIELD) {
+  this.field = FIELD
+  this.nameField = NAME_FIELD
+  this.deptField = DEPT_FIELD
+  this.name = ''
+  this.searchID = 0
+}
+UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
+UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
+  // if (value) { GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, value, x, y, w, h, style, options]); }
+
+  const sheet = options.sheet
+  const row = options.row
+  // const col = options.col
+  let data = sheet.getDataItem(row)
+  if (!data) {
+    const dataSource = sheet.getDataSource()
+    if (dataSource && !Array.isArray(dataSource)) {
+      data = dataSource.getSource()
     }
-  },
-  mounted() {
-    this.vModelRef = this.params?.editorSelected || null
-    this.vOptionsRef = this.params?.editorOptions ?? []
-    this.vValue = this.getInitialValue()
-    
-    setTimeout(() => {
-      if (this.vSelectRef && this.vSelectRef.searchEl) {
-        this.vSelectRef.searchEl.focus()
-      }
-    }, 50)
-  },
-  methods: {
-    getValue() {
-      return this.vValue
-    },
-    getInitialValue() {
-      return this.params?.value
-    },
-    onClosePopup() {
-      if (this.params && typeof this.params.stopEditing === 'function') {
-        this.params.stopEditing()
-      }
-    },
-    setValue(USER_ID) {
-      const newValue = String(USER_ID ?? '')
-      this.vValue = newValue === '' ? null : newValue
-    },
-    getSelectedValue() {
-      return this.vModelRef?.code
-    },
-    onKeydown(event) {
-      if (event.target.tagName === 'INPUT') return
-
-      if (event.key === 'Escape' || event.key === 'ESC') {
-        event.preventDefault()
-        this.setValue(this.getInitialValue())
-        this.onClosePopup()
-      } else if (event.key === 'Enter') {
-        event.preventDefault()
-        const userId = this.getSelectedValue()
-        if (userId) {
-          this.setValue(userId)
-          this.onClosePopup()
-        }
-      }
-    },
-    onSearch: debounce(async function (search, loading) {
-      const userName = String(search ?? '').trim()
-      if (userName.length < 1) {
-        this.vOptionsRef = []
-        return
-      }
-      try {
-        loading(true)
-        const response = (await ApiCommon.postOfficeFindEmployee({ 
-          Type: 'Name', 
-          Keyword: userName 
-        })) ?? []
-
-        const options = response
-          .filter(item => item.EMP_NO)
-          .map(item => ({
-            ...item,
-            code: item.EMP_NO,
-            label: `${item.EMP_NM ?? ''}(${item.DEPT_NAME ?? ''})`,
-          }))
-
-        if (options.length > 0) {
-          setEmployeeInfo(options)
-        }
-        this.vOptionsRef = options
-      } catch (error) {
-        this.vOptionsRef = []
-      } finally {
-        loading(false)
-      }
-    }, 300),
-    onSelected(item) {
-      if (item) {
-        this.setValue(item.code)
-        setTimeout(() => this.containerRef?.focus(), 10)
-      }
-    },
-    dropdownShouldOpen(vselect) {
-      return !vselect.loading && vselect.open
-    },
+  }
+  const name = data?.[this.nameField] ?? ''
+  const dept = data?.[this.deptField] ?? ''
+  const deptV = dept ? `(${dept})` : ''
+  const text = !data ? '' : `${name}${deptV}`
+  GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, text, x, y, w, h, style, options])
+  return
+}
+UserSelectCellType.prototype.updateEditor = function (editorContext /*cellStyle, cellRect*/) {
+  if (editorContext) {
+    editorContext.parentNode.style.width = '100%'
+    editorContext.parentNode.style.height = '100%'
+    return { width: _EditorWidth, height: _EditorHeight }
   }
 }
+UserSelectCellType.prototype.isEditingValueChanged = function (oldValue, newValue) {
+  return newValue !== oldValue
+}
+UserSelectCellType.prototype.createEditorElement = function () {
+  let userOptions = []
+  let userIndex = {}
+
+  // WRAPPER
+  const wrapper = document.createElement('div')
+  wrapper.setAttribute('gcUIElement', 'gcEditingInput')
+  wrapper.setAttribute('EditorType', _EditorType)
+  wrapper.className = 'spread-user-editor w-100 h-100 p-1 v-select'
+  wrapper.style.backgroundColor = 'white'
+  wrapper.style.overflow = 'hidden'
+
+  // HEADER
+  const header = document.createElement('div')
+  header.className = 'w-100'
+
+  // TITLE
+  const title = document.createElement('span')
+  title.className = ''
+  title.innerText = 'Search User'
+
+  // COMBO_BOX
+  const combo = document.createElement('div')
+  combo.className = 'cursor-text px-2 py-1 d-flex border border-1 border-light rounded-2'
+
+  // SEARCH_INPUT
+  const search = document.createElement('input')
+  search.className = 'border-0'
+  search.style.flex = 'auto'
+  search.style.outline = 'none'
+  search.type = 'text'
+  search.autocomplete = 'off'
+  search.placeholder = 'Name to search for. ex)홍길동 / ㅎㄱㄷ'
+  search.setAttribute('aria-autocomplete', 'list')
+  search.addEventListener('focus', function () {
+    listbox.style.opacity = 1
+    listbox.style.visibility = 'visible'
+  })
+  search.addEventListener('blur', function () {
+    listbox.style.opacity = 0
+    listbox.style.visibility = 'hidden'
+  })
+  search.addEventListener(
+    'input',
+    _throttle(e => {
+      if (!e.target) {
+        return
+      }
+      if (!e.isComposing) {
+        e.target.value = this.name
+        return
+      }
+
+      listbox.innerHTML = ''
+      const userName = String(e.target.value ?? '').replaceAll(' ', '')
+      if (userName.length < 2) {
+        return
+      }
+
+      this.name = e.target.value
+      const currentID = (this.searchID += 1)
+      ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: userName }).then(response => {
+        if (currentID !== this.searchID) {
+          return
+        }
+        userOptions = []
+        userIndex = {}
+        const itemList = []
+        response?.forEach((item, index) => {
+          if (!item.EMP_NO) {
+            return
+          } // UserID가 있는 항목만 필터링
+          const code = item.EMP_NO
+          const label = `${item.EMP_NM ?? ''}(${item.DEPT_NAME ?? ''})`
+          const userInfo = { ...item, code, label }
+          setEmployeeInfo(userInfo)
+
+          const listitem = document.createElement('li')
+          listitem.className = 'vs__dropdown-option'
+          listitem.innerText = label
+          listitem.setAttribute('option-id', index)
+          itemList.push(listitem)
+
+          userOptions.push(userInfo)
+          userIndex[index] = userInfo
+        })
+        listbox.append(...itemList)
+      })
+    }, 300)
+  )
+
+  // INDICATOR_ICON
+  const indicator = document.createElement('i')
+  indicator.className = 'fa fa-angle-down align-self-center'
+
+  // SELECT_BOX
+  const listbox = document.createElement('ul')
+  listbox.className = 'vs__dropdown-menu rounded-2 position-fixed'
+  listbox.style.top = 'unset'
+  listbox.style.left = 'unset'
+  listbox.style.width = '290px'
+  listbox.style.opacity = 0
+  listbox.style.visibility = 'hidden'
+  listbox.style.transition = 'opacity 0.2s linear, visibility 0s linear 0.2s'
+  listbox.setAttribute('EditorUses', 'list')
+  listbox.addEventListener('click', function (e) {
+    if (e.target && e.target.nodeName === 'LI') {
+      const optionId = e.target.getAttribute('option-id')
+      const optionText = e.target.innerText
+      const userInfo = userIndex?.[optionId]
+      search.value = optionText
+      editorVal.value = userInfo?.code
+    }
+  })
+
+  // HIDDEN_VALUE
+  const editorVal = document.createElement('input')
+  editorVal.type = 'text'
+  editorVal.style.display = 'none'
+  editorVal.disabled = true
+  editorVal.readonly = true
+  editorVal.setAttribute('EditorUses', 'value')
+
+  // CREATE_EDITOR
+  header.appendChild(title)
+  combo.appendChild(search)
+  combo.appendChild(indicator)
+  wrapper.appendChild(header)
+  wrapper.appendChild(combo)
+  wrapper.appendChild(listbox)
+  wrapper.appendChild(editorVal)
+  return wrapper
+}
+UserSelectCellType.prototype.getEditorValue = function (editorContext) {
+  if (editorContext && editorContext.getAttribute('EditorType') === _EditorType) {
+    const valNode = editorContext.querySelector('[editoruses="value"]')
+    return valNode.value
+  }
+}
+UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
+  if (editorContext && editorContext.getAttribute('EditorType') === _EditorType) {
+    if (value) {
+      const valNode = editorContext.querySelector('[editoruses="value"]')
+      valNode.value = value
+    }
+  }
+}
+
+export default UserSelectCellType
