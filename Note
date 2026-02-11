@@ -12,6 +12,9 @@
         @change="handleFileUpload($event)"
         ref="fileInput"
       />
+      <button class="btn btn-xs btn-success float-end align-items-center shadow-none me-2 mt-1" @click="saveChangesToServer">
+        변경사항 저장
+      </button>
       <button class="btn btn-xs btn-gray float-end align-items-center shadow-none me-2 mt-1" @click="importExcel">
         {{ $t('ReleasedNote_vue.import') }}
       </button>
@@ -28,25 +31,30 @@
             <span class="fs-5 ps-2" style="color: var(--txt02)">{{ $t('ReleasedNote_vue.update') }}...</span>
             <ul class="pt-2">
               <li v-for="(item, itemIndex) in versionGroup.items" :key="itemIndex">
-                <div class="fs-13px">
+                <div class="fs-13px me-3">
                   <div class="h-auto mb-1 pt-1 text-white" :class="getBadgeClass(item.category)">
                     {{ item.category }}
                   </div>
-                  <div
-                    class="border rounded-3 mb-1"
-                    :class="getBadgeTextColorClass(item.category) + ' description-text me-2'"
-                    style="background-color: var(--basic02)"
-                  >
-                    <div class="p-1 pb-0">[{{ item.AutoNo }}] : [{{ item.status }}]</div>
-                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">{{ item.description }}</div>
-                  </div>
-                  <div class="border rounded-3 text-cyan-700 mb-1 me-2" style="background-color: var(--basic02)">
-                    <div class="p-1 pb-0">{{ $t('ReleasedNote_vue.act_desc') }}</div>
-                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">: {{ item.actionDesc }}</div>
-                  </div>
-                  <div class="border rounded-3 text-green-600 mb-1 me-2" style="background-color: var(--basic02)">
-                    <div class="p-1 pb-0">{{ $t('ReleasedNote_vue.dev_desc') }}</div>
-                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">: {{ item.remarkDev }}</div>
+                  
+                  <div class="border rounded-3 mb-1 p-2" style="background-color: var(--basic02)">
+                    <div class="p-1 pb-1 fw-bold" :class="getBadgeTextColorClass(item.category)">
+                      [{{ item.AutoNo }}] : [{{ item.status }}]
+                    </div>
+                    
+                    <div class="mb-2">
+                      <label class="text-muted small ps-1">기능 상세 내용</label>
+                      <textarea v-model="item.description" class="form-control edit-area" rows="2"></textarea>
+                    </div>
+
+                    <div class="mb-2">
+                      <label class="text-cyan-700 small ps-1">{{ $t('ReleasedNote_vue.act_desc') }}</label>
+                      <textarea v-model="item.actionDesc" class="form-control edit-area" rows="2"></textarea>
+                    </div>
+
+                    <div>
+                      <label class="text-green-600 small ps-1">{{ $t('ReleasedNote_vue.dev_desc') }}</label>
+                      <textarea v-model="item.remarkDev" class="form-control edit-area" rows="2"></textarea>
+                    </div>
                   </div>
                 </div>
               </li>
@@ -61,290 +69,178 @@
       </div>
     </div>
   </div>
-  </template>
+</template>
 
 <script setup lang="ts">
   import { ref, onMounted } from 'vue'
   import { useRoute } from 'vue-router'
-  import { useAppAuthenticationStore } from '@/stores/app-authentication' /** 사용자 정보 */
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper' /** 네트워크 교류를 위한 Axios 함수 목록 */
+  import { useAppAuthenticationStore } from '@/stores/app-authentication'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
   import * as XLSX from 'xlsx'
   import { ApiCommon } from '@/utils/axios/api-common'
-  /** Helper List */
   import * as SEF from '@/utils/spread/spread-excel-funtions.js'
 
-  /** Variable List */
-  const route = useRoute() // route 정보
+  const route = useRoute()
   const releaseNotesGrouped: any = ref([])
+  const originalRawData: any = ref([]) // 엑셀 원본 JSON 보관용
   const isLoading = ref(true)
   const appAuthentication = useAppAuthenticationStore()
-  const { userInfo } = appAuthentication // Login 사용자 정보
+  const { userInfo } = appAuthentication
   const fileInput: any = ref(null)
-  const projNo: any = ref(null)
-  const epId: any = ref(null)
   const fileId: any = ref(null)
-  // 배열 정의
   const urlList = {
-    perGetMaxRoleByEP: `/api/PermissionGroup/GetMaxRoleByEP`,
     gfi: '/api/File/Get',
     gfr: '/api/File/Replace',
   }
 
   onMounted(() => {
-    projNo.value = route.query.proj_no
-    epId.value = route.query.ep_id
-
     const baseSiteName = import.meta.env.VITE_BASE_SITENAME
-
-    // 개발 사이트: 69827ed36514d58f04e067e7
-    if (baseSiteName == 'dev') {
-      fileId.value = '69827ed36514d58f04e067e7'
-    } // 개발운영(devop)
-    else if (baseSiteName == 'devop') {
-      fileId.value = '698963e8ed2aff6e2771b20d'
-    } // 운영 사이트
-    else {
-      fileId.value = '6982ac8ea605319e04771832'
-    }
+    if (baseSiteName == 'dev') fileId.value = '69827ed36514d58f04e067e7'
+    else if (baseSiteName == 'devop') fileId.value = '698963e8ed2aff6e2771b20d'
+    else fileId.value = '6982ac8ea605319e04771832'
 
     fetchAndParseExcel()
   })
 
-  /**
-   * Import된 엑셀 파일 처리
-   * @param event
-   */
-  const handleFileUpload = async (event: any) => {
+  /** 1. 서버 저장 로직: 화면의 데이터를 다시 엑셀로 만들어 업로드 */
+  const saveChangesToServer = async function () {
     try {
-      const file = event.target.files[0]
-      const fileNameLower = file.name.toLowerCase()
+      SEF.onShowOverlay()
+      
+      // 화면에서 수정한 내용을 원본 데이터(originalRawData)에 매핑
+      releaseNotesGrouped.value.forEach((group: any) => {
+        group.items.forEach((item: any) => {
+          const row = item.originalRowRef
+          // 필드명 보존을 위해 원본 참조 객체 업데이트
+          const descKey = row['기능 요청 상세 내용'] !== undefined ? '기능 요청 상세 내용' : '__EMPTY_10'
+          const actKey = row['ACTION 부서 회신 내용'] !== undefined ? 'ACTION 부서 회신 내용' : '__EMPTY_11'
+          const devKey = row['Remark(개발)'] !== undefined ? 'Remark(개발)' : '__EMPTY_12'
+          
+          row[descKey] = item.description
+          row[actKey] = item.actionDesc
+          row[devKey] = item.remarkDev
+        })
+      });
 
-      // Excel File Validation
-      if (!fileNameLower.endsWith('.xlsx') && !fileNameLower.endsWith('.xls')) {
-        SEF.setToast('This is not an Excel file. Please select again.</br>(.xlsx or .xls file only)', 'err')
-        return
-      }
+      // XLSX를 이용해 다시 바이너리 파일로 변환
+      const newSheet = XLSX.utils.json_to_sheet(originalRawData.value)
+      const newWorkbook = XLSX.utils.book_new()
+      XLSX.utils.book_append_sheet(newWorkbook, newSheet, "Sheet1")
+      
+      const excelBuffer = XLSX.write(newWorkbook, { bookType: 'xlsx', type: 'array' })
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+      const file = new File([blob], "Updated_ReleaseNote.xlsx")
 
+      // 서버의 Replace API 호출
       const setParams: any = { id: fileId.value, File: file }
       const options = { headers: { 'Content-Type': 'multipart/form-data', FileToken: 'frontserver@sh' } }
 
-      // 파일 정보 변경
-      await axiosWrapper.post(urlList.gfr, setParams, options).then((res: any) => {
-        fetchAndParseExcel()
+      await axiosWrapper.post(urlList.gfr, setParams, options).then(() => {
+        SEF.setToast('서버 저장 완료!', 'info')
+        fetchAndParseExcel() // 데이터 새로고침
       })
     } catch (err) {
-      SEF.logMng("'handleFileUpload' 함수 오류: ", err, 'err')
+      SEF.logMng("저장 실패: ", err, 'err')
+    } finally {
+      SEF.onHideOverlay()
     }
   }
 
-  /**
-   * Released Note: 파일 서버에서 엑셀 파일 다운로드 (Export)
-   */
-  const ExportExcel = async function () {
-    if (!fileId.value) {
-      SEF.setToast('다운로드할 파일 ID가 없습니다.', 'err')
-      return
-    }
-
-    try {
-      const options = {
-        responseType: 'blob', // binary 데이터 처리를 위해 필수
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: '*/*',
-          FileToken: 'frontserver@sh',
-        },
-      }
-      const bodyData = {
-        id: fileId.value,
-      }
-
-      // api/File/Get 호출
-      await axiosWrapper.postAll(urlList.gfi, bodyData, options).then((blobData: any) => {
-        // 1. 헤더에서 파일명 추출
-        const contentDisposition = blobData.headers['content-disposition']
-        let filename = 'ReleasedNote_Download.xlsx'
-        if (contentDisposition) {
-          const match = contentDisposition.match(/filename="([^"]+)"/)
-          if (match) filename = match[1]
-        }
-
-        // 2. Blob 데이터를 이용해 가상 링크 생성 및 다운로드 실행
-        const url = window.URL.createObjectURL(new Blob([blobData.data]))
-        const link = document.createElement('a')
-        link.href = url
-        link.setAttribute('download', filename)
-        
-        document.body.appendChild(link)
-        link.click()
-        
-        // 3. 뒷정리
-        document.body.removeChild(link)
-        window.URL.revokeObjectURL(url)
-        
-        SEF.setToast('파일 다운로드가 완료되었습니다.', 'info')
-      })
-    } catch (error) {
-      console.error('ExportExcel 오류:', error)
-      SEF.setToast('파일 다운로드 중 오류가 발생했습니다.', 'err')
-    }
-  }
-
-  /**
-   * Released Note: Import Excel File Input Click
-   */
-  const importExcel = function () {
-    // Import할 폴더 경로 열기
-    fileInput.value.click()
-  }
-
-  /**
-   * File Server에 저장된 파일을 읽어옴
-   */
   const fetchAndParseExcel = async function () {
+    isLoading.value = true
     try {
-      const options = {
-        responseType: 'blob',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: '*/*',
-          FileToken: 'frontserver@sh',
-        },
-      }
-      const bodyData = {
-        id: fileId.value,
-      }
-
-      await axiosWrapper.postAll(urlList.gfi, bodyData, options).then((blobData: any) => {
-        const match = blobData.headers['content-disposition'].match(/filename="([^"]+)"/)
-        const filename = match ? match[1] : null
-        const file = new File([blobData.data], filename, { type: blobData.type })
-
+      const options = { responseType: 'blob', headers: { FileToken: 'frontserver@sh' } }
+      await axiosWrapper.postAll(urlList.gfi, { id: fileId.value }, options).then((blobData: any) => {
+        const file = new File([blobData.data], "temp.xlsx", { type: blobData.type })
         ApiCommon.postFileDecryptFile({ FILE: file }).then(async (blob: any) => {
-          const decFile = new File([blob], file.name, { type: file.type })
-          const data = await decFile.arrayBuffer() // 1. File 객체를 ArrayBuffer로 변환 (비동기)
-          const workbook = XLSX.read(data, { type: 'array' }) // 2. XLSX 라이브러리로 데이터 읽기
-          const smartExcelData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' })
-          const etcDevDescData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[1]], { defval: '' })
-          let combinedJsonData: any = []
-
-          if (smartExcelData.length > 0) {
-            combinedJsonData = [...smartExcelData]
-
-            if (etcDevDescData.length > 0) {
-              combinedJsonData = [...smartExcelData, ...etcDevDescData]
-            } else {
-              combinedJsonData.shift() //smart excel에서 바로 다운 받은 경우, 첫번째 열 삭제
-            }
-          }
-
-          //1. STATUS 컬럼이 "FINISH", "CHECKED", "READY" 중 하나이고 "완료 버젼"이 비어있지 않은 행만 필터링
-          const filteredAndValidated = combinedJsonData.filter((row: any) => {
-            const statusRaw = row['STATUS'] ? row['STATUS'] : row['__EMPTY_16']
-            const statusValue = (statusRaw ?? '').toString().trim().toUpperCase()
-            const isStatusMatch = statusValue === 'FINISH' || statusValue === 'CHECKED' || statusValue === 'READY'
-            const completionVersionRaw = row['완료 버젼'] ? row['완료 버젼'] : row['__EMPTY_18']
-
-            if (isStatusMatch && completionVersionRaw) {
-              return true
-            }
-          })
+          const data = await blob.arrayBuffer()
+          const workbook = XLSX.read(data, { type: 'array' })
+          const jsonData: any = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' })
+          
+          originalRawData.value = jsonData // 원본 보관
           const grouped: any = {}
 
-          // 2. 필터링된 데이터에 대해서만 "완료 버젼"을 기준으로 그룹화
-          filteredAndValidated.forEach((row: any) => {
-            const verNumb = row['완료 버젼'] ? row['완료 버젼'].toString().trim() : row['__EMPTY_18'].toString().trim()
-            const version = verNumb.toLowerCase()
-            const AutoNom = row['Auto No'] ? row['Auto No'] : row['__EMPTY_4']
-            const AutoNo = AutoNom ? AutoNom : ''
-            const categoryField = row['구분'] ? row['구분'] : row['__EMPTY_9']
-            const category = categoryField ? categoryField.toLowerCase() : 'unknown'
-            const descField = row['기능 요청 상세 내용'] ? row['기능 요청 상세 내용'] : row['__EMPTY_10']
-            const description = descField ? descField : 'No Description'
-            const actDesc = row['ACTION 부서 회신 내용'] ? row['ACTION 부서 회신 내용'] : row['__EMPTY_11']
-            const actionDesc = actDesc ? actDesc : 'No Description'
-            const remDev = row['Remark(개발)'] ? row['Remark(개발)'] : row['__EMPTY_12']
-            const remarkDev = remDev ? remDev : 'No Description'
-            const stField = row['STATUS'] ? row['STATUS'] : row['__EMPTY_16']
-            const status = stField ? stField : 'No Description'
-            const partField = row['Part'] ? row['Part'] : row['__EMPTY_21']
-            const part = partField ? partField : ''
+          jsonData.forEach((row: any) => {
+            const verRaw = row['완료 버젼'] || row['__EMPTY_18']
+            if (!verRaw) return
+            const version = verRaw.toString().toLowerCase()
 
-            if (!grouped[version]) {
-              grouped[version] = {
-                version: version,
-                items: [],
-              }
-            }
-
-            grouped[version].items.push({ AutoNo, category, description, actionDesc, remarkDev, status, part })
+            if (!grouped[version]) grouped[version] = { version, items: [] }
+            
+            grouped[version].items.push({
+              originalRowRef: row, // 저장 시 참조할 원본 데이터
+              AutoNo: row['Auto No'] || row['__EMPTY_4'] || '',
+              category: (row['구분'] || row['__EMPTY_9'] || 'unknown').toLowerCase(),
+              description: row['기능 요청 상세 내용'] || row['__EMPTY_10'] || '',
+              actionDesc: row['ACTION 부서 회신 내용'] || row['__EMPTY_11'] || '',
+              remarkDev: row['Remark(개발)'] || row['__EMPTY_12'] || '',
+              status: row['STATUS'] || row['__EMPTY_16'] || ''
+            })
           })
 
-          // 그룹화된 객체를 배열로 변환하고 버전 문자열 기준으로 정렬 (최신 버전이 위로 오도록 내림차순 정렬)
-          releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) => {
-            return b.version.localeCompare(a.version)
-          })
+          releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) => b.version.localeCompare(a.version))
         })
       })
     } catch (error) {
-      console.error('엑셀 파일 로드 및 파싱 중 오류 발생:', error)
-      releaseNotesGrouped.value = [] // 오류 발생 시 데이터 비움
+      releaseNotesGrouped.value = []
     } finally {
-      SEF.onHideOverlay()
       isLoading.value = false
+      SEF.onHideOverlay()
     }
   }
 
-  /**
-   * 배지 클래스를 반환하는 함수
-   * @param category
-   */
+  const ExportExcel = async function () {
+    if (!fileId.value) return
+    try {
+      const options = { responseType: 'blob', headers: { FileToken: 'frontserver@sh' } }
+      await axiosWrapper.postAll(urlList.gfi, { id: fileId.value }, options).then((blobData: any) => {
+        const url = window.URL.createObjectURL(new Blob([blobData.data]))
+        const link = document.createElement('a')
+        link.href = url
+        link.setAttribute('download', 'ReleasedNote.xlsx')
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+      })
+    } catch (e) { SEF.setToast('다운로드 실패', 'err') }
+  }
+
+  const handleFileUpload = async (event: any) => {
+    const file = event.target.files[0]
+    const setParams: any = { id: fileId.value, File: file }
+    const options = { headers: { 'Content-Type': 'multipart/form-data', FileToken: 'frontserver@sh' } }
+    await axiosWrapper.post(urlList.gfr, setParams, options).then(() => fetchAndParseExcel())
+  }
+
+  const importExcel = () => fileInput.value.click()
   const getBadgeClass = (category: any) => {
-    switch (category) {
-      case '오류':
-      case 'fixed':
-        return 'badge bg-gradient-orange-red'
-      case '기능개선':
-      case 'changed': //bg-gradient-yellow-orange, badge-changed
-        return 'badge bg-gradient-yellow-orange'
-      case '신규기능':
-      case 'added':
-        return 'badge bg-gradient-teal-green'
-      default:
-        return 'badge'
-    }
+    if (['오류', 'fixed'].includes(category)) return 'badge bg-gradient-orange-red'
+    if (['기능개선', 'changed'].includes(category)) return 'badge bg-gradient-yellow-orange'
+    if (['신규기능', 'added'].includes(category)) return 'badge bg-gradient-teal-green'
+    return 'badge'
   }
-
-  /**
-   * 텍스트 색상 클래스를 반환하는 함수
-   * @param category
-   */
   const getBadgeTextColorClass = (category: any) => {
-    switch (category) {
-      case '오류':
-      case 'fixed':
-        return 'text-danger'
-      case '기능개선':
-      case 'changed':
-        return 'text-warning'
-      case '신규기능':
-      case 'added':
-        return 'text-success'
-      default:
-        return 'text-gray'
-    }
+    if (['오류', 'fixed'].includes(category)) return 'text-danger'
+    if (['기능개선', 'changed'].includes(category)) return 'text-warning'
+    if (['신규기능', 'added'].includes(category)) return 'text-success'
+    return 'text-gray'
   }
 </script>
 
 <style scoped>
-  .description-text {
-    white-space: pre-wrap; /* 줄바꿈 처리  */
-    word-break: break-word; /* 긴 단어도 줄 바꿈 가능하게 */
+  .edit-area {
+    font-size: 13px;
+    background-color: #ffffff !important;
+    border: 1px solid #ced4da !important;
+    color: #333 !important;
+    padding: 5px 8px;
+    margin-top: 2px;
   }
-
+  .edit-area:focus {
+    border-color: #80bdff !important;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  }
   .badge {
-    position: relative;
-    top: 0px;
     border-radius: 20px;
     display: inline-block;
     width: 80px;
@@ -357,26 +253,6 @@
     text-align: center;
     padding-top: 5px;
   }
-
-  .badge-changed {
-    background-color: #f4b400;
-  }
-
-  ul {
-    display: block;
-    list-style: disc outside;
-    -webkit-margin-before: 1em;
-    -webkit-margin-after: 1em;
-    -webkit-margin-start: 0px;
-    -webkit-margin-end: 0px;
-    -webkit-padding-start: 40px;
-    margin: 0;
-    padding-left: 0;
-  }
-
-  li {
-    list-style-type: none;
-    margin: 8px 0 8px 10px;
-    padding: 0;
-  }
+  ul { list-style: none; padding-left: 0; }
+  li { margin: 15px 0 15px 10px; }
 </style>
