@@ -1,179 +1,329 @@
-<script>
-  import { ref, shallowRef, nextTick } from 'vue' // nextTick 추가
+<template>
+  <!-- BEGIN panel -->
+  <div class="panel mb-0">
+    <div class="panel-heading border-bottom h-50px" style="background-color: var(--bg07)">
+      <span class="fs-2 fw-bold" style="color: var(--basic02)">{{ $t('ReleasedNote_vue.title') }}</span>
+    </div>
+    <div v-if="userInfo.IsDeveloper" class="h-35px p-0 m-0" style="background-color: var(--bg11); padding: 8px 8px 6px">
+      <input
+        id="selectedFile"
+        class="d-none"
+        type="file"
+        accept=".xlsx, .xls"
+        @change="handleFileUpload($event)"
+        ref="fileInput"
+      />
+      <button class="btn btn-xs btn-gray float-end align-items-center shadow-none me-2 mt-1" @click="importExcel">
+        {{ $t('ReleasedNote_vue.import') }}
+      </button>
+    </div>
+    <div class="panel-body py-2 overflow-auto" style="height: calc(100vh - 150px); background-color: var(--bg14)">
+      <div class="pt-2 ps-3">
+        <template v-if="releaseNotesGrouped.length > 0">
+          <div v-for="(versionGroup, groupIndex) in releaseNotesGrouped" :key="groupIndex">
+            <!-- 버전 헤더 -->
+            <span class="fs-3" style="color: var(--txt04)">{{ $t('ReleasedNote_vue.version') }}</span>
+            <span class="fs-3 ms-1" style="color: var(--txt04)">{{ versionGroup.version }}</span>
+            <span class="fs-5 ps-2" style="color: var(--txt02)">{{ $t('ReleasedNote_vue.update') }}...</span>
+            <ul class="pt-2">
+              <li v-for="(item, itemIndex) in versionGroup.items" :key="itemIndex">
+                <div class="fs-13px">
+                  <div class="h-auto mb-1 pt-1 text-white" :class="getBadgeClass(item.category)">
+                    {{ item.category }}
+                  </div>
+                  <div
+                    class="border rounded-3 mb-1"
+                    :class="getBadgeTextColorClass(item.category) + ' description-text me-2'"
+                    style="background-color: var(--basic02)"
+                  >
+                    <div class="p-1 pb-0">[{{ item.AutoNo }}] : [{{ item.status }}]</div>
+                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">{{ item.description }}</div>
+                  </div>
+                  <div class="border rounded-3 text-cyan-700 mb-1 me-2" style="background-color: var(--basic02)">
+                    <div class="p-1 pb-0">{{ $t('ReleasedNote_vue.act_desc') }}</div>
+                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">: {{ item.actionDesc }}</div>
+                  </div>
+                  <div class="border rounded-3 text-green-600 mb-1 me-2" style="background-color: var(--basic02)">
+                    <div class="p-1 pb-0">{{ $t('ReleasedNote_vue.dev_desc') }}</div>
+                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">: {{ item.remarkDev }}</div>
+                  </div>
+                </div>
+              </li>
+            </ul>
+            <hr v-if="Number(groupIndex) < releaseNotesGrouped.length - 1" />
+          </div>
+        </template>
+        <template v-else>
+          <p v-if="isLoading">{{ $t('ReleasedNote_vue.load_desc') }}</p>
+          <p v-else>{{ $t('ReleasedNote_vue.empt_desc') }}</p>
+        </template>
+      </div>
+    </div>
+  </div>
+  <!-- END panel -->
+</template>
+
+<script setup lang="ts">
+  import { ref, onMounted } from 'vue'
+  import { useRoute } from 'vue-router'
+  import { useAppAuthenticationStore } from '@/stores/app-authentication' /** 사용자 정보 */
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper' /** 네트워크 교류를 위한 Axios 함수 목록 */
+  import * as XLSX from 'xlsx'
   import { ApiCommon } from '@/utils/axios/api-common'
-  import vSelect from 'vue-select'
-  import { useEmployees } from '@/stores/app-employees'
-  import { debounce } from 'lodash-es'
+  /** Helper List */
+  import * as SEF from '@/utils/spread/spread-excel-funtions.js'
 
-  const { setEmployeeInfo } = useEmployees()
+  /** Variable List */
+  const route = useRoute() // route 정보
+  const releaseNotesGrouped: any = ref([])
+  const isLoading = ref(true)
+  const appAuthentication = useAppAuthenticationStore()
+  const { userInfo } = appAuthentication // Login 사용자 정보
+  const fileInput: any = ref(null)
+  const projNo: any = ref(null)
+  const epId: any = ref(null)
+  const fileId: any = ref(null)
+  // 배열 정의
+  const urlList = {
+    perGetMaxRoleByEP: `/api/PermissionGroup/GetMaxRoleByEP`,
+    gfi: '/api/File/Get',
+    gfr: '/api/File/Replace',
+  }
 
-  export default {
-    name: 'AgUserEditor',
-    components: { vSelect },
-    props: {
-      params: { type: Object, default: () => ({}) },
-    },
-    setup(props) {
-      return {
-        containerRef: shallowRef(null),
-        vSelectRef: shallowRef(null),
-        vModelRef: ref(null),
-        vOptionsRef: ref([]),
-        vValue: ref(null),
+  onMounted(() => {
+    projNo.value = route.query.proj_no
+    epId.value = route.query.ep_id
+
+    const baseSiteName = import.meta.env.VITE_BASE_SITENAME
+
+    // 개발 사이트: 69827ed36514d58f04e067e7
+    if (baseSiteName == 'dev') {
+      fileId.value = '69827ed36514d58f04e067e7'
+    } // 개발운영(devop)
+    else if (baseSiteName == 'devop') {
+      fileId.value = '698963e8ed2aff6e2771b20d'
+    } // 운영 사이트
+    else {
+      fileId.value = '6982ac8ea605319e04771832'
+    }
+
+    fetchAndParseExcel()
+  })
+
+  /**
+   * Import된 엑셀 파일 처리
+   * @param event
+   */
+  const handleFileUpload = async (event: any) => {
+    try {
+      const file = event.target.files[0]
+      const fileNameLower = file.name.toLowerCase()
+
+      // Excel File Validation
+      if (!fileNameLower.endsWith('.xlsx') && !fileNameLower.endsWith('.xls')) {
+        SEF.setToast('This is not an Excel file. Please select again.</br>(.xlsx or .xls file only)', 'err')
+        return
       }
-    },
-    mounted() {
-      this.vModelRef = this.params?.editorSelected
-      this.vOptionsRef = this.params?.editorOptions ?? []
-      this.vValue = this.getInitialValue()
-      
-      // [포커스 핵심 1] 렌더링이 확실히 끝난 후 포커스를 잡습니다.
-      this.focusInput();
-    },
-    methods: {
-      // 포커스를 강제로 잡는 메서드 분리
-      focusInput() {
-        nextTick(() => {
-          setTimeout(() => {
-            // v-select의 검색 입력창(searchEl)에 포커스
-            if (this.vSelectRef && this.vSelectRef.searchEl) {
-              this.vSelectRef.searchEl.focus();
+
+      const setParams: any = { id: fileId.value, File: file }
+      const options = { headers: { 'Content-Type': 'multipart/form-data', FileToken: 'frontserver@sh' } }
+
+      // 파일 정보 변경
+      await axiosWrapper.post(urlList.gfr, setParams, options).then((res: any) => {
+        fetchAndParseExcel()
+      })
+    } catch (err) {
+      SEF.logMng("'handleFileUpload' 함수 오류: ", err, 'err')
+    }
+  }
+
+  /**
+   * Released Note: Import Excel File Input Click
+   */
+  const importExcel = function () {
+    // Import할 폴더 경로 열기
+    fileInput.value.click()
+  }
+
+  /**
+   * File Server에 저장된 파일을 읽어옴
+   */
+  const fetchAndParseExcel = async function () {
+    try {
+      const options = {
+        responseType: 'blob',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: '*/*',
+          FileToken: 'frontserver@sh',
+        },
+      }
+      const bodyData = {
+        id: fileId.value,
+      }
+
+      await axiosWrapper.postAll(urlList.gfi, bodyData, options).then((blobData: any) => {
+        const match = blobData.headers['content-disposition'].match(/filename="([^"]+)"/)
+        const filename = match ? match[1] : null
+        const file = new File([blobData.data], filename, { type: blobData.type })
+
+        ApiCommon.postFileDecryptFile({ FILE: file }).then(async (blob: any) => {
+          const decFile = new File([blob], file.name, { type: file.type })
+          const data = await decFile.arrayBuffer() // 1. File 객체를 ArrayBuffer로 변환 (비동기)
+          const workbook = XLSX.read(data, { type: 'array' }) // 2. XLSX 라이브러리로 데이터 읽기
+          const smartExcelData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' })
+          const etcDevDescData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[1]], { defval: '' })
+          let combinedJsonData: any = []
+
+          if (smartExcelData.length > 0) {
+            combinedJsonData = [...smartExcelData]
+
+            if (etcDevDescData.length > 0) {
+              combinedJsonData = [...smartExcelData, ...etcDevDescData]
+            } else {
+              combinedJsonData.shift() //smart excel에서 바로 다운 받은 경우, 첫번째 열 삭제
             }
-          }, 50); // 그리드 환경에서는 50ms~100ms 정도가 안정적입니다.
-        });
-      },
-
-      // [포커스 핵심 2] AG-Grid 등의 그리드에서 팝업이 화면에 붙은 후 호출되는 표준 메서드
-      afterGuiAttached() {
-        this.focusInput();
-      },
-
-      getValue() {
-        return this.vValue
-      },
-      getInitialValue() {
-        return this.params?.value
-      },
-      onClosePopup() {
-        try {
-          if (this.params && typeof this.params.stopEditing === 'function') {
-            this.params.stopEditing()
-          }
-        } catch (e) {
-          console.error(e)
-        }
-      },
-      setValue(USER_ID) {
-        const newValue = String(USER_ID ?? '')
-        this.vValue = newValue === '' ? null : newValue
-      },
-      getSelectedValue() {
-        return this.vModelRef?.code
-      },
-
-      onKeydown(event) {
-        if (event.target.tagName === 'INPUT') {
-          return
-        }
-
-        if (event.key === 'Escape' || event.key === 'ESC') {
-          event.preventDefault()
-          const userId = this.getInitialValue()
-          this.setValue(userId)
-          this.onClosePopup()
-        } else if (event.key === 'Enter') {
-          event.preventDefault()
-          event.stopPropagation()
-          const userId = this.getSelectedValue()
-          if (userId) {
-            this.setValue(userId)
-            this.onClosePopup()
-          }
-        }
-      },
-
-      onSearch: debounce(async function (search, loading) {
-        const userName = String(search ?? '').trim()
-        if (userName.length < 1) {
-          this.vOptionsRef = []
-          return
-        }
-
-        try {
-          loading(true)
-          const response = (await ApiCommon.postOfficeFindEmployee({ 
-            Type: 'Name', 
-            Keyword: userName 
-          })) ?? []
-
-          const options = response
-            .filter(item => item.EMP_NO)
-            .map(item => ({
-              ...item,
-              code: item.EMP_NO,
-              label: `${item.EMP_NM ?? ''}(${item.DEPT_NAME ?? ''})`,
-            }))
-
-          if (options.length > 0) {
-            setEmployeeInfo(options)
           }
 
-          this.vOptionsRef = options
-        } catch (error) {
-          this.vOptionsRef = []
-        } finally {
-          loading(false)
-        }
-      }, 300),
+          //1. STATUS 컬럼이 "FINISH", "CHECKED", "READY" 중 하나이고 "완료 버젼"이 비어있지 않은 행만 필터링
+          const filteredAndValidated = combinedJsonData.filter((row: any) => {
+            const statusRaw = row['STATUS'] ? row['STATUS'] : row['__EMPTY_16']
+            const statusValue = (statusRaw ?? '').toString().trim().toUpperCase()
+            const isStatusMatch = statusValue === 'FINISH' || statusValue === 'CHECKED' || statusValue === 'READY'
+            const completionVersionRaw = row['완료 버젼'] ? row['완료 버젼'] : row['__EMPTY_18']
 
-      onSelected(item) {
-        if (item) {
-          this.setValue(item.code)
-          setTimeout(() => this.containerRef?.focus(), 1)
-        }
-      },
-      
-      dropdownShouldOpen(vselect) {
-        return !vselect.loading && vselect.open
-      },
-    },
+            if (isStatusMatch && completionVersionRaw) {
+              return true
+            }
+          })
+          const grouped: any = {}
+
+          // 2. 필터링된 데이터에 대해서만 "완료 버젼"을 기준으로 그룹화
+          filteredAndValidated.forEach((row: any) => {
+            const verNumb = row['완료 버젼'] ? row['완료 버젼'].toString().trim() : row['__EMPTY_18'].toString().trim()
+            const version = verNumb.toLowerCase()
+            const AutoNom = row['Auto No'] ? row['Auto No'] : row['__EMPTY_4']
+            const AutoNo = AutoNom ? AutoNom : ''
+            const categoryField = row['구분'] ? row['구분'] : row['__EMPTY_9']
+            const category = categoryField ? categoryField.toLowerCase() : 'unknown'
+            const descField = row['기능 요청 상세 내용'] ? row['기능 요청 상세 내용'] : row['__EMPTY_10']
+            const description = descField ? descField : 'No Description'
+            const actDesc = row['ACTION 부서 회신 내용'] ? row['ACTION 부서 회신 내용'] : row['__EMPTY_11']
+            const actionDesc = actDesc ? actDesc : 'No Description'
+            const remDev = row['Remark(개발)'] ? row['Remark(개발)'] : row['__EMPTY_12']
+            const remarkDev = remDev ? remDev : 'No Description'
+            const stField = row['STATUS'] ? row['STATUS'] : row['__EMPTY_16']
+            const status = stField ? stField : 'No Description'
+            const partField = row['Part'] ? row['Part'] : row['__EMPTY_21']
+            const part = partField ? partField : ''
+
+            if (!grouped[version]) {
+              grouped[version] = {
+                version: version,
+                items: [],
+              }
+            }
+
+            grouped[version].items.push({ AutoNo, category, description, actionDesc, remarkDev, status, part })
+          })
+
+          // 그룹화된 객체를 배열로 변환하고 버전 문자열 기준으로 정렬 (최신 버전이 위로 오도록 내림차순 정렬)
+          releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) => {
+            return b.version.localeCompare(a.version)
+          })
+        })
+      })
+    } catch (error) {
+      console.error('엑셀 파일 로드 및 파싱 중 오류 발생:', error)
+      releaseNotesGrouped.value = [] // 오류 발생 시 데이터 비움
+    } finally {
+      SEF.onHideOverlay()
+      isLoading.value = false
+    }
+  }
+
+  /**
+   * 배지 클래스를 반환하는 함수
+   * @param category
+   */
+  const getBadgeClass = (category: any) => {
+    switch (category) {
+      case '오류':
+      case 'fixed':
+        return 'badge bg-gradient-orange-red'
+      case '기능개선':
+      case 'changed': //bg-gradient-yellow-orange, badge-changed
+        return 'badge bg-gradient-yellow-orange'
+      case '신규기능':
+      case 'added':
+        return 'badge bg-gradient-teal-green'
+      default:
+        return 'badge'
+    }
+  }
+
+  /**
+   * 텍스트 색상 클래스를 반환하는 함수
+   * @param category
+   */
+  const getBadgeTextColorClass = (category: any) => {
+    switch (category) {
+      case '오류':
+      case 'fixed':
+        return 'text-danger'
+      case '기능개선':
+      case 'changed':
+        return 'text-warning'
+      case '신규기능':
+      case 'added':
+        return 'text-success'
+      default:
+        return 'text-gray'
+    }
   }
 </script>
 
-<template>
-  <div 
-    ref="containerRef" 
-    class="p-1 bg-white ag-user-editor-container" 
-    tabindex="0" 
-    @keydown="onKeydown"
-  >
-    <div class="d-flex flex-row my-1 justify-content-between">
-      <span class="badge bg-info">ESC:취소 / Enter:선택</span>
-      <span class="badge bg-dark" style="cursor: pointer" @click="onClosePopup">X</span>
-    </div>
+<style scoped>
+  .description-text {
+    white-space: pre-wrap; /*  줄바꿈 처리  */
+    word-break: break-word; /* 긴 단어도 줄 바꿈 가능하게 */
+  }
 
-    <vSelect
-      ref="vSelectRef"
-      v-model="vModelRef"
-      :options="vOptionsRef"
-      :taggable="false"
-      :filterable="false" 
-      :placeholder="'이름 검색 (예: 박정철)'"
-      :dropdown-should-open="dropdownShouldOpen"
-      :autofocus="true"
-      @option:selected="onSelected"
-      @search="onSearch"
-      @keydown.stop
-      class="w-100 ag-user-editor-select"
-    >
-      <template #no-options="{ searching }">
-        <template v-if="searching">검색 결과가 없습니다.</template>
-        <template v-else>이름을 입력해 주세요.</template>
-      </template>
-    </vSelect>
-  </div>
-</template>
+  .badge {
+    position: relative;
+    top: 0px;
+    border-radius: 20px;
+    display: inline-block;
+    width: 80px;
+    height: 30px;
+    line-height: 20px;
+    margin-right: 10px;
+    text-transform: uppercase;
+    font-size: 13px;
+    font-weight: 700;
+    text-align: center;
+    padding-top: 5px;
+  }
 
-<style scoped lang="scss">
-/* 스타일 동일 */
+  .badge-changed {
+    background-color: #f4b400;
+  }
+
+  ul {
+    display: block;
+    list-style: disc outside;
+    -webkit-margin-before: 1em;
+    -webkit-margin-after: 1em;
+    -webkit-margin-start: 0px;
+    -webkit-margin-end: 0px;
+    -webkit-padding-start: 40px;
+    margin: 0;
+    padding-left: 0;
+  }
+
+  li {
+    list-style-type: none;
+    margin: 8px 0 8px 10px;
+    padding: 0;
+  }
 </style>
