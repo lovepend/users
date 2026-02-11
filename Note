@@ -1,13 +1,143 @@
- File: D:/03. Dev/SEDP_Front_dev/FrontEnd/src/components/editors/spreadJsEditor/SpreadUserEditor.js:146:25
-  144|      class="p-1 bg-white ag-user-editor-container"
-  145|      tabindex="0"
-  146|      @keydown="onKeydown"
-     |                          ^
-  147|    >
-  148|      <div class="d-flex flex-row my-1 justify-content-between">
-      at formatError (file:///D:/03.%20Dev/SEDP_Front_dev/FrontEnd/node_modules/vite/dist/node/chunks/dep-52909643.js:44062:46)
-      at TransformContext.error (file:///D:/03.%20Dev/SEDP_Front_dev/FrontEnd/node_modules/vite/dist/node/chunks/dep-52909643.js:44058:19)
-      at TransformContext.transform (file:///D:/03.%20Dev/SEDP_Front_dev/FrontEnd/node_modules/vite/dist/node/chunks/dep-52909643.js:41784:22)
-      at async Object.transform (file:///D:/03.%20Dev/SEDP_Front_dev/FrontEnd/node_modules/vite/dist/node/chunks/dep-52909643.js:44352:30)
-      at async loadAndTransform (file:///D:/03.%20Dev/SEDP_Front_dev/FrontEnd/node_modules/vite/dist/node/chunks/dep-52909643.js:55026:29)
-      at async viteTransformMiddleware (file:///D:/03.%20Dev/SEDP_Front_dev/FrontEnd/node_modules/vite/dist/node/chunks/dep-52909643.js:64430:32)
+import { ref, shallowRef } from 'vue'
+import { ApiCommon } from '@/utils/axios/api-common'
+import vSelect from 'vue-select'
+import { useEmployees } from '@/stores/app-employees'
+import { debounce } from 'lodash-es'
+
+const { setEmployeeInfo } = useEmployees()
+
+export default {
+  name: 'SpreadUserEditor',
+  components: { vSelect },
+  props: {
+    params: { type: Object, default: () => ({}) },
+  },
+  // 템플릿 부분을 template 속성으로 정의합니다.
+  template: `
+    <div 
+      ref="containerRef" 
+      class="p-1 bg-white ag-user-editor-container" 
+      tabindex="0" 
+      @keydown="onKeydown"
+    >
+      <div class="d-flex flex-row my-1 justify-content-between">
+        <span class="badge bg-info">ESC:취소 / Enter:선택</span>
+        <span class="badge bg-dark" style="cursor: pointer" @click="onClosePopup">X</span>
+      </div>
+
+      <vSelect
+        ref="vSelectRef"
+        v-model="vModelRef"
+        :options="vOptionsRef"
+        :filterable="false" 
+        :placeholder="'이름 검색...'"
+        :dropdown-should-open="dropdownShouldOpen"
+        @option:selected="onSelected"
+        @search="onSearch"
+        @keydown.stop
+        class="w-100 ag-user-editor-select"
+      >
+        <template #no-options="{ searching }">
+          <span v-if="searching" style="font-size: 0.8rem;">검색 결과가 없습니다.</span>
+          <span v-else style="font-size: 0.8rem;">이름을 입력해 주세요.</span>
+        </template>
+      </vSelect>
+    </div>
+  `,
+  setup(props) {
+    return {
+      containerRef: shallowRef(null),
+      vSelectRef: shallowRef(null),
+      vModelRef: ref(null),
+      vOptionsRef: ref([]),
+      vValue: ref(null),
+    }
+  },
+  mounted() {
+    this.vModelRef = this.params?.editorSelected || null
+    this.vOptionsRef = this.params?.editorOptions ?? []
+    this.vValue = this.getInitialValue()
+    
+    setTimeout(() => {
+      if (this.vSelectRef && this.vSelectRef.searchEl) {
+        this.vSelectRef.searchEl.focus()
+      }
+    }, 50)
+  },
+  methods: {
+    getValue() {
+      return this.vValue
+    },
+    getInitialValue() {
+      return this.params?.value
+    },
+    onClosePopup() {
+      if (this.params && typeof this.params.stopEditing === 'function') {
+        this.params.stopEditing()
+      }
+    },
+    setValue(USER_ID) {
+      const newValue = String(USER_ID ?? '')
+      this.vValue = newValue === '' ? null : newValue
+    },
+    getSelectedValue() {
+      return this.vModelRef?.code
+    },
+    onKeydown(event) {
+      if (event.target.tagName === 'INPUT') return
+
+      if (event.key === 'Escape' || event.key === 'ESC') {
+        event.preventDefault()
+        this.setValue(this.getInitialValue())
+        this.onClosePopup()
+      } else if (event.key === 'Enter') {
+        event.preventDefault()
+        const userId = this.getSelectedValue()
+        if (userId) {
+          this.setValue(userId)
+          this.onClosePopup()
+        }
+      }
+    },
+    onSearch: debounce(async function (search, loading) {
+      const userName = String(search ?? '').trim()
+      if (userName.length < 1) {
+        this.vOptionsRef = []
+        return
+      }
+      try {
+        loading(true)
+        const response = (await ApiCommon.postOfficeFindEmployee({ 
+          Type: 'Name', 
+          Keyword: userName 
+        })) ?? []
+
+        const options = response
+          .filter(item => item.EMP_NO)
+          .map(item => ({
+            ...item,
+            code: item.EMP_NO,
+            label: `${item.EMP_NM ?? ''}(${item.DEPT_NAME ?? ''})`,
+          }))
+
+        if (options.length > 0) {
+          setEmployeeInfo(options)
+        }
+        this.vOptionsRef = options
+      } catch (error) {
+        this.vOptionsRef = []
+      } finally {
+        loading(false)
+      }
+    }, 300),
+    onSelected(item) {
+      if (item) {
+        this.setValue(item.code)
+        setTimeout(() => this.containerRef?.focus(), 10)
+      }
+    },
+    dropdownShouldOpen(vselect) {
+      return !vselect.loading && vselect.open
+    },
+  }
+}
