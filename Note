@@ -95,40 +95,16 @@ onMounted(() => {
   fetchAndParseExcel()
 })
 
-const handleFileUpload = async (event: any) => {
-  try {
-    const file = event.target.files[0]
-    const fileNameLower = file.name.toLowerCase()
-    if (!fileNameLower.endsWith('.xlsx') && !fileNameLower.endsWith('.xls')) {
-      SEF.setToast('This is not an Excel file. Please select again.</br>(.xlsx or .xls file only)', 'err')
-      return
-    }
-    const setParams: any = { id: fileId.value, File: file }
-    const options = { headers: { 'Content-Type': 'multipart/form-data', FileToken: 'frontserver@sh' } }
-    await axiosWrapper.post(urlList.gfr, setParams, options).then(() => {
-      fetchAndParseExcel()
-    })
-  } catch (err) {
-    SEF.logMng("'handleFileUpload' 함수 오류: ", err, 'err')
-  }
-}
-
-const importExcel = function () {
-  fileInput.value.click()
-}
-
 /**
  * 엑셀 시트에서 헤더 이름을 기반으로 데이터를 추출하는 헬퍼 함수
  */
 const parseSheetWithHeaders = (sheet: any) => {
-  // header: 1 옵션은 데이터를 2차원 배열 형태로 가져옵니다 (예: rows[0]이 헤더행)
   const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
   if (rows.length === 0) return []
 
-  const headers = rows[0] // 첫 번째 행을 헤더로 인식
-  const dataRows = rows.slice(1) // 데이터는 두 번째 행부터
+  const headers = rows[0]
+  const dataRows = rows.slice(1)
 
-  // 헤더 텍스트별 인덱스 매핑 (찾지 못하면 -1)
   const idx = {
     autoNo: headers.indexOf('Auto No'),
     category: headers.indexOf('구분'),
@@ -152,9 +128,40 @@ const parseSheetWithHeaders = (sheet: any) => {
   }))
 }
 
+const handleFileUpload = async (event: any) => {
+  try {
+    const file = event.target.files[0]
+    const fileNameLower = file.name.toLowerCase()
+    if (!fileNameLower.endsWith('.xlsx') && !fileNameLower.endsWith('.xls')) {
+      SEF.setToast('This is not an Excel file.', 'err')
+      return
+    }
+    const setParams: any = { id: fileId.value, File: file }
+    const options = { headers: { 'Content-Type': 'multipart/form-data', FileToken: 'frontserver@sh' } }
+    await axiosWrapper.post(urlList.gfr, setParams, options).then(() => {
+      fetchAndParseExcel()
+    })
+  } catch (err) {
+    SEF.logMng("'handleFileUpload' 오류: ", err, 'err')
+  }
+}
+
+const importExcel = function () {
+  fileInput.value.click()
+}
+
 const fetchAndParseExcel = async function () {
   try {
     isLoading.value = true
+    const baseSiteName = import.meta.env.VITE_BASE_SITENAME
+
+    // [환경별 필터 조건 설정]
+    // 개발(dev) 혹은 개발운영(devop)일 때는 READY 포함 3가지, 운영은 2가지만 허용
+    let allowedStatus = ['FINISH', 'CHECKED']
+    if (baseSiteName === 'dev' || baseSiteName === 'devop') {
+      allowedStatus.push('READY')
+    }
+
     const options = {
       responseType: 'blob',
       headers: {
@@ -175,33 +182,26 @@ const fetchAndParseExcel = async function () {
         const data = await decFile.arrayBuffer()
         const workbook = XLSX.read(data, { type: 'array' })
 
-        // 시트 1, 2 모두 동적 헤더 방식으로 파싱
         const smartExcelData = parseSheetWithHeaders(workbook.Sheets[workbook.SheetNames[0]])
         const etcDevDescData = workbook.SheetNames[1] 
                                ? parseSheetWithHeaders(workbook.Sheets[workbook.SheetNames[1]]) 
                                : []
 
         let combinedJsonData = [...smartExcelData, ...etcDevDescData]
-
         const grouped: any = {}
 
         combinedJsonData.forEach((row: any) => {
           const statusValue = (row.status ?? '').toString().trim().toUpperCase()
           const versionValue = (row.completionVersion ?? '').toString().trim()
 
-          // 필터: 상태가 대상이고 버전 정보가 있을 때만
-          const isStatusMatch = ['FINISH', 'CHECKED', 'READY'].includes(statusValue)
+          // [필터 로직 적용]
+          const isStatusMatch = allowedStatus.includes(statusValue)
 
           if (isStatusMatch && versionValue) {
             const version = versionValue.toLowerCase()
-            
             if (!grouped[version]) {
-              grouped[version] = {
-                version: versionValue,
-                items: [],
-              }
+              grouped[version] = { version: versionValue, items: [] }
             }
-
             grouped[version].items.push({
               AutoNo: row.AutoNo,
               category: row.category ? row.category.toLowerCase() : 'unknown',
@@ -214,14 +214,14 @@ const fetchAndParseExcel = async function () {
           }
         })
 
-        // 정렬 (최신 버전이 위로)
+        // 버전 내림차순 정렬
         releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) => {
           return b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: 'base' })
         })
       })
     })
   } catch (error) {
-    console.error('엑셀 파일 로드 및 파싱 중 오류 발생:', error)
+    console.error('엑셀 파싱 중 오류:', error)
     releaseNotesGrouped.value = []
   } finally {
     SEF.onHideOverlay()
