@@ -96,15 +96,18 @@ onMounted(() => {
 })
 
 /**
- * 엑셀 시트에서 헤더 이름을 기반으로 데이터를 추출하는 헬퍼 함수
+ * 엑셀 시트에서 헤더 이름을 기반으로 데이터를 추출하는 공통 함수
+ * @param sheet 엑셀 시트 객체
+ * @param skipRows 건너뛸 행 수 (0부터 시작)
  */
-const parseSheetWithHeaders = (sheet: any) => {
+const parseSheetWithHeaders = (sheet: any, skipRows: number = 0) => {
   const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
-  if (rows.length === 0) return []
+  if (rows.length <= skipRows) return []
 
-  const headers = rows[0]
-  const dataRows = rows.slice(1)
+  const headers = rows[skipRows] // 헤더 행 선택
+  const dataRows = rows.slice(skipRows + 1) // 헤더 이후 데이터 행
 
+  // 컬럼 명칭을 기반으로 인덱스 찾기
   const idx = {
     autoNo: headers.indexOf('Auto No'),
     category: headers.indexOf('구분'),
@@ -133,7 +136,7 @@ const handleFileUpload = async (event: any) => {
     const file = event.target.files[0]
     const fileNameLower = file.name.toLowerCase()
     if (!fileNameLower.endsWith('.xlsx') && !fileNameLower.endsWith('.xls')) {
-      SEF.setToast('This is not an Excel file.', 'err')
+      SEF.setToast('Excel file only (.xlsx, .xls)', 'err')
       return
     }
     const setParams: any = { id: fileId.value, File: file }
@@ -142,7 +145,7 @@ const handleFileUpload = async (event: any) => {
       fetchAndParseExcel()
     })
   } catch (err) {
-    SEF.logMng("'handleFileUpload' 오류: ", err, 'err')
+    SEF.logMng("'handleFileUpload' Error: ", err, 'err')
   }
 }
 
@@ -156,10 +159,9 @@ const fetchAndParseExcel = async function () {
     const baseSiteName = import.meta.env.VITE_BASE_SITENAME
 
     // [환경별 필터 조건 설정]
-    // 개발(dev) 혹은 개발운영(devop)일 때는 READY 포함 3가지, 운영은 2가지만 허용
     let allowedStatus = ['FINISH', 'CHECKED']
     if (baseSiteName === 'dev' || baseSiteName === 'devop') {
-      allowedStatus.push('READY')
+      allowedStatus.push('READY') // 개발/개발운영에서는 READY 추가
     }
 
     const options = {
@@ -182,9 +184,13 @@ const fetchAndParseExcel = async function () {
         const data = await decFile.arrayBuffer()
         const workbook = XLSX.read(data, { type: 'array' })
 
-        const smartExcelData = parseSheetWithHeaders(workbook.Sheets[workbook.SheetNames[0]])
+        // [시트별 파싱]
+        // 시트 1: 1,2행이 비어있으므로 3행(인덱스 2)을 헤더로 사용
+        const smartExcelData = parseSheetWithHeaders(workbook.Sheets[workbook.SheetNames[0]], 2)
+        
+        // 시트 2: 기존대로 1행(인덱스 0)을 헤더로 사용
         const etcDevDescData = workbook.SheetNames[1] 
-                               ? parseSheetWithHeaders(workbook.Sheets[workbook.SheetNames[1]]) 
+                               ? parseSheetWithHeaders(workbook.Sheets[workbook.SheetNames[1]], 0) 
                                : []
 
         let combinedJsonData = [...smartExcelData, ...etcDevDescData]
@@ -194,7 +200,7 @@ const fetchAndParseExcel = async function () {
           const statusValue = (row.status ?? '').toString().trim().toUpperCase()
           const versionValue = (row.completionVersion ?? '').toString().trim()
 
-          // [필터 로직 적용]
+          // 설정된 allowedStatus에 포함되는지 확인
           const isStatusMatch = allowedStatus.includes(statusValue)
 
           if (isStatusMatch && versionValue) {
@@ -214,14 +220,14 @@ const fetchAndParseExcel = async function () {
           }
         })
 
-        // 버전 내림차순 정렬
+        // 최신 버전순 정렬
         releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) => {
           return b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: 'base' })
         })
       })
     })
   } catch (error) {
-    console.error('엑셀 파싱 중 오류:', error)
+    console.error('Excel Parsing Error:', error)
     releaseNotesGrouped.value = []
   } finally {
     SEF.onHideOverlay()
