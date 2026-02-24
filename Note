@@ -96,18 +96,20 @@ onMounted(() => {
 })
 
 /**
- * 엑셀 시트에서 헤더 이름을 기반으로 데이터를 추출하는 공통 함수
- * @param sheet 엑셀 시트 객체
- * @param skipRows 건너뛸 행 수 (0부터 시작)
+ * 엑셀 시트 파싱 함수 (동적 헤더 찾기)
+ * @param sheet 시트 객체
+ * @param skipRows 헤더가 나오기 전까지 건너뛸 행 수
  */
 const parseSheetWithHeaders = (sheet: any, skipRows: number = 0) => {
+  if (!sheet) return []
   const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
   if (rows.length <= skipRows) return []
 
-  const headers = rows[skipRows] // 헤더 행 선택
-  const dataRows = rows.slice(skipRows + 1) // 헤더 이후 데이터 행
+  // 헤더 행 추출 및 공백 제거 처리
+  const headers = rows[skipRows].map((h: any) => String(h || '').trim())
+  const dataRows = rows.slice(skipRows + 1)
 
-  // 컬럼 명칭을 기반으로 인덱스 찾기
+  // 각 컬럼명의 인덱스 파악
   const idx = {
     autoNo: headers.indexOf('Auto No'),
     category: headers.indexOf('구분'),
@@ -119,6 +121,7 @@ const parseSheetWithHeaders = (sheet: any, skipRows: number = 0) => {
     part: headers.indexOf('Part')
   }
 
+  // 데이터 매핑
   return dataRows.map(row => ({
     AutoNo: idx.autoNo !== -1 ? row[idx.autoNo] : '',
     category: idx.category !== -1 ? row[idx.category] : '',
@@ -128,12 +131,13 @@ const parseSheetWithHeaders = (sheet: any, skipRows: number = 0) => {
     status: idx.status !== -1 ? row[idx.status] : '',
     completionVersion: idx.version !== -1 ? row[idx.version] : '',
     part: idx.part !== -1 ? row[idx.part] : ''
-  }))
+  })).filter(item => item.status || item.completionVersion) // 비어있는 행 방지
 }
 
 const handleFileUpload = async (event: any) => {
   try {
     const file = event.target.files[0]
+    if (!file) return
     const fileNameLower = file.name.toLowerCase()
     if (!fileNameLower.endsWith('.xlsx') && !fileNameLower.endsWith('.xls')) {
       SEF.setToast('Excel file only (.xlsx, .xls)', 'err')
@@ -158,10 +162,10 @@ const fetchAndParseExcel = async function () {
     isLoading.value = true
     const baseSiteName = import.meta.env.VITE_BASE_SITENAME
 
-    // [환경별 필터 조건 설정]
+    // 환경별 허용 상태값 설정
     let allowedStatus = ['FINISH', 'CHECKED']
     if (baseSiteName === 'dev' || baseSiteName === 'devop') {
-      allowedStatus.push('READY') // 개발/개발운영에서는 READY 추가
+      allowedStatus.push('READY')
     }
 
     const options = {
@@ -174,69 +178,68 @@ const fetchAndParseExcel = async function () {
     }
     const bodyData = { id: fileId.value }
 
-    await axiosWrapper.postAll(urlList.gfi, bodyData, options).then((blobData: any) => {
-      const match = blobData.headers['content-disposition'].match(/filename="([^"]+)"/)
-      const filename = match ? match[1] : null
-      const file = new File([blobData.data], filename, { type: blobData.type })
+    const blobData: any = await axiosWrapper.postAll(urlList.gfi, bodyData, options)
+    const match = blobData.headers['content-disposition']?.match(/filename="([^"]+)"/)
+    const filename = match ? match[1] : 'download.xlsx'
+    const file = new File([blobData.data], filename, { type: blobData.type })
 
-      ApiCommon.postFileDecryptFile({ FILE: file }).then(async (blob: any) => {
-        const decFile = new File([blob], file.name, { type: file.type })
-        const data = await decFile.arrayBuffer()
-        const workbook = XLSX.read(data, { type: 'array' })
+    const decryptedBlob: any = await ApiCommon.postFileDecryptFile({ FILE: file })
+    const data = await decryptedBlob.arrayBuffer()
+    const workbook = XLSX.read(data, { type: 'array' })
 
-        // [시트별 파싱]
-        // 시트 1: 1,2행이 비어있으므로 3행(인덱스 2)을 헤더로 사용
-        const smartExcelData = parseSheetWithHeaders(workbook.Sheets[workbook.SheetNames[0]], 2)
-        
-        // 시트 2: 기존대로 1행(인덱스 0)을 헤더로 사용
-        const etcDevDescData = workbook.SheetNames[1] 
-                               ? parseSheetWithHeaders(workbook.Sheets[workbook.SheetNames[1]], 0) 
-                               : []
+    // [시트 통합 로직]
+    let combinedJsonData: any[] = []
 
-        let combinedJsonData = [...smartExcelData, ...etcDevDescData]
-        const grouped: any = {}
+    // 첫 번째 시트: 3행 헤더 (skipRows: 2)
+    if (workbook.SheetNames.length > 0) {
+      const sheet1 = parseSheetWithHeaders(workbook.Sheets[workbook.SheetNames[0]], 2)
+      combinedJsonData = [...sheet1]
+    }
 
-        combinedJsonData.forEach((row: any) => {
-          const statusValue = (row.status ?? '').toString().trim().toUpperCase()
-          const versionValue = (row.completionVersion ?? '').toString().trim()
+    // 두 번째 시트: 1행 헤더 (skipRows: 0), 존재할 때만 실행
+    if (workbook.SheetNames.length > 1) {
+      const sheet2 = parseSheetWithHeaders(workbook.Sheets[workbook.SheetNames[1]], 0)
+      combinedJsonData = [...combinedJsonData, ...sheet2]
+    }
 
-          // 설정된 allowedStatus에 포함되는지 확인
-          const isStatusMatch = allowedStatus.includes(statusValue)
+    const grouped: any = {}
+    combinedJsonData.forEach((row: any) => {
+      const statusValue = String(row.status || '').trim().toUpperCase()
+      const versionValue = String(row.completionVersion || '').trim()
 
-          if (isStatusMatch && versionValue) {
-            const version = versionValue.toLowerCase()
-            if (!grouped[version]) {
-              grouped[version] = { version: versionValue, items: [] }
-            }
-            grouped[version].items.push({
-              AutoNo: row.AutoNo,
-              category: row.category ? row.category.toLowerCase() : 'unknown',
-              description: row.description || 'No Description',
-              actionDesc: row.actionDesc || 'No Description',
-              remarkDev: row.remarkDev || 'No Description',
-              status: row.status,
-              part: row.part
-            })
-          }
+      if (allowedStatus.includes(statusValue) && versionValue) {
+        const version = versionValue.toLowerCase()
+        if (!grouped[version]) {
+          grouped[version] = { version: versionValue, items: [] }
+        }
+        grouped[version].items.push({
+          AutoNo: row.AutoNo,
+          category: String(row.category || '').toLowerCase(),
+          description: row.description || 'No Description',
+          actionDesc: row.actionDesc || 'No Description',
+          remarkDev: row.remarkDev || 'No Description',
+          status: statusValue,
+          part: row.part
         })
-
-        // 최신 버전순 정렬
-        releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) => {
-          return b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: 'base' })
-        })
-      })
+      }
     })
+
+    releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) => {
+      return b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: 'base' })
+    })
+
   } catch (error) {
-    console.error('Excel Parsing Error:', error)
+    console.error('엑셀 파싱 중 오류:', error)
     releaseNotesGrouped.value = []
   } finally {
-    SEF.onHideOverlay()
+    if (typeof SEF.onHideOverlay === 'function') SEF.onHideOverlay()
     isLoading.value = false
   }
 }
 
 const getBadgeClass = (category: any) => {
-  switch (category) {
+  const c = String(category).toLowerCase()
+  switch (c) {
     case '오류': case 'fixed': return 'badge bg-gradient-orange-red'
     case '기능개선': case 'changed': return 'badge bg-gradient-yellow-orange'
     case '신규기능': case 'added': return 'badge bg-gradient-teal-green'
@@ -245,7 +248,8 @@ const getBadgeClass = (category: any) => {
 }
 
 const getBadgeTextColorClass = (category: any) => {
-  switch (category) {
+  const c = String(category).toLowerCase()
+  switch (c) {
     case '오류': case 'fixed': return 'text-danger'
     case '기능개선': case 'changed': return 'text-warning'
     case '신규기능': case 'added': return 'text-success'
@@ -256,10 +260,13 @@ const getBadgeTextColorClass = (category: any) => {
 
 <style scoped>
 .description-text {
-  white-space: pre-wrap;
-  word-break: break-word;
+  white-space: pre-wrap; /* 줄바꿈 처리 */
+  word-break: break-word; /* 긴 단어도 줄 바꿈 가능하게 */
 }
+
 .badge {
+  position: relative;
+  top: 0px;
   border-radius: 20px;
   display: inline-block;
   width: 80px;
@@ -272,13 +279,17 @@ const getBadgeTextColorClass = (category: any) => {
   text-align: center;
   padding-top: 5px;
 }
+
 ul {
   display: block;
   list-style: none;
   margin: 0;
   padding-left: 0;
 }
+
 li {
+  list-style-type: none;
   margin: 8px 0 8px 10px;
+  padding: 0;
 }
 </style>
