@@ -4,44 +4,61 @@
       <span class="fs-2 fw-bold" style="color: var(--basic02)">{{ $t('ReleasedNote_vue.title') }}</span>
     </div>
     <div v-if="userInfo.IsDeveloper" class="h-35px p-0 m-0" style="background-color: var(--bg11); padding: 8px 8px 6px">
-      <input id="selectedFile" class="d-none" type="file" accept=".xlsx, .xls" @change="handleFileUpload($event)" ref="fileInput" />
+      <input
+        id="selectedFile"
+        class="d-none"
+        type="file"
+        accept=".xlsx, .xls"
+        @change="handleFileUpload($event)"
+        ref="fileInput"
+      />
       <button class="btn btn-xs btn-gray float-end align-items-center shadow-none me-2 mt-1" @click="importExcel">
         {{ $t('ReleasedNote_vue.import') }}
       </button>
     </div>
     <div class="panel-body py-2 overflow-auto" style="height: calc(100vh - 150px); background-color: var(--bg14)">
       <div class="pt-2 ps-3">
-        <template v-if="releaseNotesGrouped.length > 0">
+        <template v-if="releaseNotesGrouped && releaseNotesGrouped.length > 0">
           <div v-for="(versionGroup, groupIndex) in releaseNotesGrouped" :key="groupIndex">
-            <span class="fs-3" style="color: var(--txt04)">{{ $t('ReleasedNote_vue.version') }} {{ versionGroup.version }}</span>
+            <span class="fs-3" style="color: var(--txt04)">{{ $t('ReleasedNote_vue.version') }}</span>
+            <span class="fs-3 ms-1" style="color: var(--txt04)">{{ versionGroup.version }}</span>
+            <span class="fs-5 ps-2" style="color: var(--txt02)">{{ $t('ReleasedNote_vue.update') }}...</span>
             <ul class="pt-2">
               <li v-for="(item, itemIndex) in versionGroup.items" :key="itemIndex">
                 <div class="fs-13px">
-                  <div class="h-auto mb-1 pt-1 text-white" :class="getBadgeClass(item.category)">{{ item.category }}</div>
-                  <div class="border rounded-3 mb-1 p-2" style="background-color: var(--basic02)">
-                    <div :class="getBadgeTextColorClass(item.category)">[{{ item.AutoNo }}] : [{{ item.status }}]</div>
-                    <div class="fw-normal" style="color: var(--txt03)">{{ item.description }}</div>
+                  <div class="h-auto mb-1 pt-1 text-white" :class="getBadgeClass(item.category)">
+                    {{ item.category }}
                   </div>
-                  <div class="border rounded-3 text-cyan-700 mb-1 me-2 p-2" style="background-color: var(--basic02)">
-                    <div>{{ $t('ReleasedNote_vue.act_desc') }} : {{ item.actionDesc }}</div>
+                  <div
+                    class="border rounded-3 mb-1 description-text me-2"
+                    :class="getBadgeTextColorClass(item.category)"
+                    style="background-color: var(--basic02)"
+                  >
+                    <div class="p-1 pb-0">[{{ item.AutoNo }}] : [{{ item.status }}]</div>
+                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">{{ item.description }}</div>
                   </div>
-                  <div class="border rounded-3 text-green-600 mb-1 me-2 p-2" style="background-color: var(--basic02)">
-                    <div>{{ $t('ReleasedNote_vue.dev_desc') }} : {{ item.remarkDev }}</div>
+                  <div class="border rounded-3 text-cyan-700 mb-1 me-2" style="background-color: var(--basic02)">
+                    <div class="p-1 pb-0">{{ $t('ReleasedNote_vue.act_desc') }}</div>
+                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">: {{ item.actionDesc }}</div>
+                  </div>
+                  <div class="border rounded-3 text-green-600 mb-1 me-2" style="background-color: var(--basic02)">
+                    <div class="p-1 pb-0">{{ $t('ReleasedNote_vue.dev_desc') }}</div>
+                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">: {{ item.remarkDev }}</div>
                   </div>
                 </div>
               </li>
             </ul>
-            <hr v-if="groupIndex < releaseNotesGrouped.length - 1" />
+            <hr v-if="isNotLastItem(groupIndex)" />
           </div>
         </template>
         <template v-else>
-          <p v-if="isLoading">Loading...</p>
-          <p v-else>No data found.</p>
+          <p v-if="isLoading">{{ $t('ReleasedNote_vue.load_desc') }}</p>
+          <p v-else>{{ $t('ReleasedNote_vue.empt_desc') }}</p>
         </template>
       </div>
     </div>
   </div>
-</template>
+  </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
@@ -51,6 +68,7 @@ import * as XLSX from 'xlsx'
 import { ApiCommon } from '@/utils/axios/api-common'
 import * as SEF from '@/utils/spread/spread-excel-funtions.js'
 
+/** Variable List */
 const releaseNotesGrouped: any = ref([])
 const isLoading = ref(true)
 const { userInfo } = useAppAuthenticationStore()
@@ -59,39 +77,42 @@ const fileId: any = ref(null)
 const urlList = { gfi: '/api/File/Get', gfr: '/api/File/Replace' }
 
 onMounted(() => {
-  const env = import.meta.env.VITE_BASE_SITENAME
-  fileId.value = env === 'dev' ? '69827ed36514d58f04e067e7' : env === 'devop' ? '698963e8ed2aff6e2771b20d' : '6982ac8ea605319e04771832'
+  const baseSiteName = import.meta.env.VITE_BASE_SITENAME
+  if (baseSiteName == 'dev') fileId.value = '69827ed36514d58f04e067e7'
+  else if (baseSiteName == 'devop') fileId.value = '698963e8ed2aff6e2771b20d'
+  else fileId.value = '6982ac8ea605319e04771832'
   fetchAndParseExcel()
 })
 
-/**
- * 엑셀 시트 파싱 (헤더 매칭 강화 버전)
- */
-const parseSheetWithHeaders = (sheet: any, skipRows: number, sheetIdx: number) => {
+/** 구분선 표시 로직 (안전하게 숫자 변환 후 체크) */
+const isNotLastItem = (index: any) => {
+  if (!releaseNotesGrouped.value) return false
+  return Number(index) < releaseNotesGrouped.value.length - 1
+}
+
+/** 엑셀 파싱 (모든 시트 순회 + 헤더 공백 제거 비교) */
+const parseSheetWithHeaders = (sheet: any, skipRows: number) => {
   if (!sheet) return []
   const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
-  
-  // 데이터가 없거나 설정한 skipRows보다 행수가 적으면 빈 배열 반환
   if (rows.length <= skipRows) return []
 
-  // 헤더 텍스트에서 모든 공백을 제거하여 비교 (예: "완료 버젼" -> "완료버젼")
+  // 헤더 매칭 (공백 제거 후 비교)
   const headers = rows[skipRows].map((h: any) => String(h || '').replace(/\s/g, ''))
   const dataRows = rows.slice(skipRows + 1)
-
-  const findIdx = (name: string) => headers.indexOf(name.replace(/\s/g, ''))
+  const getIdx = (name: string) => headers.indexOf(name.replace(/\s/g, ''))
 
   const idx = {
-    autoNo: findIdx('AutoNo'),
-    category: findIdx('구분'),
-    desc: findIdx('기능요청상세내용'),
-    action: findIdx('ACTION부서회신내용'),
-    remark: findIdx('Remark(개발)'),
-    status: findIdx('STATUS'),
-    version: findIdx('완료버젼'),
-    part: findIdx('Part')
+    autoNo: getIdx('AutoNo'),
+    category: getIdx('구분'),
+    desc: getIdx('기능요청상세내용'),
+    action: getIdx('ACTION부서회신내용'),
+    remark: getIdx('Remark(개발)'),
+    status: getIdx('STATUS'),
+    version: getIdx('완료버젼'),
+    part: getIdx('Part')
   }
 
-  const result = dataRows.map(row => ({
+  return dataRows.map(row => ({
     AutoNo: idx.autoNo !== -1 ? row[idx.autoNo] : '',
     category: idx.category !== -1 ? row[idx.category] : '',
     description: idx.desc !== -1 ? row[idx.desc] : '',
@@ -101,33 +122,28 @@ const parseSheetWithHeaders = (sheet: any, skipRows: number, sheetIdx: number) =
     completionVersion: idx.version !== -1 ? row[idx.version] : '',
     part: idx.part !== -1 ? row[idx.part] : ''
   })).filter(item => item.status || item.completionVersion)
-
-  console.log(`Sheet ${sheetIdx + 1} parsed items:`, result.length)
-  return result
 }
 
 const fetchAndParseExcel = async function () {
   try {
     isLoading.value = true
-    const env = import.meta.env.VITE_BASE_SITENAME
+    const baseSiteName = import.meta.env.VITE_BASE_SITENAME
     let allowedStatus = ['FINISH', 'CHECKED']
-    if (env === 'dev' || env === 'devop') allowedStatus.push('READY')
+    if (baseSiteName === 'dev' || baseSiteName === 'devop') allowedStatus.push('READY')
 
     const response: any = await axiosWrapper.postAll(urlList.gfi, { id: fileId.value }, { responseType: 'blob', headers: { FileToken: 'frontserver@sh' } })
     const decryptedBlob: any = await ApiCommon.postFileDecryptFile({ FILE: new File([response.data], 'temp.xlsx') })
     const workbook = XLSX.read(await decryptedBlob.arrayBuffer(), { type: 'array' })
 
     let combined: any[] = []
-
-    // 모든 시트를 순회하면서 데이터 추출
+    
+    // 시트 전체 순회 (있을 때만 합침)
     workbook.SheetNames.forEach((name, index) => {
-      // 첫 번째 시트(index 0)는 3행 헤더(skip 2), 나머지는 1행 헤더(skip 0)
+      // 첫 번째 시트(0)는 3행 헤더(skip 2), 나머지는 1행 헤더(skip 0)
       const skip = (index === 0) ? 2 : 0
-      const sheetData = parseSheetWithHeaders(workbook.Sheets[name], skip, index)
+      const sheetData = parseSheetWithHeaders(workbook.Sheets[name], skip)
       combined = [...combined, ...sheetData]
     })
-
-    console.log('Total combined items before filtering:', combined.length)
 
     const grouped: any = {}
     combined.forEach((row: any) => {
@@ -147,33 +163,33 @@ const fetchAndParseExcel = async function () {
     releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) => 
       b.version.localeCompare(a.version, undefined, { numeric: true })
     )
-  } catch (e) {
-    console.error('Excel Error:', e)
+  } catch (error) {
+    console.error('Error:', error)
   } finally {
     isLoading.value = false
     if (SEF.onHideOverlay) SEF.onHideOverlay()
   }
 }
 
-const getBadgeClass = (c: any) => {
-  const cat = String(c).toLowerCase()
-  if (['오류', 'fixed'].includes(cat)) return 'badge bg-gradient-orange-red'
-  if (['기능개선', 'changed'].includes(cat)) return 'badge bg-gradient-yellow-orange'
-  if (['신규기능', 'added'].includes(cat)) return 'badge bg-gradient-teal-green'
+const getBadgeClass = (category: any) => {
+  const c = String(category).toLowerCase()
+  if (['오류', 'fixed'].includes(c)) return 'badge bg-gradient-orange-red'
+  if (['기능개선', 'changed'].includes(c)) return 'badge bg-gradient-yellow-orange'
+  if (['신규기능', 'added'].includes(c)) return 'badge bg-gradient-teal-green'
   return 'badge'
 }
 
-const getBadgeTextColorClass = (c: any) => {
-  const cat = String(c).toLowerCase()
-  if (['오류', 'fixed'].includes(cat)) return 'text-danger'
-  if (['기능개선', 'changed'].includes(cat)) return 'text-warning'
-  if (['신규기능', 'added'].includes(cat)) return 'text-success'
+const getBadgeTextColorClass = (category: any) => {
+  const c = String(category).toLowerCase()
+  if (['오류', 'fixed'].includes(c)) return 'text-danger'
+  if (['기능개선', 'changed'].includes(c)) return 'text-warning'
+  if (['신규기능', 'added'].includes(c)) return 'text-success'
   return 'text-gray'
 }
 
 const importExcel = () => fileInput.value.click()
-const handleFileUpload = async (e: any) => {
-  const file = e.target.files[0]
+const handleFileUpload = async (event: any) => {
+  const file = event.target.files[0]
   if (!file) return
   await axiosWrapper.post(urlList.gfr, { id: fileId.value, File: file }, { headers: { 'Content-Type': 'multipart/form-data', FileToken: 'frontserver@sh' } })
   fetchAndParseExcel()
@@ -183,6 +199,6 @@ const handleFileUpload = async (e: any) => {
 <style scoped>
 .description-text { white-space: pre-wrap; word-break: break-word; }
 .badge { border-radius: 20px; display: inline-block; width: 80px; height: 30px; line-height: 20px; margin-right: 10px; text-transform: uppercase; font-size: 13px; font-weight: 700; text-align: center; padding-top: 5px; }
-ul { list-style: none; margin: 0; padding-left: 0; }
-li { margin: 8px 0 8px 10px; }
+ul { display: block; list-style: none; margin: 0; padding-left: 0; }
+li { list-style-type: none; margin: 8px 0 8px 10px; padding: 0; }
 </style>
