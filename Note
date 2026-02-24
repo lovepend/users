@@ -1,51 +1,60 @@
 {
-      field: 'VAL_TYPE',
-      headerName: 'Value Type',
-      minWidth: 120,
-      flex: 1,
-      // tooltipValueGetter: params => params.valueFormatted || params.value,
-      editable: params => {
-        const dataItem = params.data
-        return dataItem && dataItem.PROJ_NO === currentProjNo.value
-      },
-      cellRenderer: params => {
-        const displayValue = params.valueFormatted || params.value || ''
-        const editableDef  = params.colDef?.editable;
-        const editable     = (
-          DU.isFunction(editableDef) ? editableDef(params) : editableDef
-        );
-        return makeComboRender({
-          value   : displayValue,
-          editable: editable,
-        });
-      },
-      singleClickEdit: false,
-      cellEditorPopup: true,
-      cellEditorPopupPosition: 'over',
-      cellEditor: 'AgComboEditor', // 'agRichSelectCellEditor'
-      cellEditorParams: (params) => {
-        const values = Object.keys(VAL_TYPES)?.map(v=>({
-          code : VAL_TYPES[v].VALUE,
-          label: VAL_TYPES[v].EXPR,
-        })) ?? [];
-        return {
-          values            : values,
-          searchType        : 'matchAny',
-          highlightMatch    : true,
-          valueListMaxHeight: 200,
-          valueListMaxWidth : 200,
-          // AgComboEditor Parameters
-          placeholder         : 'Select Type', // Default = ''
-          code                : 'code',  // Default = 'code'
-          label               : 'label', // Default = 'label'
-          pushTags            : false,   // Default = false
-          multiple            : false,   // Default = false
-          multipleCheck       : false,   // Default = false
-          treeSelect          : false,   // Default = false
-          closeOnSelect       : false,   // Default = true
-          deselectFromDropdown: false,   // Default = false
-          returnOrigin        : false,   // Default = false
-          applySelected       : true,    // Default = false
-          // getOptionLabel      : (v) => (`${v.label} (${v.code})`),
-        }
-      },
+  field: 'VAL_TYPE',
+  headerName: 'Value Type',
+  minWidth: 120,
+  flex: 1,
+  editable: params => {
+    const dataItem = params.data
+    return dataItem && dataItem.PROJ_NO === currentProjNo.value
+  },
+  // 1. 화면에 보여질 때의 로직 수정
+  cellRenderer: params => {
+    // 실제 값이 'TEXT'이면 화면에는 'TEXT(Note)'로 표시, 그 외엔 원래 값 표시
+    const displayValue = params.value === 'TEXT' ? 'TEXT(Note)' : (params.value || '');
+    
+    const editableDef  = params.colDef?.editable;
+    const editable     = (
+      DU.isFunction(editableDef) ? editableDef(params) : editableDef
+    );
+    
+    return makeComboRender({
+      value   : displayValue,
+      editable: editable,
+    });
+  },
+  singleClickEdit: false,
+  cellEditorPopup: true,
+  cellEditorPopupPosition: 'over',
+  cellEditor: 'AgComboEditor',
+  cellEditorParams: (params) => {
+    // 2. 선택 목록 구성 수정
+    const values = Object.keys(VAL_TYPES)?.map(v => {
+      const originalValue = VAL_TYPES[v].VALUE;
+      return {
+        // 실제 저장될 값 (TEXT)
+        code : originalValue, 
+        // 화면 드롭다운에 표시될 이름 (TEXT -> TEXT(Note))
+        label: originalValue === 'TEXT' ? 'TEXT(Note)' : VAL_TYPES[v].EXPR, 
+      };
+    }) ?? [];
+
+    return {
+      values              : values,
+      searchType          : 'matchAny',
+      highlightMatch      : true,
+      valueListMaxHeight  : 200,
+      valueListMaxWidth   : 200,
+      placeholder         : 'Select Type',
+      code                : 'code',  // 저장될 키
+      label               : 'label', // 보여줄 키
+      pushTags            : false,
+      multiple            : false,
+      multipleCheck       : false,
+      treeSelect          : false,
+      closeOnSelect       : false,
+      deselectFromDropdown: false,
+      returnOrigin        : false,
+      applySelected       : true,
+    }
+  },
+}
