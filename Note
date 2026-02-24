@@ -1,204 +1,51 @@
-<template>
-  <div class="panel mb-0">
-    <div class="panel-heading border-bottom h-50px" style="background-color: var(--bg07)">
-      <span class="fs-2 fw-bold" style="color: var(--basic02)">{{ $t('ReleasedNote_vue.title') }}</span>
-      
-      <button v-if="userInfo.IsDeveloper" class="btn btn-sm btn-success float-end mt-1" @click="saveExcelData">
-        <i class="fa fa-save me-1"></i> 서버에 저장 (엑셀 반영)
-      </button>
-    </div>
-
-    <div class="panel-body p-0 overflow-auto" style="height: calc(100vh - 100px); background-color: var(--bg14)">
-      
-      <div v-if="userInfo.IsDeveloper" class="excel-editor-container">
-        <table class="excel-table">
-          <thead>
-            <tr>
-              <th v-for="(header, index) in excelHeaders" :key="index">{{ header }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(row, rowIndex) in excelRows" :key="rowIndex">
-              <td 
-                v-for="(header, colIndex) in excelHeaders" 
-                :key="colIndex"
-                contenteditable="true"
-                @blur="updateCellValue($event, rowIndex, header)"
-              >
-                {{ row[header] }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-
-      <div v-else class="pt-2 ps-3">
-        <template v-if="releaseNotesGrouped.length > 0">
-          <div v-for="(versionGroup, groupIndex) in releaseNotesGrouped" :key="groupIndex">
-            <span class="fs-3" style="color: var(--txt04)">Version {{ versionGroup.version }}</span>
-            <ul class="pt-2">
-              <li v-for="(item, itemIndex) in versionGroup.items" :key="itemIndex">
-                <div class="fs-13px me-2 border rounded-3 p-3 mb-2" style="background-color: var(--basic02)">
-                  <div :class="getBadgeClass(item.category)" class="mb-2">{{ item.category }}</div>
-                  <div class="fw-bold">[{{ item.AutoNo }}] {{ item.description }}</div>
-                  <div class="mt-2 text-muted small">: {{ item.actionDesc }}</div>
-                </div>
-              </li>
-            </ul>
-          </div>
-        </template>
-      </div>
-
-    </div>
-  </div>
-</template>
-
-<script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useAppAuthenticationStore } from '@/stores/app-authentication'
-import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import * as XLSX from 'xlsx'
-import { ApiCommon } from '@/utils/axios/api-common'
-import * as SEF from '@/utils/spread/spread-excel-funtions.js'
-
-const { userInfo } = useAppAuthenticationStore()
-const fileId = ref(null)
-const excelHeaders = ref([]) // 엑셀 헤더 목록
-const excelRows = ref([])    // 엑셀 데이터 목록
-const releaseNotesGrouped = ref([])
-const isLoading = ref(true)
-
-const urlList = {
-  gfi: '/api/File/Get',
-  gfr: '/api/File/Replace',
-}
-
-onMounted(() => {
-  // 사이트별 파일 아이디 설정 (기존 로직 동일)
-  const env = import.meta.env.VITE_BASE_SITENAME
-  fileId.value = env === 'dev' ? '69827ed36514d58f04e067e7' : (env === 'devop' ? '698963e8ed2aff6e2771b20d' : '6982ac8ea605319e04771832')
-  
-  fetchExcelData()
-})
-
-/** 1. 서버에서 데이터 가져오기 */
-const fetchExcelData = async () => {
-  try {
-    const options = { responseType: 'blob', headers: { FileToken: 'frontserver@sh' } }
-    const res = await axiosWrapper.postAll(urlList.gfi, { id: fileId.value }, options)
-    const file = new File([res.data], "data.xlsx")
-    
-    ApiCommon.postFileDecryptFile({ FILE: file }).then(async (blob) => {
-      const data = await blob.arrayBuffer()
-      const workbook = XLSX.read(data, { type: 'array' })
-      const firstSheet = workbook.Sheets[workbook.SheetNames[0]]
-      
-      // [A] 전체 데이터 (편집용)
-      const jsonData: any = XLSX.utils.sheet_to_json(firstSheet, { defval: "" })
-      if (jsonData.length > 0) {
-        excelHeaders.value = Object.keys(jsonData[0])
-        excelRows.value = jsonData
-      }
-
-      // [B] 사용자용 그룹화 데이터 (기존 로직 활용)
-      parseForUser(jsonData)
-    })
-  } catch (e) {
-    console.error(e)
-  } finally {
-    isLoading.value = false
-  }
-}
-
-/** 2. 그리드 편집 시 메모리 데이터 업데이트 */
-const updateCellValue = (event, rowIndex, header) => {
-  excelRows.value[rowIndex][header] = event.target.innerText
-}
-
-/** 3. 서버에 저장 (엑셀 파일화) */
-const saveExcelData = async () => {
-  try {
-    SEF.onShowOverlay()
-    
-    // 현재 excelRows(JSON)를 다시 엑셀 시트로 변환
-    const worksheet = XLSX.utils.json_to_sheet(excelRows.value)
-    const workbook = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1")
-    
-    const excelBuffer = XLSX.write(workbook, { bookType: 'xlsx', type: 'array' })
-    const file = new File([new Blob([excelBuffer])], "release_note.xlsx", { 
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" 
-    })
-
-    const params = { id: fileId.value, File: file }
-    const options = { headers: { 'Content-Type': 'multipart/form-data', FileToken: 'frontserver@sh' } }
-
-    await axiosWrapper.post(urlList.gfr, params, options)
-    SEF.setToast("서버에 엑셀 저장 완료!", "success")
-    
-    // 저장 후 사용자 화면용 데이터도 동기화
-    parseForUser(excelRows.value)
-  } catch (err) {
-    SEF.setToast("저장 중 오류 발생", "err")
-  } finally {
-    SEF.onHideOverlay()
-  }
-}
-
-/** 사용자용 데이터 파싱 (기존 로직 압축) */
-const parseForUser = (data) => {
-  const grouped = {}
-  data.filter(row => {
-    const status = (row['STATUS'] || row['__EMPTY_16'] || '').toString().toUpperCase()
-    return ['FINISH', 'CHECKED', 'READY'].includes(status) && (row['완료 버젼'] || row['__EMPTY_18'])
-  }).forEach(row => {
-    const ver = (row['완료 버젼'] || row['__EMPTY_18']).toString().toLowerCase()
-    if (!grouped[ver]) grouped[ver] = { version: ver, items: [] }
-    grouped[ver].items.push({
-      category: row['구분'] || row['__EMPTY_9'],
-      description: row['기능 요청 상세 내용'] || row['__EMPTY_10'],
-      actionDesc: row['ACTION 부서 회신 내용'] || row['__EMPTY_11'],
-      AutoNo: row['Auto No'] || row['__EMPTY_4']
-    })
-  })
-  releaseNotesGrouped.value = Object.values(grouped).sort((a:any, b:any) => b.version.localeCompare(a.version))
-}
-
-const getBadgeClass = (cat) => cat === '오류' ? 'badge bg-danger' : 'badge bg-primary'
-</script>
-
-<style scoped>
-/* 엑셀 스타일 그리드 */
-.excel-editor-container {
-  width: 100%;
-  overflow: auto;
-  background: white;
-}
-.excel-table {
-  border-collapse: collapse;
-  width: max-content;
-  min-width: 100%;
-  font-size: 12px;
-}
-.excel-table th {
-  background: #f1f1f1;
-  position: sticky;
-  top: 0;
-  border: 1px solid #ccc;
-  padding: 8px;
-  color: #333;
-}
-.excel-table td {
-  border: 1px solid #ccc;
-  padding: 5px;
-  min-width: 100px;
-  max-width: 400px;
-  white-space: pre-wrap;
-  outline: none;
-}
-.excel-table td:focus {
-  background: #e8f0fe;
-  border: 2px solid #1a73e8;
-}
-.badge { padding: 5px 10px; border-radius: 4px; color: white; }
-</style>
+{
+      field: 'VAL_TYPE',
+      headerName: 'Value Type',
+      minWidth: 120,
+      flex: 1,
+      // tooltipValueGetter: params => params.valueFormatted || params.value,
+      editable: params => {
+        const dataItem = params.data
+        return dataItem && dataItem.PROJ_NO === currentProjNo.value
+      },
+      cellRenderer: params => {
+        const displayValue = params.valueFormatted || params.value || ''
+        const editableDef  = params.colDef?.editable;
+        const editable     = (
+          DU.isFunction(editableDef) ? editableDef(params) : editableDef
+        );
+        return makeComboRender({
+          value   : displayValue,
+          editable: editable,
+        });
+      },
+      singleClickEdit: false,
+      cellEditorPopup: true,
+      cellEditorPopupPosition: 'over',
+      cellEditor: 'AgComboEditor', // 'agRichSelectCellEditor'
+      cellEditorParams: (params) => {
+        const values = Object.keys(VAL_TYPES)?.map(v=>({
+          code : VAL_TYPES[v].VALUE,
+          label: VAL_TYPES[v].EXPR,
+        })) ?? [];
+        return {
+          values            : values,
+          searchType        : 'matchAny',
+          highlightMatch    : true,
+          valueListMaxHeight: 200,
+          valueListMaxWidth : 200,
+          // AgComboEditor Parameters
+          placeholder         : 'Select Type', // Default = ''
+          code                : 'code',  // Default = 'code'
+          label               : 'label', // Default = 'label'
+          pushTags            : false,   // Default = false
+          multiple            : false,   // Default = false
+          multipleCheck       : false,   // Default = false
+          treeSelect          : false,   // Default = false
+          closeOnSelect       : false,   // Default = true
+          deselectFromDropdown: false,   // Default = false
+          returnOrigin        : false,   // Default = false
+          applySelected       : true,    // Default = false
+          // getOptionLabel      : (v) => (`${v.label} (${v.code})`),
+        }
+      },
