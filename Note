@@ -1,6 +1,4 @@
 <template>
-  <!-- BEGIN panel -->
-  <!-- BEGIN panel -->
   <div class="panel mb-0" style="width: 100%">
     <div class="panel-heading border-bottom h-50px" style="background-color: var(--bg07)">
       <span class="fs-2 fw-bold" style="color: var(--basic02)">{{ $t('ReleasedNote_vue.title') }}</span>
@@ -22,7 +20,6 @@
       <div class="pt-2 ps-3">
         <template v-if="releaseNotesGrouped.length > 0">
           <div v-for="(versionGroup, groupIndex) in releaseNotesGrouped" :key="groupIndex">
-            <!-- 버전 헤더 -->
             <span class="fs-3" style="color: var(--txt04)">{{ $t('ReleasedNote_vue.version') }}</span>
             <span class="fs-3 ms-1" style="color: var(--txt04)">{{ versionGroup.version }}</span>
             <span class="fs-5 ps-2" style="color: var(--txt02)">{{ $t('ReleasedNote_vue.update') }}...</span>
@@ -61,270 +58,221 @@
       </div>
     </div>
   </div>
-  <!-- END panel -->
-</template>
+  </template>
 
 <script setup lang="ts">
-  import { ref, onMounted } from 'vue'
-  import { useRoute } from 'vue-router'
-  import { useAppAuthenticationStore } from '@/stores/app-authentication' /** 사용자 정보 */
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper' /** 네트워크 교류를 위한 Axios 함수 목록 */
-  import * as XLSX from 'xlsx'
-  import { ApiCommon } from '@/utils/axios/api-common'
-  /** Helper List */
-  import * as SEF from '@/utils/spread/spread-excel-funtions.js'
+import { ref, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { useAppAuthenticationStore } from '@/stores/app-authentication'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import * as XLSX from 'xlsx'
+import { ApiCommon } from '@/utils/axios/api-common'
+import * as SEF from '@/utils/spread/spread-excel-funtions.js'
 
-  /** Variable List */
-  const route = useRoute() // route 정보
-  const releaseNotesGrouped: any = ref([])
-  const isLoading = ref(true)
-  const appAuthentication = useAppAuthenticationStore()
-  const { userInfo } = appAuthentication // Login 사용자 정보
-  const fileInput: any = ref(null)
-  const projNo: any = ref(null)
-  const epId: any = ref(null)
-  const fileId: any = ref(null)
-  // 배열 정의
-  const urlList = {
-    perGetMaxRoleByEP: `/api/PermissionGroup/GetMaxRoleByEP`,
-    gfi: '/api/File/Get',
-    gfr: '/api/File/Replace',
+/** Variable List */
+const route = useRoute()
+const releaseNotesGrouped: any = ref([])
+const isLoading = ref(true)
+const appAuthentication = useAppAuthenticationStore()
+const { userInfo } = appAuthentication
+const fileInput: any = ref(null)
+const fileId: any = ref(null)
+
+const urlList = {
+  gfi: '/api/File/Get',
+  gfr: '/api/File/Replace',
+}
+
+onMounted(() => {
+  const baseSiteName = import.meta.env.VITE_BASE_SITENAME
+  if (baseSiteName == 'dev') {
+    fileId.value = '69827ed36514d58f04e067e7'
+  } else if (baseSiteName == 'devop') {
+    fileId.value = '698963e8ed2aff6e2771b20d'
+  } else {
+    fileId.value = '6982ac8ea605319e04771832'
   }
+  fetchAndParseExcel()
+})
 
-  onMounted(() => {
-    projNo.value = route.query.proj_no
-    epId.value = route.query.ep_id
-
-    const baseSiteName = import.meta.env.VITE_BASE_SITENAME
-
-    // 개발 사이트: 69827ed36514d58f04e067e7
-    if (baseSiteName == 'dev') {
-      fileId.value = '69827ed36514d58f04e067e7'
-    } // 개발운영(devop)
-    else if (baseSiteName == 'devop') {
-      fileId.value = '698963e8ed2aff6e2771b20d'
-    } // 운영 사이트
-    else {
-      fileId.value = '6982ac8ea605319e04771832'
+const handleFileUpload = async (event: any) => {
+  try {
+    const file = event.target.files[0]
+    const fileNameLower = file.name.toLowerCase()
+    if (!fileNameLower.endsWith('.xlsx') && !fileNameLower.endsWith('.xls')) {
+      SEF.setToast('This is not an Excel file. Please select again.</br>(.xlsx or .xls file only)', 'err')
+      return
     }
+    const setParams: any = { id: fileId.value, File: file }
+    const options = { headers: { 'Content-Type': 'multipart/form-data', FileToken: 'frontserver@sh' } }
+    await axiosWrapper.post(urlList.gfr, setParams, options).then(() => {
+      fetchAndParseExcel()
+    })
+  } catch (err) {
+    SEF.logMng("'handleFileUpload' 함수 오류: ", err, 'err')
+  }
+}
 
-    fetchAndParseExcel()
-  })
+const importExcel = function () {
+  fileInput.value.click()
+}
 
-  /**
-   * Import된 엑셀 파일 처리
-   * @param event
-   */
-  const handleFileUpload = async (event: any) => {
-    try {
-      const file = event.target.files[0]
-      const fileNameLower = file.name.toLowerCase()
+/**
+ * 엑셀 시트에서 헤더 이름을 기반으로 데이터를 추출하는 헬퍼 함수
+ */
+const parseSheetWithHeaders = (sheet: any) => {
+  // header: 1 옵션은 데이터를 2차원 배열 형태로 가져옵니다 (예: rows[0]이 헤더행)
+  const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
+  if (rows.length === 0) return []
 
-      // Excel File Validation
-      if (!fileNameLower.endsWith('.xlsx') && !fileNameLower.endsWith('.xls')) {
-        SEF.setToast('This is not an Excel file. Please select again.</br>(.xlsx or .xls file only)', 'err')
-        return
-      }
+  const headers = rows[0] // 첫 번째 행을 헤더로 인식
+  const dataRows = rows.slice(1) // 데이터는 두 번째 행부터
 
-      const setParams: any = { id: fileId.value, File: file }
-      const options = { headers: { 'Content-Type': 'multipart/form-data', FileToken: 'frontserver@sh' } }
+  // 헤더 텍스트별 인덱스 매핑 (찾지 못하면 -1)
+  const idx = {
+    autoNo: headers.indexOf('Auto No'),
+    category: headers.indexOf('구분'),
+    desc: headers.indexOf('기능 요청 상세 내용'),
+    action: headers.indexOf('ACTION 부서 회신 내용'),
+    remark: headers.indexOf('Remark(개발)'),
+    status: headers.indexOf('STATUS'),
+    version: headers.indexOf('완료 버젼'),
+    part: headers.indexOf('Part')
+  }
 
-      // 파일 정보 변경
-      await axiosWrapper.post(urlList.gfr, setParams, options).then((res: any) => {
-        fetchAndParseExcel()
-      })
-    } catch (err) {
-      SEF.logMng("'handleFileUpload' 함수 오류: ", err, 'err')
+  return dataRows.map(row => ({
+    AutoNo: idx.autoNo !== -1 ? row[idx.autoNo] : '',
+    category: idx.category !== -1 ? row[idx.category] : '',
+    description: idx.desc !== -1 ? row[idx.desc] : '',
+    actionDesc: idx.action !== -1 ? row[idx.action] : '',
+    remarkDev: idx.remark !== -1 ? row[idx.remark] : '',
+    status: idx.status !== -1 ? row[idx.status] : '',
+    completionVersion: idx.version !== -1 ? row[idx.version] : '',
+    part: idx.part !== -1 ? row[idx.part] : ''
+  }))
+}
+
+const fetchAndParseExcel = async function () {
+  try {
+    isLoading.value = true
+    const options = {
+      responseType: 'blob',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: '*/*',
+        FileToken: 'frontserver@sh',
+      },
     }
-  }
+    const bodyData = { id: fileId.value }
 
-  /**
-   * Released Note: Import Excel File Input Click
-   */
-  const importExcel = function () {
-    // Import할 폴더 경로 열기
-    fileInput.value.click()
-  }
+    await axiosWrapper.postAll(urlList.gfi, bodyData, options).then((blobData: any) => {
+      const match = blobData.headers['content-disposition'].match(/filename="([^"]+)"/)
+      const filename = match ? match[1] : null
+      const file = new File([blobData.data], filename, { type: blobData.type })
 
-  /**
-   * File Server에 저장된 파일을 읽어옴
-   */
-  const fetchAndParseExcel = async function () {
-    try {
-      const options = {
-        responseType: 'blob',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: '*/*',
-          FileToken: 'frontserver@sh',
-        },
-      }
-      const bodyData = {
-        id: fileId.value,
-      }
+      ApiCommon.postFileDecryptFile({ FILE: file }).then(async (blob: any) => {
+        const decFile = new File([blob], file.name, { type: file.type })
+        const data = await decFile.arrayBuffer()
+        const workbook = XLSX.read(data, { type: 'array' })
 
-      await axiosWrapper.postAll(urlList.gfi, bodyData, options).then((blobData: any) => {
-        const match = blobData.headers['content-disposition'].match(/filename="([^"]+)"/)
-        const filename = match ? match[1] : null
-        const file = new File([blobData.data], filename, { type: blobData.type })
+        // 시트 1, 2 모두 동적 헤더 방식으로 파싱
+        const smartExcelData = parseSheetWithHeaders(workbook.Sheets[workbook.SheetNames[0]])
+        const etcDevDescData = workbook.SheetNames[1] 
+                               ? parseSheetWithHeaders(workbook.Sheets[workbook.SheetNames[1]]) 
+                               : []
 
-        ApiCommon.postFileDecryptFile({ FILE: file }).then(async (blob: any) => {
-          const decFile = new File([blob], file.name, { type: file.type })
-          const data = await decFile.arrayBuffer() // 1. File 객체를 ArrayBuffer로 변환 (비동기)
-          const workbook = XLSX.read(data, { type: 'array' }) // 2. XLSX 라이브러리로 데이터 읽기
-          const smartExcelData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { defval: '' })
-          const etcDevDescData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[1]], { defval: '' })
-          let combinedJsonData: any = []
+        let combinedJsonData = [...smartExcelData, ...etcDevDescData]
 
-          if (smartExcelData.length > 0) {
-            combinedJsonData = [...smartExcelData]
+        const grouped: any = {}
 
-            if (etcDevDescData.length > 0) {
-              combinedJsonData = [...smartExcelData, ...etcDevDescData]
-            } else {
-              combinedJsonData.shift() //smart excel에서 바로 다운 받은 경우, 첫번째 열 삭제
-            }
-          }
+        combinedJsonData.forEach((row: any) => {
+          const statusValue = (row.status ?? '').toString().trim().toUpperCase()
+          const versionValue = (row.completionVersion ?? '').toString().trim()
 
-          //1. STATUS 컬럼이 "FINISH", "CHECKED", "READY" 중 하나이고 "완료 버젼"이 비어있지 않은 행만 필터링
-          const filteredAndValidated = combinedJsonData.filter((row: any) => {
-            const statusRaw = row['STATUS'] ? row['STATUS'] : row['__EMPTY_16']
-            const statusValue = (statusRaw ?? '').toString().trim().toUpperCase()
-            const isStatusMatch = statusValue === 'FINISH' || statusValue === 'CHECKED' || statusValue === 'READY'
-            const completionVersionRaw = row['완료 버젼'] ? row['완료 버젼'] : row['__EMPTY_18']
+          // 필터: 상태가 대상이고 버전 정보가 있을 때만
+          const isStatusMatch = ['FINISH', 'CHECKED', 'READY'].includes(statusValue)
 
-            if (isStatusMatch && completionVersionRaw) {
-              return true
-            }
-          })
-          const grouped: any = {}
-
-          // 2. 필터링된 데이터에 대해서만 "완료 버젼"을 기준으로 그룹화
-          filteredAndValidated.forEach((row: any) => {
-            const verNumb = row['완료 버젼'] ? row['완료 버젼'].toString().trim() : row['__EMPTY_18'].toString().trim()
-            const version = verNumb.toLowerCase()
-            const AutoNom = row['Auto No'] ? row['Auto No'] : row['__EMPTY_4']
-            const AutoNo = AutoNom ? AutoNom : ''
-            const categoryField = row['구분'] ? row['구분'] : row['__EMPTY_9']
-            const category = categoryField ? categoryField.toLowerCase() : 'unknown'
-            const descField = row['기능 요청 상세 내용'] ? row['기능 요청 상세 내용'] : row['__EMPTY_10']
-            const description = descField ? descField : 'No Description'
-            const actDesc = row['ACTION 부서 회신 내용'] ? row['ACTION 부서 회신 내용'] : row['__EMPTY_11']
-            const actionDesc = actDesc ? actDesc : 'No Description'
-            const remDev = row['Remark(개발)'] ? row['Remark(개발)'] : row['__EMPTY_12']
-            const remarkDev = remDev ? remDev : 'No Description'
-            const stField = row['STATUS'] ? row['STATUS'] : row['__EMPTY_16']
-            const status = stField ? stField : 'No Description'
-            const partField = row['Part'] ? row['Part'] : row['__EMPTY_21']
-            const part = partField ? partField : ''
-
+          if (isStatusMatch && versionValue) {
+            const version = versionValue.toLowerCase()
+            
             if (!grouped[version]) {
               grouped[version] = {
-                version: version,
+                version: versionValue,
                 items: [],
               }
             }
 
-            grouped[version].items.push({ AutoNo, category, description, actionDesc, remarkDev, status, part })
-          })
+            grouped[version].items.push({
+              AutoNo: row.AutoNo,
+              category: row.category ? row.category.toLowerCase() : 'unknown',
+              description: row.description || 'No Description',
+              actionDesc: row.actionDesc || 'No Description',
+              remarkDev: row.remarkDev || 'No Description',
+              status: row.status,
+              part: row.part
+            })
+          }
+        })
 
-          // 그룹화된 객체를 배열로 변환하고 버전 문자열 기준으로 정렬 (최신 버전이 위로 오도록 내림차순 정렬)
-          releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) => {
-            return b.version.localeCompare(a.version)
-          })
+        // 정렬 (최신 버전이 위로)
+        releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) => {
+          return b.version.localeCompare(a.version, undefined, { numeric: true, sensitivity: 'base' })
         })
       })
-    } catch (error) {
-      console.error('엑셀 파일 로드 및 파싱 중 오류 발생:', error)
-      releaseNotesGrouped.value = [] // 오류 발생 시 데이터 비움
-    } finally {
-      SEF.onHideOverlay()
-      isLoading.value = false
-    }
+    })
+  } catch (error) {
+    console.error('엑셀 파일 로드 및 파싱 중 오류 발생:', error)
+    releaseNotesGrouped.value = []
+  } finally {
+    SEF.onHideOverlay()
+    isLoading.value = false
   }
+}
 
-  /**
-   * 배지 클래스를 반환하는 함수
-   * @param category
-   */
-  const getBadgeClass = (category: any) => {
-    switch (category) {
-      case '오류':
-      case 'fixed':
-        return 'badge bg-gradient-orange-red'
-      case '기능개선':
-      case 'changed': //bg-gradient-yellow-orange, badge-changed
-        return 'badge bg-gradient-yellow-orange'
-      case '신규기능':
-      case 'added':
-        return 'badge bg-gradient-teal-green'
-      default:
-        return 'badge'
-    }
+const getBadgeClass = (category: any) => {
+  switch (category) {
+    case '오류': case 'fixed': return 'badge bg-gradient-orange-red'
+    case '기능개선': case 'changed': return 'badge bg-gradient-yellow-orange'
+    case '신규기능': case 'added': return 'badge bg-gradient-teal-green'
+    default: return 'badge'
   }
+}
 
-  /**
-   * 텍스트 색상 클래스를 반환하는 함수
-   * @param category
-   */
-  const getBadgeTextColorClass = (category: any) => {
-    switch (category) {
-      case '오류':
-      case 'fixed':
-        return 'text-danger'
-      case '기능개선':
-      case 'changed':
-        return 'text-warning'
-      case '신규기능':
-      case 'added':
-        return 'text-success'
-      default:
-        return 'text-gray'
-    }
+const getBadgeTextColorClass = (category: any) => {
+  switch (category) {
+    case '오류': case 'fixed': return 'text-danger'
+    case '기능개선': case 'changed': return 'text-warning'
+    case '신규기능': case 'added': return 'text-success'
+    default: return 'text-gray'
   }
+}
 </script>
 
 <style scoped>
-  .description-text {
-    white-space: pre-wrap; /*  줄바꿈 처리  */
-    word-break: break-word; /* 긴 단어도 줄 바꿈 가능하게 */
-  }
-
-  .badge {
-    position: relative;
-    top: 0px;
-    border-radius: 20px;
-    display: inline-block;
-    width: 80px;
-    height: 30px;
-    line-height: 20px;
-    margin-right: 10px;
-    text-transform: uppercase;
-    font-size: 13px;
-    font-weight: 700;
-    text-align: center;
-    padding-top: 5px;
-  }
-
-  .badge-changed {
-    background-color: #f4b400;
-  }
-
-  ul {
-    display: block;
-    list-style: disc outside;
-    -webkit-margin-before: 1em;
-    -webkit-margin-after: 1em;
-    -webkit-margin-start: 0px;
-    -webkit-margin-end: 0px;
-    -webkit-padding-start: 40px;
-    margin: 0;
-    padding-left: 0;
-  }
-
-  li {
-    list-style-type: none;
-    margin: 8px 0 8px 10px;
-    padding: 0;
-  }
+.description-text {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.badge {
+  border-radius: 20px;
+  display: inline-block;
+  width: 80px;
+  height: 30px;
+  line-height: 20px;
+  margin-right: 10px;
+  text-transform: uppercase;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: center;
+  padding-top: 5px;
+}
+ul {
+  display: block;
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+}
+li {
+  margin: 8px 0 8px 10px;
+}
 </style>
