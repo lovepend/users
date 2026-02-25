@@ -1,8 +1,6 @@
-const rawWrk = primaryData.WrkData || []
-
-// 🔥 Wrk의 TAG_IDX로 Pub 존재 여부 확인 추가
 const enhancedWrk = await Promise.all(
-  rawWrk.map(async item => {
+  rawWrk.map(async (item) => {
+
     if (!item.TAG_IDX) {
       return { ...item, hasPub: false }
     }
@@ -13,16 +11,17 @@ const enhancedWrk = await Promise.all(
         {
           ProjectNo: projectNoInput.value,
           TAG_IDX: item.TAG_IDX,
-          ContainDeleted: true
+          ContainDeleted: true   // ✅ 추가
         }
       )
 
       return {
         ...item,
-        hasPub: !!detailRes
+        hasPub: !!detailRes   // ✅ boolean만 저장
       }
+
     } catch (e) {
-      console.error('GetPubDataByID 실패:', e)
+      console.error('상세조회 실패:', e)
       return {
         ...item,
         hasPub: false
@@ -32,3 +31,17 @@ const enhancedWrk = await Promise.all(
 )
 
 wrkData.value = enhancedWrk
+
+
+==================
+<div class="pub-check-line">
+  <span
+    v-if="wrkItem.hasPub"
+    style="color:#28a745;font-weight:bold;"
+  >
+    ✔ Pub 존재
+  </span>
+</div>
+
+
+
