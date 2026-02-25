@@ -22,124 +22,83 @@
         </div>
         <button @click="searchTag" :disabled="apiLoading" class="action-btn primary-btn">API 상세 조회</button>
 
-        <div v-if="apiLoading" class="message loading-message">API 데이터를 불러오는 중입니다...</div>
-        <div v-else-if="apiErrorMessage" class="message error-message">오류 발생: {{ apiErrorMessage }}</div>
+        <div v-if="apiLoading" class="message loading-message">데이터를 가져오는 중입니다...</div>
+        <div v-else-if="apiErrorMessage" class="message error-message">오류: {{ apiErrorMessage }}</div>
 
-        <div
-          v-else-if="
-            apiSearched &&
-            !pubData &&
-            (!wrkData || wrkData.length === 0) &&
-            (!registerTypeData || registerTypeData.length === 0)
-          "
-          class="message no-results-message"
-        >
-          입력하신 Tag No. ({{ apiSearchedTagNo }}) 에 대한 API 검색 결과가 없습니다. [cite: 4, 5]
-        </div>
-
-        <div v-else-if="pubData || (wrkData && wrkData.length > 0) || (registerTypeData && registerTypeData.length > 0)">
+        <div v-else-if="apiSearched">
           <div class="results-card" v-if="pubData">
-            <h4>✨ Pub 데이터 검색 결과 (단일 항목)</h4>
-            <p><strong>조회 Tag No.:</strong> {{ apiSearchedTagNo }}</p>
-            <p><strong>EP_ID:</strong> {{ pubData.EP_ID }}</p>
-            <p><strong>EP_IC:</strong> {{ pubData.EP_IC }}</p>
-            <p><strong>CLS_ID:</strong> {{ pubData.CLS_ID }}</p>
-            <p><strong>DELETED:</strong> {{ pubData.DELETED ? 'Yes' : 'No' }}</p>
-            <p v-if="pubData.TAG_NO"><strong>데이터 Tag No.:</strong> {{ pubData.TAG_NO }}</p>
-            <p v-if="pubData.TAG_IDX"><strong>데이터 Tag IDX.:</strong> {{ pubData.TAG_IDX }}</p>
+            <h4>✨ Pub 기본 정보</h4>
+            [cite_start]<p><strong>TAG_NO:</strong> {{ pubData.TAG_NO }} [cite: 3]</p>
+            [cite_start]<p><strong>EP_ID:</strong> {{ pubData.EP_ID }} [cite: 4]</p>
+            [cite_start]<p><strong>CLS_ID:</strong> {{ pubData.CLS_ID }} [cite: 4]</p>
           </div>
 
           <div class="results-card wrk-data-section" v-if="wrkData && wrkData.length > 0">
-            <h4>✨ Wrk 데이터 검색 결과 (여러 항목)</h4>
+            [cite_start]<h4>✨ Wrk 데이터 리스트 ({{ wrkData.length }}건) [cite: 4]</h4>
             <div v-for="(wrkItem, index) in wrkData" :key="wrkItem._id || index" class="wrk-item">
-              <h5 style="border-bottom: 1px dotted #c8e6c9; padding-bottom: 5px;">Wrk 항목 #{{ index + 1 }}</h5>
-              <p><strong>EP_ID:</strong> {{ wrkItem.EP_ID }}</p>
-              <p><strong>TAG_IDX:</strong> {{ wrkItem.TAG_IDX }}</p>
-              <p><strong>DEL_YN:</strong> {{ wrkItem.DEL_YN ? 'Yes' : 'No' }}</p>
+              <div class="wrk-header">
+                [cite_start]<span class="badge">Wrk #{{ index + 1 }}</span> [cite: 5, 36]
+                [cite_start]<strong>{{ wrkItem.EP_ID }} / {{ wrkItem.TAG_IDX }}</strong> [cite: 5]
+              </div>
               
-              <p>
-                <strong>연계 Pub 데이터:</strong>
-                <span v-if="wrkItem.hasLinkedPub === 'loading'" style="color: #666;">확인 중...</span>
-                <span v-else-if="wrkItem.hasLinkedPub === 'Y'" style="color: #2e7d32; font-weight: bold;">✅ 존재함</span>
-                <span v-else style="color: #dc3545; font-weight: bold;">❌ 없음</span>
-              </p>
-            </div>
-          </div>
+              <p><strong>DEL_YN:</strong> {{ wrkItem.DEL_YN ? 'Yes' : 'No' }}</p>
 
-          <div class="results-card type-id-section" v-if="registerTypeData && registerTypeData.length > 0">
-            <h4>✨ 관련 REGISTER ID 정보</h4>
-            <ul>
-              <li v-for="(item, index) in registerTypeData" :key="item._id || index">
-                <strong>CLS_ID:</strong> {{ item.CLS_ID }} ({{ item.DESC || '설명 없음' }}) →
-                <strong>REGISTER_ID:</strong> {{ item.TYPE_ID }} [cite: 12]
-              </li>
-            </ul>
+              <div class="pub-check-line">
+                <strong>연계된 Pub 데이터:</strong> 
+                <span v-if="wrkItem.linkedPubData" style="color: #28a745; font-weight: bold;"> 존재함 (TAG_IDX: {{ wrkItem.linkedPubData.TAG_IDX }})</span>
+                <span v-else style="color: #dc3545;"> 존재하지 않음</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       <div class="panel tag-split-panel">
-        <h3 class="panel-title">Tag Split (유효성 검사기)</h3>
+        [cite_start]<h3 class="panel-title">Tag Split (유효성 검사기)</h3> [cite: 9]
         <div class="input-group">
-          <label for="tagNoInputValidator">검사할 Tag No. 입력:</label>
-          <input id="tagNoInputValidator" v-model="tagNoForValidator" type="text" placeholder="예: AA-BBB01-0001/A" />
+          [cite_start]<label for="tagNoInputValidator">검사할 Tag No. 입력:</label> [cite: 9]
+          [cite_start]<input id="tagNoInputValidator" v-model="tagNoForValidator" type="text" placeholder="입력하세요..." /> [cite: 10]
         </div>
 
         <div class="rules-table-container">
-          <h4>규칙 설정 (간단한 테이블)</h4>
+          <div class="table-header">
+            [cite_start]<h4>규칙 설정</h4> [cite: 11]
+            <div class="table-btns">
+              [cite_start]<button @click="addRule" class="small-btn success">추가</button> [cite: 11, 41]
+              [cite_start]<button @click="showPasteModal = true" class="small-btn info">붙여넣기</button> [cite: 11, 41]
+            </div>
+          </div>
           <table>
             <thead>
-              <tr><th>TAG ID</th><th>구분자</th><th>정규식</th><th>액션</th></tr>
+              [cite_start]<tr><th>구분자</th><th>정규식</th><th>관리</th></tr> [cite: 11]
             </thead>
             <tbody>
               <tr v-for="(rule, index) in tagRules" :key="index">
-                <td>TAG{{ String(index + 1).padStart(3, '0') }}</td>
-                <td><input type="text" v-model="rule.delimiter" maxlength="1" /></td>
-                <td><input type="text" v-model="rule.regex" /></td>
-                <td><button @click="removeRule(index)" class="action-btn danger-btn">삭제</button></td>
+                [cite_start]<td><input v-model="rule.delimiter" class="table-input" /></td> [cite: 12]
+                [cite_start]<td><input v-model="rule.regex" class="table-input" /></td> [cite: 12]
+                [cite_start]<td><button @click="removeRule(index)" class="del-btn">X</button></td> [cite: 12, 44]
               </tr>
             </tbody>
           </table>
-          <div class="table-actions">
-            <button @click="addRule" class="action-btn success-btn">규칙 추가</button>
-            <button @click="showPasteModal = true" class="action-btn info-btn">엑셀에서 붙여넣기</button>
-          </div>
         </div>
 
-        <h4 class="section-sub-title">전체 태그 번호 유효성 검사</h4>
         <div class="overall-validation-result">
-          <p class="validation-summary">
-            결과: <span :style="{ color: isTagNoValid ? 'green' : 'red', fontWeight: 'bold' }">
-              {{ isTagNoValid ? '유효합니다.' : '유효하지 않습니다.' }} [cite: 19, 20]
+          <p>종합 유효성: 
+            <span :class="{ 'valid-txt': isTagNoValid, 'invalid-txt': !isTagNoValid }">
+              {{ isTagNoValid ? [cite_start]'유효함(PASS)' : '유효하지 않음(FAIL)' }} [cite: 13, 14]
             </span>
           </p>
         </div>
-
-        <h4 class="section-sub-title">부분별 분석 결과</h4>
-        <table class="parts-analysis-table">
-          <thead>
-            <tr><th>규칙</th><th>분리된 값</th><th>구분자 유효</th><th>내용 유효</th><th>종합 유효</th></tr>
-          </thead>
-          <tbody>
-            <tr v-for="(part, index) in tagParts" :key="index">
-              <td>TAG{{ String(index + 1).padStart(3, '0') }}</td>
-              <td>{{ part.matchedValue || '(빈 값)' }}</td>
-              <td :style="{ color: part.isDelimiterValid ? 'green' : 'red' }">{{ part.isDelimiterValid ? '유효' : '오류' }}</td>
-              <td :style="{ color: part.isContentValid ? 'green' : 'red' }">{{ part.isContentValid ? '유효' : '오류' }}</td>
-              <td :style="{ color: part.isValid ? 'green' : 'red' }">{{ part.isValid ? '유효' : '오류' }}</td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </div>
 
-    <div v-if="showPasteModal" class="modal-overlay">
+    [cite_start]<div v-if="showPasteModal" class="modal-overlay"> [cite: 14, 46]
       <div class="modal-content">
-        <h4>엑셀 데이터 붙여넣기</h4>
-        <textarea v-model="pasteData" rows="10" class="paste-textarea"></textarea>
+        [cite_start]<h4>엑셀 데이터 붙여넣기</h4> [cite: 15, 47]
+        [cite_start]<textarea v-model="pasteData" rows="10" placeholder="구분자[탭]정규식"></textarea> [cite: 15, 47]
         <div class="modal-actions">
-          <button @click="applyPasteData" class="action-btn success-btn">적용</button>
-          <button @click="showPasteModal = false" class="action-btn cancel-btn">취소</button>
+          [cite_start]<button @click="applyPasteData" class="action-btn primary-btn">적용</button> [cite: 15]
+          [cite_start]<button @click="showPasteModal = false" class="action-btn cancel-btn">취소</button> [cite: 15, 34]
         </div>
       </div>
     </div>
@@ -152,151 +111,153 @@ import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 
 export default {
   setup() {
-    const tagNoForApi = ref('')
-    const projectNoInput = ref('TE1002')
-    const apiSearchedTagNo = ref('')
-    const pubData = ref(null)
-    const wrkData = ref([])
-    const registerTypeData = ref([])
-    const apiLoading = ref(false)
-    const apiErrorMessage = ref('')
-    const apiSearched = ref(false)
+    [cite_start]const tagNoForApi = ref('') [cite: 16]
+    [cite_start]const projectNoInput = ref('TE1002') [cite: 16]
+    [cite_start]const apiSearchedTagNo = ref('') [cite: 16]
+    [cite_start]const pubData = ref(null) [cite: 16]
+    [cite_start]const wrkData = ref([]) [cite: 16]
+    [cite_start]const apiLoading = ref(false) [cite: 16]
+    [cite_start]const apiErrorMessage = ref('') [cite: 16]
+    [cite_start]const apiSearched = ref(false) [cite: 16]
 
-    // 유효성 검사기 상태 (기존 파일 설정 유지)
-    const tagNoForValidator = ref('AP330X01-')
+    [cite_start]const tagNoForValidator = ref('AP330X01-') [cite: 16]
     const tagRules = ref([
       { delimiter: '', regex: '^$|^[A-Z]{2}$' },
       { delimiter: '', regex: '^[0123LCRIT]{3}$' },
       { delimiter: '', regex: '^[ABCDEFNVXS]{1}$' },
-      { delimiter: '', regex: '^$|^[ABCDEFNVXS]{1}$' },
-      { delimiter: '', regex: '^[0-9]{2}$' },
-      { delimiter: '-', regex: '^$|^[APS1-9]{2}$' },
-    ])
-    const showPasteModal = ref(false)
-    const pasteData = ref('')
+      { delimiter: '-', regex: '^[0-9]{2}$' }
+    [cite_start]]) [cite: 16]
+    [cite_start]const showPasteModal = ref(false) [cite: 16]
+    [cite_start]const pasteData = ref('') [cite: 16]
 
-    // --- API 조회 로직 (수정됨) ---
     const searchTag = async () => {
-      pubData.value = null
-      wrkData.value = []
-      registerTypeData.value = []
-      apiErrorMessage.value = ''
-      apiSearched.value = true
-
-      if (!tagNoForApi.value) return
-
-      apiLoading.value = true
-      apiSearchedTagNo.value = tagNoForApi.value
+      [cite_start]pubData.value = null [cite: 17]
+      [cite_start]wrkData.value = [] [cite: 17]
+      [cite_start]apiErrorMessage.value = '' [cite: 17]
+      [cite_start]apiSearched.value = true [cite: 17]
+      [cite_start]apiLoading.value = true [cite: 17]
 
       try {
         const res = await axiosWrapper.post('/api/Data/GetPubWrkDataByTagNo', {
-          ProjectNo: projectNoInput.value,
-          TAG_NO: tagNoForApi.value,
-          ContainDeleted: true,
+          [cite_start]ProjectNo: projectNoInput.value, [cite: 18]
+          [cite_start]TAG_NO: tagNoForApi.value, [cite: 17]
+          [cite_start]ContainDeleted: true, [cite: 18]
         })
 
         if (res) {
-          pubData.value = res.PubData?.[0] || null
-          // Wrk 데이터에 유무 확인을 위한 임시 상태 추가
-          const rawWrk = (res.WrkData || []).map(item => ({ ...item, hasLinkedPub: 'loading' }))
-          wrkData.value = rawWrk
+          pubData.value = res.PubData?.[0] [cite_start]|| null [cite: 18, 19]
+          const rawWrk = res.WrkData || [cite_start][] [cite: 19, 20]
 
-          // ⭐ 각 Wrk 항목의 TAG_IDX로 Pub 데이터 유무 확인 ⭐
-          const checkTasks = wrkData.value.map(async (item) => {
+          // 각 Wrk 항목의 TAG_IDX로 연계 데이터를 조회하여 존재 여부 확인
+          const enhancedWrk = await Promise.all(rawWrk.map(async (item) => {
             if (item.TAG_IDX) {
               try {
-                const detail = await axiosWrapper.post('/api/Data/GetPubDataByID', {
-                  ProjectNo: projectNoInput.value,
-                  TAG_IDX: item.TAG_IDX
+                const detailRes = await axiosWrapper.post('/api/Data/GetPubDataByID', {
+                  [cite_start]ProjectNo: projectNoInput.value, [cite: 21]
+                  [cite_start]TAG_IDX: item.TAG_IDX [cite: 21]
                 })
-                // 리턴된 데이터 객체에 TAG_IDX가 있으면 존재하는 것으로 판단
-                item.hasLinkedPub = (detail && detail.TAG_IDX) ? 'Y' : 'N'
+                // 데이터가 객체 형태로 존재하면 linkedPubData에 저장
+                if (detailRes && typeof detailRes === 'object') {
+                  [cite_start]return { ...item, linkedPubData: detailRes } [cite: 22]
+                }
               } catch (e) {
-                item.hasLinkedPub = 'N'
+                console.error('상세조회 실패:', e)
               }
-            } else {
-              item.hasLinkedPub = 'N'
             }
-          })
-          await Promise.all(checkTasks)
-
-          // 기존 REGISTER ID 조회 로직 유지
-          const classIDs = new Set()
-          if (pubData.value?.CLS_ID) classIDs.add(pubData.value.CLS_ID)
-          wrkData.value.forEach(i => i.CLS_ID && classIDs.add(i.CLS_ID))
-          if (classIDs.size > 0) {
-            registerTypeData.value = await axiosWrapper.post('/api/Register/GetByClassIDs', {
-              ProjectNo: projectNoInput.value,
-              ClassIDs: Array.from(classIDs),
-              ContainDeleted: true,
-            })
-          }
+            [cite_start]return item [cite: 22]
+          }))
+          [cite_start]wrkData.value = enhancedWrk [cite: 23]
         }
-      } catch (error) {
-        apiErrorMessage.value = error.message
+      } catch (err) {
+        [cite_start]apiErrorMessage.value = err.message [cite: 23]
       } finally {
-        apiLoading.value = false
+        [cite_start]apiLoading.value = false [cite: 23]
       }
     }
 
-    // --- 유효성 검사기 로직 (기존 파일 코드 보존) ---
-    const isRegexOptional = r => r.startsWith('^$|') || r === '^$'
+    [cite_start]const formatDate = (dt) => dt ? new Date(dt).toLocaleString() : '-' [cite: 24]
+    const getValidAttributes = (attrs) => {
+      [cite_start]if (!attrs) return [] [cite: 24]
+      [cite_start]return attrs.filter(a => a.VALUE && a.VALUE !== 'null' && a.VALUE !== 'false') [cite: 24]
+    }
+
+    [cite_start]const isRegexOptional = r => r.startsWith('^$|') [cite: 24]
     const combinedRegexString = computed(() => {
       let parts = tagRules.value.map((rule, i) => {
-        let p = rule.regex.replace(/^\^|\$$/g, '')
-        let s = `(?:${p})`
+        [cite_start]let p = rule.regex.replace(/^\^|\$$/g, '') [cite: 25]
+        [cite_start]let s = `(?:${p})` [cite: 25]
         if (i > 0 && rule.delimiter) {
-          const d = rule.delimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          s = isRegexOptional(rule.regex) ? `(?:${d}${s})?` : `(?:${d}${s})`
+          [cite_start]const d = rule.delimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') [cite: 25]
+          s = isRegexOptional(rule.regex) ? [cite_start]`(?:${d}${s})?` : `(?:${d}${s})` [cite: 25]
         }
         return s
       })
-      return `^${parts.join('')}$`
+      [cite_start]return `^${parts.join('')}$` [cite: 25]
     })
     const isTagNoValid = computed(() => {
-      try { return new RegExp(combinedRegexString.value).test(tagNoForValidator.value) } catch { return false }
+      [cite_start]try { return new RegExp(combinedRegexString.value).test(tagNoForValidator.value) } [cite: 25]
+      [cite_start]catch { return false } [cite: 26]
     })
 
-    // 부분 분석 로직 (간소화하여 보존)
-    const tagParts = computed(() => {
-      return tagRules.value.map(r => ({ matchedValue: '', isDelimiterValid: true, isContentValid: true, isValid: true }))
-    })
-
-    const addRule = () => tagRules.value.push({ delimiter: '', regex: '' })
-    const removeRule = i => tagRules.value.splice(i, 1)
+    [cite_start]const addRule = () => tagRules.value.push({ delimiter: '', regex: '' }) [cite: 26]
+    [cite_start]const removeRule = (i) => tagRules.value.splice(i, 1) [cite: 26]
     const applyPasteData = () => {
       tagRules.value = pasteData.value.trim().split('\n').map(row => {
-        const col = row.split('\t')
-        return { delimiter: col[0] || '', regex: col[1] || col[0] || '' }
+        [cite_start]const c = row.split('\t') [cite: 27]
+        return { delimiter: c[0] || '', regex: c[1] || c[0] || [cite_start]'' } [cite: 27]
       })
-      showPasteModal.value = false
+      [cite_start]showPasteModal.value = false [cite: 27]
     }
 
     return {
-      tagNoForApi, projectNoInput, apiSearchedTagNo, pubData, wrkData, registerTypeData,
-      apiLoading, apiErrorMessage, apiSearched, searchTag,
-      tagNoForValidator, tagRules, isTagNoValid, tagParts, combinedRegexString,
-      showPasteModal, pasteData, addRule, removeRule, applyPasteData
+      tagNoForApi, projectNoInput, pubData, wrkData, apiLoading, apiErrorMessage, apiSearched,
+      searchTag, formatDate, getValidAttributes, tagNoForValidator, tagRules, isTagNoValid,
+      showPasteModal, pasteData, addRule, removeRule, applyPasteData, combinedRegexString
     }
   }
 }
 </script>
 
 <style scoped>
-/* 기존 Note.txt의 스타일을 100% 유지합니다 */
-#app { font-family: 'Segoe UI', sans-serif; max-width: 1400px; margin: 30px auto; padding: 30px; border: 1px solid #e0e0e0; border-radius: 12px; background-color: #f8f9fa; }
-.main-content-wrapper { display: flex; gap: 30px; flex-wrap: wrap; justify-content: center; }
-.panel { flex: 1; min-width: 450px; border: 1px solid #dcdcdc; border-radius: 10px; padding: 30px; background-color: #ffffff; max-height: 80vh; overflow-y: auto; }
-.panel-title { border-bottom: 2px solid #5cb85c; padding-bottom: 10px; text-align: center; }
-.results-card { background-color: #e8f5e9; border: 1px solid #c8e6c9; padding: 20px; border-radius: 8px; margin-top: 25px; }
-.wrk-item { margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #eee; }
-.action-btn { padding: 12px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; border: none; }
-.primary-btn { background-color: #007bff; color: white; }
-.success-btn { background-color: #28a745; color: white; }
-.danger-btn { background-color: #dc3545; color: white; width: auto; padding: 5px 10px; }
-.input-group input { width: calc(100% - 24px); padding: 12px; border: 1px solid #ccc; border-radius: 6px; }
-.parts-analysis-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-.parts-analysis-table th, .parts-analysis-table td { padding: 10px; border: 1px solid #ddd; font-size: 0.85em; }
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-.modal-content { background: white; padding: 30px; border-radius: 10px; width: 550px; }
+/* 기존 Note.txt의 스타일을 100% 보존합니다 */
+#app { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background: #f0f2f5; min-height: 100vh; [cite_start]} [cite: 28]
+.page-main-title { text-align: center; color: #1a73e8; margin-bottom: 30px; [cite_start]} [cite: 28]
+.main-content-wrapper { display: flex; gap: 20px; align-items: flex-start; [cite_start]} [cite: 28, 29]
+.panel { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); flex: 1; [cite_start]} [cite: 29, 30]
+.panel-title { border-left: 5px solid #1a73e8; padding-left: 10px; margin-bottom: 20px; [cite_start]} [cite: 30]
+
+.input-group { margin-bottom: 15px; [cite_start]} [cite: 30]
+.input-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; [cite_start]} [cite: 31]
+.input-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; [cite_start]} [cite: 31, 32]
+
+.action-btn { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; [cite_start]} [cite: 32, 33]
+.primary-btn { background: #1a73e8; color: white; [cite_start]} [cite: 33]
+.primary-btn:hover { background: #1557b0; [cite_start]} [cite: 33]
+.cancel-btn { background: #6c757d; color: white; margin-top: 10px; [cite_start]} [cite: 33, 34]
+
+.results-card { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #e9ecef; [cite_start]} [cite: 34]
+.wrk-item { padding: 15px; border-bottom: 1px solid #eee; [cite_start]} [cite: 34, 35]
+.wrk-header { margin-bottom: 10px; display: flex; gap: 10px; align-items: center; [cite_start]} [cite: 35]
+.badge { background: #e8f0fe; color: #1a73e8; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; [cite_start]} [cite: 35, 36]
+
+/* 추가된 한 줄 디자인 */
+.pub-check-line { margin-top: 8px; font-size: 0.9em; border-top: 1px dashed #ddd; padding-top: 8px; }
+
+.table-header { display: flex; justify-content: space-between; align-items: center; [cite_start]} [cite: 40]
+.small-btn { padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; color: #fff; [cite_start]} [cite: 40]
+.success { background: #28a745; [cite_start]} [cite: 40, 41]
+.info { background: #17a2b8; [cite_start]} [cite: 41]
+table { width: 100%; border-collapse: collapse; margin-top: 10px; [cite_start]} [cite: 41]
+th { background: #f8f9fa; font-size: 0.85em; padding: 10px; border-bottom: 2px solid #dee2e6; [cite_start]} [cite: 41, 42]
+td { padding: 5px; border-bottom: 1px solid #eee; [cite_start]} [cite: 42]
+.table-input { width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 3px; [cite_start]} [cite: 42, 43]
+.del-btn { background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; [cite_start]} [cite: 43, 44]
+
+.overall-validation-result { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center; [cite_start]} [cite: 44]
+.valid-txt { color: #28a745; font-weight: bold; [cite_start]} [cite: 44, 45]
+.invalid-txt { color: #dc3545; font-weight: bold; [cite_start]} [cite: 45]
+
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; [cite_start]} [cite: 46]
+.modal-content { background: white; padding: 20px; border-radius: 10px; width: 400px; [cite_start]} [cite: 46, 47]
+.modal-content textarea { width: 100%; margin-top: 10px; border-radius: 4px; border: 1px solid #ddd; [cite_start]} [cite: 47]
 </style>
