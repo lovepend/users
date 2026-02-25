@@ -1,255 +1,996 @@
-<template>
-  <div id="app">
-    <h2 class="page-main-title">🏷️ 태그 번호 상세 조회 및 유효성 검사</h2>
-
-    <div class="main-content-wrapper">
-      <div class="panel api-pubdata-panel">
-        <h3 class="panel-title">Tag No. Pub/Wrk 데이터 조회</h3>
-
-        <div class="input-group">
-          <label for="tagNoInputApi">조회할 Tag No. 입력:</label>
-          <input
-            id="tagNoInputApi"
-            v-model="tagNoForApi"
-            type="text"
-            placeholder="예: CheckTest009"
-            @keyup.enter="searchTag"
-          />
-        </div>
-        <div class="input-group">
-          <label for="projectNoInputApi">프로젝트 번호:</label>
-          <input id="projectNoInputApi" v-model="projectNoInput" type="text" placeholder="예: TE1002" />
-        </div>
-        <button @click="searchTag" :disabled="apiLoading" class="action-btn primary-btn">API 상세 조회</button>
-
-        <div v-if="apiLoading" class="message loading-message">데이터를 가져오는 중입니다...</div>
-        <div v-else-if="apiErrorMessage" class="message error-message">오류: {{ apiErrorMessage }}</div>
-
-        <div v-else-if="apiSearched">
-          <div class="results-card" v-if="pubData">
-            <h4>✨ Pub 기본 정보</h4>
-            <p><strong>TAG_NO:</strong> {{ pubData.TAG_NO }}</p>
-            <p><strong>EP_ID:</strong> {{ pubData.EP_ID }}</p>
-            <p><strong>CLS_ID:</strong> {{ pubData.CLS_ID }}</p>
-          </div>
-
-          <div class="results-card wrk-data-section" v-if="wrkData && wrkData.length > 0">
-            <h4>✨ Wrk 데이터 리스트 ({{ wrkData.length }}건)</h4>
-            <div v-for="(wrkItem, index) in wrkData" :key="wrkItem._id || index" class="wrk-item">
-              <div class="wrk-header">
-                <span class="badge">Wrk #{{ index + 1 }}</span>
-                <strong>{{ wrkItem.EP_ID }} / {{ wrkItem.TAG_IDX }}</strong>
-              </div>
-              
-              <p><strong>DEL_YN:</strong> {{ wrkItem.DEL_YN ? 'Yes' : 'No' }}</p>
-
-              <div class="pub-check-line">
-                <strong>연계된 Pub 데이터:</strong> 
-                <span v-if="wrkItem.linkedPubData" style="color: #28a745; font-weight: bold;"> 존재함</span>
-                <span v-else style="color: #dc3545;"> 존재하지 않음</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel tag-split-panel">
-        <h3 class="panel-title">Tag Split (유효성 검사기)</h3>
-        <div class="input-group">
-          <label for="tagNoInputValidator">검사할 Tag No. 입력:</label>
-          <input id="tagNoInputValidator" v-model="tagNoForValidator" type="text" placeholder="입력하세요..." />
-        </div>
-
-        <div class="rules-table-container">
-          <div class="table-header">
-            <h4>규칙 설정</h4>
-            <div class="table-btns">
-              <button @click="addRule" class="small-btn success">추가</button>
-              <button @click="showPasteModal = true" class="small-btn info">붙여넣기</button>
-            </div>
-          </div>
-          <table>
-            <thead>
-              <tr><th>구분자</th><th>정규식</th><th>관리</th></tr>
-            </thead>
-            <tbody>
-              <tr v-for="(rule, index) in tagRules" :key="index">
-                <td><input v-model="rule.delimiter" class="table-input" /></td>
-                <td><input v-model="rule.regex" class="table-input" /></td>
-                <td><button @click="removeRule(index)" class="del-btn">X</button></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        <div class="overall-validation-result">
-          <p>종합 유효성: 
-            <span :class="{ 'valid-txt': isTagNoValid, 'invalid-txt': !isTagNoValid }">
-              {{ isTagNoValid ? '유효함(PASS)' : '유효하지 않음(FAIL)' }}
-            </span>
-          </p>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showPasteModal" class="modal-overlay">
-      <div class="modal-content">
-        <h4>엑셀 데이터 붙여넣기</h4>
-        <textarea v-model="pasteData" rows="10" placeholder="구분자[탭]정규식"></textarea>
-        <div class="modal-actions">
-          <button @click="applyPasteData" class="action-btn primary-btn">적용</button>
-          <button @click="showPasteModal = false" class="action-btn cancel-btn">취소</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script>
-import { ref, computed } from 'vue'
-import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-
-export default {
-  setup() {
-    [cite_start]// 상태 정의 (기존 유지) [cite: 16]
-    const tagNoForApi = ref('')
-    const projectNoInput = ref('TE1002')
-    const apiSearchedTagNo = ref('')
-    const pubData = ref(null)
-    const wrkData = ref([])
-    const apiLoading = ref(false)
-    const apiErrorMessage = ref('')
-    const apiSearched = ref(false)
-
-    const tagNoForValidator = ref('AP330X01-')
-    const tagRules = ref([
-      { delimiter: '', regex: '^$|^[A-Z]{2}$' },
-      { delimiter: '', regex: '^[0123LCRIT]{3}$' },
-      { delimiter: '', regex: '^[ABCDEFNVXS]{1}$' },
-      { delimiter: '-', regex: '^[0-9]{2}$' }
-    ])
-    const showPasteModal = ref(false)
-    const pasteData = ref('')
-
-    [cite_start]// API 상세 조회 로직 (기존 파일 로직 반영 및 유무 확인 추가) [cite: 17, 18, 19]
-    const searchTag = async () => {
-      pubData.value = null
-      wrkData.value = []
-      apiErrorMessage.value = ''
-      apiSearched.value = true
-      apiLoading.value = true
-
-      try {
-        const res = await axiosWrapper.post('/api/Data/GetPubWrkDataByTagNo', {
-          ProjectNo: projectNoInput.value,
-          TAG_NO: tagNoForApi.value,
-          ContainDeleted: true,
-        })
-
-        if (res) {
-          pubData.value = res.PubData?.[0] || null
-          const rawWrk = res.WrkData || []
-
-          [cite_start]// ⭐ Wrk의 각 TAG_IDX로 Pub 데이터를 개별 조회하여 유무를 확인 ⭐ [cite: 21, 22]
-          const enhancedWrk = await Promise.all(rawWrk.map(async (item) => {
-            if (item.TAG_IDX) {
-              try {
-                const detailRes = await axiosWrapper.post('/api/Data/GetPubDataByID', {
-                  ProjectNo: projectNoInput.value,
-                  TAG_IDX: item.TAG_IDX
-                })
-                // 리턴된 데이터가 객체 구조이면 연계 데이터가 있는 것으로 판단
-                if (detailRes && typeof detailRes === 'object') {
-                  return { ...item, linkedPubData: detailRes }
-                }
-              } catch (e) {
-                console.error('상세조회 실패:', e)
-              }
-            }
-            return item
-          }))
-          wrkData.value = enhancedWrk
-        }
-      } catch (err) {
-        apiErrorMessage.value = err.message
-      } finally {
-        apiLoading.value = false
-      }
-    }
-
-    [cite_start]// 유효성 검사기 및 기타 헬퍼 (기존 유지) [cite: 24, 25, 26, 27]
-    const isRegexOptional = r => r.startsWith('^$|')
-    const combinedRegexString = computed(() => {
-      let parts = tagRules.value.map((rule, i) => {
-        let p = rule.regex.replace(/^\^|\$$/g, '')
-        let s = `(?:${p})`
-        if (i > 0 && rule.delimiter) {
-          const d = rule.delimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          s = isRegexOptional(rule.regex) ? `(?:${d}${s})?` : `(?:${d}${s})`
-        }
-        return s
-      })
-      return `^${parts.join('')}$`
-    })
-    const isTagNoValid = computed(() => {
-      try { return new RegExp(combinedRegexString.value).test(tagNoForValidator.value) } 
-      catch { return false }
-    })
-
-    const addRule = () => tagRules.value.push({ delimiter: '', regex: '' })
-    const removeRule = (i) => tagRules.value.splice(i, 1)
-    const applyPasteData = () => {
-      tagRules.value = pasteData.value.trim().split('\n').map(row => {
-        const c = row.split('\t')
-        return { delimiter: c[0] || '', regex: c[1] || c[0] || '' }
-      })
-      showPasteModal.value = false
-    }
-
-    return {
-      tagNoForApi, projectNoInput, pubData, wrkData, apiLoading, apiErrorMessage, apiSearched,
-      searchTag, tagNoForValidator, tagRules, isTagNoValid,
-      showPasteModal, pasteData, addRule, removeRule, applyPasteData, combinedRegexString
-    }
-  }
-}
-</script>
-
-<style scoped>
-[cite_start]/* 기존 Note.txt의 스타일을 100% 유지 [cite: 28, 29, 30, 31, 32, 33, 34, 35, 36, 40, 41, 42, 43, 44, 45, 46, 47] */
-#app { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background: #f0f2f5; min-height: 100vh; }
-.page-main-title { text-align: center; color: #1a73e8; margin-bottom: 30px; }
-.main-content-wrapper { display: flex; gap: 20px; align-items: flex-start; }
-.panel { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); flex: 1; }
-.panel-title { border-left: 5px solid #1a73e8; padding-left: 10px; margin-bottom: 20px; }
-.input-group { margin-bottom: 15px; }
-.input-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
-.input-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
-.action-btn { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
-.primary-btn { background: #1a73e8; color: white; }
-.primary-btn:hover { background: #1557b0; }
-.results-card { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #e9ecef; }
-.wrk-item { padding: 15px; border-bottom: 1px solid #eee; }
-.wrk-header { margin-bottom: 10px; display: flex; gap: 10px; align-items: center; }
-.badge { background: #e8f0fe; color: #1a73e8; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; }
-
-[cite_start]/* 추가된 디자인 한 줄 [cite: 38] */
-.pub-check-line { margin-top: 8px; font-size: 0.9em; border-top: 1px dashed #ddd; padding-top: 8px; }
-
-.table-header { display: flex; justify-content: space-between; align-items: center; }
-.small-btn { padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; color: #fff; }
-.success { background: #28a745; }
-.info { background: #17a2b8; }
-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-th { background: #f8f9fa; font-size: 0.85em; padding: 10px; border-bottom: 2px solid #dee2e6; }
-td { padding: 5px; border-bottom: 1px solid #eee; }
-.table-input { width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 3px; }
-.del-btn { background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; }
-.overall-validation-result { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center; }
-.valid-txt { color: #28a745; font-weight: bold; }
-.invalid-txt { color: #dc3545; font-weight: bold; }
-.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
-.modal-content { background: white; padding: 20px; border-radius: 10px; width: 400px; }
-.modal-content textarea { width: 100%; margin-top: 10px; border-radius: 4px; border: 1px solid #ddd; }
-.cancel-btn { background: #6c757d; color: white; margin-top: 10px; }
-</style>
+[{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1003",
+	"severity": 8,
+	"message": "Identifier expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 116,
+	"startColumn": 45,
+	"endLineNumber": 116,
+	"endColumn": 56,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 116,
+	"startColumn": 57,
+	"endLineNumber": 116,
+	"endColumn": 58,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "eslint2",
+	"severity": 8,
+	"message": "Parsing error: ';' expected.",
+	"source": "eslint",
+	"startLineNumber": 146,
+	"startColumn": 18,
+	"endLineNumber": 146,
+	"endColumn": 18,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 146,
+	"startColumn": 19,
+	"endLineNumber": 146,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 146,
+	"startColumn": 52,
+	"endLineNumber": 146,
+	"endColumn": 53,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1134",
+	"severity": 8,
+	"message": "Variable declaration expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 146,
+	"startColumn": 54,
+	"endLineNumber": 146,
+	"endColumn": 56,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 146,
+	"startColumn": 56,
+	"endLineNumber": 146,
+	"endColumn": 57,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 147,
+	"startColumn": 19,
+	"endLineNumber": 147,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 147,
+	"startColumn": 61,
+	"endLineNumber": 147,
+	"endColumn": 62,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1134",
+	"severity": 8,
+	"message": "Variable declaration expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 147,
+	"startColumn": 63,
+	"endLineNumber": 147,
+	"endColumn": 65,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 147,
+	"startColumn": 65,
+	"endLineNumber": 147,
+	"endColumn": 66,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 148,
+	"startColumn": 19,
+	"endLineNumber": 148,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 148,
+	"startColumn": 57,
+	"endLineNumber": 148,
+	"endColumn": 58,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1134",
+	"severity": 8,
+	"message": "Variable declaration expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 148,
+	"startColumn": 59,
+	"endLineNumber": 148,
+	"endColumn": 61,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 148,
+	"startColumn": 61,
+	"endLineNumber": 148,
+	"endColumn": 62,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 149,
+	"startColumn": 19,
+	"endLineNumber": 149,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 149,
+	"startColumn": 50,
+	"endLineNumber": 149,
+	"endColumn": 51,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1134",
+	"severity": 8,
+	"message": "Variable declaration expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 149,
+	"startColumn": 52,
+	"endLineNumber": 149,
+	"endColumn": 54,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 149,
+	"startColumn": 54,
+	"endLineNumber": 149,
+	"endColumn": 55,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 150,
+	"startColumn": 19,
+	"endLineNumber": 150,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 150,
+	"startColumn": 48,
+	"endLineNumber": 150,
+	"endColumn": 49,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1134",
+	"severity": 8,
+	"message": "Variable declaration expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 150,
+	"startColumn": 50,
+	"endLineNumber": 150,
+	"endColumn": 52,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 150,
+	"startColumn": 52,
+	"endLineNumber": 150,
+	"endColumn": 53,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 151,
+	"startColumn": 19,
+	"endLineNumber": 151,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 151,
+	"startColumn": 54,
+	"endLineNumber": 151,
+	"endColumn": 55,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1134",
+	"severity": 8,
+	"message": "Variable declaration expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 151,
+	"startColumn": 56,
+	"endLineNumber": 151,
+	"endColumn": 58,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 151,
+	"startColumn": 58,
+	"endLineNumber": 151,
+	"endColumn": 59,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 152,
+	"startColumn": 19,
+	"endLineNumber": 152,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 152,
+	"startColumn": 56,
+	"endLineNumber": 152,
+	"endColumn": 57,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1134",
+	"severity": 8,
+	"message": "Variable declaration expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 152,
+	"startColumn": 58,
+	"endLineNumber": 152,
+	"endColumn": 60,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 152,
+	"startColumn": 60,
+	"endLineNumber": 152,
+	"endColumn": 61,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 153,
+	"startColumn": 19,
+	"endLineNumber": 153,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 153,
+	"startColumn": 55,
+	"endLineNumber": 153,
+	"endColumn": 56,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1134",
+	"severity": 8,
+	"message": "Variable declaration expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 153,
+	"startColumn": 57,
+	"endLineNumber": 153,
+	"endColumn": 59,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 153,
+	"startColumn": 59,
+	"endLineNumber": 153,
+	"endColumn": 60,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 155,
+	"startColumn": 19,
+	"endLineNumber": 155,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 155,
+	"startColumn": 67,
+	"endLineNumber": 155,
+	"endColumn": 68,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1134",
+	"severity": 8,
+	"message": "Variable declaration expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 155,
+	"startColumn": 69,
+	"endLineNumber": 155,
+	"endColumn": 71,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 155,
+	"startColumn": 71,
+	"endLineNumber": 155,
+	"endColumn": 72,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 161,
+	"startColumn": 27,
+	"endLineNumber": 161,
+	"endColumn": 28,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1134",
+	"severity": 8,
+	"message": "Variable declaration expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 161,
+	"startColumn": 29,
+	"endLineNumber": 161,
+	"endColumn": 31,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 161,
+	"startColumn": 31,
+	"endLineNumber": 161,
+	"endColumn": 32,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 162,
+	"startColumn": 19,
+	"endLineNumber": 162,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 162,
+	"startColumn": 58,
+	"endLineNumber": 162,
+	"endColumn": 59,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1134",
+	"severity": 8,
+	"message": "Variable declaration expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 162,
+	"startColumn": 60,
+	"endLineNumber": 162,
+	"endColumn": 62,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 162,
+	"startColumn": 62,
+	"endLineNumber": 162,
+	"endColumn": 63,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 163,
+	"startColumn": 19,
+	"endLineNumber": 163,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 163,
+	"startColumn": 50,
+	"endLineNumber": 163,
+	"endColumn": 51,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1134",
+	"severity": 8,
+	"message": "Variable declaration expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 163,
+	"startColumn": 52,
+	"endLineNumber": 163,
+	"endColumn": 54,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 163,
+	"startColumn": 54,
+	"endLineNumber": 163,
+	"endColumn": 55,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 166,
+	"startColumn": 21,
+	"endLineNumber": 166,
+	"endColumn": 28,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 166,
+	"startColumn": 47,
+	"endLineNumber": 166,
+	"endColumn": 48,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 166,
+	"startColumn": 51,
+	"endLineNumber": 166,
+	"endColumn": 52,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 167,
+	"startColumn": 21,
+	"endLineNumber": 167,
+	"endColumn": 28,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 167,
+	"startColumn": 45,
+	"endLineNumber": 167,
+	"endColumn": 46,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 167,
+	"startColumn": 49,
+	"endLineNumber": 167,
+	"endColumn": 50,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 168,
+	"startColumn": 21,
+	"endLineNumber": 168,
+	"endColumn": 36,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 168,
+	"startColumn": 53,
+	"endLineNumber": 168,
+	"endColumn": 54,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 168,
+	"startColumn": 57,
+	"endLineNumber": 168,
+	"endColumn": 58,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 169,
+	"startColumn": 21,
+	"endLineNumber": 169,
+	"endColumn": 32,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 169,
+	"startColumn": 51,
+	"endLineNumber": 169,
+	"endColumn": 52,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 169,
+	"startColumn": 55,
+	"endLineNumber": 169,
+	"endColumn": 56,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 170,
+	"startColumn": 21,
+	"endLineNumber": 170,
+	"endColumn": 31,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 170,
+	"startColumn": 50,
+	"endLineNumber": 170,
+	"endColumn": 51,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 170,
+	"startColumn": 54,
+	"endLineNumber": 170,
+	"endColumn": 55,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "':' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 174,
+	"startColumn": 25,
+	"endLineNumber": 174,
+	"endColumn": 34,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "',' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 174,
+	"startColumn": 34,
+	"endLineNumber": 174,
+	"endColumn": 35,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "',' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 174,
+	"startColumn": 50,
+	"endLineNumber": 174,
+	"endColumn": 51,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 174,
+	"startColumn": 63,
+	"endLineNumber": 174,
+	"endColumn": 64,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "',' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 174,
+	"startColumn": 67,
+	"endLineNumber": 174,
+	"endColumn": 68,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "':' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 175,
+	"startColumn": 25,
+	"endLineNumber": 175,
+	"endColumn": 31,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "',' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 175,
+	"startColumn": 31,
+	"endLineNumber": 175,
+	"endColumn": 32,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "',' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 175,
+	"startColumn": 44,
+	"endLineNumber": 175,
+	"endColumn": 45,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 175,
+	"startColumn": 57,
+	"endLineNumber": 175,
+	"endColumn": 58,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "',' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 175,
+	"startColumn": 61,
+	"endLineNumber": 175,
+	"endColumn": 62,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "':' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 176,
+	"startColumn": 25,
+	"endLineNumber": 176,
+	"endColumn": 39,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "',' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 176,
+	"startColumn": 39,
+	"endLineNumber": 176,
+	"endColumn": 40,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "':' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 176,
+	"startColumn": 45,
+	"endLineNumber": 176,
+	"endColumn": 46,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 176,
+	"startColumn": 52,
+	"endLineNumber": 176,
+	"endColumn": 53,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "',' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 176,
+	"startColumn": 56,
+	"endLineNumber": 176,
+	"endColumn": 57,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "']' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 180,
+	"startColumn": 71,
+	"endLineNumber": 180,
+	"endColumn": 72,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1005",
+	"severity": 8,
+	"message": "';' expected.",
+	"source": "ts-plugin",
+	"startLineNumber": 180,
+	"startColumn": 79,
+	"endLineNumber": 180,
+	"endColumn": 80,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/tagvalidator/index.vue",
+	"owner": "typescript",
+	"code": "1011",
+	"severity": 8,
+	"message": "An element access expression should take an argument.",
+	"source": "ts-plugin",
+	"startLineNumber": 181,
+	"startColumn": 56,
+	"endLineNumber": 181,
+	"endColumn": 56,
+	"origin": "extHost1"
+},
