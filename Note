@@ -1,159 +1,279 @@
-{
-    "TAG_NO_PASSED": "Passed",
-    "NEW_YN": true,
-    "DEL_YN": false,
-    "EP_ID": "TeEP",
-    "EP_IC": "TeEP",
-    "DELETED": false,
-    "DEL_USER": null,
-    "DEL_DTM": null,
-    "PROJ_NO": "TE1002",
-    "TAG_IDX": "682bc954d235c727377a265b",
-    "TAG_NO": "CheckTest009",
-    "TAG_TYPE_ID": null,
-    "CLS_ID": "TEST101_CLS",
-    "TAG_DESC": "CheckTest009",
-    "BF_TAG_NO": "",
-    "PIC_NO": "52593271",
-    "DSN_SKL": null,
-    "PRNT_TAG_IDX": null,
-    "ATTRIBUTES": [
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "ASSEMBLY_NAME",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "SYSTEM_NAME",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": "METRIC_CENTIMETER",
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST001",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST002",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST003",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST004",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST005",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST006",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST007",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST008",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST009",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST010",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST011",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST012",
-            "VALUE": "박정철"
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST013",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST014",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST015",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST016",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST017",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST018",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST019",
-            "VALUE": null
-        },
-        {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "TEST020",
-            "VALUE": "false"
+<template>
+  <div id="app">
+    <h2 class="page-main-title">🏷️ 태그 번호 상세 조회 및 유효성 검사</h2>
+
+    <div class="main-content-wrapper">
+      <div class="panel api-pubdata-panel">
+        <h3 class="panel-title">Tag No. Pub/Wrk 데이터 조회</h3>
+
+        <div class="input-group">
+          <label for="tagNoInputApi">조회할 Tag No. 입력:</label>
+          <input
+            id="tagNoInputApi"
+            v-model="tagNoForApi"
+            type="text"
+            placeholder="예: CheckTest009"
+            @keyup.enter="searchTag"
+          />
+        </div>
+        <div class="input-group">
+          <label for="projectNoInputApi">프로젝트 번호:</label>
+          <input id="projectNoInputApi" v-model="projectNoInput" type="text" placeholder="예: TE1002" />
+        </div>
+        <button @click="searchTag" :disabled="apiLoading" class="action-btn primary-btn">API 상세 조회</button>
+
+        <div v-if="apiLoading" class="message loading-message">데이터를 가져오는 중입니다...</div>
+        <div v-else-if="apiErrorMessage" class="message error-message">오류: {{ apiErrorMessage }}</div>
+
+        <div v-else-if="apiSearched">
+          <div class="results-card" v-if="pubData">
+            <h4>✨ Pub 기본 정보</h4>
+            <p><strong>TAG_NO:</strong> {{ pubData.TAG_NO }}</p>
+            <p><strong>EP_ID:</strong> {{ pubData.EP_ID }}</p>
+            <p><strong>CLS_ID:</strong> {{ pubData.CLS_ID }}</p>
+          </div>
+
+          <div class="results-card wrk-data-section" v-if="wrkData && wrkData.length > 0">
+            <h4>✨ Wrk 데이터 리스트 ({{ wrkData.length }}건)</h4>
+            <div v-for="(wrkItem, index) in wrkData" :key="wrkItem._id || index" class="wrk-item">
+              <div class="wrk-header">
+                <span class="badge">Wrk #{{ index + 1 }}</span>
+                <strong>{{ wrkItem.EP_ID }} / {{ wrkItem.TAG_IDX }}</strong>
+              </div>
+
+              <div v-if="wrkItem.linkedPubData" class="linked-pub-box">
+                <h6 class="linked-title">🔗 [연동된 Pub 데이터 정보]</h6>
+                <div class="linked-grid">
+                  <p><strong>TAG_NO:</strong> {{ wrkItem.linkedPubData.TAG_NO }}</p>
+                  <p><strong>상태:</strong> {{ wrkItem.linkedPubData.DELETED ? '삭제됨' : '정상' }}</p>
+                  <p><strong>수정일:</strong> {{ formatDate(wrkItem.linkedPubData.CHGE_DTM) }}</p>
+                  <div v-if="getValidAttributes(wrkItem.linkedPubData.ATTRIBUTES).length > 0" class="attr-list">
+                    <strong>주요 속성:</strong>
+                    <span v-for="attr in getValidAttributes(wrkItem.linkedPubData.ATTRIBUTES)" :key="attr.ATT_ID" class="attr-tag">
+                      {{ attr.ATT_ID }}: {{ attr.VALUE }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="no-linked-pub">
+                <small>해당 TAG_IDX로 연결된 Pub 데이터가 존재하지 않습니다.</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel tag-split-panel">
+        <h3 class="panel-title">Tag Split (유효성 검사기)</h3>
+        <div class="input-group">
+          <label for="tagNoInputValidator">검사할 Tag No. 입력:</label>
+          <input id="tagNoInputValidator" v-model="tagNoForValidator" type="text" placeholder="입력하세요..." />
+        </div>
+
+        <div class="rules-table-container">
+          <div class="table-header">
+            <h4>규칙 설정</h4>
+            <div class="table-btns">
+              <button @click="addRule" class="small-btn success">추가</button>
+              <button @click="showPasteModal = true" class="small-btn info">붙여넣기</button>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr><th>구분자</th><th>정규식</th><th>관리</th></tr>
+            </thead>
+            <tbody>
+              <tr v-for="(rule, index) in tagRules" :key="index">
+                <td><input v-model="rule.delimiter" class="table-input" /></td>
+                <td><input v-model="rule.regex" class="table-input" /></td>
+                <td><button @click="removeRule(index)" class="del-btn">X</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="overall-validation-result">
+          <p>종합 유효성: 
+            <span :class="{ 'valid-txt': isTagNoValid, 'invalid-txt': !isTagNoValid }">
+              {{ isTagNoValid ? '유효함(PASS)' : '유효하지 않음(FAIL)' }}
+            </span>
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showPasteModal" class="modal-overlay">
+      <div class="modal-content">
+        <h4>엑셀 데이터 붙여넣기</h4>
+        <textarea v-model="pasteData" rows="10" placeholder="구분자[탭]정규식"></textarea>
+        <div class="modal-actions">
+          <button @click="applyPasteData" class="action-btn primary-btn">적용</button>
+          <button @click="showPasteModal = false" class="action-btn cancel-btn">취소</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { ref, computed } from 'vue'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+
+export default {
+  setup() {
+    const tagNoForApi = ref('')
+    const projectNoInput = ref('TE1002')
+    const apiSearchedTagNo = ref('')
+    const pubData = ref(null)
+    const wrkData = ref([])
+    const apiLoading = ref(false)
+    const apiErrorMessage = ref('')
+    const apiSearched = ref(false)
+
+    // Validator 관련
+    const tagNoForValidator = ref('AP330X01-')
+    const tagRules = ref([
+      { delimiter: '', regex: '^$|^[A-Z]{2}$' },
+      { delimiter: '', regex: '^[0123LCRIT]{3}$' },
+      { delimiter: '', regex: '^[ABCDEFNVXS]{1}$' },
+      { delimiter: '-', regex: '^[0-9]{2}$' }
+    ])
+    const showPasteModal = ref(false)
+    const pasteData = ref('')
+
+    // ⭐ API 로직 (전달해주신 단일 객체 구조 반영) ⭐
+    const searchTag = async () => {
+      pubData.value = null
+      wrkData.value = []
+      apiErrorMessage.value = ''
+      apiSearched.value = true
+      apiLoading.value = true
+
+      try {
+        const res = await axiosWrapper.post('/api/Data/GetPubWrkDataByTagNo', {
+          ProjectNo: projectNoInput.value,
+          TAG_NO: tagNoForApi.value,
+          ContainDeleted: true,
+        })
+
+        if (res) {
+          pubData.value = res.PubData?.[0] || null
+          const rawWrk = res.WrkData || []
+
+          // TAG_IDX로 추가 Pub 정보 병렬 조회
+          const enhancedWrk = await Promise.all(rawWrk.map(async (item) => {
+            if (item.TAG_IDX) {
+              try {
+                const detailRes = await axiosWrapper.post('/api/Data/GetPubDataByID', {
+                  ProjectNo: projectNoInput.value,
+                  TAG_IDX: item.TAG_IDX
+                })
+                // ⭐ 리턴 데이터가 단일 객체이므로 detailRes를 바로 할당 ⭐
+                if (detailRes && typeof detailRes === 'object') {
+                  return { ...item, linkedPubData: detailRes }
+                }
+              } catch (e) {
+                console.error('상세조회 실패:', e)
+              }
+            }
+            return item
+          }))
+          wrkData.value = enhancedWrk
         }
-    ],
-    "CRTER_NO": "52593271",
-    "CRTE_DTM": "2025-05-20T00:14:12Z",
-    "CHGER_NO": "52593271",
-    "CHGE_DTM": "2026-02-11T23:32:39.104Z",
-    "_id": "682bd5b5d235c727377a27cb"
+      } catch (err) {
+        apiErrorMessage.value = err.message
+      } finally {
+        apiLoading.value = false
+      }
+    }
+
+    // 유틸리티 함수
+    const formatDate = (dt) => dt ? new Date(dt).toLocaleString() : '-'
+    const getValidAttributes = (attrs) => {
+      if (!attrs) return []
+      return attrs.filter(a => a.VALUE && a.VALUE !== 'null' && a.VALUE !== 'false')
+    }
+
+    // Validator 로직
+    const isRegexOptional = r => r.startsWith('^$|')
+    const combinedRegexString = computed(() => {
+      let parts = tagRules.value.map((rule, i) => {
+        let p = rule.regex.replace(/^\^|\$$/g, '')
+        let s = `(?:${p})`
+        if (i > 0 && rule.delimiter) {
+          const d = rule.delimiter.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+          s = isRegexOptional(rule.regex) ? `(?:${d}${s})?` : `(?:${d}${s})`
+        }
+        return s
+      })
+      return `^${parts.join('')}$`
+    })
+    const isTagNoValid = computed(() => {
+      try { return new RegExp(combinedRegexString.value).test(tagNoForValidator.value) } catch { return false }
+    })
+
+    const addRule = () => tagRules.value.push({ delimiter: '', regex: '' })
+    const removeRule = (i) => tagRules.value.splice(i, 1)
+    const applyPasteData = () => {
+      tagRules.value = pasteData.value.trim().split('\n').map(row => {
+        const c = row.split('\t')
+        return { delimiter: c[0] || '', regex: c[1] || c[0] || '' }
+      })
+      showPasteModal.value = false
+    }
+
+    return {
+      tagNoForApi, projectNoInput, pubData, wrkData, apiLoading, apiErrorMessage, apiSearched,
+      searchTag, formatDate, getValidAttributes, tagNoForValidator, tagRules, isTagNoValid,
+      showPasteModal, pasteData, addRule, removeRule, applyPasteData, combinedRegexString
+    }
+  }
 }
+</script>
+
+<style scoped>
+#app { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background: #f0f2f5; min-height: 100vh; }
+.page-main-title { text-align: center; color: #1a73e8; margin-bottom: 30px; }
+.main-content-wrapper { display: flex; gap: 20px; align-items: flex-start; }
+.panel { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); flex: 1; }
+.panel-title { border-left: 5px solid #1a73e8; padding-left: 10px; margin-bottom: 20px; }
+
+.input-group { margin-bottom: 15px; }
+.input-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
+.input-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+
+.action-btn { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
+.primary-btn { background: #1a73e8; color: white; }
+.primary-btn:hover { background: #1557b0; }
+.cancel-btn { background: #6c757d; color: white; margin-top: 10px; }
+
+.results-card { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #e9ecef; }
+.wrk-item { padding: 15px; border-bottom: 1px solid #eee; }
+.wrk-header { margin-bottom: 10px; display: flex; gap: 10px; align-items: center; }
+.badge { background: #e8f0fe; color: #1a73e8; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; }
+
+/* ⭐ 연동 데이터 박스 ⭐ */
+.linked-pub-box { background: #fff9f0; border: 1px solid #ffe8cc; padding: 12px; border-radius: 6px; margin-top: 10px; }
+.linked-title { color: #e67e22; margin: 0 0 8px 0; font-size: 0.95em; }
+.linked-grid { display: grid; gap: 5px; font-size: 0.85em; }
+.attr-tag { background: #e2e3e5; padding: 2px 6px; border-radius: 4px; margin-right: 5px; display: inline-block; margin-top: 5px; }
+
+/* Validator 테이블 스타일 */
+.table-header { display: flex; justify-content: space-between; align-items: center; }
+.small-btn { padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; color: #fff; }
+.success { background: #28a745; }
+.info { background: #17a2b8; }
+table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+th { background: #f8f9fa; font-size: 0.85em; padding: 10px; border-bottom: 2px solid #dee2e6; }
+td { padding: 5px; border-bottom: 1px solid #eee; }
+.table-input { width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 3px; }
+.del-btn { background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; }
+
+.overall-validation-result { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center; }
+.valid-txt { color: #28a745; font-weight: bold; }
+.invalid-txt { color: #dc3545; font-weight: bold; }
+
+.modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
+.modal-content { background: white; padding: 20px; border-radius: 10px; width: 400px; }
+.modal-content textarea { width: 100%; margin-top: 10px; border-radius: 4px; border: 1px solid #ddd; }
+</style>
