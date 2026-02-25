@@ -45,7 +45,7 @@
 
               <div class="pub-check-line">
                 <strong>연계된 Pub 데이터:</strong> 
-                <span v-if="wrkItem.linkedPubData" style="color: #28a745; font-weight: bold;"> 존재함</span>
+                <span v-if="wrkItem.linkedPubData" style="color: #28a745; font-weight: bold;"> 존재함 (TAG_IDX: {{ wrkItem.linkedPubData.TAG_IDX }})</span>
                 <span v-else style="color: #dc3545;"> 존재하지 않음</span>
               </div>
             </div>
@@ -111,6 +111,7 @@ import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 
 export default {
   setup() {
+    // API 조회 관련 상태
     const tagNoForApi = ref('')
     const projectNoInput = ref('TE1002')
     const pubData = ref(null)
@@ -119,6 +120,7 @@ export default {
     const apiErrorMessage = ref('')
     const apiSearched = ref(false)
 
+    // 유효성 검사기 관련 상태
     const tagNoForValidator = ref('AP330X01-')
     const tagRules = ref([
       { delimiter: '', regex: '^$|^[A-Z]{2}$' },
@@ -129,6 +131,7 @@ export default {
     const showPasteModal = ref(false)
     const pasteData = ref('')
 
+    // 상세 조회 및 연계 데이터 체크 로직
     const searchTag = async () => {
       pubData.value = null
       wrkData.value = []
@@ -147,7 +150,7 @@ export default {
           pubData.value = res.PubData?.[0] || null
           const rawWrk = res.WrkData || []
 
-          // 각 Wrk 항목에 대해 Pub 연계 데이터 여부 확인
+          // 각 Wrk 항목의 TAG_IDX로 연계된 Pub 데이터가 존재하는지 개별 확인
           const enhancedWrk = await Promise.all(rawWrk.map(async (item) => {
             if (item.TAG_IDX) {
               try {
@@ -155,11 +158,12 @@ export default {
                   ProjectNo: projectNoInput.value,
                   TAG_IDX: item.TAG_IDX
                 })
+                // 데이터가 객체 형태로 존재하면 연계된 정보가 있는 것으로 간주
                 if (detailRes && typeof detailRes === 'object') {
                   return { ...item, linkedPubData: detailRes }
                 }
               } catch (e) {
-                console.error('조회 실패:', e)
+                console.error('연계 데이터 상세조회 실패:', e)
               }
             }
             return item
@@ -171,6 +175,13 @@ export default {
       } finally {
         apiLoading.value = false
       }
+    }
+
+    // 헬퍼 함수 및 계산된 속성
+    const formatDate = (dt) => dt ? new Date(dt).toLocaleString() : '-'
+    const getValidAttributes = (attrs) => {
+      if (!attrs) return []
+      return attrs.filter(a => a.VALUE && a.VALUE !== 'null' && a.VALUE !== 'false')
     }
 
     const isRegexOptional = r => r.startsWith('^$|')
@@ -203,32 +214,37 @@ export default {
 
     return {
       tagNoForApi, projectNoInput, pubData, wrkData, apiLoading, apiErrorMessage, apiSearched,
-      searchTag, tagNoForValidator, tagRules, isTagNoValid,
-      showPasteModal, pasteData, addRule, removeRule, applyPasteData
+      searchTag, formatDate, getValidAttributes, tagNoForValidator, tagRules, isTagNoValid,
+      showPasteModal, pasteData, addRule, removeRule, applyPasteData, combinedRegexString
     }
   }
 }
 </script>
 
 <style scoped>
-/* Note.txt 스타일 100% 복원 */
 #app { font-family: 'Malgun Gothic', sans-serif; padding: 20px; background: #f0f2f5; min-height: 100vh; }
 .page-main-title { text-align: center; color: #1a73e8; margin-bottom: 30px; }
 .main-content-wrapper { display: flex; gap: 20px; align-items: flex-start; }
 .panel { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); flex: 1; }
 .panel-title { border-left: 5px solid #1a73e8; padding-left: 10px; margin-bottom: 20px; }
+
 .input-group { margin-bottom: 15px; }
 .input-group label { display: block; font-weight: bold; margin-bottom: 5px; color: #555; }
 .input-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+
 .action-btn { width: 100%; padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; transition: 0.2s; }
 .primary-btn { background: #1a73e8; color: white; }
 .primary-btn:hover { background: #1557b0; }
 .cancel-btn { background: #6c757d; color: white; margin-top: 10px; }
+
 .results-card { background: #f8f9fa; padding: 15px; border-radius: 8px; margin-top: 20px; border: 1px solid #e9ecef; }
 .wrk-item { padding: 15px; border-bottom: 1px solid #eee; }
 .wrk-header { margin-bottom: 10px; display: flex; gap: 10px; align-items: center; }
 .badge { background: #e8f0fe; color: #1a73e8; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; }
+
+/* 추가된 Pub 체크 줄 스타일 */
 .pub-check-line { margin-top: 8px; font-size: 0.9em; border-top: 1px dashed #ddd; padding-top: 8px; }
+
 .table-header { display: flex; justify-content: space-between; align-items: center; }
 .small-btn { padding: 5px 10px; border: none; border-radius: 4px; cursor: pointer; font-size: 0.8em; color: #fff; }
 .success { background: #28a745; }
@@ -238,9 +254,11 @@ th { background: #f8f9fa; font-size: 0.85em; padding: 10px; border-bottom: 2px s
 td { padding: 5px; border-bottom: 1px solid #eee; }
 .table-input { width: 100%; padding: 5px; border: 1px solid #ddd; border-radius: 3px; }
 .del-btn { background: #dc3545; color: white; border: none; border-radius: 3px; cursor: pointer; }
+
 .overall-validation-result { margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px; text-align: center; }
 .valid-txt { color: #28a745; font-weight: bold; }
 .invalid-txt { color: #dc3545; font-weight: bold; }
+
 .modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 1000; }
 .modal-content { background: white; padding: 20px; border-radius: 10px; width: 400px; }
 .modal-content textarea { width: 100%; margin-top: 10px; border-radius: 4px; border: 1px solid #ddd; }
