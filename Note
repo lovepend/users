@@ -1,440 +1,159 @@
-<template>
-  <div id="app">
-    <h2 class="page-main-title">🏷️ 태그 번호 상세 조회 및 유효성 검사</h2>
-
-    <div class="main-content-wrapper">
-      <div class="panel api-pubdata-panel">
-        <h3 class="panel-title">Tag No. Pub/Wrk 데이터 조회</h3>
-
-        <div class="input-group">
-          <label for="tagNoInputApi">조회할 Tag No. 입력:</label>
-          <input
-            id="tagNoInputApi"
-            v-model="tagNoForApi"
-            type="text"
-            placeholder="예: CheckTest009"
-            @keyup.enter="searchTag"
-          />
-        </div>
-        <div class="input-group">
-          <label for="projectNoInputApi">프로젝트 번호:</label>
-          <input id="projectNoInputApi" v-model="projectNoInput" type="text" placeholder="예: TE1002" />
-        </div>
-        <button @click="searchTag" :disabled="apiLoading" class="action-btn primary-btn">API 상세 조회</button>
-
-        <div v-if="apiLoading" class="message loading-message">API 데이터를 불러오는 중입니다...</div>
-        <div v-else-if="apiErrorMessage" class="message error-message">오류 발생: {{ apiErrorMessage }}</div>
-
-        <div
-          v-else-if="
-            apiSearched &&
-            !pubData &&
-            (!wrkData || wrkData.length === 0) &&
-            (!registerTypeData || registerTypeData.length === 0)
-          "
-          class="message no-results-message"
-        >
-          입력하신 Tag No. ({{ apiSearchedTagNo }}) 에 대한 API 검색 결과가 없습니다.
-        </div>
-
-        <div
-          v-else-if="pubData || (wrkData && wrkData.length > 0) || (registerTypeData && registerTypeData.length > 0)"
-        >
-          <div class="results-card" v-if="pubData">
-            <h4>✨ Pub 데이터 검색 결과 (단일 항목)</h4>
-            <p><strong>조회 Tag No.:</strong> {{ apiSearchedTagNo }}</p>
-            <p><strong>EP_ID:</strong> {{ pubData.EP_ID }}</p>
-            <p><strong>EP_IC:</strong> {{ pubData.EP_IC }}</p>
-            <p><strong>CLS_ID:</strong> {{ pubData.CLS_ID }}</p>
-            <p><strong>DELETED:</strong> {{ pubData.DELETED ? 'Yes' : 'No' }}</p>
-            <p v-if="pubData.TAG_NO"><strong>데이터 Tag No.:</strong> {{ pubData.TAG_NO }}</p>
-            <p v-if="pubData.TAG_IDX"><strong>데이터 Tag IDX.:</strong> {{ pubData.TAG_IDX }}</p>
-          </div>
-
-          <div class="results-card wrk-data-section" v-if="wrkData && wrkData.length > 0">
-            <h4>✨ Wrk 데이터 검색 결과 (여러 항목)</h4>
-            <div v-for="(wrkItem, index) in wrkData" :key="wrkItem._id || index" class="wrk-item">
-              <h5>Wrk 항목 #{{ index + 1 }}</h5>
-              <p><strong>EP_ID:</strong> {{ wrkItem.EP_ID }}</p>
-              <p><strong>EP_IC:</strong> {{ wrkItem.EP_IC }}</p>
-              <p><strong>CLS_ID:</strong> {{ wrkItem.CLS_ID }}</p>
-              <p><strong>TAG_IDX:</strong> {{ wrkItem.TAG_IDX }}</p>
-              <p><strong>DELETED:</strong> {{ wrkItem.DELETED ? 'Yes' : 'No' }}</p>
-
-              <div v-if="wrkItem.linkedPubData" class="linked-pub-box">
-                <h6>🔗 연결된 Pub 데이터 (TAG_IDX 기반 상세)</h6>
-                <p><strong>Pub EP_ID:</strong> {{ wrkItem.linkedPubData.EP_ID }}</p>
-                <p><strong>Pub CLS_ID:</strong> {{ wrkItem.linkedPubData.CLS_ID }}</p>
-                <p><strong>상태:</strong> {{ wrkItem.linkedPubData.DELETED ? '삭제됨(Deleted)' : '정상(Active)' }}</p>
-              </div>
-              <div v-else-if="apiSearched && wrkItem.TAG_IDX" class="no-linked-pub">
-                <small>조회된 추가 Pub 데이터가 없습니다.</small>
-              </div>
-            </div>
-          </div>
-
-          <div class="results-card type-id-section" v-if="registerTypeData && registerTypeData.length > 0">
-            <h4>✨ 관련 REGISTER ID 정보</h4>
-            <ul>
-              <li v-for="(item, index) in registerTypeData" :key="item._id || index">
-                <strong>CLS_ID:</strong> {{ item.CLS_ID }} ({{ item.DESC || '설명 없음' }}) →
-                <strong>REGISTER_ID:</strong> {{ item.TYPE_ID }}
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      <div class="panel tag-split-panel">
-        <h3 class="panel-title">Tag Split (유효성 검사기)</h3>
-
-        <div class="input-group">
-          <label for="tagNoInputValidator">검사할 Tag No. 입력:</label>
-          <input id="tagNoInputValidator" v-model="tagNoForValidator" type="text" placeholder="예: AA-BBB01-0001/A" />
-        </div>
-
-        <div class="rules-table-container">
-          <h4>규칙 설정 (간단한 테이블)</h4>
-          <p class="panel-description">각 태그 구성 요소의 구분자와 정규식을 직접 편집할 수 있습니다.</p>
-          <table>
-            <thead>
-              <tr>
-                <th>TAG ID</th>
-                <th>구분자</th>
-                <th>정규식</th>
-                <th>액션</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(rule, index) in tagRules" :key="index">
-                <td>TAG{{ String(index + 1).padStart(3, '0') }}</td>
-                <td><input type="text" v-model="rule.delimiter" maxlength="1" /></td>
-                <td><input type="text" v-model="rule.regex" /></td>
-                <td><button @click="removeRule(index)" class="action-btn danger-btn">삭제</button></td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="table-actions">
-            <button @click="addRule" class="action-btn success-btn">규칙 추가</button>
-            <button @click="showPasteModal = true" class="action-btn info-btn">엑셀에서 붙여넣기</button>
-          </div>
-        </div>
-
-        <h4 class="section-sub-title">전체 태그 번호 유효성 검사</h4>
-        <div class="overall-validation-result">
-          <p class="validation-summary">
-            전체 태그 번호 (`{{ tagNoForValidator }}`)는 **
-            <span :style="{ color: isTagNoValid ? 'green' : 'red', fontWeight: 'bold' }">
-              {{ isTagNoValid ? '유효합니다.' : '유효하지 않습니다.' }}
-            </span>
-            **
-          </p>
-          <p class="regex-info">
-            적용된 전체 정규식: <code class="combined-regex-code">{{ combinedRegexString }}</code>
-          </p>
-        </div>
-
-        <h4 class="section-sub-title">부분별 분석 결과</h4>
-        <table class="parts-analysis-table">
-          <thead>
-            <tr>
-              <th>규칙</th>
-              <th>분리된 값</th>
-              <th>종합 유효성</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="(part, index) in tagParts" :key="index">
-              <td>TAG{{ String(index + 1).padStart(3, '0') }}</td>
-              <td>{{ part.matchedValue || '(값 없음)' }}</td>
-              <td :style="{ color: part.isValid ? 'green' : 'red', fontWeight: 'bold' }">
-                {{ part.isValid ? '유효' : '유효하지 않음' }}
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div v-if="showPasteModal" class="modal-overlay">
-      <div class="modal-content">
-        <h4>엑셀 데이터 붙여넣기</h4>
-        <p>엑셀에서 복사한 데이터를 아래 텍스트 영역에 붙여넣어 주세요.</p>
-        <textarea
-          v-model="pasteData"
-          placeholder="구분자[탭]정규식 형태"
-          rows="10"
-          class="paste-textarea"
-        ></textarea>
-        <div class="modal-actions">
-          <button @click="applyPasteData" class="action-btn success-btn">적용</button>
-          <button @click="showPasteModal = false" class="action-btn cancel-btn">취소</button>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script>
-import { ref, computed } from 'vue'
-import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-
-export default {
-  setup() {
-    // --- API 조회 관련 상태 ---
-    const tagNoForApi = ref('')
-    const projectNoInput = ref('TE1002')
-    const apiSearchedTagNo = ref('')
-    const pubData = ref(null)
-    const wrkData = ref([])
-    const registerTypeData = ref([])
-    const apiLoading = ref(false)
-    const apiErrorMessage = ref('')
-    const apiSearched = ref(false)
-
-    // --- Validator 관련 상태 ---
-    const tagNoForValidator = ref('AP330X01-')
-    const tagRules = ref([
-      { delimiter: '', regex: '^$|^[A-Z]{2}$' },
-      { delimiter: '', regex: '^[0123LCRIT]{3}$' },
-      { delimiter: '', regex: '^[ABCDEFNVXS]{1}$' },
-      { delimiter: '', regex: '^$|^[ABCDEFNVXS]{1}$' },
-      { delimiter: '', regex: '^[0-9]{2}$' },
-      { delimiter: '-', regex: '^$|^[APS1-9]{2}$' },
-    ])
-    const showPasteModal = ref(false)
-    const pasteData = ref('')
-
-    // --- API 상세 조회 로직 (GetPubWrkDataByTagNo + GetPubDataByID) ---
-    const searchTag = async () => {
-      pubData.value = null
-      wrkData.value = []
-      registerTypeData.value = []
-      apiErrorMessage.value = ''
-      apiSearched.value = true
-
-      if (!projectNoInput.value || !tagNoForApi.value) {
-        apiErrorMessage.value = '프로젝트 번호와 Tag No.를 입력해주세요.'
-        return
-      }
-
-      apiLoading.value = true
-      apiSearchedTagNo.value = tagNoForApi.value
-
-      try {
-        // 1. 기본 데이터(Pub & Wrk) 조회
-        const primaryApiUrl = '/api/Data/GetPubWrkDataByTagNo'
-        const primaryPayload = {
-          ProjectNo: projectNoInput.value,
-          TAG_NO: tagNoForApi.value,
-          ContainDeleted: true,
+{
+    "TAG_NO_PASSED": "Passed",
+    "NEW_YN": true,
+    "DEL_YN": false,
+    "EP_ID": "TeEP",
+    "EP_IC": "TeEP",
+    "DELETED": false,
+    "DEL_USER": null,
+    "DEL_DTM": null,
+    "PROJ_NO": "TE1002",
+    "TAG_IDX": "682bc954d235c727377a265b",
+    "TAG_NO": "CheckTest009",
+    "TAG_TYPE_ID": null,
+    "CLS_ID": "TEST101_CLS",
+    "TAG_DESC": "CheckTest009",
+    "BF_TAG_NO": "",
+    "PIC_NO": "52593271",
+    "DSN_SKL": null,
+    "PRNT_TAG_IDX": null,
+    "ATTRIBUTES": [
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "ASSEMBLY_NAME",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "SYSTEM_NAME",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": "METRIC_CENTIMETER",
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST001",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST002",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST003",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST004",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST005",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST006",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST007",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST008",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST009",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST010",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST011",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST012",
+            "VALUE": "박정철"
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST013",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST014",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST015",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST016",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST017",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST018",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST019",
+            "VALUE": null
+        },
+        {
+            "UOM_ID": null,
+            "VALUE_DBL": 0,
+            "ATT_ID": "TEST020",
+            "VALUE": "false"
         }
-        const primaryData = await axiosWrapper.post(primaryApiUrl, primaryPayload)
-
-        if (primaryData) {
-          pubData.value = primaryData.PubData && primaryData.PubData.length > 0 ? primaryData.PubData[0] : null
-          wrkData.value = primaryData.WrkData || []
-
-          // 2. ⭐ WrkData의 각 TAG_IDX로 Pub 데이터 상세 조회 (추가 로직) ⭐
-          if (wrkData.value.length > 0) {
-            const detailRequests = wrkData.value.map(async (item) => {
-              if (item.TAG_IDX) {
-                try {
-                  const detailUrl = '/api/Data/GetPubDataByID'
-                  const detailPayload = { ProjectNo: projectNoInput.value, TAG_IDX: item.TAG_IDX }
-                  const detailRes = await axiosWrapper.post(detailUrl, detailPayload)
-                  if (detailRes && detailRes.length > 0) {
-                    item.linkedPubData = detailRes[0] // 항목별 매칭 데이터 저장
-                  }
-                } catch (err) {
-                  console.error(`TAG_IDX ${item.TAG_IDX} 조회 중 오류:`, err)
-                }
-              }
-            })
-            await Promise.all(detailRequests)
-          }
-
-          // 3. CLS_ID 기반 Register ID 정보 조회
-          const classIDsToFetch = new Set()
-          if (pubData.value?.CLS_ID) classIDsToFetch.add(pubData.value.CLS_ID)
-          wrkData.value.forEach(item => { if (item.CLS_ID) classIDsToFetch.add(item.CLS_ID) })
-
-          if (classIDsToFetch.size > 0) {
-            const secondaryApiUrl = '/api/Register/GetByClassIDs'
-            const secondaryPayload = {
-              ProjectNo: projectNoInput.value,
-              ClassIDs: Array.from(classIDsToFetch),
-              ContainDeleted: true,
-            }
-            const secondaryResponse = await axiosWrapper.post(secondaryApiUrl, secondaryPayload)
-            registerTypeData.value = secondaryResponse || []
-          }
-        }
-      } catch (error) {
-        apiErrorMessage.value = `통신 중 오류가 발생했습니다: ${error.message}`
-      } finally {
-        apiLoading.value = false
-      }
-    }
-
-    // --- 유효성 검사 관련 헬퍼/계산 함수 ---
-    const isRegexOptional = regexPattern => {
-      const trimmed = regexPattern.trim()
-      if (!trimmed || trimmed === '^$') return true
-      if (trimmed.startsWith('^$|')) return true
-      try {
-        return new RegExp(`^${trimmed.replace(/^\^/, '').replace(/\$$/, '')}$`).test('')
-      } catch (e) { return false }
-    }
-
-    const combinedRegexString = computed(() => {
-      if (tagRules.value.length === 0) return '^$'
-      let regexParts = []
-      tagRules.value.forEach((rule, index) => {
-        let pattern = rule.regex.trim().replace(/^\^/, '').replace(/\$$/, '')
-        let segment = `(?:${pattern})`
-        if (index > 0 && rule.delimiter.trim() !== '') {
-          const escDelim = rule.delimiter.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-          segment = isRegexOptional(rule.regex) ? `(?:${escDelim}${segment})?` : `(?:${escDelim}${segment})`
-        }
-        regexParts.push(segment)
-      })
-      return `^${regexParts.join('')}$`
-    })
-
-    const isTagNoValid = computed(() => {
-      try { return new RegExp(combinedRegexString.value).test(tagNoForValidator.value) }
-      catch (e) { return false }
-    })
-
-    const tagParts = computed(() => {
-      const parts = []
-      let currentTagNo = tagNoForValidator.value || ''
-      let currentIndex = 0
-      for (let i = 0; i < tagRules.value.length; i++) {
-        const rule = tagRules.value[i]
-        const rawRegex = rule.regex.trim().replace(/^\^/, '').replace(/\$$/, '')
-        const match = new RegExp(`^(${rawRegex})`).exec(currentTagNo.substring(currentIndex))
-        let matchedValue = match ? match[1] : null
-        if (matchedValue !== null) currentIndex += matchedValue.length
-        parts.push({ matchedValue, isValid: true })
-      }
-      return parts
-    })
-
-    const addRule = () => { tagRules.value.push({ delimiter: '', regex: '' }) }
-    const removeRule = index => { tagRules.value.splice(index, 1) }
-    const applyPasteData = () => {
-      const rows = pasteData.value.trim().split('\n')
-      const newRules = rows.map(row => {
-        const cols = row.split('\t')
-        return { delimiter: cols[0]?.trim() || '', regex: cols[1]?.trim() || cols[0]?.trim() || '' }
-      }).filter(r => r.regex)
-      if (newRules.length > 0) tagRules.value = newRules
-      showPasteModal.value = false
-    }
-
-    return {
-      tagNoForApi, projectNoInput, apiSearchedTagNo, pubData, wrkData, registerTypeData,
-      apiLoading, apiErrorMessage, apiSearched, searchTag,
-      tagNoForValidator, tagRules, showPasteModal, pasteData, isTagNoValid, tagParts,
-      addRule, removeRule, applyPasteData, combinedRegexString
-    }
-  }
+    ],
+    "CRTER_NO": "52593271",
+    "CRTE_DTM": "2025-05-20T00:14:12Z",
+    "CHGER_NO": "52593271",
+    "CHGE_DTM": "2026-02-11T23:32:39.104Z",
+    "_id": "682bd5b5d235c727377a27cb"
 }
-</script>
-
-<style scoped>
-#app {
-  font-family: 'Segoe UI', sans-serif;
-  max-width: 1400px;
-  margin: 30px auto;
-  padding: 30px;
-  background-color: #f8f9fa;
-  border-radius: 12px;
-  box-shadow: 0 5px 20px rgba(0,0,0,0.08);
-}
-
-.page-main-title {
-  text-align: center;
-  color: #2c3e50;
-  border-bottom: 3px solid #4caf50;
-  padding-bottom: 15px;
-  margin-bottom: 40px;
-}
-
-.main-content-wrapper {
-  display: flex;
-  gap: 30px;
-  flex-wrap: wrap;
-}
-
-.panel {
-  flex: 1;
-  min-width: 450px;
-  background: white;
-  padding: 30px;
-  border-radius: 10px;
-  border: 1px solid #dcdcdc;
-  max-height: 85vh;
-  overflow-y: auto;
-}
-
-.panel-title {
-  font-size: 1.8em;
-  border-bottom: 2px solid #5cb85c;
-  padding-bottom: 10px;
-  margin-bottom: 25px;
-}
-
-.input-group { margin-bottom: 20px; }
-.input-group label { display: block; margin-bottom: 8px; font-weight: bold; }
-.input-group input { width: 100%; padding: 12px; border: 1px solid #ccc; border-radius: 6px; box-sizing: border-box; }
-
-.action-btn { padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
-.primary-btn { background: #007bff; color: white; }
-.success-btn { background: #28a745; color: white; margin-bottom: 5px; }
-.info-btn { background: #17a2b8; color: white; }
-.danger-btn { background: #dc3545; color: white; padding: 5px 10px; width: auto; }
-.cancel-btn { background: #6c757d; color: white; }
-
-.message { padding: 15px; border-radius: 6px; margin-top: 20px; text-align: center; }
-.loading-message { background: #e0f7fa; color: #00796b; }
-.error-message { background: #ffebee; color: #d32f2f; }
-.no-results-message { background: #fffde7; color: #fbc02d; }
-
-.results-card { background: #e8f5e9; padding: 20px; border-radius: 8px; margin-top: 25px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
-.results-card h4 { color: #2e7d32; border-bottom: 1px solid #c8e6c9; padding-bottom: 10px; }
-.wrk-item { border-bottom: 1px solid #eee; padding: 15px 0; }
-.wrk-item:last-child { border-bottom: none; }
-
-/* ⭐ 추가된 연동 Pub 데이터 박스 스타일 ⭐ */
-.linked-pub-box {
-  margin-top: 10px;
-  padding: 12px;
-  background-color: #e3f2fd;
-  border-left: 5px solid #2196f3;
-  border-radius: 4px;
-}
-.linked-pub-box h6 { margin: 0 0 8px 0; color: #0d47a1; font-size: 1em; }
-.linked-pub-box p { margin: 3px 0; font-size: 0.9em; }
-.no-linked-pub { color: #999; font-style: italic; margin-top: 8px; }
-
-.rules-table-container table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-.rules-table-container th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-.rules-table-container th { background: #f2f2f2; }
-
-.overall-validation-result { padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px; margin-top: 20px; }
-.combined-regex-code { background: #eee; padding: 2px 5px; border-radius: 3px; font-size: 0.9em; }
-
-.parts-analysis-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-.parts-analysis-table th { background: #f2f2f2; }
-
-.modal-overlay {
-  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-  background: rgba(0,0,0,0.5); display: flex; justify-content: center; align-items: center; z-index: 2000;
-}
-.modal-content { background: white; padding: 30px; border-radius: 10px; width: 500px; }
-.paste-textarea { width: 100%; margin-top: 10px; padding: 10px; border-radius: 6px; border: 1px solid #ccc; }
-.modal-actions { margin-top: 15px; display: flex; gap: 10px; }
-</style>
