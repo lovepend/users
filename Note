@@ -1,37 +1,257 @@
-api ====
-api/Data/GetPubDataByID
+<template>
+  <div id="app">
+    <h2 class="page-main-title">🏷️ 태그 번호 상세 조회 및 유효성 검사</h2>
 
-payload====
-{
-  "ProjectNo": "TE1002",
-  "TAG_IDX": "689d31924c35487828ec43fb",
-  "ContainDeleted": true
+    <div class="main-content-wrapper">
+      <!-- ===================== API 조회 패널 ===================== -->
+      <div class="panel api-pubdata-panel">
+        <h3 class="panel-title">Tag No. Pub/Wrk 데이터 조회</h3>
+
+        <div class="input-group">
+          <label>조회할 Tag No. 입력:</label>
+          <input
+            v-model="tagNoForApi"
+            type="text"
+            placeholder="예: CheckTest009"
+            @keyup.enter="searchTag"
+          />
+        </div>
+
+        <div class="input-group">
+          <label>프로젝트 번호:</label>
+          <input v-model="projectNoInput" type="text" />
+        </div>
+
+        <button @click="searchTag" :disabled="apiLoading" class="action-btn primary-btn">
+          API 상세 조회
+        </button>
+
+        <div v-if="apiLoading" class="message loading-message">
+          데이터를 가져오는 중입니다...
+        </div>
+
+        <div v-else-if="apiErrorMessage" class="message error-message">
+          오류: {{ apiErrorMessage }}
+        </div>
+
+        <div v-else-if="apiSearched">
+          <!-- Pub 정보 -->
+          <div class="results-card" v-if="pubData">
+            <h4>✨ Pub 기본 정보</h4>
+            <p><strong>TAG_NO:</strong> {{ pubData.TAG_NO }}</p>
+            <p><strong>EP_ID:</strong> {{ pubData.EP_ID }}</p>
+            <p><strong>CLS_ID:</strong> {{ pubData.CLS_ID }}</p>
+          </div>
+
+          <!-- Wrk 리스트 -->
+          <div
+            class="results-card wrk-data-section"
+            v-if="wrkData && wrkData.length > 0"
+          >
+            <h4>✨ Wrk 데이터 리스트 ({{ wrkData.length }}건)</h4>
+
+            <div
+              v-for="(wrkItem, index) in wrkData"
+              :key="wrkItem._id || index"
+              class="wrk-item"
+            >
+              <div class="wrk-header">
+                <span class="badge">Wrk #{{ index + 1 }}</span>
+                <strong>{{ wrkItem.EP_ID }} / {{ wrkItem.TAG_IDX }}</strong>
+              </div>
+
+              <p><strong>DEL_YN:</strong> {{ wrkItem.DEL_YN ? 'Yes' : 'No' }}</p>
+
+              <!-- ✅ 요청한 부분 -->
+              <div class="pub-check-line">
+                <span
+                  v-if="wrkItem.hasPub"
+                  class="pub-exist"
+                >
+                  ✔ Pub 존재
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</template>
+
+<script>
+import { ref } from 'vue'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+
+export default {
+  setup() {
+    const tagNoForApi = ref('')
+    const projectNoInput = ref('TE1002')
+
+    const pubData = ref(null)
+    const wrkData = ref([])
+    const apiLoading = ref(false)
+    const apiErrorMessage = ref('')
+    const apiSearched = ref(false)
+
+    const searchTag = async () => {
+      pubData.value = null
+      wrkData.value = []
+      apiErrorMessage.value = ''
+      apiSearched.value = true
+      apiLoading.value = true
+
+      try {
+        const res = await axiosWrapper.post(
+          '/api/Data/GetPubWrkDataByTagNo',
+          {
+            ProjectNo: projectNoInput.value,
+            TAG_NO: tagNoForApi.value,
+            ContainDeleted: true
+          }
+        )
+
+        if (res) {
+          pubData.value = res.PubData?.[0] || null
+          const rawWrk = res.WrkData || []
+
+          // ✅ 각 wrk의 TAG_IDX로 Pub 존재 여부 확인
+          const enhancedWrk = await Promise.all(
+            rawWrk.map(async (item) => {
+              if (!item.TAG_IDX) {
+                return { ...item, hasPub: false }
+              }
+
+              try {
+                const detailRes = await axiosWrapper.post(
+                  '/api/Data/GetPubDataByID',
+                  {
+                    ProjectNo: projectNoInput.value,
+                    TAG_IDX: item.TAG_IDX,
+                    ContainDeleted: true
+                  }
+                )
+
+                return {
+                  ...item,
+                  hasPub: !!detailRes
+                }
+              } catch (err) {
+                console.error('Pub 조회 실패:', err)
+                return {
+                  ...item,
+                  hasPub: false
+                }
+              }
+            })
+          )
+
+          wrkData.value = enhancedWrk
+        }
+      } catch (err) {
+        apiErrorMessage.value = err.message
+      } finally {
+        apiLoading.value = false
+      }
+    }
+
+    return {
+      tagNoForApi,
+      projectNoInput,
+      pubData,
+      wrkData,
+      apiLoading,
+      apiErrorMessage,
+      apiSearched,
+      searchTag
+    }
+  }
+}
+</script>
+
+<style scoped>
+#app {
+  font-family: 'Malgun Gothic', sans-serif;
+  padding: 20px;
+  background: #f0f2f5;
+  min-height: 100vh;
 }
 
-response====
-{
-    "TAG_NO_PASSED": null,
-    "NEW_YN": true,
-    "DEL_YN": false,
-    "EP_ID": "TeEP",
-    "EP_IC": "TeEP",
-    "DELETED": false,
-    "DEL_USER": null,
-    "DEL_DTM": null,
-    "PROJ_NO": "TE1002",
-    "TAG_IDX": "689d31924c35487828ec43fb",
-    "TAG_NO": "CheckTest009",
-    "TAG_TYPE_ID": null,
-    "CLS_ID": "DOC_TO_TAG_CLAS",
-    "TAG_DESC": null,
-    "BF_TAG_NO": null,
-    "PIC_NO": "52593270",
-    "DSN_SKL": null,
-    "PRNT_TAG_IDX": "689d31814c35487828ec43eb",
-    "ATTRIBUTES": [],
-    "CRTER_NO": "52593270",
-    "CRTE_DTM": "2025-08-14T00:45:12.51Z",
-    "CHGER_NO": "52593270",
-    "CHGE_DTM": null,
-    "_id": "689d31924c35487828ec440a"
+.page-main-title {
+  text-align: center;
+  color: #1a73e8;
+  margin-bottom: 30px;
 }
+
+.main-content-wrapper {
+  display: flex;
+  gap: 20px;
+}
+
+.panel {
+  background: #fff;
+  padding: 20px;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+  flex: 1;
+}
+
+.input-group {
+  margin-bottom: 15px;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.action-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.primary-btn {
+  background: #1a73e8;
+  color: white;
+}
+
+.results-card {
+  background: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 20px;
+  border: 1px solid #e9ecef;
+}
+
+.wrk-item {
+  padding: 15px;
+  border-bottom: 1px solid #eee;
+}
+
+.badge {
+  background: #e8f0fe;
+  color: #1a73e8;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.8em;
+}
+
+.pub-check-line {
+  margin-top: 8px;
+  font-size: 0.9em;
+  border-top: 1px dashed #ddd;
+  padding-top: 8px;
+}
+
+.pub-exist {
+  color: #28a745;
+  font-weight: bold;
+}
+</style>
