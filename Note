@@ -1,274 +1,929 @@
-<template>
-  <div class="panel mb-0" style="width: 100%">
-    <div class="panel-heading border-bottom h-50px" style="background-color: var(--bg07)">
-      <span class="fs-2 fw-bold" style="color: var(--basic02)">{{ $t('ReleasedNote_vue.title') }}</span>
-    </div>
-
-    <div v-if="userInfo && (userInfo as any).IsDeveloper" class="h-35px p-0 m-0" style="background-color: var(--bg11); padding: 8px 8px 6px">
-      <input
-        id="selectedFile"
-        ref="fileInput"
-        class="d-none"
-        type="file"
-        accept=".xlsx, .xls"
-        @change="handleFileUpload($event)"
-      />
-      <button class="btn btn-xs btn-gray float-end align-items-center shadow-none me-2 mt-1" @click="importExcel">
-        {{ $t('ReleasedNote_vue.import') }}
-      </button>
-    </div>
-
-    <div class="panel-body py-2 overflow-auto" style="height: calc(100vh - 150px); background-color: var(--bg14)">
-      <div class="pt-2 ps-3">
-        <template v-if="releaseNotesGrouped && releaseNotesGrouped.length > 0">
-          <div v-for="(versionGroup, groupIndex) in releaseNotesGrouped" :key="groupIndex">
-            <span class="fs-3" style="color: var(--txt04)">{{ $t('ReleasedNote_vue.version') }}</span>
-            <span class="fs-3 ms-1" style="color: var(--txt04)">{{ versionGroup.version }}</span>
-            <span class="fs-5 ps-2" style="color: var(--txt02)">({{ $t('ReleasedNote_vue.update') }})</span>
-
-            <ul class="pt-2">
-              <li v-for="(item, itemIndex) in versionGroup.items" :key="itemIndex">
-                <div class="fs-13px">
-                  <div class="h-auto mb-1 pt-1 text-white" :class="getBadgeClass(item.category)">
-                    {{ item.category }}
-                  </div>
-
-                  <div
-                    class="border rounded-3 mb-1 description-text me-2"
-                    :class="getBadgeTextColorClass(item.category)"
-                    style="background-color: var(--basic02)"
-                  >
-                    <div class="p-1 pb-0">[{{ item.AutoNo }}] : [{{ item.status }}]</div>
-                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">{{ item.description }}</div>
-                  </div>
-
-                  <div class="border rounded-3 text-cyan-700 mb-1 me-2" style="background-color: var(--basic02)">
-                    <div class="p-1 pb-0">{{ $t('ReleasedNote_vue.act_desc') }}</div>
-                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">: {{ item.actionDesc }}</div>
-                  </div>
-
-                  <div class="border rounded-3 text-green-600 mb-1 me-2" style="background-color: var(--basic02)">
-                    <div class="p-1 pb-0">{{ $t('ReleasedNote_vue.dev_desc') }}</div>
-                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">: {{ item.remarkDev }}</div>
-                  </div>
-                </div>
-              </li>
-            </ul>
-            <hr v-if="isNotLastItem(groupIndex)" />
-          </div>
-        </template>
-
-        <template v-else>
-          <p v-if="isLoading">{{ $t('ReleasedNote_vue.load_desc') }}</p>
-          <p v-else>{{ $t('ReleasedNote_vue.empt_desc') }}</p>
-        </template>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useAppAuthenticationStore } from '@/stores/app-authentication';
-import { axiosWrapper } from '@/utils/axios/axios-wrapper';
-import * as XLSX from 'xlsx';
-import { ApiCommon } from '@/utils/axios/api-common';
-// @ts-ignore
-import * as SEF from '@/utils/spread/spread-excel-funtions.js';
-
-/** 변수 정의 */
-const releaseNotesGrouped = ref<any[]>([]);
-const isLoading = ref(true);
-const authStore = useAppAuthenticationStore();
-const userInfo = authStore.userInfo;
-const fileInput = ref<HTMLInputElement | null>(null);
-const fileId = ref<string | null>(null);
-const urlList = { gfi: '/api/File/Get', gfr: '/api/File/Replace' };
-
-onMounted(() => {
-  const baseSiteName = (import.meta as any).env.VITE_BASE_SITENAME;
-  if (baseSiteName === 'dev') fileId.value = '69827ed36514d58f04e067e7';
-  else if (baseSiteName === 'devop') fileId.value = '698963e8ed2aff6e2771b20d';
-  else fileId.value = '6982ac8ea605319e04771832';
-  fetchAndParseExcel();
-});
-
-/** 마지막 아이템 체크 */
-const isNotLastItem = (index: number): boolean => {
-  if (!releaseNotesGrouped.value) return false;
-  return index < releaseNotesGrouped.value.length - 1;
-};
-
-/** 운영 환경용 날짜 계산 로직 (+1일) */
-const getUpdatedVersionForProd = (version: string): string => {
-  const parts = version.split('.');
-  if (parts.length < 2) return version;
-
-  const lastPart = parts[parts.length - 1]; // DD
-  const monthPart = parts[parts.length - 2]; // MM
-
-  const dayNum = parseInt(lastPart);
-  const monthNum = parseInt(monthPart);
-
-  if (isNaN(dayNum) || isNaN(monthNum)) return version;
-
-  const currentYear = new Date().getFullYear();
-  const date = new Date(currentYear, monthNum - 1, dayNum);
-  date.setDate(date.getDate() + 1);
-
-  const newMonth = String(date.getMonth() + 1).padStart(2, '0');
-  const newDay = String(date.getDate()).padStart(2, '0');
-
-  const prefix = parts.slice(0, parts.length - 2).join('.');
-  return prefix ? `${prefix}.${newMonth}.${newDay}` : `${newMonth}.${newDay}`;
-};
-
-/** 시트 파싱 */
-const parseSheetWithHeaders = (sheet: any, skipRows: number): any[] => {
-  if (!sheet) return [];
-  const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-  if (rows.length <= skipRows) return [];
-
-  const headers = rows[skipRows].map((h: any) => String(h || '').replace(/\s/g, ''));
-  const dataRows = rows.slice(skipRows + 1);
-  const getIdx = (name: string) => headers.indexOf(name.replace(/\s/g, ''));
-
-  const idx = {
-    autoNo: getIdx('AutoNo'),
-    category: getIdx('구분'),
-    desc: getIdx('기능요청상세내용'),
-    action: getIdx('ACTION부서회신내용'),
-    remark: getIdx('Remark(개발)'),
-    status: getIdx('STATUS'),
-    version: getIdx('완료버젼'),
-  };
-
-  return dataRows.map(row => ({
-    AutoNo: idx.autoNo !== -1 ? row[idx.autoNo] : '',
-    category: idx.category !== -1 ? row[idx.category] : '',
-    description: idx.desc !== -1 ? row[idx.desc] : '',
-    actionDesc: idx.action !== -1 ? row[idx.action] : '',
-    remarkDev: idx.remark !== -1 ? row[idx.remark] : '',
-    status: idx.status !== -1 ? row[idx.status] : '',
-    completionVersion: idx.version !== -1 ? row[idx.version] : '',
-  })).filter(item => item.status || item.completionVersion);
-};
-
-/** 메인 페치 함수 */
-const fetchAndParseExcel = async () => {
-  try {
-    isLoading.value = true;
-    const baseSiteName = (import.meta as any).env.VITE_BASE_SITENAME;
-    const isProd = !(baseSiteName === 'dev' || baseSiteName === 'devop');
-
-    let allowedStatus = ['FINISH', 'CHECKED'];
-    if (!isProd) allowedStatus.push('READY');
-
-    const response: any = await axiosWrapper.postAll(
-      urlList.gfi,
-      { id: fileId.value },
-      { responseType: 'blob', headers: { FileToken: 'frontserver@sh' } }
-    );
-    const decryptedBlob: any = await ApiCommon.postFileDecryptFile({ FILE: new File([response.data], 'temp.xlsx') });
-    const workbook = XLSX.read(await decryptedBlob.arrayBuffer(), { type: 'array' });
-
-    let combined: any[] = [];
-    workbook.SheetNames.forEach((name, index) => {
-      const skip = index === 0 ? 2 : 0;
-      combined = [...combined, ...parseSheetWithHeaders(workbook.Sheets[name], skip)];
-    });
-
-    const grouped: Record<string, any> = {};
-    combined.forEach((row: any) => {
-      const status = String(row.status || '').trim().toUpperCase();
-      let version = String(row.completionVersion || '').trim();
-
-      if (allowedStatus.includes(status) && version) {
-        if (isProd) version = getUpdatedVersionForProd(version);
-
-        if (!grouped[version]) grouped[version] = { version: version, items: [] };
-        grouped[version].items.push({
-          ...row,
-          category: String(row.category || '').toLowerCase(),
-          status: status,
-        });
-      }
-    });
-
-    releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) =>
-      b.version.localeCompare(a.version, undefined, { numeric: true })
-    );
-  } catch (error) {
-    console.error('Fetch Error:', error);
-  } finally {
-    isLoading.value = false;
-    if (SEF && (SEF as any).onHideOverlay) (SEF as any).onHideOverlay();
-  }
-};
-
-/** 배지 클래스 */
-const getBadgeClass = (category: any) => {
-  const c = String(category).toLowerCase();
-  if (['오류', 'fixed'].includes(c)) return 'badge bg-gradient-orange-red';
-  if (['기능개선', 'changed'].includes(c)) return 'badge bg-gradient-yellow-orange';
-  if (['신규기능', 'added'].includes(c)) return 'badge bg-gradient-teal-green';
-  return 'badge';
-};
-
-const getBadgeTextColorClass = (category: any) => {
-  const c = String(category).toLowerCase();
-  if (['오류', 'fixed'].includes(c)) return 'text-danger';
-  if (['기능개선', 'changed'].includes(c)) return 'text-warning';
-  if (['신규기능', 'added'].includes(c)) return 'text-success';
-  return 'text-gray';
-};
-
-/** 엑셀 업로드 처리 */
-const importExcel = () => fileInput.value?.click();
-
-const handleFileUpload = async (event: any) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  try {
-    await axiosWrapper.post(
-      urlList.gfr,
-      { id: fileId.value, File: file },
-      { headers: { 'Content-Type': 'multipart/form-data', FileToken: 'frontserver@sh' } }
-    );
-    fetchAndParseExcel();
-  } catch (err) {
-    console.error('Upload Error:', err);
-  }
-};
-</script>
-
-<style scoped>
-.description-text {
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.badge {
-  border-radius: 20px;
-  display: inline-block;
-  width: 80px;
-  height: 30px;
-  line-height: 20px;
-  margin-right: 10px;
-  text-transform: uppercase;
-  font-size: 13px;
-  font-weight: 700;
-  text-align: center;
-  padding-top: 5px;
-}
-ul {
-  display: block;
-  list-style: none;
-  margin: 0;
-  padding-left: 0;
-}
-li {
-  list-style-type: none;
-  margin: 8px 0 8px 10px;
-  padding: 0;
-}
-</style>
+[{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "24",
+	"severity": 8,
+	"message": "Element is missing end tag.",
+	"source": "vue",
+	"startLineNumber": 6,
+	"startColumn": 5,
+	"endLineNumber": 6,
+	"endColumn": 5,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: missing-whitespace-between-attributes.",
+	"source": "eslint",
+	"startLineNumber": 13,
+	"startColumn": 24,
+	"endLineNumber": 13,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: unexpected-character-in-attribute-name.",
+	"source": "eslint",
+	"startLineNumber": 13,
+	"startColumn": 24,
+	"endLineNumber": 13,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/valid-attribute-name",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/valid-attribute-name.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Attribute name <template is not valid.",
+	"source": "eslint",
+	"startLineNumber": 13,
+	"startColumn": 24,
+	"endLineNumber": 13,
+	"endColumn": 33,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'ref' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 76,
+	"startColumn": 12,
+	"endLineNumber": 76,
+	"endColumn": 15,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'onMounted' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 76,
+	"startColumn": 17,
+	"endLineNumber": 76,
+	"endColumn": 26,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'useAppAuthenticationStore' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 77,
+	"startColumn": 12,
+	"endLineNumber": 77,
+	"endColumn": 37,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'axiosWrapper' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 78,
+	"startColumn": 12,
+	"endLineNumber": 78,
+	"endColumn": 24,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'XLSX' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 79,
+	"startColumn": 15,
+	"endLineNumber": 79,
+	"endColumn": 19,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'ApiCommon' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 80,
+	"startColumn": 12,
+	"endLineNumber": 80,
+	"endColumn": 21,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'SEF' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 81,
+	"startColumn": 15,
+	"endLineNumber": 81,
+	"endColumn": 18,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'releaseNotesGrouped' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 84,
+	"startColumn": 9,
+	"endLineNumber": 84,
+	"endColumn": 33,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'isLoading' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 85,
+	"startColumn": 9,
+	"endLineNumber": 85,
+	"endColumn": 18,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'userInfo' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 86,
+	"startColumn": 11,
+	"endLineNumber": 86,
+	"endColumn": 19,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'fileInput' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 87,
+	"startColumn": 9,
+	"endLineNumber": 87,
+	"endColumn": 23,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'fileId' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 88,
+	"startColumn": 9,
+	"endLineNumber": 88,
+	"endColumn": 20,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'urlList' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 89,
+	"startColumn": 9,
+	"endLineNumber": 89,
+	"endColumn": 16,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'isNotLastItem' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 100,
+	"startColumn": 9,
+	"endLineNumber": 100,
+	"endColumn": 22,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'parseSheetWithHeaders' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 132,
+	"startColumn": 9,
+	"endLineNumber": 132,
+	"endColumn": 30,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'fetchAndParseExcel' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 166,
+	"startColumn": 9,
+	"endLineNumber": 166,
+	"endColumn": 27,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'getBadgeClass' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 222,
+	"startColumn": 9,
+	"endLineNumber": 222,
+	"endColumn": 22,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'getBadgeTextColorClass' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 230,
+	"startColumn": 9,
+	"endLineNumber": 230,
+	"endColumn": 31,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'importExcel' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 238,
+	"startColumn": 9,
+	"endLineNumber": 238,
+	"endColumn": 20,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "no-redeclare",
+		"target": {
+			"$mid": 1,
+			"path": "/docs/latest/rules/no-redeclare",
+			"scheme": "https",
+			"authority": "eslint.org"
+		}
+	},
+	"severity": 8,
+	"message": "'handleFileUpload' is already defined.",
+	"source": "eslint",
+	"startLineNumber": 239,
+	"startColumn": 9,
+	"endLineNumber": 239,
+	"endColumn": 25,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 285,
+	"startColumn": 5,
+	"endLineNumber": 285,
+	"endColumn": 5,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 285,
+	"startColumn": 5,
+	"endLineNumber": 285,
+	"endColumn": 5,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 306,
+	"startColumn": 19,
+	"endLineNumber": 306,
+	"endColumn": 19,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 306,
+	"startColumn": 19,
+	"endLineNumber": 306,
+	"endColumn": 19,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 310,
+	"startColumn": 19,
+	"endLineNumber": 310,
+	"endColumn": 19,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 310,
+	"startColumn": 19,
+	"endLineNumber": 310,
+	"endColumn": 19,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 314,
+	"startColumn": 19,
+	"endLineNumber": 314,
+	"endColumn": 19,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 314,
+	"startColumn": 19,
+	"endLineNumber": 314,
+	"endColumn": 19,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 315,
+	"startColumn": 17,
+	"endLineNumber": 315,
+	"endColumn": 17,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 315,
+	"startColumn": 17,
+	"endLineNumber": 315,
+	"endColumn": 17,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 316,
+	"startColumn": 15,
+	"endLineNumber": 316,
+	"endColumn": 15,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 316,
+	"startColumn": 15,
+	"endLineNumber": 316,
+	"endColumn": 15,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 317,
+	"startColumn": 13,
+	"endLineNumber": 317,
+	"endColumn": 13,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 317,
+	"startColumn": 13,
+	"endLineNumber": 317,
+	"endColumn": 13,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 319,
+	"startColumn": 11,
+	"endLineNumber": 319,
+	"endColumn": 11,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 319,
+	"startColumn": 11,
+	"endLineNumber": 319,
+	"endColumn": 11,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 320,
+	"startColumn": 9,
+	"endLineNumber": 320,
+	"endColumn": 9,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 320,
+	"startColumn": 9,
+	"endLineNumber": 320,
+	"endColumn": 9,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 325,
+	"startColumn": 7,
+	"endLineNumber": 325,
+	"endColumn": 7,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 325,
+	"startColumn": 7,
+	"endLineNumber": 325,
+	"endColumn": 7,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 326,
+	"startColumn": 5,
+	"endLineNumber": 326,
+	"endColumn": 5,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 326,
+	"startColumn": 5,
+	"endLineNumber": 326,
+	"endColumn": 5,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 327,
+	"startColumn": 3,
+	"endLineNumber": 327,
+	"endColumn": 3,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 327,
+	"startColumn": 3,
+	"endLineNumber": 327,
+	"endColumn": 3,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "_generated_diagnostic_collection_name_#2",
+	"code": "23",
+	"severity": 8,
+	"message": "Invalid end tag.",
+	"source": "vue",
+	"startLineNumber": 328,
+	"startColumn": 1,
+	"endLineNumber": 328,
+	"endColumn": 1,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/no-parsing-error",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-parsing-error.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 8,
+	"message": "Parsing error: x-invalid-end-tag.",
+	"source": "eslint",
+	"startLineNumber": 328,
+	"startColumn": 1,
+	"endLineNumber": 328,
+	"endColumn": 1,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/component-tags-order",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/component-tags-order.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 4,
+	"message": "'<template [object Object]>' should be above '<style scoped>' on line 251.",
+	"source": "eslint",
+	"startLineNumber": 321,
+	"startColumn": 9,
+	"endLineNumber": 324,
+	"endColumn": 20,
+	"origin": "extHost1"
+},{
+	"resource": "/d:/03. Dev/SEDP_Front_dev/FrontEnd/src/views/common/release-note/index.vue",
+	"owner": "eslint4",
+	"code": {
+		"value": "vue/component-tags-order",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/component-tags-order.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 4,
+	"message": "'<script setup lang=ts>' should be above '<style scoped>' on line 251.",
+	"source": "eslint",
+	"startLineNumber": 330,
+	"startColumn": 1,
+	"endLineNumber": 476,
+	"endColumn": 10,
+	"origin": "extHost1"
+}]
