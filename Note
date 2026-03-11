@@ -1,238 +1,174 @@
 <template>
-  <div id="app">
-    <header class="header">
-      <h2 class="page-main-title">🏷️ 태그 번호 유효성 검사 대시보드</h2>
-    </header>
+  <div class="error-code-page-hardcoded">
+    <h2>자주 발생하는 오류 코드 해결 가이드</h2>
 
-    <div class="main-container">
-      <div class="side-panel left-panel">
-        <section class="panel-card">
-          <h3 class="card-title">1. 입력 및 규칙 설정</h3>
-          <div class="input-group">
-            <label for="tagNoInputValidator">검사할 Tag No. 입력</label>
-            <input id="tagNoInputValidator" v-model="tagNoForValidator" type="text" placeholder="검증할 태그 번호를 입력하세요" />
-          </div>
-
-          <div class="rules-header">
-            <h4>규칙 리스트 (구분자 + 정규식)</h4>
-            <div class="button-group">
-              <button @click="addRule" class="btn-small btn-success">+ 추가</button>
-              <button @click="showPasteModal = true" class="btn-small btn-info">엑셀 붙여넣기</button>
-            </div>
-          </div>
-
-          <div class="scroll-area rules-area">
-            <table class="data-table">
-              <thead>
-                <tr>
-                  <th width="50">No</th>
-                  <th width="70">구분자</th>
-                  <th>정규식 (Regex)</th>
-                  <th width="40"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(rule, index) in tagRules" :key="index">
-                  <td class="text-center font-code">#{{ index + 1 }}</td>
-                  <td><input type="text" v-model="rule.delimiter" placeholder="없음" class="cell-input text-center" /></td>
-                  <td><input type="text" v-model="rule.regex" placeholder="예: ^[A-Z]+$" class="cell-input" /></td>
-                  <td><button @click="removeRule(index)" class="btn-delete">×</button></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-
-      <div class="side-panel right-panel">
-        <section class="panel-card result-card">
-          <h3 class="card-title">2. 유효성 분석 결과</h3>
-          
-          <div class="status-banner" :class="isTagNoValid ? 'status-pass' : 'status-fail'">
-            <div class="status-icon">{{ isTagNoValid ? '✅' : '❌' }}</div>
-            <div class="status-text">
-              <strong>{{ isTagNoValid ? '최종 검증 통과' : '최종 검증 실패' }}</strong>
-              <div class="full-regex">Pattern: {{ combinedRegexDisplay }}</div>
-            </div>
-          </div>
-
-          <h4 class="sub-title">부분별 매칭 상세 분석</h4>
-          <div class="scroll-area analysis-area">
-            <table class="data-table analysis-table">
-              <thead>
-                <tr>
-                  <th width="80">구성요소</th>
-                  <th>추출된 값</th>
-                  <th width="65">구분자</th>
-                  <th width="65">내용</th>
-                  <th width="75">결과</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(part, index) in tagParts" :key="index">
-                  <td class="font-code">규칙 #{{ index + 1 }}</td>
-                  <td class="font-bold">{{ part.matchedValue === '' ? '(빈값)' : (part.matchedValue || '-') }}</td>
-                  <td :class="part.isDelimiterValid ? 'text-ok' : 'text-error'">{{ part.hasDelimiterRule ? (part.isDelimiterValid ? 'OK' : 'ERR') : '-' }}</td>
-                  <td :class="part.isContentValid ? 'text-ok' : 'text-error'">{{ part.isContentValid ? 'OK' : 'ERR' }}</td>
-                  <td><span class="badge" :class="part.isValid ? 'badge-ok' : 'badge-err'">{{ part.isValid ? 'PASS' : 'FAIL' }}</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          
-          <div v-if="!isTagNoValid" class="error-msg-box">
-            <strong>에러 분석:</strong> {{ analysisFeedback }}
-          </div>
-        </section>
-      </div>
+    <!-- 오류 코드 테이블 -->
+    <div class="table-container">
+      <table class="error-code-table">
+        <thead>
+          <tr>
+            <th>Error Code</th>
+            <th>원인</th>
+            <th>해결방법</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- rowData 배열을 순회하며 각 오류 코드를 테이블 행으로 표시 -->
+          <tr v-for="(error, index) in rowData" :key="index">
+            <td>{{ error.errorCode }}</td>
+            <td>{{ error.origin }}</td>
+            <td>{{ error.solution }}</td>
+          </tr>
+          <tr v-if="rowData.length === 0">
+            <td colspan="3" class="no-data">오류 코드 데이터가 없습니다.</td>
+          </tr>
+        </tbody>
+      </table>
     </div>
 
-    <div v-if="showPasteModal" class="modal-overlay" @click.self="showPasteModal = false">
-      <div class="modal-content">
-        <h4>엑셀 데이터 붙여넣기</h4>
-        <p class="modal-desc">엑셀에서 [구분자], [정규식] 열을 복사해 붙여넣으세요. (구분자가 없어도 탭 공간은 유지됩니다)</p>
-        <textarea v-model="pasteData" placeholder="여기에 붙여넣으세요..." rows="10"></textarea>
-        <div class="modal-btns">
-          <button @click="applyPasteData" class="btn-info">데이터 적용</button>
-          <button @click="showPasteModal = false">닫기</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
-<script>
-import { ref, computed } from 'vue'
+<script setup>
+import { ref } from 'vue';
 
-export default {
-  setup() {
-    const tagNoForValidator = ref('AA-11-BB-2222-C')
-    const showPasteModal = ref(false)
-    const pasteData = ref('')
-    const tagRules = ref([
-      { delimiter: '', regex: '^[A-Z]{2}$' },
-      { delimiter: '-', regex: '^[0-9]{2}$' },
-      { delimiter: '-', regex: '^[A-Z]{2}$' },
-      { delimiter: '-', regex: '^[0-9]{4}$' },
-      { delimiter: '-', regex: '^[A-Z]{1}$' },
-    ])
-
-    const canBeEmpty = (regexStr) => {
-      try { return new RegExp(`^(${regexStr.replace(/^\^|\$/g, '')})$`).test(''); } catch { return false; }
-    }
-
-    const tagParts = computed(() => {
-      const results = [];
-      let currentStr = tagNoForValidator.value || '';
-      let cursor = 0;
-
-      for (let i = 0; i < tagRules.value.length; i++) {
-        const rule = tagRules.value[i];
-        const delim = rule.delimiter;
-        const pureRegex = rule.regex.replace(/^\^|\$/g, '');
-        let dOk = true, cOk = false, matchedVal = null;
-        const hasDelim = delim !== '';
-
-        if (hasDelim) {
-          if (currentStr.substring(cursor).startsWith(delim)) {
-            cursor += delim.length; dOk = true;
-          } else { dOk = canBeEmpty(rule.regex); }
-        }
-
-        try {
-          const matcher = new RegExp(`^(${pureRegex})`).exec(currentStr.substring(cursor));
-          if (matcher) {
-            matchedVal = matcher[1]; cursor += matchedVal.length; cOk = true;
-          } else if (canBeEmpty(rule.regex)) {
-            matchedVal = ''; cOk = true;
-          }
-        } catch { cOk = false; }
-
-        results.push({ hasDelimiterRule: hasDelim, isDelimiterValid: dOk, isContentValid: cOk, matchedValue: matchedVal, isValid: dOk && cOk });
-        if (!(dOk && cOk)) break;
-      }
-      return results;
-    })
-
-    const isTagNoValid = computed(() => {
-      const allPartsPass = tagParts.value.length === tagRules.value.length && tagParts.value.every(p => p.isValid);
-      if (!allPartsPass) return false;
-      let usedLen = 0;
-      tagParts.value.forEach((p, i) => {
-        if (p.hasDelimiterRule && p.isDelimiterValid) {
-          if (tagNoForValidator.value.substring(usedLen).startsWith(tagRules.value[i].delimiter)) {
-            usedLen += tagRules.value[i].delimiter.length;
-          }
-        }
-        if (p.matchedValue) usedLen += p.matchedValue.length;
-      });
-      return usedLen === (tagNoForValidator.value || '').length;
-    })
-
-    const applyPasteData = () => {
-      if (!pasteData.value.trim()) return;
-      const rows = pasteData.value.split('\n');
-      const newRules = rows.map(row => {
-        const cols = row.split('\t');
-        let delim = cols[0] ? cols[0].trim() : '';
-        let regex = cols[1] ? cols[1].trim() : '';
-        // 보정: 탭이 없고 정규식 기호만 있는 경우
-        if (cols.length === 1 && delim.includes('^')) { regex = delim; delim = ''; }
-        return { delimiter: delim, regex: regex };
-      }).filter(r => r.delimiter || r.regex);
-
-      if (newRules.length) tagRules.value = newRules;
-      showPasteModal.value = false;
-      pasteData.value = '';
-    }
-
-    const combinedRegexDisplay = computed(() => tagRules.value.map(r => (r.delimiter ? `[${r.delimiter}]` : '') + `(${r.regex.replace(/^\^|\$/g, '')})`).join(''));
-    const addRule = () => tagRules.value.push({ delimiter: '', regex: '' });
-    const removeRule = (i) => tagRules.value.splice(i, 1);
-
-    return { tagNoForValidator, tagRules, tagParts, isTagNoValid, combinedRegexDisplay, addRule, removeRule, showPasteModal, pasteData, applyPasteData };
+// *** 데이터 (하드코딩) ***  // 임시로 잠시 사용
+const rowData = ref([
+  {
+    errorCode: "Save or Publish :Wrong ProjectNo",
+    origin: "Register의 생성 및 저장 시점이 오래되어서 Register의 스키마나 System Atribute 강제로 Edit 및 Save&Pub 셋팅이 현재 구조와 맞지 않아서 발생",
+    solution: "Wrong ProjectNo 발생하는 Register의 Attribute Map에서 Save 후 다시 진행",
+  },
+  {
+    errorCode: "Publish : '(Tag No)' : Duplicated",
+    origin: "생성 할려고 하는 Tag가 이미 DB에 생성되어 있음",
+    solution: "다른 Tag No부여 하거나 중복 생성된 Tag를 Restore 해서 Tag No 변경하여 유니크 하게 Tag No 지정",
+  },
+  {
+    errorCode: "Publish : '(Value)' is invalid (Regex)",
+    origin: "해당 Value가 Master Attribute에 정의한 Value와 다를 때 발생",
+    solution: "Value가 발생한 Attribute를 맞는 값으로 수정 하고 Publish 진행 ",
+  },
+  {
+    errorCode: "Publish : '(Code List Value)' is not in Code List values",
+    origin: "Code List의 Value가 아닌 경우 발생",
+    solution: "Value를 Code List의 Value로 변경 후 Save or Publish 진행 ",
+  },
+  {
+    errorCode: "Attribute value : '(Tag No or Item No)' RegisterInvalid",
+    origin: "Register의 구성 필수 Attribute가 누락",
+    solution: "Tag Type에 구성되어 있는 Attribute 포함 하여 Register 구성",
+  },
+  {
+    errorCode: "Object Class : '(ObjectClass Name)' has child Object Classes",
+    origin: "하위에 Object Class가 있어서 삭제 불가",
+    solution: "하위 Object Class 삭제 후 삭제 ",
+  },
+  {
+    errorCode: "Publish : RIG_TAG_IDX is invalid",
+    origin: "Relation 저장할 때 Right Tag IDX가 Data 저장되어 있지 않아서 발생",
+    solution: "Data 저장 후 실행 할 것",
+  },
+  {
+    errorCode: "Publish : '(Tag No or Item No)' NotMatched",
+    origin: "Tag Type에 정의된 Attribute의 입력 값들이 Tag와 맞지 않아서 발생",
+    solution: "AutoTag 사용하여 Tag No를 맞추서 Publish 진행",
+  },
+  {
+    errorCode: "Publish : Command update failed: Caused by :: Write conflict during plan execution and yielding is disabled. :: Please retry your operation or multi-document transaction..",
+    origin: "백앤드 몽고DB에 잘못된 요청으로 재 요청 할 때 발생, MongoDB 고유의 Error ",
+    solution: "잘못된 부분 수정 후 올바르게 Publish 요청할 것(단 1~2분 후에 시도) ",
   }
-}
+
+  // --- 필요한 만큼 오류 코드를 추가하세요 ---
+  // {
+  //     errorCode: "예시 오류",
+  //     origin: "발생 원인 예시",
+  //     solution: "해결 방법 예시 설명...",
+  // },
+]);
+
+
+// 다른 Vue용 테이블 라이브러리(예: Vue-Good-Table, Element Plus Table 등)를 사용하는 것이 좋습니다.
+
 </script>
 
 <style scoped>
-/* 이전 스타일 유지 (좌우 2분할 레이아웃) */
-#app { font-family: 'Segoe UI', sans-serif; background-color: #f4f7fa; height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-.header { padding: 15px 25px; background: white; border-bottom: 2px solid #1a73e8; }
-.page-main-title { margin: 0; font-size: 1.25rem; color: #333; }
-.main-container { display: flex; flex: 1; padding: 15px; gap: 15px; overflow: hidden; }
-.side-panel { display: flex; flex-direction: column; height: 100%; }
-.left-panel { flex: 4; min-width: 400px; }
-.right-panel { flex: 5; min-width: 500px; }
-.panel-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); display: flex; flex-direction: column; height: calc(100% - 40px); }
-.card-title { margin: 0 0 15px 0; font-size: 1rem; color: #1a73e8; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-.input-group input { width: 100%; padding: 12px; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 1.1rem; box-sizing: border-box; font-family: monospace; }
-.rules-header { display: flex; justify-content: space-between; align-items: center; margin-top: 15px; margin-bottom: 10px; }
-.scroll-area { flex: 1; overflow-y: auto; border: 1px solid #edf2f7; border-radius: 8px; }
-.data-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
-.data-table th { background: #f8fafc; padding: 10px; font-size: 0.75rem; position: sticky; top: 0; border-bottom: 1px solid #eee; }
-.data-table td { padding: 8px; border-bottom: 1px solid #f7fafc; }
-.cell-input { width: 100%; border: 1px solid #cbd5e0; padding: 6px; border-radius: 4px; box-sizing: border-box; font-family: monospace; }
-.status-banner { display: flex; align-items: center; padding: 15px; border-radius: 10px; margin-bottom: 15px; }
-.status-pass { background: #f0fff4; border: 1px solid #38a169; color: #22543d; }
-.status-fail { background: #fff5f5; border: 1px solid #e53e3e; color: #742a2a; }
-.status-icon { font-size: 1.8rem; margin-right: 15px; }
-.full-regex { font-size: 0.7rem; font-family: monospace; opacity: 0.7; word-break: break-all; }
-.badge { padding: 4px 10px; border-radius: 20px; font-size: 0.7rem; font-weight: bold; }
-.badge-ok { background: #38a169; color: white; }
-.badge-err { background: #e53e3e; color: white; }
-.text-ok { color: #38a169; font-weight: bold; text-align: center; }
-.text-error { color: #e53e3e; font-weight: bold; text-align: center; }
-.btn-small { padding: 5px 12px; border-radius: 6px; border: none; cursor: pointer; font-size: 0.75rem; font-weight: bold; }
-.btn-success { background: #38a169; color: white; }
-.btn-info { background: #3182ce; color: white; }
-.btn-delete { background: none; border: none; color: #e53e3e; font-size: 1.2rem; cursor: pointer; }
-.error-msg-box { margin-top: 15px; padding: 12px; background: #fffaf0; border-left: 4px solid #ed8936; font-size: 0.85rem; }
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 100; }
-.modal-content { background: white; padding: 25px; border-radius: 12px; width: 500px; }
-.modal-content textarea { width: 100%; margin: 15px 0; font-family: monospace; padding: 10px; border-radius: 6px; border: 1px solid #ddd; box-sizing: border-box; }
-.modal-btns { display: flex; justify-content: flex-end; gap: 10px; }
-.font-code { font-family: monospace; font-size: 0.8rem; color: #718096; }
-.font-bold { font-weight: bold; color: #2d3748; }
-.text-center { text-align: center; }
+/* 컴포넌트 전체 스타일 */
+.error-code-page-hardcoded {
+  padding: 20px;
+  font-family: 'Arial', sans-serif; /* 심플한 폰트 */
+  color: #333;
+  background-color: #f8f8f8; /* 은은한 배경색 */
+  border-radius: 8px; /* 모서리 둥글게 */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* 은은한 그림자 */
+}
+
+.error-code-page-hardcoded h2 {
+  margin-top: 0;
+  margin-bottom: 25px;
+  text-align: center;
+  color: #2c3e50; /* 조금 더 진한 제목 색 */
+  font-size: 1.8em;
+}
+
+/* 테이블 컨테이너 (테이블 너비 제어 및 스크롤) */
+.table-container {
+  width: 100%;
+  overflow-x: auto; /* 테이블 내용이 넘치면 가로 스크롤 */
+}
+
+/* 테이블 기본 스타일 */
+.error-code-table {
+  width: 100%; /* 컨테이너 너비에 맞춤 */
+  border-collapse: collapse; /* 셀 간 경계선 겹치게 */
+  margin-bottom: 20px;
+  background-color: #fff; /* 테이블 배경색 흰색 */
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05); /* 테이블에도 은은한 그림자 */
+}
+
+/* 테이블 헤더 스타일 */
+.error-code-table thead th {
+  background-color: #e9ecef; /* 헤더 배경색 */
+  color: #495057; /* 헤더 글자색 */
+  font-weight: bold;
+  padding: 12px 15px;
+  text-align: left; /* 왼쪽 정렬 */
+  border-bottom: 2px solid #dee2e6; /* 헤더 아래 두꺼운 선 */
+}
+
+/* 테이블 본문 행 스타일 */
+.error-code-table tbody tr {
+  border-bottom: 1px solid #dee2e6; /* 본문 행 아래 얇은 선 */
+}
+
+/* 마우스 오버 시 행 배경색 변경 */
+.error-code-table tbody tr:hover {
+  background-color: #f2f2f2; /* 호버 시 배경색 */
+}
+
+/* 테이블 셀 스타일 */
+.error-code-table tbody td {
+  padding: 12px 15px;
+  vertical-align: top; /* 셀 내용이 위에서부터 시작되게 */
+  /* 필요시 특정 컬럼 너비 지정 (선택 사항) */
+  /*  width: 150px; /* Error Code 컬럼 너비 예시 */
+  &:nth-child(1) { width: 400px; }  /* 첫 번째 td (Error Code) */
+  &:nth-child(2) { width: 500px; } /* 두 번째 td (원인) */
+  &:nth-child(3) { flex: 1; }  /* HTML 테이블 td에는 flex 적용 안됨, CSS 그리드나 다른 레이아웃 필요 */
+   /* 넓이 조절은 width 속성으로 비율 또는 픽셀 지정 */
+}
+
+/* 해결방법 컬럼 내용 줄 바꿈 */
+.error-code-table tbody td:nth-child(3) {
+  white-space: pre-wrap; /* 공백 및 줄 바꿈 유지하면서 자동 줄 바꿈 */
+  word-break: break-word; /* 긴 단어 줄 바꿈 */
+}
+
+/* 데이터가 없을 때 표시되는 행 스타일 */
+.error-code-table tbody tr.no-data td {
+  text-align: center;
+  font-style: italic;
+  color: #666;
+}
 </style>
