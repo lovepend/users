@@ -1,21 +1,21 @@
 <template>
-  <div class="app-wrapper">
-    <header class="fixed-top-bar">
-      <div class="header-inner">
-        <h2 class="main-title">에러 코드</h2>
-        <div class="global-search-wrapper">
+  <div class="main-container">
+    <div class="header-section">
+      <div class="top-row">
+        <h2 class="title">에러 코드</h2>
+        <div class="search-box">
           <input 
             type="text" 
             v-model="globalSearch" 
-            placeholder="전체 컬럼 내용 검색..." 
-            class="global-search-input"
+            placeholder="전체 검색어 입력..." 
+            class="global-input"
           />
         </div>
       </div>
-    </header>
+    </div>
 
-    <div class="scroll-body">
-      <div class="table-card">
+    <div class="table-outer-wrapper">
+      <div class="table-inner-scroll">
         <table class="error-table">
           <colgroup>
             <col style="width: 60px;">
@@ -27,42 +27,29 @@
           </colgroup>
           <thead>
             <tr>
-              <th v-for="col in columns" :key="col" class="sticky-header">
+              <th v-for="col in columns" :key="col" class="fixed-th">
                 <div class="th-content">
-                  <span class="label">{{ col }}</span>
+                  <span class="col-name">{{ col }}</span>
                   
                   <div v-if="col === '기능'" class="filter-group">
-                    <input 
-                      type="text" 
-                      v-model="columnFilters[col]" 
-                      class="filter-input"
-                      placeholder="필터"
-                    />
-                    <div class="dropdown-container">
-                      <button @click.stop="toggleFuncList" class="combo-btn">▼</button>
-                      <ul v-if="showFuncList" class="combo-list">
+                    <input type="text" v-model="columnFilters[col]" class="filter-input" placeholder="필터" />
+                    <div class="combo-wrapper" @click.stop>
+                      <button @click="toggleFuncList" class="combo-btn">▼</button>
+                      <ul v-if="showFuncList" class="combo-menu">
                         <li @click="selectFunc('')">전체보기</li>
-                        <li v-for="item in uniqueFuncs" :key="item" @click="selectFunc(item)">
-                          {{ item }}
-                        </li>
+                        <li v-for="item in uniqueFuncs" :key="item" @click="selectFunc(item)">{{ item }}</li>
                       </ul>
                     </div>
                   </div>
 
-                  <input 
-                    v-else
-                    type="text" 
-                    v-model="columnFilters[col]" 
-                    class="filter-input"
-                    placeholder="필터"
-                  />
+                  <input v-else type="text" v-model="columnFilters[col]" class="filter-input" placeholder="필터" />
                 </div>
               </th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="filteredData.length === 0">
-              <td :colspan="columns.length" class="empty-msg">데이터를 찾을 수 없습니다.</td>
+              <td :colspan="columns.length" class="no-result">데이터가 없습니다.</td>
             </tr>
             <tr v-for="(row, idx) in filteredData" :key="idx">
               <td v-for="col in columns" :key="col" :class="['data-cell', `col-${col}`]">
@@ -79,223 +66,153 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue';
 import * as XLSX from 'xlsx';
-
-// src/assets/Errorcode.xlsx 파일을 읽어옵니다.
 import excelFileUrl from '@/assets/Errorcode.xlsx?url';
 
-// --- 상태 관리 ---
 const rawData = ref([]);
 const columns = ['No', '기능', 'Code', 'Message', '원인', '해결방법'];
 const globalSearch = ref('');
 const columnFilters = ref({ No: '', 기능: '', Code: '', Message: '', 원인: '', 해결방법: '' });
-
 const showFuncList = ref(false);
 const uniqueFuncs = ref([]);
 
-// --- 엑셀 데이터 로드 ---
 const loadExcelData = async () => {
   try {
-    const response = await fetch(excelFileUrl);
-    const arrayBuffer = await response.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-    
-    rawData.value = jsonData;
-
-    // '기능' 컬럼에서 중복 제거된 목록 추출
-    const funcs = [...new Set(jsonData.map(item => item['기능']))].filter(Boolean);
-    uniqueFuncs.value = funcs.sort();
-  } catch (error) {
-    console.error('엑셀 로드 에러:', error);
-  }
+    const res = await fetch(excelFileUrl);
+    const buf = await res.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    rawData.value = data;
+    uniqueFuncs.value = [...new Set(data.map(item => item['기능']))].filter(Boolean).sort();
+  } catch (err) { console.error(err); }
 };
 
-// --- 기능 필터 콤보박스 로직 ---
-const toggleFuncList = () => {
-  showFuncList.value = !showFuncList.value;
-};
-
+const toggleFuncList = () => (showFuncList.value = !showFuncList.value);
 const selectFunc = (val) => {
   columnFilters.value['기능'] = val;
   showFuncList.value = false;
 };
+const closeDropdown = () => (showFuncList.value = false);
 
-const closeDropdown = () => {
-  showFuncList.value = false;
-};
-
-// --- 필터링 로직 ---
-const filteredData = computed(() => {
-  return rawData.value.filter(row => {
-    // 컬럼별 필터
-    const isColumnMatch = columns.every(col => {
-      const fv = columnFilters.value[col]?.toLowerCase().trim();
-      return !fv || String(row[col] || '').toLowerCase().includes(fv);
-    });
-    // 전체 검색
-    const sk = globalSearch.value.toLowerCase().trim();
-    const isGlobalMatch = !sk || columns.some(col => 
-      String(row[col] || '').toLowerCase().includes(sk)
-    );
-    return isColumnMatch && isGlobalMatch;
-  });
-});
-
-// --- 검색어 하이라이트 ---
-const highlightText = (text) => {
-  const strText = String(text || '');
-  const keyword = globalSearch.value.trim();
-  if (!keyword) return strText;
-  const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  return strText.replace(regex, '<mark class="hl">$1</mark>');
-};
-
-// --- 생명주기 ---
 onMounted(() => {
   loadExcelData();
   window.addEventListener('click', closeDropdown);
 });
+onUnmounted(() => window.removeEventListener('click', closeDropdown));
 
-onUnmounted(() => {
-  window.removeEventListener('click', closeDropdown);
+const filteredData = computed(() => {
+  return rawData.value.filter(row => {
+    const colMatch = columns.every(c => !columnFilters.value[c] || String(row[c]||'').toLowerCase().includes(columnFilters.value[c].toLowerCase()));
+    const gMatch = !globalSearch.value || columns.some(c => String(row[c]||'').toLowerCase().includes(globalSearch.value.toLowerCase()));
+    return colMatch && gMatch;
+  });
 });
+
+const highlightText = (t) => {
+  const s = String(t || '');
+  const k = globalSearch.value.trim();
+  if (!k) return s;
+  const re = new RegExp(`(${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return s.replace(re, '<mark class="hl">$1</mark>');
+};
 </script>
 
 <style scoped>
-/* 전체 레이아웃 */
-.app-wrapper {
+/* 1. 전체 화면을 꽉 채우고 스크롤을 막음 */
+.main-container {
   display: flex;
   flex-direction: column;
   height: 100vh;
-  background-color: #f1f3f5;
-  overflow: hidden; /* 브라우저 전체 스크롤 방지 */
+  background-color: #f5f7fa;
+  overflow: hidden; 
 }
 
-/* 상단 고정 바 */
-.fixed-top-bar {
+/* 2. 상단 섹션 (고정) */
+.header-section {
   flex: 0 0 auto;
-  background: #ffffff;
-  padding: 15px 30px;
-  border-bottom: 1px solid #dee2e6;
-  z-index: 1000;
+  background: white;
+  padding: 20px 40px;
+  border-bottom: 1px solid #e1e4e8;
 }
-.header-inner {
+.top-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   max-width: 1600px;
   margin: 0 auto;
 }
-.main-title { font-size: 20px; font-weight: 800; color: #333; margin: 0; }
-.global-search-input {
-  width: 350px;
-  padding: 8px 15px;
-  border: 2px solid #e9ecef;
-  border-radius: 6px;
+.title { font-size: 24px; font-weight: 800; color: #1a1f23; margin: 0; }
+.global-input {
+  width: 400px;
+  padding: 10px 16px;
+  border: 2px solid #edf2f7;
+  border-radius: 8px;
   outline: none;
 }
-.global-search-input:focus { border-color: #3498db; }
 
-/* 본문 스크롤 영역 */
-.scroll-body {
-  flex: 1;
-  overflow-y: auto; /* 테이블 본문만 스크롤 */
-  padding: 20px;
+/* 3. 테이블 영역 (여기가 핵심 스크롤 박스) */
+.table-outer-wrapper {
+  flex: 1; /* 남은 화면 전체 차지 */
+  padding: 20px 40px;
+  overflow: hidden; /* 외부 스크롤 방지 */
 }
 
-.table-card {
-  background: #ffffff;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-  min-width: 1200px;
+.table-inner-scroll {
+  height: 100%;
+  overflow-y: auto; /* 본문 스크롤 발생 */
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+  position: relative;
 }
 
 .error-table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+  table-layout: fixed;
 }
 
-/* 틀고정 헤더 핵심 */
-.sticky-header {
+/* 4. 헤더 틀고정 및 가림막 설정 */
+.fixed-th {
   position: sticky;
-  top: 0; /* 스크롤 본문 상단에 고정 */
-  background-color: #ffffff; /* 아래 데이터가 보이지 않도록 흰색 배경 */
-  z-index: 500; /* 데이터 로우보다 높게 */
-  padding: 12px 10px;
-  border-bottom: 2px solid #3498db;
-  box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1); /* 고정 시 구분선 */
-}
-
-.th-content { display: flex; flex-direction: column; gap: 8px; }
-.label { font-size: 12px; font-weight: 700; color: #495057; text-align: left; }
-
-.filter-group { display: flex; gap: 4px; position: relative; }
-.filter-input {
-  padding: 4px 8px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  font-size: 11px;
-  width: 100%;
-}
-
-/* 콤보박스 디자인 */
-.dropdown-container { position: relative; }
-.combo-btn {
-  height: 100%;
-  padding: 0 6px;
-  background: #f8f9fa;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 10px;
-}
-.combo-list {
-  position: absolute;
-  top: calc(100% + 5px);
-  right: 0;
-  background: white;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  box-shadow: 0 8px 16px rgba(0,0,0,0.1);
-  min-width: 160px;
-  max-height: 250px;
-  overflow-y: auto;
-  z-index: 2000;
-  list-style: none;
-  padding: 5px 0;
-  margin: 0;
-}
-.combo-list li {
-  padding: 10px 15px;
-  font-size: 13px;
-  cursor: pointer;
-  text-align: left;
-}
-.combo-list li:hover { background-color: #3498db; color: white; }
-
-/* 데이터 셀 */
-.data-cell {
+  top: 0; /* 스크롤 박스 최상단에 고정 */
+  z-index: 100; /* 데이터보다 위 */
+  background-color: white !important; /* 아래 데이터 가림막 역할 */
   padding: 15px 10px;
-  border-bottom: 1px solid #f1f3f5;
-  font-size: 13.5px;
-  line-height: 1.5;
+  border-bottom: 2px solid #3498db;
+}
+
+/* 5. 디자인 디테일 */
+.th-content { display: flex; flex-direction: column; gap: 8px; }
+.col-name { font-size: 13px; font-weight: 700; color: #4b5563; }
+.filter-input { padding: 6px; border: 1px solid #d1d5db; border-radius: 4px; font-size: 12px; width: 100%; }
+
+.filter-group { display: flex; gap: 4px; }
+.combo-btn { padding: 0 6px; background: #f3f4f6; border: 1px solid #d1d5db; border-radius: 4px; cursor: pointer; }
+.combo-menu {
+  position: absolute;
+  top: calc(100% - 10px);
+  right: 10px;
+  background: white;
+  border: 1px solid #e5e7eb;
+  box-shadow: 0 10px 15px rgba(0,0,0,0.1);
+  min-width: 160px;
+  z-index: 200;
+  list-style: none; padding: 5px 0; margin: 0;
+}
+.combo-menu li { padding: 10px 15px; font-size: 13px; cursor: pointer; }
+.combo-menu li:hover { background: #3498db; color: white; }
+
+.data-cell {
+  padding: 16px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  font-size: 14px;
   vertical-align: top;
   word-break: break-all;
-  background-color: #ffffff;
 }
 .col-No, .col-기능, .col-Code { text-align: center; }
-.col-No { color: #3498db; font-weight: bold; }
+.col-No { color: #3498db; font-weight: 700; }
 
-/* 호버 및 하이라이트 */
-tbody tr:hover td { background-color: #f8faff; }
-:deep(.hl) {
-  background-color: #fff3bf;
-  color: #e67e22;
-  font-weight: bold;
-  padding: 0 2px;
-  border-radius: 2px;
-}
-
-.empty-msg { padding: 50px; text-align: center; color: #999; }
+tbody tr:hover { background-color: #f9fafb; }
+:deep(.hl) { background-color: #fef3c7; color: #d97706; font-weight: 700; padding: 0 2px; }
 </style>
