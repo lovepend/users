@@ -1,47 +1,58 @@
 <template>
-  <div class="error-code-container">
-    <h2 class="title">에러 코드</h2>
-    
-    <div class="search-bar">
-      <input 
-        type="text" 
-        v-model="globalSearch" 
-        placeholder="검색어를 입력하세요 (전체 컬럼 대상)..." 
-        class="global-search-input"
-      />
-    </div>
+  <div class="app-container">
+    <header class="sticky-top">
+      <div class="header-content">
+        <h2 class="title">
+          <span class="icon">🔍</span> 에러 코드 마스터
+        </h2>
+        <div class="search-bar">
+          <input 
+            type="text" 
+            v-model="globalSearch" 
+            placeholder="찾으시는 에러 메시지나 원인을 입력하세요..." 
+            class="global-search-input"
+          />
+        </div>
+      </div>
+    </header>
 
-    <div class="table-wrapper">
-      <table>
-        <colgroup>
-          <col style="width: 55px;">  <col style="width: 100px;"> <col style="width: 130px;"> <col style="width: 23%;">   <col style="width: 23%;">   <col style="width: 23%;">   </colgroup>
-        <thead>
-          <tr>
-            <th v-for="col in columns" :key="col">
-              <div class="th-content">
-                <span class="col-label">{{ col }}</span>
-                <input 
-                  type="text" 
-                  v-model="columnFilters[col]" 
-                  class="column-filter-input"
-                  placeholder="필터"
-                />
-              </div>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="filteredData.length === 0">
-            <td :colspan="columns.length" class="no-data">데이터가 없습니다.</td>
-          </tr>
-          <tr v-for="(row, index) in filteredData" :key="index">
-            <td v-for="col in columns" :key="col" :class="`col-${col}`">
-              <div v-html="highlightText(row[col])"></div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <main class="content-area">
+      <div class="table-card">
+        <table>
+          <colgroup>
+            <col style="width: 60px;">  <col style="width: 100px;"> <col style="width: 140px;"> <col style="width: 23%;">   <col style="width: 23%;">   <col style="width: 23%;">   </colgroup>
+          
+          <thead>
+            <tr>
+              <th v-for="col in columns" :key="col" class="sticky-th">
+                <div class="th-content">
+                  <span class="col-label">{{ col }}</span>
+                  <input 
+                    type="text" 
+                    v-model="columnFilters[col]" 
+                    class="column-filter-input"
+                    :placeholder="col + ' 필터'"
+                  />
+                </div>
+              </th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr v-if="filteredData.length === 0">
+              <td :colspan="columns.length" class="no-data">
+                검색 결과가 없습니다. 다시 확인해 주세요.
+              </td>
+            </tr>
+            <tr v-for="(row, index) in filteredData" :key="index">
+              <td v-for="col in columns" :key="col" :class="['cell', `col-${col}`]">
+                <div v-html="highlightText(row[col])"></div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
   </div>
 </template>
 
@@ -51,39 +62,27 @@ import * as XLSX from 'xlsx';
 import excelFileUrl from '@/assets/Errorcode.xlsx?url';
 
 const rawData = ref([]);
-
-// 컬럼 순서 정의: No -> 기능 -> Code -> Message -> 원인 -> 해결방법
 const columns = ref(['No', '기능', 'Code', 'Message', '원인', '해결방법']);
-
 const globalSearch = ref('');
-const columnFilters = ref({
-  No: '', 기능: '', Code: '', Message: '', 원인: '', 해결방법: ''
-});
+const columnFilters = ref({ No: '', 기능: '', Code: '', Message: '', 원인: '', 해결방법: '' });
 
 const loadExcelData = async () => {
   try {
     const response = await fetch(excelFileUrl);
     const arrayBuffer = await response.arrayBuffer();
     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-    rawData.value = jsonData;
-  } catch (error) {
-    console.error('엑셀 로드 실패:', error);
-  }
+    rawData.value = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
+  } catch (error) { console.error('Data Load Error:', error); }
 };
 
 const filteredData = computed(() => {
   return rawData.value.filter(row => {
-    // 1. 개별 필터
     const isColumnMatch = columns.value.every(col => {
       const fv = columnFilters.value[col]?.toLowerCase().trim();
       return !fv || String(row[col] || '').toLowerCase().includes(fv);
     });
-    // 2. 전체 검색
     const sk = globalSearch.value.toLowerCase().trim();
-    const isGlobalMatch = !sk || columns.value.some(col => 
-      String(row[col] || '').toLowerCase().includes(sk)
-    );
+    const isGlobalMatch = !sk || columns.value.some(col => String(row[col] || '').toLowerCase().includes(sk));
     return isColumnMatch && isGlobalMatch;
   });
 });
@@ -100,96 +99,150 @@ onMounted(loadExcelData);
 </script>
 
 <style scoped>
-.error-code-container {
-  padding: 30px;
+/* 전체 레이아웃 */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* 전체 화면 높이 사용 */
+  background-color: #f4f7f9; /* 연한 블루그레이 배경 */
+  font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+/* 상단 고정 헤더 */
+.sticky-top {
   background-color: #ffffff;
-  min-height: 100vh;
-  font-family: sans-serif;
+  padding: 20px 40px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  z-index: 100;
+}
+
+.header-content {
+  max-width: 1600px;
+  margin: 0 auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .title {
-  font-size: 24px;
-  font-weight: bold;
-  margin-bottom: 25px;
-  color: #111;
+  font-size: 22px;
+  font-weight: 800;
+  color: #2c3e50;
+  margin: 0;
 }
 
-.search-bar {
-  margin-bottom: 20px;
-}
+.title .icon { margin-right: 10px; }
+
+.search-bar { flex: 0 0 400px; }
 
 .global-search-input {
   width: 100%;
-  max-width: 450px;
-  padding: 10px 15px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
+  padding: 12px 20px;
+  border: 2px solid #eef2f6;
+  border-radius: 12px;
+  background-color: #f8fafc;
+  transition: all 0.3s;
 }
 
-.table-wrapper {
-  border: 1px solid #eee;
-  border-radius: 8px;
-  overflow: hidden;
+.global-search-input:focus {
+  outline: none;
+  border-color: #3498db;
+  background-color: #fff;
+  box-shadow: 0 0 15px rgba(52, 152, 219, 0.1);
+}
+
+/* 메인 콘텐츠 영역 (스크롤 발생) */
+.content-area {
+  flex: 1;
+  overflow-y: auto; /* 내용이 많으면 여기서 스크롤 발생 */
+  padding: 30px 40px;
+}
+
+.table-card {
+  max-width: 1600px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.03);
+  overflow: hidden; /* 테두리 곡선 유지 */
 }
 
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   table-layout: fixed;
 }
 
-th {
-  background-color: #f8f9fa;
-  border-bottom: 2px solid #eee;
-  padding: 12px 8px;
-}
-
-td {
-  padding: 12px 8px;
-  border-bottom: 1px solid #f2f2f2;
-  font-size: 13px;
-  line-height: 1.5;
-  word-break: break-all;
-  vertical-align: top;
+/* 테이블 헤더 고정 (틀고정) */
+.sticky-th {
+  position: sticky;
+  top: 0;
+  background-color: #fcfdfe;
+  z-index: 10;
+  border-bottom: 2px solid #edf2f7;
+  padding: 15px 12px;
 }
 
 .th-content {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .col-label {
-  font-weight: bold;
   font-size: 12px;
-  color: #555;
+  color: #7f8c8d;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
 }
 
 .column-filter-input {
-  padding: 4px 6px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  padding: 6px 10px;
   font-size: 11px;
 }
 
-/* 정렬 스타일 */
-.col-No, .col-기능, .col-Code {
-  text-align: center;
+/* 셀 디자인 */
+.cell {
+  padding: 18px 12px;
+  border-bottom: 1px solid #f1f4f8;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #34495e;
+  vertical-align: top;
+  word-break: break-all;
 }
 
-.no-data {
-  text-align: center;
-  padding: 40px;
-  color: #999;
+/* 열 포인트 스타일 */
+.col-No { 
+  text-align: center; 
+  background-color: #f9fbff; 
+  font-weight: 600; 
+  color: #3498db;
 }
+.col-기능, .col-Code { text-align: center; }
 
-tbody tr:hover {
-  background-color: #fcfcfc;
-}
-
+/* 하이라이트 */
 :deep(mark.highlight) {
-  background-color: #fff3bf;
-  color: #e67e22;
-  font-weight: bold;
+  background-color: rgba(52, 152, 219, 0.15);
+  color: #2980b9;
+  padding: 0 4px;
+  border-radius: 4px;
+  font-weight: 700;
 }
+
+/* 호버 효과 */
+tbody tr:hover td {
+  background-color: #f8faff;
+  transition: background-color 0.2s;
+}
+
+/* 스크롤바 커스텀 */
+.content-area::-webkit-scrollbar { width: 8px; }
+.content-area::-webkit-scrollbar-track { background: #f1f1f1; }
+.content-area::-webkit-scrollbar-thumb { background: #cbd5e0; border-radius: 4px; }
+.content-area::-webkit-scrollbar-thumb:hover { background: #a0aec0; }
 </style>
