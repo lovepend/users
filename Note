@@ -1,6 +1,261 @@
-  10 |      text-align: center;
-  11 |      border-bottom: 3px solid #007bff;
-  12 |      padding-bottom: 15px; [cite: 95]
-     |                             ^
-  13 |    }
-  14 |
+<template>
+  <div id="app">
+    <h2 class="page-main-title">🔍 태그 통합 데이터 검색 (Pub + Wrk)</h2>
+
+    <div class="main-content-wrapper">
+      <div class="panel full-panel">
+        <h3 class="panel-title">키워드 기반 데이터 매칭 조회</h3>
+
+        <div class="search-controls">
+          <div class="input-group-container">
+            <div class="input-item">
+              <label for="projectNo">Project No</label>
+              <input id="projectNo" v-model="projectNo" type="text" placeholder="TE1002" class="custom-input" />
+            </div>
+            <div class="input-item">
+              <label for="keyword">Keyword</label>
+              <input 
+                id="keyword" 
+                v-model="keyword" 
+                type="text" 
+                placeholder="태그 번호 입력 (예: 6802)" 
+                class="custom-input"
+                @keyup.enter="fetchAndMergeData"
+              />
+            </div>
+            <button @click="fetchAndMergeData" :disabled="isLoading" class="search-btn">
+              <span v-if="isLoading">🌀 조회 중...</span>
+              <span v-else>통합 검색</span>
+            </button>
+          </div>
+        </div>
+
+        <div v-if="errorMessage" class="message error-message">
+          ⚠️ {{ errorMessage }}
+        </div>
+
+        <div class="table-container" v-if="mergedList.length > 0">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th rowspan="2">Tag Index</th>
+                <th rowspan="2">Tag No</th>
+                <th colspan="4" class="pub-header">Published Data (Master)</th>
+                <th colspan="4" class="wrk-header">Working Data (Current)</th>
+              </tr>
+              <tr>
+                <th class="pub-bg">EP_ID / IC</th>
+                <th class="pub-bg">CLS_ID</th>
+                <th class="pub-bg">TypeID</th>
+                <th class="pub-bg">Deleted</th>
+                <th class="wrk-bg">EP_ID / IC</th>
+                <th class="wrk-bg">CLS_ID</th>
+                <th class="wrk-bg">DelYN</th>
+                <th class="wrk-bg">Deleted</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in mergedList" :key="item.TagIdx">
+                <td class="idx-cell">{{ item.TagIdx }}</td>
+                <td class="tag-no-cell">{{ item.TagNo }}</td>
+                
+                <td class="pub-bg">{{ item.pub?.EpId || '-' }} / {{ item.pub?.EpIc || '-' }}</td>
+                <td class="pub-bg">{{ item.pub?.ClsId || '-' }}</td>
+                <td class="pub-bg">{{ item.pub?.TagTypeId || '-' }}</td>
+                <td class="pub-bg">
+                  <span v-if="item.pub" :class="item.pub.Deleted ? 'status-red' : 'status-green'">
+                    {{ item.pub.Deleted ? 'YES' : 'NO' }}
+                  </span>
+                  <span v-else>-</span>
+                </td>
+
+                <td class="wrk-bg">{{ item.wrk?.EpId || '-' }} / {{ item.wrk?.EpIc || '-' }}</td>
+                <td class="wrk-bg">{{ item.wrk?.ClsId || '-' }}</td>
+                <td class="wrk-bg">
+                  <span v-if="item.wrk" :class="item.wrk.DelYn ? 'status-red' : 'status-green'">
+                    {{ item.wrk.DelYn ? 'YES' : 'NO' }}
+                  </span>
+                  <span v-else>-</span>
+                </td>
+                <td class="wrk-bg">
+                  <span v-if="item.wrk" :class="item.wrk.Deleted ? 'status-red' : 'status-green'">
+                    {{ item.wrk.Deleted ? 'YES' : 'NO' }}
+                  </span>
+                  <span v-else>-</span>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        
+        <div v-else-if="searched && !isLoading" class="message no-results-message">
+          검색된 데이터가 없습니다. (키워드: {{ keyword }})
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { ref } from 'vue';
+import { axiosWrapper } from '@/utils/axios/axios-wrapper';
+
+export default {
+  name: 'TagIntegratedSearch',
+  setup() {
+    const projectNo = ref('TE1002');
+    const keyword = ref('');
+    const mergedList = ref([]);
+    const isLoading = ref(false);
+    const errorMessage = ref('');
+    const searched = ref(false);
+
+    const fetchAndMergeData = async () => {
+      if (!keyword.value.trim()) {
+        alert("검색어를 입력해 주세요.");
+        return;
+      }
+
+      isLoading.value = true;
+      errorMessage.value = '';
+      mergedList.value = [];
+      searched.value = true;
+
+      try {
+        const payload = {
+          ProjectNo: projectNo.value,
+          Keyword: keyword.value
+        };
+
+        // 1. API 호출 (구조 분해 할당 시 .data 확인 필요)
+        // axiosWrapper의 구현에 따라 res.data를 바로 반환하는지 확인하세요.
+        const [pubResponse, wrkResponse] = await Promise.all([
+          axiosWrapper.post('/api/Admin/Tool/GetPublishedData', payload),
+          axiosWrapper.post('/api/Admin/Tool/GetWorkingData', payload)
+        ]);
+
+        // axiosWrapper가 응답 객체 전체를 줄 경우를 대비해 처리
+        const pubDataRaw = pubResponse?.data || pubResponse;
+        const wrkDataRaw = wrkResponse?.data || wrkResponse;
+
+        // 2. 데이터 병합 (Map 활용)
+        const dataMap = new Map();
+
+        if (Array.isArray(pubDataRaw)) {
+          pubDataRaw.forEach(item => {
+            dataMap.set(item.TagIdx, {
+              TagIdx: item.TagIdx,
+              TagNo: item.TagNo,
+              pub: item,
+              wrk: null
+            });
+          });
+        }
+
+        if (Array.isArray(wrkDataRaw)) {
+          wrkDataRaw.forEach(item => {
+            if (dataMap.has(item.TagIdx)) {
+              dataMap.get(item.TagIdx).wrk = item;
+            } else {
+              dataMap.set(item.TagIdx, {
+                TagIdx: item.TagIdx,
+                TagNo: item.TagNo,
+                pub: null,
+                wrk: item
+              });
+            }
+          });
+        }
+
+        mergedList.value = Array.from(dataMap.values());
+
+      } catch (error) {
+        console.error("Fetch Error:", error);
+        errorMessage.value = error.response?.data?.Message || "데이터를 불러오는 중 서버 에러가 발생했습니다.";
+      } finally {
+        isLoading.value = false;
+      }
+    };
+
+    return {
+      projectNo,
+      keyword,
+      mergedList,
+      isLoading,
+      errorMessage,
+      searched,
+      fetchAndMergeData
+    };
+  }
+};
+</script>
+
+<style scoped>
+#app { padding: 20px; background-color: #f4f7f9; min-height: 100vh; }
+.page-main-title { text-align: center; color: #2c3e50; margin-bottom: 30px; }
+
+.panel {
+  background: white; border-radius: 12px; padding: 30px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+}
+
+.search-controls {
+  margin-bottom: 40px;
+  padding: 20px;
+  background: #f8f9fa;
+  border-radius: 10px;
+}
+
+.input-group-container {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+}
+
+.input-item { display: flex; flex-direction: column; flex: 1; }
+.input-item label { font-weight: bold; margin-bottom: 8px; font-size: 0.9em; color: #555; }
+
+.custom-input {
+  padding: 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  font-size: 1em;
+  outline: none;
+  transition: border 0.3s;
+}
+.custom-input:focus { border-color: #007bff; }
+
+.search-btn {
+  padding: 12px 30px;
+  background-color: #007bff;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: bold;
+  cursor: pointer;
+  height: 45px;
+}
+.search-btn:disabled { background-color: #ccc; cursor: not-allowed; }
+
+/* 테이블 스타일 */
+.table-container { overflow-x: auto; margin-top: 20px; }
+.data-table { width: 100%; border-collapse: collapse; min-width: 1000px; }
+.data-table th, .data-table td {
+  border: 1px solid #e9ecef; padding: 12px; text-align: center; font-size: 0.9em;
+}
+
+.pub-header { background-color: #e3f2fd; color: #0d47a1; }
+.wrk-header { background-color: #fff3e0; color: #e65100; }
+.pub-bg { background-color: #f1f8ff; }
+.wrk-bg { background-color: #fffaf2; }
+
+.idx-cell { font-family: 'Courier New', monospace; color: #888; font-size: 0.85em; }
+.tag-no-cell { font-weight: bold; color: #333; }
+
+.status-red { color: #d32f2f; font-weight: bold; background: #ffebee; padding: 2px 6px; border-radius: 4px; }
+.status-green { color: #388e3c; font-weight: bold; background: #e8f5e9; padding: 2px 6px; border-radius: 4px; }
+
+.message { padding: 15px; border-radius: 8px; margin-top: 20px; text-align: center; }
+.error-message { background: #ffdada; color: #b71c1c; border: 1px solid #ffb3b3; }
+.no-results-message { background: #eee; color: #666; }
+</style>
