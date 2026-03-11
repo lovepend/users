@@ -1,65 +1,78 @@
 <template>
-  <div class="app-container">
-    <header class="sticky-top">
-      <div class="header-content">
-        <h2 class="title"><span class="icon">🔍</span> 에러 코드 마스터</h2>
-        <div class="search-bar">
-          <input type="text" v-model="globalSearch" placeholder="전체 검색..." class="global-search-input" />
+  <div class="app-wrapper">
+    <div class="fixed-header-section">
+      <div class="header-inner">
+        <h2 class="main-title">에러 코드</h2>
+        <div class="global-search-wrapper">
+          <input 
+            type="text" 
+            v-model="globalSearch" 
+            placeholder="전체 컬럼 내용 검색..." 
+            class="global-search-input"
+          />
         </div>
       </div>
-    </header>
+    </div>
 
-    <main class="content-area">
-      <div class="table-card">
-        <table>
+    <div class="scroll-content-area">
+      <div class="table-container">
+        <table class="error-table">
           <colgroup>
             <col style="width: 60px;">
             <col style="width: 150px;">
             <col style="width: 130px;">
-            <col style="width: 23%;">
-            <col style="width: 23%;">
-            <col style="width: 23%;">
+            <col style="width: 25%;">
+            <col style="width: 25%;">
+            <col style="width: 25%;">
           </colgroup>
           <thead>
             <tr>
               <th v-for="col in columns" :key="col" class="sticky-th">
-                <div class="th-content">
-                  <span class="col-label">{{ col }}</span>
+                <div class="th-box">
+                  <span class="label">{{ col }}</span>
                   
-                  <div v-if="col === '기능'" class="filter-group">
+                  <div v-if="col === '기능'" class="filter-with-dropdown">
                     <input 
                       type="text" 
                       v-model="columnFilters[col]" 
-                      class="column-filter-input"
-                      placeholder="기능 필터"
+                      class="filter-input"
+                      placeholder="필터"
                     />
-                    <div class="dropdown-wrapper" @click.stop>
-                      <button @click="toggleFuncList" class="dropdown-btn">▼</button>
-                      <ul v-if="showFuncList" class="dropdown-menu">
+                    <div class="dropdown-container">
+                      <button @click.stop="toggleFuncList" class="combo-btn">▼</button>
+                      <ul v-if="showFuncList" class="combo-list">
                         <li @click="selectFunc('')">전체보기</li>
                         <li v-for="item in uniqueFuncs" :key="item" @click="selectFunc(item)">
                           {{ item }}
                         </li>
-                        <li v-if="uniqueFuncs.length === 0" class="no-item">데이터 없음</li>
                       </ul>
                     </div>
                   </div>
 
-                  <input v-else type="text" v-model="columnFilters[col]" class="column-filter-input" :placeholder="col + ' 필터'" />
+                  <input 
+                    v-else
+                    type="text" 
+                    v-model="columnFilters[col]" 
+                    class="filter-input"
+                    placeholder="필터"
+                  />
                 </div>
               </th>
             </tr>
           </thead>
           <tbody>
-            <tr v-for="(row, index) in filteredData" :key="index">
-              <td v-for="col in columns" :key="col" :class="['cell', `col-${col}`]">
+            <tr v-if="filteredData.length === 0">
+              <td :colspan="columns.length" class="empty-cell">데이터를 찾을 수 없습니다.</td>
+            </tr>
+            <tr v-for="(row, idx) in filteredData" :key="idx">
+              <td v-for="col in columns" :key="col" :class="['data-cell', `col-${col}`]">
                 <div v-html="highlightText(row[col])"></div>
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
@@ -69,134 +82,182 @@ import * as XLSX from 'xlsx';
 import excelFileUrl from '@/assets/Errorcode.xlsx?url';
 
 const rawData = ref([]);
-const columns = ref(['No', '기능', 'Code', 'Message', '원인', '해결방법']);
+const columns = ['No', '기능', 'Code', 'Message', '원인', '해결방법'];
 const globalSearch = ref('');
 const columnFilters = ref({ No: '', 기능: '', Code: '', Message: '', 원인: '', 해결방법: '' });
-
 const showFuncList = ref(false);
 const uniqueFuncs = ref([]);
 
 const loadExcelData = async () => {
   try {
-    const response = await fetch(excelFileUrl);
-    const arrayBuffer = await response.arrayBuffer();
-    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
-    const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
-    
-    rawData.value = jsonData;
+    const res = await fetch(excelFileUrl);
+    const buf = await res.arrayBuffer();
+    const wb = XLSX.read(buf, { type: 'array' });
+    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
+    rawData.value = data;
 
-    // 데이터 확인용 로그 (브라우저 F12 콘솔에서 확인 가능)
-    console.log('로드된 데이터 샘플:', jsonData[0]);
-
-    // 중복 제거 시 '기능' 키가 정확한지 확인
-    const funcs = jsonData
-      .map(item => item['기능']) // 엑셀 헤더명이 '기능'인지 꼭 확인하세요!
-      .filter((val, index, self) => val && self.indexOf(val) === index);
-    
+    // 기능 리스트 추출
+    const funcs = [...new Set(data.map(item => item['기능']))].filter(Boolean);
     uniqueFuncs.value = funcs.sort();
-    console.log('추출된 기능 목록:', uniqueFuncs.value);
-
-  } catch (error) {
-    console.error('엑셀 로드 에러:', error);
-  }
+  } catch (err) { console.error(err); }
 };
 
-const toggleFuncList = () => {
-  showFuncList.value = !showFuncList.value;
-};
-
+const toggleFuncList = () => (showFuncList.value = !showFuncList.value);
 const selectFunc = (val) => {
   columnFilters.value['기능'] = val;
   showFuncList.value = false;
 };
-
-// 화면 아무데나 클릭하면 닫히도록 설정
-const handleOutsideClick = () => {
-  showFuncList.value = false;
-};
+const closeDropdown = () => (showFuncList.value = false);
 
 onMounted(() => {
   loadExcelData();
-  window.addEventListener('click', handleOutsideClick);
+  window.addEventListener('click', closeDropdown);
 });
+onUnmounted(() => window.removeEventListener('click', closeDropdown));
 
-onUnmounted(() => {
-  window.removeEventListener('click', handleOutsideClick);
-});
-
-// 검색 및 하이라이트 로직 (이전과 동일)
 const filteredData = computed(() => {
   return rawData.value.filter(row => {
-    const isColumnMatch = columns.value.every(col => {
-      const fv = columnFilters.value[col]?.toLowerCase().trim();
-      return !fv || String(row[col] || '').toLowerCase().includes(fv);
-    });
-    const sk = globalSearch.value.toLowerCase().trim();
-    return isColumnMatch && (!sk || columns.value.some(col => String(row[col] || '').toLowerCase().includes(sk)));
+    const colMatch = columns.every(c => !columnFilters.value[c] || String(row[c]||'').toLowerCase().includes(columnFilters.value[c].toLowerCase()));
+    const globalMatch = !globalSearch.value || columns.some(c => String(row[c]||'').toLowerCase().includes(globalSearch.value.toLowerCase()));
+    return colMatch && globalMatch;
   });
 });
 
-const highlightText = (text) => {
-  const strText = String(text || '');
-  const keyword = globalSearch.value.trim();
-  if (!keyword) return strText;
-  const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  return strText.replace(regex, '<mark class="highlight">$1</mark>');
+const highlightText = (t) => {
+  const s = String(t || '');
+  const k = globalSearch.value.trim();
+  if (!k) return s;
+  const re = new RegExp(`(${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
+  return s.replace(re, '<mark class="hl">$1</mark>');
 };
 </script>
 
 <style scoped>
-/* 드롭다운 관련 핵심 스타일 */
-.filter-group { display: flex; gap: 4px; position: relative; align-items: center; }
-.dropdown-wrapper { position: relative; display: flex; align-items: center; }
-
-.dropdown-btn {
-  padding: 4px 8px;
-  background: #edf2f7;
-  border: 1px solid #cbd5e0;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 10px;
-  line-height: 1;
-  height: 28px;
+/* 1. 레이아웃 구조 정의 */
+.app-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100vh; /* 브라우저 꽉 채우기 */
+  background-color: #f8f9fa;
+  overflow: hidden; /* 바깥쪽 스크롤 방지 */
 }
 
-.dropdown-menu {
-  position: absolute;
-  top: 35px; /* 버튼 바로 아래 */
-  left: 0;
-  background: white;
-  border: 1px solid #e2e8f0;
+/* 2. 상단 고정 헤더 섹션 */
+.fixed-header-section {
+  flex: 0 0 auto;
+  background: #fff;
+  padding: 20px 40px;
+  border-bottom: 1px solid #eee;
+  z-index: 1000;
+}
+.header-inner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+.main-title { font-size: 24px; font-weight: 800; color: #333; margin: 0; }
+.global-search-input {
+  width: 400px;
+  padding: 10px 15px;
+  border: 2px solid #edf2f7;
   border-radius: 8px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+  outline: none;
+}
+
+/* 3. 스크롤 영역 */
+.scroll-content-area {
+  flex: 1;
+  overflow: auto; /* 여기서만 스크롤 발생 */
+  padding: 20px 40px;
+}
+
+.table-container {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
+  min-width: 1200px;
+}
+
+.error-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+/* 4. 틀고정 헤더 (Sticky) */
+.sticky-th {
+  position: sticky;
+  top: 0; /* scroll-content-area 내부에서 고정됨 */
+  background: #ffffff; /* 투명하면 안됨 */
+  z-index: 100; /* 데이터 로우보다 높아야 함 */
+  padding: 15px 10px;
+  border-bottom: 2px solid #3498db;
+  text-align: left;
+}
+
+.th-box { display: flex; flex-direction: column; gap: 8px; }
+.label { font-size: 13px; font-weight: 700; color: #555; }
+.filter-input {
+  padding: 6px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+  width: 100%;
+}
+
+/* 5. 기능 콤보박스 디자인 */
+.filter-with-dropdown {
+  display: flex;
+  gap: 4px;
+  position: relative;
+}
+.dropdown-container { position: relative; }
+.combo-btn {
+  height: 100%;
+  padding: 0 8px;
+  background: #f1f3f5;
+  border: 1px solid #ced4da;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.combo-list {
+  position: absolute;
+  top: calc(100% + 5px);
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  min-width: 180px;
+  max-height: 300px;
+  overflow-y: auto;
+  z-index: 2000; /* 헤더보다 높게 */
   list-style: none;
   padding: 5px 0;
   margin: 0;
-  min-width: 160px;
-  z-index: 9999; /* 최상단 배치 */
-  max-height: 300px;
-  overflow-y: auto;
 }
-
-.dropdown-menu li {
+.combo-list li {
   padding: 10px 15px;
   font-size: 13px;
   cursor: pointer;
-  text-align: left;
-  color: #2d3748;
 }
+.combo-list li:hover { background: #3498db; color: white; }
 
-.dropdown-menu li:hover { background-color: #3182ce; color: white; }
-.no-item { color: #a0aec0; font-style: italic; pointer-events: none; }
+/* 6. 데이터 셀 디자인 */
+.data-cell {
+  padding: 15px 10px;
+  border-bottom: 1px solid #f1f3f5;
+  font-size: 14px;
+  line-height: 1.5;
+  vertical-align: top;
+  word-break: break-all;
+}
+.col-No, .col-기능, .col-Code { text-align: center; }
+.col-No { color: #3498db; font-weight: 600; }
 
-/* 기존 스타일들... (생략 방지를 위해 이전 코드의 스타일 유지) */
-.app-container { display: flex; flex-direction: column; height: 100vh; background-color: #f7fafc; }
-.sticky-top { background: white; padding: 20px 40px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); z-index: 100; }
-.content-area { flex: 1; overflow-y: auto; padding: 20px 40px; }
-.table-card { background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
-.sticky-th { position: sticky; top: 0; background: #fdfdfd; z-index: 20; border-bottom: 2px solid #edf2f7; padding: 12px; }
-.column-filter-input { border: 1px solid #e2e8f0; border-radius: 4px; padding: 5px 8px; font-size: 12px; width: 100%; }
-.cell { padding: 15px 12px; border-bottom: 1px solid #edf2f7; font-size: 14px; vertical-align: top; }
-:deep(mark.highlight) { background: #bee3f8; color: #2b6cb0; font-weight: bold; border-radius: 2px; }
+tbody tr:hover { background-color: #f8fbff; }
+:deep(.hl) { background-color: #fff3bf; color: #e67e22; font-weight: bold; padding: 0 2px; }
+.empty-cell { padding: 50px; text-align: center; color: #999; }
 </style>
