@@ -1,277 +1,1094 @@
 <template>
-  <div class="panel mb-0" style="width: 100%">
-    <div class="panel-heading border-bottom h-50px" style="background-color: var(--bg07)">
-      <span class="fs-2 fw-bold" style="color: var(--basic02)">{{ $t('ReleasedNote_vue.title') }}</span>
-    </div>
+  <div id="app">
+    <h2 class="page-main-title">🏷️ 태그 번호 상세 조회 및 유효성 검사</h2>
 
-    <div v-if="isDeveloper" class="h-35px p-0 m-0" style="background-color: var(--bg11); padding: 8px 8px 6px">
-      <input
-        id="selectedFile"
-        ref="fileInput"
-        class="d-none"
-        type="file"
-        accept=".xlsx, .xls"
-        @change="handleFileUpload"
-      />
-      <button class="btn btn-xs btn-gray float-end align-items-center shadow-none me-2 mt-1" @click="importExcel">
-        {{ $t('ReleasedNote_vue.import') }}
-      </button>
-    </div>
+    <div class="main-content-wrapper">
+      <!-- ⭐⭐⭐ 좌측: Tag No Pub/Wrk 데이터 조회 화면 (API) ⭐⭐⭐ -->
+      <div class="panel api-pubdata-panel">
+        <h3 class="panel-title">Tag No. Pub/Wrk 데이터 조회</h3>
 
-    <div class="panel-body py-2 overflow-auto" style="height: calc(100vh - 150px); background-color: var(--bg14)">
-      <div class="pt-2 ps-3">
-        <template v-if="releaseNotesGrouped && releaseNotesGrouped.length > 0">
-          <div v-for="(versionGroup, groupIndex) in releaseNotesGrouped" :key="groupIndex">
-            <span class="fs-3" style="color: var(--txt04)">{{ $t('ReleasedNote_vue.version') }}</span>
-            <span class="fs-3 ms-1" style="color: var(--txt04)">{{ versionGroup.version }}</span>
-            <span class="fs-5 ps-2" style="color: var(--txt02)">({{ $t('ReleasedNote_vue.update') }})</span>
+        <div class="input-group">
+          <label for="tagNoInputApi">조회할 Tag No. 입력:</label>
+          <input
+            id="tagNoInputApi"
+            v-model="tagNoForApi"
+            type="text"
+            placeholder="예: CheckTest009"
+            @keyup.enter="searchTag"
+          />
+        </div>
+        <div class="input-group">
+          <label for="projectNoInputApi">프로젝트 번호:</label>
+          <input id="projectNoInputApi" v-model="projectNoInput" type="text" placeholder="예: TE1002" />
+        </div>
+        <button @click="searchTag" :disabled="apiLoading" class="action-btn primary-btn">API 상세 조회</button>
 
-            <ul class="pt-2">
-              <li v-for="(item, itemIndex) in versionGroup.items" :key="itemIndex">
-                <div class="fs-13px">
-                  <div class="h-auto mb-1 pt-1 text-white" :class="getBadgeClass(item.category)">
-                    {{ item.category }}
-                  </div>
+        <div v-if="apiLoading" class="message loading-message">API 데이터를 불러오는 중입니다...</div>
+        <div v-else-if="apiErrorMessage" class="message error-message">오류 발생: {{ apiErrorMessage }}</div>
 
-                  <div
-                    class="border rounded-3 mb-1 description-text me-2"
-                    :class="getBadgeTextColorClass(item.category)"
-                    style="background-color: var(--basic02)"
-                  >
-                    <div class="p-1 pb-0">[{{ item.AutoNo }}] : [{{ item.status }}]</div>
-                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">{{ item.description }}</div>
-                  </div>
+        <div
+          v-else-if="
+            apiSearched &&
+            !pubData &&
+            (!wrkData || wrkData.length === 0) &&
+            (!registerTypeData || registerTypeData.length === 0)
+          "
+          class="message no-results-message"
+        >
+          입력하신 Tag No. ({{ apiSearchedTagNo }}) 에 대한 API 검색 결과가 없습니다.
+        </div>
 
-                  <div class="border rounded-3 text-cyan-700 mb-1 me-2" style="background-color: var(--basic02)">
-                    <div class="p-1 pb-0">{{ $t('ReleasedNote_vue.act_desc') }}</div>
-                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">: {{ item.actionDesc }}</div>
-                  </div>
+        <div
+          v-else-if="pubData || (wrkData && wrkData.length > 0) || (registerTypeData && registerTypeData.length > 0)"
+        >
+          <!-- Pub 데이터 검색 결과 -->
+          <div class="results-card" v-if="pubData">
+            <h4>✨ Pub 데이터 검색 결과 (단일 항목)</h4>
+            <p><strong>조회 Tag No.:</strong> {{ apiSearchedTagNo }}</p>
+            <p><strong>EP_ID:</strong> {{ pubData.EP_ID }}</p>
+            <p><strong>EP_IC:</strong> {{ pubData.EP_IC }}</p>
+            <p><strong>CLS_ID:</strong> {{ pubData.CLS_ID }}</p>
+            <p><strong>DELETED:</strong> {{ pubData.DELETED ? 'Yes' : 'No' }}</p>
+            <p v-if="pubData.TAG_NO"><strong>데이터 Tag No.:</strong> {{ pubData.TAG_NO }}</p>
+            <p v-if="pubData.TAG_IDX"><strong>데이터 Tag IDX.:</strong> {{ pubData.TAG_IDX }}</p>
+            <p v-if="pubData.NEW_YN !== undefined"><strong>NEW_YN:</strong> {{ pubData.NEW_YN ? 'Yes' : 'No' }}</p>
+            <p v-if="pubData.DEL_YN !== undefined"><strong>DEL_YN:</strong> {{ pubData.DEL_YN ? 'Yes' : 'No' }}</p>
+          </div>
 
-                  <div class="border rounded-3 text-green-600 mb-1 me-2" style="background-color: var(--basic02)">
-                    <div class="p-1 pb-0">{{ $t('ReleasedNote_vue.dev_desc') }}</div>
-                    <div class="p-2 pb-1 fw-normal" style="color: var(--txt03)">: {{ item.remarkDev }}</div>
-                  </div>
-                </div>
+          <!-- Wrk 데이터 검색 결과 -->
+          <div class="results-card wrk-data-section" v-if="wrkData && wrkData.length > 0">
+            <h4>✨ Wrk 데이터 검색 결과 (여러 항목)</h4>
+            <div v-for="(wrkItem, index) in wrkData" :key="wrkItem._id || index" class="wrk-item">
+              <h5>Wrk 항목 #{{ index + 1 }}</h5>
+              <p><strong>EP_ID:</strong> {{ wrkItem.EP_ID }}</p>
+              <p><strong>EP_IC:</strong> {{ wrkItem.EP_IC }}</p>
+              <p><strong>CLS_ID:</strong> {{ wrkItem.CLS_ID }}</p>
+              <p><strong>DELETED:</strong> {{ wrkItem.DELETED ? 'Yes' : 'No' }}</p>
+              <p v-if="wrkItem.TAG_NO"><strong>데이터 Tag No.:</strong> {{ wrkItem.TAG_NO }}</p>
+              <p v-if="wrkItem.TAG_IDX"><strong>데이터 Tag IDX.:</strong> {{ wrkItem.TAG_IDX }}</p>
+              <p v-if="wrkItem.NEW_YN !== undefined"><strong>NEW_YN:</strong> {{ wrkItem.NEW_YN ? 'Yes' : 'No' }}</p>
+              <p v-if="wrkItem.DEL_YN !== undefined"><strong>DEL_YN:</strong> {{ wrkItem.DEL_YN ? 'Yes' : 'No' }}</p>
+            </div>
+          </div>
+
+          <!-- ⭐ 관련 TYPE_ID"Register ID" 정보 추가 ⭐ -->
+          <div class="results-card type-id-section" v-if="registerTypeData && registerTypeData.length > 0">
+            <h4>✨ 관련 REGISTER ID 정보</h4>
+            <ul>
+              <li v-for="(item, index) in registerTypeData" :key="item._id || index">
+                <strong>CLS_ID:</strong> {{ item.CLS_ID }} ({{ item.DESC || '설명 없음' }}) →
+                <strong>REGISTER_ID":</strong>
+                {{ item.TYPE_ID }}
               </li>
             </ul>
-            <hr v-if="isNotLastItem(groupIndex)" />
           </div>
-        </template>
+        </div>
+      </div>
 
-        <template v-else>
-          <p v-if="isLoading">{{ $t('ReleasedNote_vue.load_desc') }}</p>
-          <p v-else>{{ $t('ReleasedNote_vue.empt_desc') }}</p>
-        </template>
+      <!-- ⭐⭐⭐ 우측: Tag Split 화면 (유효성 검사기) ⭐⭐⭐ -->
+      <div class="panel tag-split-panel">
+        <h3 class="panel-title">Tag Split (유효성 검사기)</h3>
+
+        <div class="input-group">
+          <label for="tagNoInputValidator">검사할 Tag No. 입력:</label>
+          <input id="tagNoInputValidator" v-model="tagNoForValidator" type="text" placeholder="예: AA-BBB01-0001/A" />
+        </div>
+
+        <div class="rules-table-container">
+          <h4>규칙 설정 (간단한 테이블)</h4>
+          <p class="panel-description">각 태그 구성 요소의 구분자와 정규식을 직접 편집할 수 있습니다.</p>
+          <table>
+            <thead>
+              <tr>
+                <th>TAG ID</th>
+                <th>구분자</th>
+                <th>정규식</th>
+                <th>액션</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="(rule, index) in tagRules" :key="index">
+                <td>TAG{{ String(index + 1).padStart(3, '0') }}</td>
+                <td><input type="text" v-model="rule.delimiter" maxlength="1" /></td>
+                <td><input type="text" v-model="rule.regex" /></td>
+                <td><button @click="removeRule(index)" class="action-btn danger-btn">삭제</button></td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="table-actions">
+            <button @click="addRule" class="action-btn success-btn">규칙 추가</button>
+            <button @click="showPasteModal = true" class="action-btn info-btn">엑셀에서 붙여넣기</button>
+          </div>
+        </div>
+
+        <h4 class="section-sub-title">전체 태그 번호 유효성 검사</h4>
+        <div class="overall-validation-result">
+          <p class="validation-summary">
+            전체 태그 번호 (`{{ tagNoForValidator }}`)는 **
+            <span :style="{ color: isTagNoValid ? 'green' : 'red', fontWeight: 'bold' }">
+              {{ isTagNoValid ? '유효합니다.' : '유효하지 않습니다.' }}
+            </span>
+            **
+          </p>
+          <p class="regex-info">
+            적용된 전체 정규식: <code class="combined-regex-code">{{ combinedRegexString }}</code>
+            <span v-if="combinedRegexError" class="regex-error-msg"> (정규식 오류: {{ combinedRegexError }}) </span>
+          </p>
+        </div>
+
+        <h4 class="section-sub-title">부분별 분석 결과</h4>
+        <table class="parts-analysis-table">
+          <thead>
+            <tr>
+              <th>규칙</th>
+              <th>분리된 값</th>
+              <th>적용된 정규식</th>
+              <th>구분자 유효성</th>
+              <th>내용 유효성</th>
+              <th>종합 유효성</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-if="tagRules.length === 0">
+              <td colspan="6" class="no-rule-message">규칙을 설정해주세요.</td>
+            </tr>
+            <tr v-if="!tagNoForValidator && tagRules.length > 0">
+              <td colspan="6" class="no-input-message">태그 번호를 입력해주세요.</td>
+            </tr>
+            <tr v-for="(part, index) in tagParts" :key="index">
+              <td>
+                TAG{{ String(index + 1).padStart(3, '0') }} (예상 구분자:
+                <span style="font-weight: bold">'{{ part.expectedDelimiter || '(없음)' }}'</span>)
+              </td>
+              <td>
+                <span
+                  :style="{ color: part.matchedValue === undefined || part.matchedValue === null ? '#aaa' : 'inherit' }"
+                >
+                  {{
+                    part.matchedValue === undefined || part.matchedValue === null
+                      ? '(값 없음)'
+                      : part.matchedValue === ''
+                        ? '(빈 값)'
+                        : part.matchedValue
+                  }}
+                </span>
+              </td>
+              <td>{{ part.regex }}</td>
+              <td :style="{ color: part.isDelimiterValid ? 'green' : 'red', fontWeight: 'bold' }">
+                {{ part.isDelimiterValid ? '유효' : part.delimiterError || '유효하지 않음' }}
+              </td>
+              <td :style="{ color: part.isContentValid ? 'green' : 'red', fontWeight: 'bold' }">
+                {{ part.isContentValid ? '유효' : part.contentError || '유효하지 않음' }}
+              </td>
+              <td :style="{ color: part.isValid ? 'green' : 'red', fontWeight: 'bold' }">
+                {{ part.isValid ? '유효' : '유효하지 않음' }}
+              </td>
+            </tr>
+            <tr v-if="tagNoForValidator && isTagNoValid === false && tagParts.length > 0 && lastPartError">
+              <td colspan="6" class="overall-fail-message">
+                <span style="font-weight: bold">전체 유효성 검사 실패: {{ lastPartError }}</span>
+              </td>
+            </tr>
+            <tr v-if="tagNoForValidator && isTagNoValid === false && tagParts.length > 0 && !lastPartError">
+              <td colspan="6" class="overall-fail-message">
+                <span style="font-weight: bold">입력된 태그 번호가 규칙과 완전히 일치하지 않습니다.</span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- 엑셀 붙여넣기 모달 (모달은 항상 최상단에 보이도록 main-content-wrapper 밖에 둠) -->
+    <div v-if="showPasteModal" class="modal-overlay">
+      <div class="modal-content">
+        <h4>엑셀 데이터 붙여넣기</h4>
+        <p>엑셀에서 복사한 데이터를 아래 텍스트 영역에 붙여넣어 주세요.</p>
+        <textarea
+          v-model="pasteData"
+          placeholder="여기에 엑셀에서 복사한 데이터를 붙여넣으세요 (탭으로 구분된 값)"
+          rows="10"
+          class="paste-textarea"
+        ></textarea>
+        <div class="modal-actions">
+          <button @click="applyPasteData" class="action-btn success-btn">적용</button>
+          <button @click="showPasteModal = false" class="action-btn cancel-btn">취소</button>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
-<script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
-import { useAppAuthenticationStore } from '@/stores/app-authentication';
-import { axiosWrapper } from '@/utils/axios/axios-wrapper';
-import * as XLSX from 'xlsx';
-import { ApiCommon } from '@/utils/axios/api-common';
-// @ts-ignore
-import * as SEF from '@/utils/spread/spread-excel-funtions.js';
+<script>
+  // Library - Common
+  import { ref, onMounted, onBeforeMount, watch, inject, computed, shallowRef, toRaw } from 'vue'
+  // Pinia를 사용하지 않으므로 제거합니다. (storeToRefs가 사용되는 부분이 없어서 제거)
+  // import { storeToRefs } from 'pinia';
 
-/** 변수 정의 */
-const releaseNotesGrouped = ref<any[]>([]);
-const isLoading = ref(true);
-const authStore = useAppAuthenticationStore();
-const fileInput = ref<HTMLInputElement | null>(null);
-const fileId = ref<string | null>(null);
-const urlList = { gfi: '/api/File/Get', gfr: '/api/File/Replace' };
+  // Helpers
+  // sAlert, sToast 사용하지 않으므로 주석 처리합니다.
+  // import { sAlert, sToast } from '@/utils/messages/alert-common';
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  // axios를 직접 사용하지 않으므로 제거합니다.
+  // import axios from 'axios';
 
-// 템플릿 에러 방지를 위해 computed로 권한 체크 로직 분리
-const isDeveloper = computed(() => {
-  return authStore.userInfo && (authStore.userInfo as any).IsDeveloper;
-});
+  export default {
+    setup() {
+      // --- API Pub Data 조회 관련 상태 ---
+      const tagNoForApi = ref('') // API 조회용 독립 Tag No. 입력
+      const projectNoInput = ref('TE1002') // 예시 프로젝트 번호. 실제 사용 시 변경해주세요.
+      const apiSearchedTagNo = ref('') // API 검색 완료된 Tag No. (결과 표시용)
 
-onMounted(() => {
-  const baseSiteName = (import.meta as any).env.VITE_BASE_SITENAME;
-  if (baseSiteName === 'dev') fileId.value = '69827ed36514d58f04e067e7';
-  else if (baseSiteName === 'devop') fileId.value = '698963e8ed2aff6e2771b20d';
-  else fileId.value = '6982ac8ea605319e04771832';
-  fetchAndParseExcel();
-});
+      // PubData와 WrkData를 각각 저장할 상태 변수
+      const pubData = ref(null)
+      const wrkData = ref([])
+      const registerTypeData = ref([]) // ⭐ 새로운 상태: GetByClassIDs API 결과 저장
 
-/** 마지막 아이템 체크 */
-const isNotLastItem = (index: number): boolean => {
-  return index < releaseNotesGrouped.value.length - 1;
-};
+      const apiLoading = ref(false) // API 관련 로딩 상태
+      const apiErrorMessage = ref('') // API 관련 오류 메시지
+      const apiSearched = ref(false) // API 검색이 한 번이라도 시도되었는지 여부
 
-/** 운영 환경용 날짜 계산 로직 (+1일) */
-const getUpdatedVersionForProd = (version: string): string => {
-  const parts = version.split('.');
-  if (parts.length < 2) return version;
+      // --- Tag Split (유효성 검사기) 관련 상태 ---
+      const tagNoForValidator = ref('AP330X01-') // Validator용 독립 Tag No. 입력
+      const combinedRegexError = ref(null)
+      const lastPartError = ref(null)
 
-  const lastPart = parts[parts.length - 1]; 
-  const monthPart = parts[parts.length - 2]; 
+      const tagRules = ref([
+        { delimiter: '', regex: '^$|^[A-Z]{2}$' }, // TAG001 (ex: AZ, AP)
+        { delimiter: '', regex: '^[0123LCRIT]{3}$' }, // TAG002 (ex: 012, 330)
+        { delimiter: '', regex: '^[ABCDEFNVXS]{1}$' }, // TAG003 (한 글자 A/B/C/D/E/F/N/V/X/S, ex: A, X)
+        { delimiter: '', regex: '^$|^[ABCDEFNVXS]{1}$' }, // TAG004 (옵셔널, 한 글자 A/B/C/D/E/F/N/V/X/S, ex: A, (값 없음))
+        { delimiter: '', regex: '^[0-9]{2}$' }, // TAG005 (숫자 두 글자, ex: 09, 01)
+        { delimiter: '-', regex: '^$|^[APS1-9]{2}$' }, // TAG006 (구분자 -, 옵셔널 두 글자 A/P/S/1-9, ex: AA, (값 없음))
+      ])
 
-  const dayNum = parseInt(lastPart);
-  const monthNum = parseInt(monthPart);
+      // 엑셀 붙여넣기 모달 관련 상태
+      const showPasteModal = ref(false)
+      const pasteData = ref('')
 
-  if (isNaN(dayNum) || isNaN(monthNum)) return version;
+      // --- API Pub/Wrk Data 조회 로직 ---
+      const searchTag = async () => {
+        // 이전 API 검색 결과 및 오류 메시지 초기화
+        pubData.value = null // PubData 초기화
+        wrkData.value = [] // WrkData 초기화
+        registerTypeData.value = [] // ⭐ GetByClassIDs 결과도 초기화
+        apiErrorMessage.value = ''
+        apiSearched.value = true // 검색 시도 표시
 
-  const currentYear = new Date().getFullYear();
-  const date = new Date(currentYear, monthNum - 1, dayNum);
-  date.setDate(date.getDate() + 1);
+        if (!projectNoInput.value) {
+          apiErrorMessage.value = '프로젝트 번호를 입력해주세요.'
+          return
+        }
+        if (!tagNoForApi.value) {
+          apiErrorMessage.value = 'API 상세 조회를 위한 Tag No.를 입력해주세요.'
+          return
+        }
 
-  const newMonth = String(date.getMonth() + 1).padStart(2, '0');
-  const newDay = String(date.getDate()).padStart(2, '0');
+        apiLoading.value = true // API 로딩 상태 시작
+        apiSearchedTagNo.value = tagNoForApi.value // 검색할 Tag No. 저장
 
-  const prefix = parts.slice(0, parts.length - 2).join('.');
-  return prefix ? `${prefix}.${newMonth}.${newDay}` : `${newMonth}.${newDay}`;
-};
+        try {
+          const primaryApiUrl = '/api/Data/GetPubWrkDataByTagNo' // 첫 번째 API URL
+          const primaryPayload = {
+            ProjectNo: projectNoInput.value,
+            TAG_NO: tagNoForApi.value,
+            ContainDeleted: true,
+          }
 
-/** 시트 파싱 */
-const parseSheetWithHeaders = (sheet: any, skipRows: number): any[] => {
-  if (!sheet) return [];
-  const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
-  if (rows.length <= skipRows) return [];
+          const primaryResponse = await axiosWrapper.post(primaryApiUrl, primaryPayload)
+          const primaryData = primaryResponse
 
-  const headers = rows[skipRows].map((h: any) => String(h || '').replace(/\s/g, ''));
-  const dataRows = rows.slice(skipRows + 1);
-  const getIdx = (name: string) => headers.indexOf(name.replace(/\s/g, ''));
+          if (primaryData) {
+            // PubData와 WrkData 저장
+            pubData.value = primaryData.PubData && primaryData.PubData.length > 0 ? primaryData.PubData[0] : null
+            wrkData.value = primaryData.WrkData || []
 
-  const idx = {
-    autoNo: getIdx('AutoNo'),
-    category: getIdx('구분'),
-    desc: getIdx('기능요청상세내용'),
-    action: getIdx('ACTION부서회신내용'),
-    remark: getIdx('Remark(개발)'),
-    status: getIdx('STATUS'),
-    version: getIdx('완료버젼'),
-  };
+            if (!pubData.value && wrkData.value.length === 0) {
+              apiErrorMessage.value = `입력하신 Tag No. (${apiSearchedTagNo.value})에 대한 Pub 또는 Wrk 데이터가 없습니다.`
+            }
 
-  return dataRows.map(row => ({
-    AutoNo: idx.autoNo !== -1 ? row[idx.autoNo] : '',
-    category: idx.category !== -1 ? row[idx.category] : '',
-    description: idx.desc !== -1 ? row[idx.desc] : '',
-    actionDesc: idx.action !== -1 ? row[idx.action] : '',
-    remarkDev: idx.remark !== -1 ? row[idx.remark] : '',
-    status: idx.status !== -1 ? row[idx.status] : '',
-    completionVersion: idx.version !== -1 ? row[idx.version] : '',
-  })).filter(item => item.status || item.completionVersion);
-};
+            // ⭐ CLS_ID 추출 및 두 번째 API 호출 로직 시작 ⭐
+            const classIDsToFetch = new Set() // 중복 CLS_ID 제거를 위해 Set 사용
+            if (pubData.value && pubData.value.CLS_ID) {
+              classIDsToFetch.add(pubData.value.CLS_ID)
+            }
+            wrkData.value.forEach(item => {
+              if (item.CLS_ID) {
+                classIDsToFetch.add(item.CLS_ID)
+              }
+            })
 
-/** 메인 페치 함수 */
-const fetchAndParseExcel = async () => {
-  try {
-    isLoading.value = true;
-    const baseSiteName = (import.meta as any).env.VITE_BASE_SITENAME;
-    const isProd = !(baseSiteName === 'dev' || baseSiteName === 'devop');
-
-    let allowedStatus = ['FINISH', 'CHECKED'];
-    if (!isProd) allowedStatus.push('READY');
-
-    const response: any = await axiosWrapper.postAll(
-      urlList.gfi,
-      { id: fileId.value },
-      { responseType: 'blob', headers: { FileToken: 'frontserver@sh' } }
-    );
-    const decryptedBlob: any = await ApiCommon.postFileDecryptFile({ FILE: new File([response.data], 'temp.xlsx') });
-    const workbook = XLSX.read(await decryptedBlob.arrayBuffer(), { type: 'array' });
-
-    let combined: any[] = [];
-    workbook.SheetNames.forEach((name, index) => {
-      const skip = index === 0 ? 2 : 0;
-      combined = [...combined, ...parseSheetWithHeaders(workbook.Sheets[name], skip)];
-    });
-
-    const grouped: Record<string, any> = {};
-    combined.forEach((row: any) => {
-      const status = String(row.status || '').trim().toUpperCase();
-      let version = String(row.completionVersion || '').trim();
-
-      if (allowedStatus.includes(status) && version) {
-        if (isProd) version = getUpdatedVersionForProd(version);
-
-        if (!grouped[version]) grouped[version] = { version: version, items: [] };
-        grouped[version].items.push({
-          ...row,
-          category: String(row.category || '').toLowerCase(),
-          status: status,
-        });
+            if (classIDsToFetch.size > 0) {
+              const secondaryApiUrl = '/api/Register/GetByClassIDs'
+              const secondaryPayload = {
+                ProjectNo: projectNoInput.value,
+                ClassIDs: Array.from(classIDsToFetch), // Set을 배열로 변환
+                ContainDeleted: true,
+              }
+              const secondaryResponse = await axiosWrapper.post(secondaryApiUrl, secondaryPayload)
+              registerTypeData.value = secondaryResponse || [] // 결과 저장
+            }
+            // ⭐ CLS_ID 추출 및 두 번째 API 호출 로직 끝 ⭐
+          } else {
+            pubData.value = null
+            wrkData.value = []
+            registerTypeData.value = []
+          }
+        } catch (error) {
+          console.error('API 호출 중 오류 발생:', error)
+          if (error.response) {
+            apiErrorMessage.value = `서버 오류: ${error.response.status} - ${error.response.data?.message || error.message}`
+            if (error.response.status === 401) {
+              apiErrorMessage.value += ' (인증 오류: 로그인 상태를 확인해주세요.)'
+            }
+          } else if (error.request) {
+            apiErrorMessage.value = '네트워크 오류: 서버에 연결할 수 없습니다.'
+          } else {
+            apiErrorMessage.value = `요청 오류: ${error.message}`
+          }
+        } finally {
+          apiLoading.value = false // API 로딩 상태 종료
+        }
       }
-    });
 
-    releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) =>
-      b.version.localeCompare(a.version, undefined, { numeric: true })
-    );
-  } catch (error) {
-    console.error('Fetch Error:', error);
-  } finally {
-    isLoading.value = false;
-    if (SEF && (SEF as any).onHideOverlay) (SEF as any).onHideOverlay();
+      // --- Tag Split (유효성 검사기) 로직 (기존 코드와 동일) ---
+      const isRegexOptional = regexPattern => {
+        const trimmed = regexPattern.trim()
+        if (!trimmed) return true
+        if (trimmed === '^$') return true
+        if (trimmed.startsWith('^$|')) return true
+
+        try {
+          const cleanedRegex = trimmed.replace(/^\^/, '').replace(/\$$/, '')
+          const regex = new RegExp(`^${cleanedRegex}$`)
+          return regex.test('')
+        } catch (e) {
+          return false
+        }
+      }
+
+      const combinedRegexString = computed(() => {
+        combinedRegexError.value = null
+        if (tagRules.value.length === 0) return '^$'
+
+        let regexParts = []
+        try {
+          tagRules.value.forEach((rule, index) => {
+            let currentContentRegex = rule.regex.trim()
+            const isRuleContentOptional = isRegexOptional(currentContentRegex)
+
+            let contentPatternOnly = currentContentRegex.replace(/^\^/, '').replace(/\$$/, '')
+
+            let contentPatternForCombination
+            if (isRuleContentOptional && contentPatternOnly.includes('$|')) {
+              contentPatternOnly = contentPatternOnly.replace('$|', '')
+              contentPatternForCombination = `(?:${contentPatternOnly}|)`
+            } else {
+              contentPatternForCombination = `(?:${contentPatternOnly})`
+            }
+
+            let segmentPattern
+
+            if (index > 0 && rule.delimiter.trim() !== '') {
+              const escapedDelimiter = rule.delimiter.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+              if (isRuleContentOptional) {
+                segmentPattern = `(?:${escapedDelimiter}${contentPatternForCombination})?`
+              } else {
+                segmentPattern = `(?:${escapedDelimiter}${contentPatternForCombination})`
+              }
+            } else {
+              segmentPattern = contentPatternForCombination
+            }
+
+            regexParts.push(segmentPattern)
+          })
+
+          return `^${regexParts.join('')}$`
+        } catch (e) {
+          combinedRegexError.value = e.message
+          console.error('Combined Regex Generation Error:', e)
+          return '.*'
+        }
+      })
+
+      const isTagNoValid = computed(() => {
+        if (combinedRegexError.value) return false
+
+        if (!tagNoForValidator.value && tagRules.value.length === 0) return true
+        if (!tagNoForValidator.value && tagRules.value.length > 0) {
+          return tagRules.value.every(rule => isRegexOptional(rule.regex))
+        }
+        if (tagRules.value.length === 0 && tagNoForValidator.value) return false
+
+        try {
+          const regex = new RegExp(combinedRegexString.value)
+          return regex.test(tagNoForValidator.value)
+        } catch (e) {
+          console.error('Invalid combined regex for validation:', combinedRegexString.value, e)
+          return false
+        }
+      })
+
+      // 부분별 분석 로직
+      const tagParts = computed(() => {
+        const parts = []
+        let currentTagNo = tagNoForValidator.value || ''
+        lastPartError.value = null
+
+        if (!currentTagNo && tagRules.value.length === 0) return []
+
+        if (!currentTagNo && tagRules.value.length > 0) {
+          tagRules.value.forEach(rule => {
+            parts.push({
+              expectedDelimiter: rule.delimiter.trim(),
+              matchedValue: null,
+              regex: rule.regex,
+              isDelimiterValid: true,
+              delimiterError: null,
+              isContentValid: isRegexOptional(rule.regex),
+              contentError: isRegexOptional(rule.regex) ? null : '필수 값이 비어있음',
+              isValid: isRegexOptional(rule.regex),
+            })
+          })
+          return parts
+        }
+
+        let currentIndex = 0
+
+        for (let i = 0; i < tagRules.value.length; i++) {
+          const rule = tagRules.value[i]
+          let matchedValue = null
+          let isContentValid = false
+          let contentError = null
+          let isDelimiterValid = true
+          let delimiterError = null
+
+          let expectedDelimiter = rule.delimiter.trim()
+          let contentRegexRaw = rule.regex.trim()
+          let contentRegex = contentRegexRaw.replace(/^\^/, '').replace(/\$$/, '')
+
+          const remainingSegment = currentTagNo.substring(currentIndex)
+          const isRuleContentOptional = isRegexOptional(contentRegexRaw)
+
+          if (i > 0 && expectedDelimiter !== '') {
+            const delimiterPresentInSegment = remainingSegment.startsWith(expectedDelimiter)
+
+            let contentWillMatchActualValue = false
+            if (contentRegex) {
+              try {
+                contentWillMatchActualValue = new RegExp(`^(${contentRegex})`).test(remainingSegment)
+              } catch (e) {
+                /* 정규식 오류 무시 */
+              }
+            }
+
+            if (isRuleContentOptional && !contentWillMatchActualValue) {
+              if (delimiterPresentInSegment) {
+                isDelimiterValid = false
+                delimiterError = `빈 값 구성요소에 불필요한 구분자 '${expectedDelimiter}' 존재`
+              } else {
+                isDelimiterValid = true
+                delimiterError = null
+              }
+            } else {
+              if (delimiterPresentInSegment) {
+                currentIndex += expectedDelimiter.length
+                isDelimiterValid = true
+                delimiterError = null
+              } else {
+                isDelimiterValid = false
+                delimiterError = `필수 구분자 '${expectedDelimiter}' 누락`
+              }
+            }
+          }
+
+          const segmentAfterDelimiter = currentTagNo.substring(currentIndex)
+
+          try {
+            const matchRegex = new RegExp(`^(${contentRegex})`)
+            const match = matchRegex.exec(segmentAfterDelimiter)
+
+            if (match && match[1] !== undefined) {
+              matchedValue = match[1]
+              currentIndex += matchedValue.length
+            } else {
+              if (!isRuleContentOptional) {
+                contentError = '필수 구성 요소 누락'
+              }
+              matchedValue = null
+            }
+
+            const individualRegex = new RegExp(`^${contentRegex}$`)
+            isContentValid = individualRegex.test(matchedValue !== null ? matchedValue : '')
+
+            if (!isContentValid && matchedValue === null && isRuleContentOptional) {
+              isContentValid = true
+              contentError = null
+            } else if (!isContentValid && contentError === null) {
+              contentError = '정규식 불일치'
+            }
+          } catch (e) {
+            console.error(`규칙 TAG${String(i + 1).padStart(3, '0')} 정규식 처리 중 오류 발생:`, rule.regex, e)
+            contentError = `정규식 처리 오류: ${e.message}`
+            isContentValid = false
+            matchedValue = null
+          }
+
+          const isValid = isDelimiterValid && isContentValid
+
+          parts.push({
+            expectedDelimiter: expectedDelimiter,
+            matchedValue: matchedValue,
+            regex: rule.regex,
+            isDelimiterValid: isDelimiterValid,
+            delimiterError: delimiterError,
+            isContentValid: isContentValid,
+            contentError: contentError,
+            isValid: isValid,
+          })
+
+          if (!isDelimiterValid || !isContentValid) {
+            if (delimiterError || contentError) {
+              lastPartError.value = `${delimiterError || ''} ${contentError || ''}`.trim()
+            }
+            return parts
+          }
+        }
+
+        if (currentIndex < currentTagNo.length) {
+          lastPartError.value = `규칙 외의 추가 문자열: '${currentTagNo.substring(currentIndex)}'`
+        } else if (currentIndex > currentTagNo.length) {
+          lastPartError.value = '예상보다 긴 패턴이 매칭됨 (내부 로직 오류 가능성)'
+        }
+
+        return parts
+      })
+
+      // --- 규칙 및 엑셀 관련 함수 (기존 코드와 동일) ---
+      const addRule = () => {
+        tagRules.value.push({ delimiter: '', regex: '' })
+      }
+
+      const removeRule = index => {
+        tagRules.value.splice(index, 1)
+      }
+
+      const applyPasteData = () => {
+        const newRules = []
+        const rows = pasteData.value.trim().split('\n')
+
+        rows.forEach(row => {
+          const columns = row.split('\t')
+          if (columns.length >= 2) {
+            newRules.push({
+              delimiter: columns[0].trim() || '',
+              regex: columns[1].trim() || '',
+            })
+          } else if (columns.length === 1 && columns[0].trim() !== '') {
+            newRules.push({
+              delimiter: '',
+              regex: columns[0].trim(),
+            })
+          }
+        })
+
+        if (newRules.length > 0) {
+          tagRules.value = newRules
+        }
+        showPasteModal.value = false
+        pasteData.value = ''
+      }
+
+      return {
+        // API Pub Data 조회 관련
+        tagNoForApi,
+        projectNoInput,
+        apiSearchedTagNo,
+        pubData, // PubData 반환
+        wrkData, // WrkData 반환
+        registerTypeData, // ⭐ registerTypeData 반환
+        apiLoading,
+        apiErrorMessage,
+        apiSearched,
+        searchTag,
+
+        // Tag Split (유효성 검사기) 관련
+        tagNoForValidator,
+        combinedRegexError,
+        lastPartError,
+        tagRules,
+        showPasteModal,
+        pasteData,
+        isTagNoValid,
+        tagParts,
+        addRule,
+        removeRule,
+        applyPasteData,
+        combinedRegexString, // template에서 computed 속성을 직접 사용
+      }
+    },
   }
-};
-
-/** 배지 클래스 */
-const getBadgeClass = (category: any) => {
-  const c = String(category).toLowerCase();
-  if (['오류', 'fixed'].includes(c)) return 'badge bg-gradient-orange-red';
-  if (['기능개선', 'changed'].includes(c)) return 'badge bg-gradient-yellow-orange';
-  if (['신규기능', 'added'].includes(c)) return 'badge bg-gradient-teal-green';
-  return 'badge';
-};
-
-const getBadgeTextColorClass = (category: any) => {
-  const c = String(category).toLowerCase();
-  if (['오류', 'fixed'].includes(c)) return 'text-danger';
-  if (['기능개선', 'changed'].includes(c)) return 'text-warning';
-  if (['신규기능', 'added'].includes(c)) return 'text-success';
-  return 'text-gray';
-};
-
-/** 엑셀 업로드 처리 */
-const importExcel = () => fileInput.value?.click();
-
-const handleFileUpload = async (event: any) => {
-  const file = event.target.files[0];
-  if (!file) return;
-  try {
-    await axiosWrapper.post(
-      urlList.gfr,
-      { id: fileId.value, File: file },
-      { headers: { 'Content-Type': 'multipart/form-data', FileToken: 'frontserver@sh' } }
-    );
-    fetchAndParseExcel();
-  } catch (err) {
-    console.error('Upload Error:', err);
-  }
-};
 </script>
 
 <style scoped>
-.description-text {
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.badge {
-  border-radius: 20px;
-  display: inline-block;
-  width: 80px;
-  height: 30px;
-  line-height: 20px;
-  margin-right: 10px;
-  text-transform: uppercase;
-  font-size: 13px;
-  font-weight: 700;
-  text-align: center;
-  padding-top: 5px;
-}
-ul {
-  display: block;
-  list-style: none;
-  margin: 0;
-  padding-left: 0;
-}
-li {
-  list-style-type: none;
-  margin: 8px 0 8px 10px;
-  padding: 0;
-}
+  /* 기본 타이포그래피 */
+  #app {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    max-width: 1400px; /* 두 패널을 나란히 배치하기 위해 최대 너비 증가 */
+    margin: 30px auto;
+    padding: 30px;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
+    background-color: #f8f9fa;
+    color: #333;
+  }
+
+  .page-main-title {
+    color: #2c3e50;
+    text-align: center;
+    margin-bottom: 40px;
+    font-size: 2.5em;
+    font-weight: 600;
+    border-bottom: 3px solid #4caf50;
+    padding-bottom: 15px;
+  }
+
+  /* 메인 컨텐츠 래퍼 (Flexbox 사용) */
+  .main-content-wrapper {
+    display: flex;
+    gap: 30px; /* 패널 사이의 간격 */
+    margin-top: 30px;
+    flex-wrap: wrap; /* 작은 화면에서 컬럼이 쌓이도록 */
+    justify-content: center; /* 가운데 정렬 */
+  }
+
+  .panel {
+    flex: 1; /* 남은 공간을 균등하게 분배 */
+    min-width: 450px; /* 각 패널의 최소 너비 설정 */
+    border: 1px solid #dcdcdc;
+    border-radius: 10px;
+    padding: 30px;
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
+    background-color: #ffffff;
+    display: flex; /* 내부 요소도 flex로 정렬될 수 있도록 */
+    flex-direction: column;
+
+    /* ⭐ 패널 스크롤 추가 ⭐ */
+    max-height: 80vh; /* 화면 높이의 80%를 최대 높이로 설정 */
+    overflow-y: auto; /* 내용이 max-height를 초과하면 스크롤바 생성 */
+    padding-right: 15px; /* 스크롤바와 내용 사이 여백 확보 (선택 사항) */
+    box-sizing: border-box; /* 패딩이 너비/높이에 포함되도록 */
+  }
+
+  .panel-title {
+    color: #34495e;
+    margin-top: 0;
+    margin-bottom: 25px;
+    font-size: 2em;
+    font-weight: 500;
+    padding-bottom: 10px;
+    border-bottom: 2px solid #5cb85c;
+    text-align: center;
+  }
+
+  /* Input Group */
+  .input-group {
+    margin-bottom: 20px;
+  }
+
+  .input-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: bold;
+    color: #555;
+    font-size: 0.95em;
+  }
+
+  .input-group input[type='text'] {
+    width: calc(100% - 24px); /* 패딩 및 보더 고려 */
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 1em;
+    transition:
+      border-color 0.3s ease,
+      box-shadow 0.3s ease;
+  }
+
+  .input-group input[type='text']:focus {
+    border-color: #4caf50;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
+  }
+
+  /* Action Buttons */
+  .action-btn {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 1.05em;
+    font-weight: bold;
+    transition:
+      background-color 0.3s ease,
+      transform 0.2s ease;
+    width: 100%;
+  }
+
+  .action-btn:hover:not(:disabled) {
+    transform: translateY(-2px);
+  }
+
+  .action-btn:disabled {
+    background-color: #e0e0e0;
+    color: #a0a0a0;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .primary-btn {
+    background-color: #007bff;
+    color: white;
+  }
+  .primary-btn:hover:not(:disabled) {
+    background-color: #0056b3;
+  }
+
+  .success-btn {
+    background-color: #28a745;
+    color: white;
+  }
+  .success-btn:hover:not(:disabled) {
+    background-color: #218838;
+  }
+
+  .info-btn {
+    background-color: #17a2b8;
+    color: white;
+  }
+  .info-btn:hover:not(:disabled) {
+    background-color: #138496;
+  }
+
+  .danger-btn {
+    background-color: #dc3545;
+    color: white;
+  }
+  .danger-btn:hover:not(:disabled) {
+    background-color: #c82333;
+  }
+
+  .cancel-btn {
+    background-color: #6c757d;
+    color: white;
+  }
+  .cancel-btn:hover:not(:disabled) {
+    background-color: #5a6268;
+  }
+
+  /* Message Styles */
+  .message {
+    padding: 15px;
+    border-radius: 6px;
+    margin-top: 20px;
+    text-align: center;
+    font-weight: bold;
+    font-size: 0.9em;
+  }
+
+  .loading-message {
+    background-color: #e0f7fa;
+    color: #00796b;
+    border: 1px solid #b2ebf2;
+  }
+
+  .error-message {
+    background-color: #ffebee;
+    color: #d32f2f;
+    border: 1px solid #ef9a9a;
+  }
+
+  .no-results-message {
+    background-color: #fffde7;
+    color: #fbc02d;
+    border: 1px solid #fff59d;
+  }
+
+  /* API Results Card */
+  .results-card {
+    background-color: #e8f5e9;
+    border: 1px solid #c8e6c9;
+    padding: 20px;
+    border-radius: 8px;
+    margin-top: 25px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+
+  .results-card h4 {
+    color: #2e7d32;
+    margin-top: 0;
+    margin-bottom: 15px;
+    font-size: 1.3em;
+    border-bottom: 1px solid #d4edda;
+    padding-bottom: 10px;
+  }
+  .results-card h5 {
+    /* Wrk 데이터 항목별 제목 */
+    color: #388e3c;
+    font-size: 1.1em;
+    margin-top: 20px;
+    margin-bottom: 10px;
+    padding-bottom: 5px;
+    border-bottom: 1px dotted #c8e6c9;
+  }
+
+  .results-card p {
+    margin-bottom: 8px;
+    line-height: 1.5;
+    font-size: 0.95em;
+  }
+
+  .results-card p strong {
+    color: #388e3c;
+    min-width: 100px;
+    display: inline-block;
+  }
+
+  /* ⭐ TYPE_ID 섹션 스타일 ⭐ */
+  .type-id-section ul {
+    list-style-type: disc;
+    padding-left: 20px;
+    margin-top: 10px;
+  }
+  .type-id-section li {
+    margin-bottom: 5px;
+    font-size: 0.95em;
+    color: #4caf50;
+  }
+  .type-id-section li strong {
+    color: #388e3c;
+  }
+
+  /* Validator Panel specific styles */
+  .tag-input-display {
+    background-color: #e9f7ef;
+    border: 1px solid #c8e6c9;
+    padding: 10px 15px;
+    border-radius: 5px;
+    margin-bottom: 25px;
+    font-size: 1.1em;
+    color: #333;
+  }
+
+  .tag-value-display {
+    font-weight: bold;
+    color: #2e7d32;
+  }
+
+  .panel-description {
+    color: #777;
+    font-size: 0.9em;
+    margin-bottom: 15px;
+  }
+
+  .rules-table-container {
+    margin-bottom: 20px;
+  }
+
+  .rules-table-container h4,
+  .section-sub-title {
+    color: #333;
+    margin-top: 30px;
+    margin-bottom: 15px;
+    font-size: 1.4em;
+    padding-bottom: 8px;
+    border-bottom: 1px dashed #eee;
+  }
+
+  .rules-table-container table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+  }
+
+  .rules-table-container th,
+  .rules-table-container td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+    font-size: 0.9em;
+  }
+
+  .rules-table-container th {
+    background-color: #f2f2f2;
+  }
+
+  .rules-table-container input[type='text'] {
+    width: calc(100% - 10px);
+    padding: 5px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    box-sizing: border-box;
+    font-size: 0.9em;
+  }
+
+  .rules-table-container .table-actions {
+    margin-top: 15px;
+    display: flex;
+    gap: 10px;
+  }
+
+  .overall-validation-result {
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background-color: #f9f9f9;
+    margin-bottom: 20px;
+    font-size: 0.95em;
+  }
+
+  .validation-summary {
+    margin: 0;
+    font-size: 1.1em;
+  }
+
+  .regex-info {
+    margin-top: 10px;
+    font-size: 0.9em;
+    color: #666;
+  }
+
+  .combined-regex-code {
+    background-color: #e9e9e9;
+    padding: 3px 6px;
+    border-radius: 3px;
+    word-break: break-all;
+    font-size: 0.9em;
+  }
+
+  .regex-error-msg {
+    color: red;
+    font-size: 0.85em;
+    display: block;
+    margin-top: 5px;
+  }
+
+  .parts-analysis-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+  }
+
+  .parts-analysis-table thead tr {
+    background-color: #f2f2f2;
+  }
+
+  .parts-analysis-table th,
+  .parts-analysis-table td {
+    padding: 10px;
+    border: 1px solid #ddd;
+    text-align: left;
+    font-size: 0.85em;
+  }
+
+  .no-rule-message,
+  .no-input-message,
+  .overall-fail-message {
+    padding: 12px;
+    border: 1px solid #ddd;
+    text-align: center;
+    color: #999;
+    font-size: 0.9em;
+  }
+
+  .overall-fail-message {
+    color: #cc0000;
+    background-color: #ffe0e0;
+  }
+
+  /* 모달 스타일 (최상단 z-index로 띄움) */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+  }
+
+  .modal-content {
+    background: white;
+    padding: 30px;
+    border-radius: 10px;
+    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+    width: 90%;
+    max-width: 550px;
+    box-sizing: border-box;
+  }
+
+  .modal-content h4 {
+    margin-top: 0;
+    color: #333;
+    font-size: 1.5em;
+  }
+
+  .modal-content p {
+    color: #666;
+    font-size: 0.95em;
+    margin-bottom: 20px;
+  }
+
+  .modal-content .paste-textarea {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    font-size: 1em;
+    resize: vertical;
+    min-height: 150px;
+    box-sizing: border-box;
+  }
+
+  .modal-content .modal-actions {
+    margin-top: 25px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+  }
+
+  /* 반응형 디자인 */
+  @media (max-width: 1100px) {
+    .main-content-wrapper {
+      flex-direction: column; /* 중간 크기 화면에서 세로로 쌓이도록 */
+      gap: 30px;
+    }
+    .panel {
+      min-width: unset; /* 최소 너비 제한 해제 */
+      width: 100%;
+    }
+  }
+
+  @media (max-width: 600px) {
+    #app {
+      padding: 15px;
+    }
+    .page-main-title {
+      font-size: 1.8em;
+    }
+    .panel-title {
+      font-size: 1.5em;
+    }
+    .input-group input[type='text'],
+    .action-btn,
+    .modal-content .paste-textarea {
+      font-size: 0.9em;
+      padding: 10px;
+    }
+  }
 </style>
