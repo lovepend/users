@@ -1,112 +1,15 @@
-<script setup lang="ts">
-  // Library - Common
-  import { ref, shallowRef, toRaw, computed } from 'vue'
-  import { useRouter, useRoute } from 'vue-router'
-  import { storeToRefs } from 'pinia'
-  import { useJdModalRef } from '@jood/v-modal'
-
-  // AG-Grid
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-
-  import { useAppMenuStore } from '@/stores/app-menu'
-
-  const { sideMenus } = storeToRefs(useAppMenuStore())
-
-  const router = useRouter()
-  const route = useRoute()
-
-  const modalRef = useJdModalRef()
-  const modalData = ref([])
-
-  const pinnedBottomRowData = ref([
-    {
-      TYPE: 'Total',
-      REG_IDs: '',
-      TOTAL: 0,
-      EXIST: 0,
-      ABSENCE: 0,
-    },
-  ])
-
-  // AG-Grid 정의
-  const attrGridApi = shallowRef()
-
-  // Save Modal에 보여주기 위한 rowData
-  const themeClass = 'ag-theme-custom'
-
-  const colGridAttrDefs = ref([
-    { field: 'PIC_NO', headerName: 'PIC_NO', minWidth: 80, flex: 0.5, hide: true },
-    {
-      field: 'TYPE',
-      headerName: 'Menu Name',
-      minWidth: 100,
-      flex: 1.5,
-      // onCellClicked: (event: CellClickedEvent) =>
-      //   console.log('Cell was clicked')
-      cellRenderer: params => {
-        if (params.node.rowPinned) {
-          return 'Total'
-        } else {
-          if (params.data.TYPE !== 'Not found') {
-            const eDiv = document.createElement('div')
-            // eDiv.innerHTML = '<span>' + params.data.TYPE + '</span>';
-            eDiv.innerHTML = '<a href="#" class="link-primary">' + params.data.TYPE + '</a>'
-            eDiv.onclick = function () {
-              // window.open(params.data.URL.substring(1) + '?menuid=' + params.data.TYPE_ID);
-
-              // const routeData = router.resolve({
-              const routeData = router.resolve({
-                path: params.data.URL,
-                query: {
-                  proj_no: route.query.proj_no,
-                  ep_id: route.query.ep_id,
-                  menuid: params.data.TYPE_ID,
-                },
-              })
-
-              console.log('routeData : ', routeData)
-
-              window.open(routeData.href, `_blank`)
-              //window.open(routePath.value.substring(1) + '?moveid=' + params.data.TYPE_ID);
-            }
-            return eDiv
-          } else {
-            return params.data.TYPE_ID
-          }
-        }
-      },
-      colSpan: params => (params.node.rowPinned ? 2 : 1),
-      cellStyle: params => {
-        if (params.node.rowPinned) {
-          // return { backgroundColor: '#ced4da', fontWeight: 'bold', border: 'none' };
-          return { fontWeight: 'bold', border: 'none' }
-        }
-        return null
-      },
-    },
-    { field: 'TYPE_ID', headerName: 'TYPE_ID', minWidth: 100, flex: 0.5, hide: true },
-    {
-      field: 'REG_IDs',
-      headerName: 'REG_IDs',
-      minWidth: 30,
-      flex: 3,
-      cellStyle: params => {
-        if (params.node.rowPinned) {
-          // return { backgroundColor: '#ced4da', fontWeight: 'bold', border: 'none' };
-          return { fontWeight: 'bold', border: 'none' }
-        }
-        return null
-      },
-    },
+const colGridAttrDefs = ref([
+    // ... 앞부분 컬럼 (PIC_NO, TYPE, TYPE_ID, REG_IDs) 생략 ...
     {
       field: 'TOTAL',
       headerName: 'DATA QTY TOTAL',
       minWidth: 80,
       flex: 1,
       aggFunc: 'sum',
+      // 👇 천 단위 콤마 추가
+      valueFormatter: params => params.value == null ? '' : Number(params.value).toLocaleString(),
       cellStyle: params => {
         if (params.node.rowPinned) {
-          // return { backgroundColor: '#ced4da', fontWeight: 'bold', border: 'none' };
           return { fontWeight: 'bold', border: 'none' }
         }
         return null
@@ -118,9 +21,10 @@
       minWidth: 80,
       flex: 1,
       aggFunc: 'sum',
+      // 👇 천 단위 콤마 추가
+      valueFormatter: params => params.value == null ? '' : Number(params.value).toLocaleString(),
       cellStyle: params => {
         if (params.node.rowPinned) {
-          // return { backgroundColor: '#ced4da', fontWeight: 'bold', border: 'none' };
           return { fontWeight: 'bold', border: 'none' }
         }
         return null
@@ -132,202 +36,13 @@
       minWidth: 80,
       flex: 1,
       aggFunc: 'sum',
+      // 👇 천 단위 콤마 추가
+      valueFormatter: params => params.value == null ? '' : Number(params.value).toLocaleString(),
       cellStyle: params => {
         if (params.node.rowPinned) {
-          // return { backgroundColor: '#ced4da', fontWeight: 'bold', border: 'none' };
           return { fontWeight: 'bold', border: 'none' }
         }
         return null
       },
     },
   ])
-
-  const loadingOverlayComponentParams = ref({
-    loadingMessage: 'Loading...',
-  })
-
-  const defaultColDef = ref({
-    filter: true,
-    editable: false,
-  })
-
-  // const getRowStyle = (params: RowClassParams): RowStyle | undefined => {
-  //   if (params.node.rowPinned) {
-  //     return { backgroundColor: '#ced4da', fontWeight: 'bold' };
-  //   }
-  // }
-
-  const rowClassRules = {
-    'rag-pinned': params => {
-      return params.node.rowPinned
-    },
-  }
-
-  const onClose = () => {
-    console.log('Modal Closed: ', modalData)
-
-    modalRef.close()
-  }
-
-  const onConfirm = async () => {
-    try {
-      // 다시 TemplateDesiner.vue로 저장 정보 던짐
-      modalRef.close(modalData)
-    } catch (err) {
-      console.log('Error: ', err)
-    }
-  }
-
-  const onAttrGridReady = params => {
-    attrGridApi.value = params.api
-
-    // 모든 EP 메뉴 Data에서 메뉴명 및 URL 가져와야 함.
-    modalData.value = toRaw(modalRef.modalData.value)
-
-    let sumTOTAL = 0
-    let sumEXIST = 0
-    let sumABSENCE = 0
-
-    modalData.value.forEach(elem => {
-      // let menuName = sideMenus.value.find(menu_item => menu_item.ID == elem.TYPE_ID)?.NAME;
-      let findMenu = findObjectByKey(sideMenus.value, 'ID', elem.TYPE_ID)
-      let menuUrl = findMenu?.URL
-      let menuName = findMenu?.NAME
-      console.log(menuName)
-
-      if (typeof menuName == 'undefined' || menuName == null || menuName == '') {
-        elem.TYPE = 'Not found'
-        elem.URL = ''
-      } else {
-        elem.TYPE = menuName
-        elem.URL = menuUrl
-      }
-
-      sumTOTAL += elem.TOTAL
-      sumEXIST += elem.EXIST
-      sumABSENCE += elem.ABSENCE
-    })
-
-    pinnedBottomRowData.value = [
-      {
-        TYPE: 'Total',
-        REG_IDs: '',
-        TOTAL: sumTOTAL,
-        EXIST: sumEXIST,
-        ABSENCE: sumABSENCE,
-      },
-    ]
-  }
-
-  function findObjectByKey(arr, key, value) {
-    let result = null
-
-    function search(arr) {
-      for (const obj of arr) {
-        // 특정 키 값이 일치하는 경우 결과 저장
-        if (obj[key] === value) {
-          result = obj
-          return true
-        }
-
-        // 자식(children)이 있는 경우 재귀적으로 탐색
-        if (obj.MENUS && Array.isArray(obj.MENUS)) {
-          if (search(obj.MENUS)) {
-            return true
-          }
-        }
-      }
-      return false
-    }
-
-    search(arr)
-    return result
-  }
-</script>
-
-<template>
-  <div class="vmodal p-1">
-    <div class="modal position-static d-block">
-      <div class="modal-lg">
-        <!-- Begin Grid Save Modal -->
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">Data Status Details</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="modal" @click="onClose"></button>
-          </div>
-          <div class="modal-body px-3 modal-body-dashboard">
-            <!-- :getRowHeight="params => params.node.level === -1 ? 24 : null" -->
-            <!-- :grandTotalRow="'bottom'" -->
-            <!-- :getRowStyle="getRowStyle" -->
-            <!-- :suppressRowHoverHighlight=true -->
-            <ag-grid-vue
-              id="attrAgGrid"
-              style="height: 450px"
-              :class="themeClass"
-              :columnDefs="colGridAttrDefs"
-              :defaultColDef="defaultColDef"
-              :rowData="modalData"
-              :pagination="false"
-              :pinnedBottomRowData="pinnedBottomRowData"
-              :rowClassRules="rowClassRules"
-              :loadingOverlayComponent="AggridLoadingOverlay"
-              :loadingOverlayComponentParams="loadingOverlayComponentParams"
-              @grid-ready="onAttrGridReady"
-            >
-            </ag-grid-vue>
-          </div>
-          <!-- End Grid Save Modal -->
-        </div>
-        <div class="modal-footer">
-          <!-- <button type="button" class="btn btn-sm btn-primary" @click="onConfirm">확인</button> -->
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<style lang="scss" scoped>
-  .vmodal {
-    display: flex;
-    flex-direction: column;
-    min-width: 60vw;
-    min-height: 30vw;
-    box-sizing: border-box;
-  }
-
-  .disabled {
-    pointer-events: none;
-    color: #bfcbd9;
-    cursor: not-allowed;
-    background-image: none;
-    background-color: #eef1f6;
-    border-color: #d1dbe5;
-  }
-</style>
-
-<style>
-  /* AG Grid Row Pinning */
-  .modal-body-dashboard .ag-floating-bottom {
-    background-color: color-mix(in srgb, transparent, var(--ag-foreground-color) 15%);
-    /* Top Border 색상 */
-    overflow-y: hidden !important;
-    /* 세로 스크롤 유무 */
-  }
-
-  .ag-floating-bottom-viewport {
-    background-color: #ced4da;
-    /* 세로 스크롤 영역 색상 */
-  }
-
-  .modal-body-dashboard .rag-pinned {
-    background-color: #ced4da;
-    /* Pinned Row 색상 */
-  }
-
-  .modal-body-dashboard .rag-pinned:hover {
-    --ag-accent-color: #ced4da;
-    /* Pinned Row Hover 색상 관련 */
-    --ag-row-hover-color: color-mix(in srgb, transparent, var(--ag-accent-color) 12%);
-    /* Pinned Row Hover 색상 관련 */
-  }
-</style>
