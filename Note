@@ -1,21 +1,21 @@
 <template>
   <div class="app-wrapper">
-    <div class="fixed-header-section">
+    <header class="fixed-top-bar">
       <div class="header-inner">
         <h2 class="main-title">에러 코드</h2>
         <div class="global-search-wrapper">
           <input 
             type="text" 
             v-model="globalSearch" 
-            placeholder="전체 컬럼 내용 검색..." 
+            placeholder="전체 검색..." 
             class="global-search-input"
           />
         </div>
       </div>
-    </div>
+    </header>
 
-    <div class="scroll-content-area">
-      <div class="table-container">
+    <div class="scroll-body">
+      <div class="table-card">
         <table class="error-table">
           <colgroup>
             <col style="width: 60px;">
@@ -27,42 +27,29 @@
           </colgroup>
           <thead>
             <tr>
-              <th v-for="col in columns" :key="col" class="sticky-th">
-                <div class="th-box">
+              <th v-for="col in columns" :key="col" class="sticky-header">
+                <div class="th-content">
                   <span class="label">{{ col }}</span>
                   
-                  <div v-if="col === '기능'" class="filter-with-dropdown">
-                    <input 
-                      type="text" 
-                      v-model="columnFilters[col]" 
-                      class="filter-input"
-                      placeholder="필터"
-                    />
+                  <div v-if="col === '기능'" class="filter-group">
+                    <input type="text" v-model="columnFilters[col]" class="filter-input" placeholder="필터" />
                     <div class="dropdown-container">
                       <button @click.stop="toggleFuncList" class="combo-btn">▼</button>
                       <ul v-if="showFuncList" class="combo-list">
                         <li @click="selectFunc('')">전체보기</li>
-                        <li v-for="item in uniqueFuncs" :key="item" @click="selectFunc(item)">
-                          {{ item }}
-                        </li>
+                        <li v-for="item in uniqueFuncs" :key="item" @click="selectFunc(item)">{{ item }}</li>
                       </ul>
                     </div>
                   </div>
 
-                  <input 
-                    v-else
-                    type="text" 
-                    v-model="columnFilters[col]" 
-                    class="filter-input"
-                    placeholder="필터"
-                  />
+                  <input v-else type="text" v-model="columnFilters[col]" class="filter-input" placeholder="필터" />
                 </div>
               </th>
             </tr>
           </thead>
           <tbody>
             <tr v-if="filteredData.length === 0">
-              <td :colspan="columns.length" class="empty-cell">데이터를 찾을 수 없습니다.</td>
+              <td :colspan="columns.length" class="empty-msg">일치하는 결과가 없습니다.</td>
             </tr>
             <tr v-for="(row, idx) in filteredData" :key="idx">
               <td v-for="col in columns" :key="col" :class="['data-cell', `col-${col}`]">
@@ -76,188 +63,95 @@
   </div>
 </template>
 
-<script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import * as XLSX from 'xlsx';
-import excelFileUrl from '@/assets/Errorcode.xlsx?url';
-
-const rawData = ref([]);
-const columns = ['No', '기능', 'Code', 'Message', '원인', '해결방법'];
-const globalSearch = ref('');
-const columnFilters = ref({ No: '', 기능: '', Code: '', Message: '', 원인: '', 해결방법: '' });
-const showFuncList = ref(false);
-const uniqueFuncs = ref([]);
-
-const loadExcelData = async () => {
-  try {
-    const res = await fetch(excelFileUrl);
-    const buf = await res.arrayBuffer();
-    const wb = XLSX.read(buf, { type: 'array' });
-    const data = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]]);
-    rawData.value = data;
-
-    // 기능 리스트 추출
-    const funcs = [...new Set(data.map(item => item['기능']))].filter(Boolean);
-    uniqueFuncs.value = funcs.sort();
-  } catch (err) { console.error(err); }
-};
-
-const toggleFuncList = () => (showFuncList.value = !showFuncList.value);
-const selectFunc = (val) => {
-  columnFilters.value['기능'] = val;
-  showFuncList.value = false;
-};
-const closeDropdown = () => (showFuncList.value = false);
-
-onMounted(() => {
-  loadExcelData();
-  window.addEventListener('click', closeDropdown);
-});
-onUnmounted(() => window.removeEventListener('click', closeDropdown));
-
-const filteredData = computed(() => {
-  return rawData.value.filter(row => {
-    const colMatch = columns.every(c => !columnFilters.value[c] || String(row[c]||'').toLowerCase().includes(columnFilters.value[c].toLowerCase()));
-    const globalMatch = !globalSearch.value || columns.some(c => String(row[c]||'').toLowerCase().includes(globalSearch.value.toLowerCase()));
-    return colMatch && globalMatch;
-  });
-});
-
-const highlightText = (t) => {
-  const s = String(t || '');
-  const k = globalSearch.value.trim();
-  if (!k) return s;
-  const re = new RegExp(`(${k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  return s.replace(re, '<mark class="hl">$1</mark>');
-};
-</script>
-
 <style scoped>
-/* 1. 레이아웃 구조 정의 */
+/* 전체 화면 레이아웃 */
 .app-wrapper {
   display: flex;
   flex-direction: column;
-  height: 100vh; /* 브라우저 꽉 채우기 */
-  background-color: #f8f9fa;
-  overflow: hidden; /* 바깥쪽 스크롤 방지 */
+  height: 100vh;
+  background-color: #f1f3f5;
+  overflow: hidden; /* 바깥쪽 스크롤 차단 */
 }
 
-/* 2. 상단 고정 헤더 섹션 */
-.fixed-header-section {
+/* 1. 최상단 검색바 고정 */
+.fixed-top-bar {
   flex: 0 0 auto;
-  background: #fff;
-  padding: 20px 40px;
-  border-bottom: 1px solid #eee;
-  z-index: 1000;
+  background: #ffffff;
+  padding: 15px 30px;
+  border-bottom: 1px solid #dee2e6;
+  z-index: 1000; /* 가장 위에 배치 */
 }
-.header-inner {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  max-width: 1600px;
-  margin: 0 auto;
-}
-.main-title { font-size: 24px; font-weight: 800; color: #333; margin: 0; }
-.global-search-input {
-  width: 400px;
-  padding: 10px 15px;
-  border: 2px solid #edf2f7;
-  border-radius: 8px;
-  outline: none;
-}
+.header-inner { display: flex; justify-content: space-between; align-items: center; }
+.main-title { font-size: 20px; font-weight: 800; color: #333; margin: 0; }
+.global-search-input { width: 350px; padding: 8px 15px; border: 2px solid #e9ecef; border-radius: 6px; }
 
-/* 3. 스크롤 영역 */
-.scroll-content-area {
+/* 2. 스크롤 본문 영역 */
+.scroll-body {
   flex: 1;
-  overflow: auto; /* 여기서만 스크롤 발생 */
-  padding: 20px 40px;
+  overflow-y: auto; /* 본문만 스크롤 */
+  padding: 20px;
 }
 
-.table-container {
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.05);
-  min-width: 1200px;
+.table-card {
+  background: #ffffff;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+  overflow: visible; /* sticky 메뉴가 안 잘리도록 설정 */
 }
 
 .error-table {
   width: 100%;
-  border-collapse: separate;
+  border-collapse: separate; /* sticky 사용 시 테두리 유지를 위해 필요 */
   border-spacing: 0;
 }
 
-/* 4. 틀고정 헤더 (Sticky) */
-.sticky-th {
+/* 3. ★ 핵심: 테이블 헤더 틀고정 ★ */
+.sticky-header {
   position: sticky;
-  top: 0; /* scroll-content-area 내부에서 고정됨 */
-  background: #ffffff; /* 투명하면 안됨 */
-  z-index: 100; /* 데이터 로우보다 높아야 함 */
-  padding: 15px 10px;
+  top: 0; /* scroll-body 상단에 딱 붙음 */
+  background-color: #ffffff; /* 중요: 아래 데이터가 가려지도록 흰색 배경 필수 */
+  z-index: 10; /* 데이터 로우(0)보다 높게 설정 */
+  padding: 12px 10px;
   border-bottom: 2px solid #3498db;
-  text-align: left;
+  box-shadow: 0 2px 2px -1px rgba(0,0,0,0.1); /* 헤더 경계선 효과 */
 }
 
-.th-box { display: flex; flex-direction: column; gap: 8px; }
-.label { font-size: 13px; font-weight: 700; color: #555; }
-.filter-input {
-  padding: 6px 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 12px;
-  width: 100%;
+.th-content { display: flex; flex-direction: column; gap: 6px; }
+.label { font-size: 12px; font-weight: 700; color: #495057; text-align: left; }
+.filter-input { padding: 4px 8px; border: 1px solid #ced4da; border-radius: 4px; font-size: 11px; width: 100%; }
+
+/* 4. 본문 데이터 디자인 */
+.data-cell {
+  padding: 12px 10px;
+  border-bottom: 1px solid #f1f3f5;
+  font-size: 13.5px;
+  vertical-align: top;
+  background-color: #ffffff; /* 각 셀에도 배경색을 주어 겹침 방지 */
 }
 
-/* 5. 기능 콤보박스 디자인 */
-.filter-with-dropdown {
-  display: flex;
-  gap: 4px;
-  position: relative;
-}
+/* 특정 열 중앙 정렬 */
+.col-No, .col-기능, .col-Code { text-align: center; }
+.col-No { color: #3498db; font-weight: bold; }
+
+/* 콤보박스 위치 조정 */
 .dropdown-container { position: relative; }
-.combo-btn {
-  height: 100%;
-  padding: 0 8px;
-  background: #f1f3f5;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  cursor: pointer;
-}
 .combo-list {
   position: absolute;
-  top: calc(100% + 5px);
+  top: 100%;
   right: 0;
+  z-index: 200; /* 헤더보다 무조건 높게 */
   background: white;
   border: 1px solid #ddd;
-  border-radius: 6px;
-  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
-  min-width: 180px;
-  max-height: 300px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  /* 이하 이전과 동일 */
+  min-width: 150px;
+  max-height: 250px;
   overflow-y: auto;
-  z-index: 2000; /* 헤더보다 높게 */
   list-style: none;
-  padding: 5px 0;
-  margin: 0;
+  padding: 0;
 }
-.combo-list li {
-  padding: 10px 15px;
-  font-size: 13px;
-  cursor: pointer;
-}
-.combo-list li:hover { background: #3498db; color: white; }
 
-/* 6. 데이터 셀 디자인 */
-.data-cell {
-  padding: 15px 10px;
-  border-bottom: 1px solid #f1f3f5;
-  font-size: 14px;
-  line-height: 1.5;
-  vertical-align: top;
-  word-break: break-all;
-}
-.col-No, .col-기능, .col-Code { text-align: center; }
-.col-No { color: #3498db; font-weight: 600; }
-
-tbody tr:hover { background-color: #f8fbff; }
+/* 하이라이트 및 호버 */
 :deep(.hl) { background-color: #fff3bf; color: #e67e22; font-weight: bold; padding: 0 2px; }
-.empty-cell { padding: 50px; text-align: center; color: #999; }
+tbody tr:hover td { background-color: #f8faff; }
 </style>
