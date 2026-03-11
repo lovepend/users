@@ -1,10 +1,219 @@
-No	Code	Message	기능	원인	해결방법
-1	COMMON0001	Save or Publish :Wrong ProjectNo		Register의 생성 및 저장 시점이 오래되어서 Register의 스키마나 System Atribute 강제로 Edit 및 Save&Pub 셋팅이 현재 구조와 맞지 않아서 발생	Wrong ProjectNo 발생하는 Register의 Attribute Map에서 Save 후 다시 진행
-2	COMMON0001	Publish : '(Tag No)' : Duplicated		생성 할려고 하는 Tag가 이미 DB에 생성되어 있음	다른 Tag No부여 하거나 중복 생성된 Tag를 Restore 해서 Tag No 변경하여 유니크 하게 Tag No 지정
-3	COMMON0001	Publish : '(Value)' is invalid (Regex)		해당 Value가 Master Attribute에 정의한 Value와 다를 때 발생	Value가 발생한 Attribute를 맞는 값으로 수정 하고 Publish 진행
-4	COMMON0001	Publish : '(Code List Value)' is not in Code List values		Code List의 Value가 아닌 경우 발생	Value를 Code List의 Value로 변경 후 Save or Publish 진행
-5	COMMON0001	Attribute value : '(Tag No or Item No)' RegisterInvalid		Register의 구성 필수 Attribute가 누락	Tag Type에 구성되어 있는 Attribute 포함 하여 Register 구성
-6	COMMON0001	Object Class : '(ObjectClass Name)' has child Object Classes		하위에 Object Class가 있어서 삭제 불가	하위 Object Class 삭제 후 삭제
-7	COMMON0001	Publish : RIG_TAG_IDX is invalid		Relation 저장할 때 Right Tag IDX가 Data 저장되어 있지 않아서 발생	Data 저장 후 실행 할 것
-8	COMMON0001	Publish : '(Tag No or Item No)' NotMatched		Tag Type에 정의된 Attribute의 입력 값들이 Tag와 맞지 않아서 발생	AutoTag 사용하여 Tag No를 맞추서 Publish 진행
-9	COMMON0001	Publish : Command update failed: Caused by :: Write conflict during plan execution and yielding is disabled. :: Please retry your operation or multi-document transaction..		백앤드 몽고DB에 잘못된 요청으로 재 요청 할 때 발생, MongoDB 고유의 Error	잘못된 부분 수정 후 올바르게 Publish 요청할 것(단 1~2분 후에 시도)
+<template>
+  <div class="error-code-container">
+    <h2>에러 코드 뷰어</h2>
+    
+    <div class="search-bar">
+      <input 
+        type="text" 
+        v-model="globalSearch" 
+        placeholder="전체 검색어를 입력하세요..." 
+        class="global-search-input"
+      />
+    </div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th v-for="col in columns" :key="col">
+              <div class="th-content">
+                <span>{{ col }}</span>
+                <input 
+                  type="text" 
+                  v-model="columnFilters[col]" 
+                  :placeholder="`${col} 필터`" 
+                  class="column-filter-input"
+                />
+              </div>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr v-if="filteredData.length === 0">
+            <td :colspan="columns.length" class="no-data">
+              표시할 데이터가 없습니다.
+            </td>
+          </tr>
+          <tr v-for="(row, index) in filteredData" :key="index">
+            <td 
+              v-for="col in columns" 
+              :key="col" 
+              v-html="highlightText(row[col])"
+            ></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, onMounted } from 'vue';
+import * as XLSX from 'xlsx';
+
+// Vite 환경에서 src/assets 폴더의 파일 URL을 가져옵니다.
+import excelFileUrl from '@/assets/Errorcode.xlsx?url';
+
+// 상태 관리
+const rawData = ref([]);
+const columns = ref([]);
+const globalSearch = ref('');
+const columnFilters = ref({});
+
+// 엑셀 파일 로드 및 파싱 함수
+const loadExcelData = async () => {
+  try {
+    const response = await fetch(excelFileUrl);
+    const arrayBuffer = await response.arrayBuffer();
+    
+    // 엑셀 워크북 읽기
+    const workbook = XLSX.read(arrayBuffer, { type: 'array' });
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    
+    // JSON 형태로 변환
+    const jsonData = XLSX.utils.sheet_to_json(worksheet);
+    rawData.value = jsonData;
+
+    // 컬럼 추출 및 필터 초기화
+    if (jsonData.length > 0) {
+      columns.value = Object.keys(jsonData[0]);
+      columns.value.forEach(col => {
+        columnFilters.value[col] = '';
+      });
+    }
+  } catch (error) {
+    console.error('엑셀 파일을 읽어오는 중 오류가 발생했습니다:', error);
+  }
+};
+
+// 필터링된 데이터 (컬럼 필터 -> 전체 검색 순서로 적용)
+const filteredData = computed(() => {
+  return rawData.value.filter(row => {
+    // 1. 각 컬럼별 필터 검사
+    for (const col of columns.value) {
+      const filterValue = columnFilters.value[col]?.toLowerCase().trim();
+      if (filterValue) {
+        const cellValue = String(row[col] || '').toLowerCase();
+        if (!cellValue.includes(filterValue)) {
+          return false; // 하나라도 만족하지 않으면 제외
+        }
+      }
+    }
+
+    // 2. 전체 검색 검사
+    const searchKeyword = globalSearch.value.toLowerCase().trim();
+    if (searchKeyword) {
+      // 행의 모든 값 중 하나라도 전체 검색어를 포함하는지 확인
+      const isMatch = columns.value.some(col => {
+        const cellValue = String(row[col] || '').toLowerCase();
+        return cellValue.includes(searchKeyword);
+      });
+      if (!isMatch) return false;
+    }
+
+    return true;
+  });
+});
+
+// HTML 특수문자 이스케이프 (XSS 방지)
+const escapeHtml = (unsafe) => {
+  return String(unsafe || '')
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+};
+
+// 검색어 하이라이팅 함수
+const highlightText = (text) => {
+  const safeText = escapeHtml(text);
+  const keyword = globalSearch.value.trim();
+  
+  // 전체 검색어가 없으면 원본 반환
+  if (!keyword) return safeText;
+
+  // 정규식 특수문자 이스케이프 처리
+  const escapedKeyword = escapeHtml(keyword).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(${escapedKeyword})`, 'gi');
+  
+  // 일치하는 텍스트를 <mark> 태그로 감싸기
+  return safeText.replace(regex, '<mark class="highlight">$1</mark>');
+};
+
+// 컴포넌트 마운트 시 데이터 로드
+onMounted(() => {
+  loadExcelData();
+});
+</script>
+
+<style scoped>
+.error-code-container {
+  padding: 20px;
+  font-family: Arial, sans-serif;
+}
+
+.search-bar {
+  margin-bottom: 20px;
+}
+
+.global-search-input {
+  width: 100%;
+  max-width: 400px;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+}
+
+.table-wrapper {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 800px;
+}
+
+th, td {
+  border: 1px solid #ddd;
+  padding: 12px;
+  text-align: left;
+}
+
+th {
+  background-color: #f5f5f5;
+}
+
+.th-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.column-filter-input {
+  padding: 4px 8px;
+  font-size: 13px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.no-data {
+  text-align: center;
+  padding: 30px;
+  color: #666;
+}
+
+/* 하이라이트 스타일 (v-html 내부 태그) */
+:deep(mark.highlight) {
+  background-color: #ffeeb2;
+  color: #d93025;
+  font-weight: bold;
+  padding: 0 2px;
+  border-radius: 2px;
+}
+</style>
