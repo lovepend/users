@@ -1,28 +1,30 @@
 <template>
-  <div :class="['error-code-container', themeClass]">
-    <h2>에러 코드 뷰어</h2>
+  <div class="error-code-container">
+    <h2 class="title">에러 코드</h2>
     
     <div class="search-bar">
       <input 
         type="text" 
         v-model="globalSearch" 
-        placeholder="전체 검색어를 입력하세요..." 
+        placeholder="검색어를 입력하세요 (전체 컬럼 대상)..." 
         class="global-search-input"
       />
     </div>
 
     <div class="table-wrapper">
       <table>
+        <colgroup>
+          <col style="width: 55px;">  <col style="width: 100px;"> <col style="width: 130px;"> <col style="width: 23%;">   <col style="width: 23%;">   <col style="width: 23%;">   </colgroup>
         <thead>
           <tr>
             <th v-for="col in columns" :key="col">
               <div class="th-content">
-                <span>{{ col }}</span>
+                <span class="col-label">{{ col }}</span>
                 <input 
                   type="text" 
                   v-model="columnFilters[col]" 
-                  :placeholder="`${col} 필터`" 
                   class="column-filter-input"
+                  placeholder="필터"
                 />
               </div>
             </th>
@@ -30,10 +32,12 @@
         </thead>
         <tbody>
           <tr v-if="filteredData.length === 0">
-            <td :colspan="columns.length" class="no-data">표시할 데이터가 없습니다.</td>
+            <td :colspan="columns.length" class="no-data">데이터가 없습니다.</td>
           </tr>
           <tr v-for="(row, index) in filteredData" :key="index">
-            <td v-for="col in columns" :key="col" v-html="highlightText(row[col])"></td>
+            <td v-for="col in columns" :key="col" :class="`col-${col}`">
+              <div v-html="highlightText(row[col])"></div>
+            </td>
           </tr>
         </tbody>
       </table>
@@ -42,36 +46,20 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import * as XLSX from 'xlsx';
 import excelFileUrl from '@/assets/Errorcode.xlsx?url';
 
-// --- 상태 관리 ---
 const rawData = ref([]);
-const columns = ref([]);
+
+// 컬럼 순서 정의: No -> 기능 -> Code -> Message -> 원인 -> 해결방법
+const columns = ref(['No', '기능', 'Code', 'Message', '원인', '해결방법']);
+
 const globalSearch = ref('');
-const columnFilters = ref({});
-const themeClass = ref('light-theme'); // 기본값: 라이트
+const columnFilters = ref({
+  No: '', 기능: '', Code: '', Message: '', 원인: '', 해결방법: ''
+});
 
-// --- 테마 로직 (Local Storage 연동) ---
-const updateTheme = () => {
-  const encodedOption = localStorage.getItem('dev_AppOption');
-  if (encodedOption) {
-    try {
-      // Base64 디코딩 후 JSON 파싱
-      const decoded = atob(encodedOption);
-      const option = JSON.parse(decoded);
-      
-      // appThemeClass 값에 따라 클래스 설정 (dark 또는 light)
-      themeClass.value = option.appThemeClass === 'dark' ? 'dark-theme' : 'light-theme';
-    } catch (e) {
-      console.error("테마 설정을 읽는 중 오류 발생:", e);
-      themeClass.value = 'light-theme';
-    }
-  }
-};
-
-// --- 데이터 로드 로직 ---
 const loadExcelData = async () => {
   try {
     const response = await fetch(excelFileUrl);
@@ -79,103 +67,129 @@ const loadExcelData = async () => {
     const workbook = XLSX.read(arrayBuffer, { type: 'array' });
     const jsonData = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]]);
     rawData.value = jsonData;
-    if (jsonData.length > 0) {
-      columns.value = Object.keys(jsonData[0]);
-      columns.value.forEach(col => columnFilters.value[col] = '');
-    }
   } catch (error) {
     console.error('엑셀 로드 실패:', error);
   }
 };
 
-// --- 필터링 및 하이라이트 로직 ---
 const filteredData = computed(() => {
   return rawData.value.filter(row => {
-    for (const col of columns.value) {
+    // 1. 개별 필터
+    const isColumnMatch = columns.value.every(col => {
       const fv = columnFilters.value[col]?.toLowerCase().trim();
-      if (fv && !String(row[col] || '').toLowerCase().includes(fv)) return false;
-    }
+      return !fv || String(row[col] || '').toLowerCase().includes(fv);
+    });
+    // 2. 전체 검색
     const sk = globalSearch.value.toLowerCase().trim();
-    return sk ? columns.value.some(col => String(row[col] || '').toLowerCase().includes(sk)) : true;
+    const isGlobalMatch = !sk || columns.value.some(col => 
+      String(row[col] || '').toLowerCase().includes(sk)
+    );
+    return isColumnMatch && isGlobalMatch;
   });
 });
 
 const highlightText = (text) => {
-  const safeText = String(text || '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#039;"}[m]));
+  const strText = String(text || '');
   const keyword = globalSearch.value.trim();
-  if (!keyword) return safeText;
+  if (!keyword) return strText;
   const regex = new RegExp(`(${keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi');
-  return safeText.replace(regex, '<mark class="highlight">$1</mark>');
+  return strText.replace(regex, '<mark class="highlight">$1</mark>');
 };
 
-// --- 생명주기 관리 ---
-onMounted(() => {
-  loadExcelData();
-  updateTheme(); // 초기 로드 시 테마 적용
-
-  // 같은 창에서 localStorage가 변경될 때를 위한 이벤트 리스너 (필요 시)
-  window.addEventListener('storage', updateTheme);
-  
-  // 만약 앱 내부에서 스토리지 변경 시 이벤트를 발생시키지 않는 경우를 대비한 주기적 체크 (선택사항)
-  // setInterval(updateTheme, 1000); 
-});
-
-onUnmounted(() => {
-  window.removeEventListener('storage', updateTheme);
-});
+onMounted(loadExcelData);
 </script>
 
 <style scoped>
-/* 공통 스타일 */
 .error-code-container {
-  padding: 20px;
-  min-height: 100vh;
-  transition: background-color 0.3s, color 0.3s;
-}
-
-/* 라이트 테마 (배경 흰색) */
-.light-theme {
+  padding: 30px;
   background-color: #ffffff;
-  color: #333333;
-}
-.light-theme th { background-color: #f8f9fa; color: #333; }
-.light-theme td, .light-theme th { border: 1px solid #dee2e6; }
-.light-theme .global-search-input, .light-theme .column-filter-input {
-  background-color: #fff;
-  color: #333;
-  border: 1px solid #ccc;
+  min-height: 100vh;
+  font-family: sans-serif;
 }
 
-/* 다크 테마 */
-.dark-theme {
-  background-color: #1e1e1e;
-  color: #e0e0e0;
-}
-.dark-theme th { background-color: #2d2d2d; color: #fff; }
-.dark-theme td, .dark-theme th { border: 1px solid #444; }
-.dark-theme .global-search-input, .dark-theme .column-filter-input {
-  background-color: #333;
-  color: #fff;
-  border: 1px solid #555;
-}
-
-/* 검색바 및 테이블 구조 */
-.search-bar { margin-bottom: 20px; }
-.global-search-input { width: 100%; max-width: 400px; padding: 10px; border-radius: 4px; }
-.table-wrapper { overflow-x: auto; }
-table { width: 100%; border-collapse: collapse; min-width: 800px; }
-th, td { padding: 12px; text-align: left; }
-.th-content { display: flex; flex-direction: column; gap: 8px; }
-.column-filter-input { padding: 4px 8px; font-size: 13px; border-radius: 4px; width: 100%; }
-
-/* 하이라이트 스타일 */
-:deep(mark.highlight) {
-  background-color: #ffeb3b;
-  color: #000;
+.title {
+  font-size: 24px;
   font-weight: bold;
-  padding: 0 2px;
+  margin-bottom: 25px;
+  color: #111;
 }
-.dark-theme :deep(mark.highlight) {
-  background-color: #ffd600;
+
+.search-bar {
+  margin-bottom: 20px;
+}
+
+.global-search-input {
+  width: 100%;
+  max-width: 450px;
+  padding: 10px 15px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.table-wrapper {
+  border: 1px solid #eee;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+th {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #eee;
+  padding: 12px 8px;
+}
+
+td {
+  padding: 12px 8px;
+  border-bottom: 1px solid #f2f2f2;
+  font-size: 13px;
+  line-height: 1.5;
+  word-break: break-all;
+  vertical-align: top;
+}
+
+.th-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.col-label {
+  font-weight: bold;
+  font-size: 12px;
+  color: #555;
+}
+
+.column-filter-input {
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+/* 정렬 스타일 */
+.col-No, .col-기능, .col-Code {
+  text-align: center;
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px;
+  color: #999;
+}
+
+tbody tr:hover {
+  background-color: #fcfcfc;
+}
+
+:deep(mark.highlight) {
+  background-color: #fff3bf;
+  color: #e67e22;
+  font-weight: bold;
 }
 </style>
