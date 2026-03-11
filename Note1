@@ -1,1 +1,152 @@
-Test
+api : /api/Admin/Tool/GetPublishedData
+
+payload : 
+{
+    "ProjectNo": "TE1002",
+    "Keyword": "6802"
+}
+
+response :
+[
+    {
+        "Id": "6972b1861e0a7d5e4d35d137",
+        "ProjectNo": "TE1002",
+        "PrntTagIdx": null,
+        "TagIdx": "6972b1861e0a7d5e4d35d135",
+        "TagNo": "6802",
+        "TagTypeId": null,
+        "ClsId": "NON_TEST_CLS",
+        "TagDesc": null,
+        "BfTagNo": "2",
+        "PicNo": "52593271",
+        "DsnSkl": null,
+        "EpId": "TeEP",
+        "EpIc": "TeEP",
+        "CreateNo": "52593271",
+        "CreateAt": "2026-01-22T23:23:36Z",
+        "ChangeNo": "52593271",
+        "ChangeAt": "2026-03-10T23:45:35.835Z",
+        "DeleteNo": null,
+        "DeleteAt": null,
+        "Deleted": false,
+        "Attributes": []
+    },
+    {
+        "Id": "6972b1861e0a7d5e4d35d13c",
+        "ProjectNo": "TE1002",
+        "PrntTagIdx": null,
+        "TagIdx": "6972b1861e0a7d5e4d35d13a",
+        "TagNo": "6802",
+        "TagTypeId": null,
+        "ClsId": "NON_TEST_CLS",
+        "TagDesc": null,
+        "BfTagNo": "1",
+        "PicNo": "52593271",
+        "DsnSkl": null,
+        "EpId": "TeEP",
+        "EpIc": "TeEP",
+        "CreateNo": "52593271",
+        "CreateAt": "2026-01-22T23:23:36Z",
+        "ChangeNo": "52593271",
+        "ChangeAt": "2026-03-10T23:45:35.835Z",
+        "DeleteNo": null,
+        "DeleteAt": null,
+        "Deleted": false,
+        "Attributes": []
+    },
+    {
+        "Id": "6972b1861e0a7d5e4d35d141",
+        "ProjectNo": "TE1002",
+        "PrntTagIdx": null,
+        "TagIdx": "6972b1861e0a7d5e4d35d13f",
+        "TagNo": "6802",
+        "TagTypeId": null,
+        "ClsId": "NON_TEST_CLS",
+        "TagDesc": null,
+        "BfTagNo": "0",
+        "PicNo": "52593271",
+        "DsnSkl": null,
+        "EpId": "TeEP",
+        "EpIc": "TeEP",
+        "CreateNo": "52593271",
+        "CreateAt": "2026-01-22T23:23:36Z",
+        "ChangeNo": "52593271",
+        "ChangeAt": "2026-03-10T23:45:41.913Z",
+        "DeleteNo": "52593271",
+        "DeleteAt": "2026-03-10T23:45:41.913Z",
+        "Deleted": true,
+        "Attributes": []
+    }
+]
+
+==================================
+api : /api/Admin/Tool/GetWorkingData
+
+payload : 
+{
+    "ProjectNo": "TE1002",
+    "Keyword": "6802"
+}
+
+response :
+[
+    {
+        "Id": "6972b1861e0a7d5e4d35d136",
+        "ProjectNo": "TE1002",
+        "PrntTagIdx": null,
+        "TagIdx": "6972b1861e0a7d5e4d35d135",
+        "TagNo": "6802",
+        "TagTypeId": null,
+        "ClsId": "NON_TEST_CLS",
+        "TagDesc": null,
+        "BfTagNo": "2",
+        "PicNo": "52593271",
+        "DsnSkl": null,
+        "EpId": "TeEP",
+        "EpIc": "TeEP",
+        "CreateNo": "52593271",
+        "CreateAt": "2026-01-22T23:23:36Z",
+        "ChangeNo": "52593271",
+        "ChangeAt": "2026-03-10T23:45:35.799Z",
+        "DeleteNo": null,
+        "DeleteAt": null,
+        "Deleted": false,
+        "Attributes": [],
+        "TagNoPassed": "Passed",
+        "NewYn": false,
+        "DelYn": false
+    },
+    {
+        "Id": "6972b1861e0a7d5e4d35d13b",
+        "ProjectNo": "TE1002",
+        "PrntTagIdx": null,
+        "TagIdx": "6972b1861e0a7d5e4d35d13a",
+        "TagNo": "6802",
+        "TagTypeId": null,
+        "ClsId": "NON_TEST_CLS",
+        "TagDesc": null,
+        "BfTagNo": "1",
+        "PicNo": "52593271",
+        "DsnSkl": null,
+        "EpId": "TeEP",
+        "EpIc": "TeEP",
+        "CreateNo": "52593271",
+        "CreateAt": "2026-01-22T23:23:36Z",
+        "ChangeNo": "52593271",
+        "ChangeAt": "2026-03-10T23:45:35.799Z",
+        "DeleteNo": null,
+        "DeleteAt": null,
+        "Deleted": false,
+        "Attributes": [],
+        "TagNoPassed": "Passed",
+        "NewYn": false,
+        "DelYn": false
+    }
+]
+
+
+
+
+
+
+
