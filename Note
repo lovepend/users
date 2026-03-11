@@ -1,134 +1,109 @@
 <template>
   <div id="app">
-    <h2 class="page-main-title">🏷️ 태그 번호 유효성 검사</h2>
+    <header class="header">
+      <h2 class="page-main-title">🏷️ 태그 번호 유효성 검사</h2>
+    </header>
 
     <div class="main-content-wrapper">
       <div class="panel tag-split-panel">
-        <h3 class="panel-title">Tag Split (유효성 검사기)</h3>
-
-        <div class="input-group">
-          <label for="tagNoInputValidator">검사할 Tag No. 입력:</label>
-          <input id="tagNoInputValidator" v-model="tagNoForValidator" type="text" placeholder="예: AA-BBB01-0001/A" />
-        </div>
-
-        <div class="rules-table-container">
-          <h4>규칙 설정 (간단한 테이블)</h4>
-          <p class="panel-description">각 태그 구성 요소의 구분자와 정규식을 직접 편집할 수 있습니다.</p>
-          <table>
-            <thead>
-              <tr>
-                <th>TAG ID</th>
-                <th>구분자</th>
-                <th>정규식</th>
-                <th>액션</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(rule, index) in tagRules" :key="index">
-                <td>TAG{{ String(index + 1).padStart(3, '0') }}</td>
-                <td><input type="text" v-model="rule.delimiter" maxlength="1" /></td>
-                <td><input type="text" v-model="rule.regex" /></td>
-                <td><button @click="removeRule(index)" class="action-btn danger-btn">삭제</button></td>
-              </tr>
-            </tbody>
-          </table>
-          <div class="table-actions">
-            <button @click="addRule" class="action-btn success-btn">규칙 추가</button>
-            <button @click="showPasteModal = true" class="action-btn info-btn">엑셀에서 붙여넣기</button>
+        <section class="input-section">
+          <h3 class="panel-title">Tag Split (유효성 검사기)</h3>
+          <div class="input-group">
+            <label for="tagNoInputValidator">검사할 Tag No. 입력:</label>
+            <input id="tagNoInputValidator" v-model="tagNoForValidator" type="text" placeholder="예: AA-BBB01-0001/A" />
           </div>
-        </div>
 
-        <h4 class="section-sub-title">전체 태그 번호 유효성 검사</h4>
-        <div class="overall-validation-result">
-          <p class="validation-summary">
-            전체 태그 번호 (`{{ tagNoForValidator }}`)는 **
-            <span :style="{ color: isTagNoValid ? 'green' : 'red', fontWeight: 'bold' }">
-              {{ isTagNoValid ? '유효합니다.' : '유효하지 않습니다.' }}
-            </span>
-            **
-          </p>
-          <p class="regex-info">
-            적용된 전체 정규식: <code class="combined-regex-code">{{ combinedRegexString }}</code>
-            <span v-if="combinedRegexError" class="regex-error-msg"> (정규식 오류: {{ combinedRegexError }}) </span>
-          </p>
-        </div>
+          <div class="overall-validation-result">
+            <p class="validation-summary">
+              상태: 
+              <span :style="{ color: isTagNoValid ? '#28a745' : '#dc3545', fontWeight: 'bold' }">
+                {{ isTagNoValid ? '✅ 유효함' : '❌ 유효하지 않음' }}
+              </span>
+            </p>
+            <p class="regex-info">
+              전체 정규식: <code class="combined-regex-code">{{ combinedRegexString }}</code>
+            </p>
+          </div>
+        </section>
 
-        <h4 class="section-sub-title">부분별 분석 결과</h4>
-        <table class="parts-analysis-table">
-          <thead>
-            <tr>
-              <th>규칙</th>
-              <th>분리된 값</th>
-              <th>적용된 정규식</th>
-              <th>구분자 유효성</th>
-              <th>내용 유효성</th>
-              <th>종합 유효성</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-if="tagRules.length === 0">
-              <td colspan="6" class="no-rule-message">규칙을 설정해주세요.</td>
-            </tr>
-            <tr v-if="!tagNoForValidator && tagRules.length > 0">
-              <td colspan="6" class="no-input-message">태그 번호를 입력해주세요.</td>
-            </tr>
-            <tr v-for="(part, index) in tagParts" :key="index">
-              <td>
-                TAG{{ String(index + 1).padStart(3, '0') }} (예상 구분자:
-                <span style="font-weight: bold">'{{ part.expectedDelimiter || '(없음)' }}'</span>)
-              </td>
-              <td>
-                <span
-                  :style="{ color: part.matchedValue === undefined || part.matchedValue === null ? '#aaa' : 'inherit' }"
-                >
-                  {{
-                    part.matchedValue === undefined || part.matchedValue === null
-                      ? '(값 없음)'
-                      : part.matchedValue === ''
-                        ? '(빈 값)'
-                        : part.matchedValue
-                  }}
-                </span>
-              </td>
-              <td>{{ part.regex }}</td>
-              <td :style="{ color: part.isDelimiterValid ? 'green' : 'red', fontWeight: 'bold' }">
-                {{ part.isDelimiterValid ? '유효' : part.delimiterError || '유효하지 않음' }}
-              </td>
-              <td :style="{ color: part.isContentValid ? 'green' : 'red', fontWeight: 'bold' }">
-                {{ part.isContentValid ? '유효' : part.contentError || '유효하지 않음' }}
-              </td>
-              <td :style="{ color: part.isValid ? 'green' : 'red', fontWeight: 'bold' }">
-                {{ part.isValid ? '유효' : '유효하지 않음' }}
-              </td>
-            </tr>
-            <tr v-if="tagNoForValidator && isTagNoValid === false && tagParts.length > 0 && lastPartError">
-              <td colspan="6" class="overall-fail-message">
-                <span style="font-weight: bold">전체 유효성 검사 실패: {{ lastPartError }}</span>
-              </td>
-            </tr>
-            <tr v-if="tagNoForValidator && isTagNoValid === false && tagParts.length > 0 && !lastPartError">
-              <td colspan="6" class="overall-fail-message">
-                <span style="font-weight: bold">입력된 태그 번호가 규칙과 완전히 일치하지 않습니다.</span>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <section class="rules-section">
+          <div class="section-header">
+            <h4>규칙 설정</h4>
+            <div class="table-actions">
+              <button @click="addRule" class="small-btn success-btn">+ 추가</button>
+              <button @click="showPasteModal = true" class="small-btn info-btn">엑셀 붙여넣기</button>
+            </div>
+          </div>
+          <div class="scrollable-table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th width="15%">ID</th>
+                  <th width="15%">구분자</th>
+                  <th>정규식</th>
+                  <th width="10%">삭제</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(rule, index) in tagRules" :key="index">
+                  <td class="text-center">TAG{{ String(index + 1).padStart(3, '0') }}</td>
+                  <td><input type="text" v-model="rule.delimiter" maxlength="1" class="table-input" /></td>
+                  <td><input type="text" v-model="rule.regex" class="table-input" /></td>
+                  <td><button @click="removeRule(index)" class="delete-btn">×</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="analysis-section">
+          <h4 class="section-sub-title">부분별 분석 결과</h4>
+          <div class="scrollable-table-wrapper">
+            <table class="parts-analysis-table">
+              <thead>
+                <tr>
+                  <th>구분</th>
+                  <th>분리된 값</th>
+                  <th>정규식</th>
+                  <th>구분자</th>
+                  <th>내용</th>
+                  <th>종합</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="tagRules.length === 0">
+                  <td colspan="6" class="no-rule-message">규칙을 설정해주세요.</td>
+                </tr>
+                <tr v-for="(part, index) in tagParts" :key="index">
+                  <td class="font-small">TAG{{ String(index + 1).padStart(3, '0') }}</td>
+                  <td class="font-bold">{{ part.matchedValue || '-' }}</td>
+                  <td class="font-code">{{ part.regex }}</td>
+                  <td :class="part.isDelimiterValid ? 'text-ok' : 'text-fail'">{{ part.isDelimiterValid ? 'OK' : 'ERR' }}</td>
+                  <td :class="part.isContentValid ? 'text-ok' : 'text-fail'">{{ part.isContentValid ? 'OK' : 'ERR' }}</td>
+                  <td :class="part.isValid ? 'text-ok' : 'text-fail'">{{ part.isValid ? 'PASS' : 'FAIL' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div v-if="tagNoForValidator && !isTagNoValid" class="error-banner">
+            ⚠️ <strong>검색 실패:</strong> {{ lastPartError || '규칙과 일치하지 않는 부분이 있습니다.' }}
+          </div>
+        </section>
       </div>
     </div>
 
-    <div v-if="showPasteModal" class="modal-overlay">
+    <div v-if="showPasteModal" class="modal-overlay" @click.self="showPasteModal = false">
       <div class="modal-content">
         <h4>엑셀 데이터 붙여넣기</h4>
-        <p>엑셀에서 복사한 데이터를 아래 텍스트 영역에 붙여넣어 주세요.</p>
         <textarea
           v-model="pasteData"
-          placeholder="여기에 엑셀에서 복사한 데이터를 붙여넣으세요 (탭으로 구분된 값)"
+          placeholder="[구분자][Tab][정규식] 형태로 붙여넣으세요."
           rows="10"
           class="paste-textarea"
         ></textarea>
         <div class="modal-actions">
-          <button @click="applyPasteData" class="action-btn success-btn">적용</button>
-          <button @click="showPasteModal = false" class="action-btn cancel-btn">취소</button>
+          <button @click="applyPasteData" class="action-btn success-btn">적용하기</button>
+          <button @click="showPasteModal = false" class="action-btn cancel-btn">닫기</button>
         </div>
       </div>
     </div>
@@ -140,649 +115,303 @@
 
   export default {
     setup() {
-      // --- Tag Split (유효성 검사기) 관련 상태 ---
       const tagNoForValidator = ref('AP330X01-')
       const combinedRegexError = ref(null)
       const lastPartError = ref(null)
-
-      const tagRules = ref([
-        { delimiter: '', regex: '^$|^[A-Z]{2}$' }, // TAG001 (ex: AZ, AP)
-        { delimiter: '', regex: '^[0123LCRIT]{3}$' }, // TAG002 (ex: 012, 330)
-        { delimiter: '', regex: '^[ABCDEFNVXS]{1}$' }, // TAG003 (한 글자 A/B/C/D/E/F/N/V/X/S, ex: A, X)
-        { delimiter: '', regex: '^$|^[ABCDEFNVXS]{1}$' }, // TAG004 (옵셔널, 한 글자 A/B/C/D/E/F/N/V/X/S, ex: A, (값 없음))
-        { delimiter: '', regex: '^[0-9]{2}$' }, // TAG005 (숫자 두 글자, ex: 09, 01)
-        { delimiter: '-', regex: '^$|^[APS1-9]{2}$' }, // TAG006 (구분자 -, 옵셔널 두 글자 A/P/S/1-9, ex: AA, (값 없음))
-      ])
-
-      // 엑셀 붙여넣기 모달 관련 상태
       const showPasteModal = ref(false)
       const pasteData = ref('')
 
+      const tagRules = ref([
+        { delimiter: '', regex: '^$|^[A-Z]{2}$' },
+        { delimiter: '', regex: '^[0123LCRIT]{3}$' },
+        { delimiter: '', regex: '^[ABCDEFNVXS]{1}$' },
+        { delimiter: '', regex: '^$|^[ABCDEFNVXS]{1}$' },
+        { delimiter: '', regex: '^[0-9]{2}$' },
+        { delimiter: '-', regex: '^$|^[APS1-9]{2}$' },
+      ])
+
       const isRegexOptional = regexPattern => {
         const trimmed = regexPattern.trim()
-        if (!trimmed) return true
-        if (trimmed === '^$') return true
+        if (!trimmed || trimmed === '^$') return true
         if (trimmed.startsWith('^$|')) return true
-
         try {
           const cleanedRegex = trimmed.replace(/^\^/, '').replace(/\$$/, '')
-          const regex = new RegExp(`^${cleanedRegex}$`)
-          return regex.test('')
-        } catch (e) {
-          return false
-        }
+          return new RegExp(`^${cleanedRegex}$`).test('')
+        } catch (e) { return false }
       }
 
       const combinedRegexString = computed(() => {
         combinedRegexError.value = null
         if (tagRules.value.length === 0) return '^$'
-
-        let regexParts = []
         try {
-          tagRules.value.forEach((rule, index) => {
-            let currentContentRegex = rule.regex.trim()
-            const isRuleContentOptional = isRegexOptional(currentContentRegex)
-
-            let contentPatternOnly = currentContentRegex.replace(/^\^/, '').replace(/\$$/, '')
-
-            let contentPatternForCombination
-            if (isRuleContentOptional && contentPatternOnly.includes('$|')) {
-              contentPatternOnly = contentPatternOnly.replace('$|', '')
-              contentPatternForCombination = `(?:${contentPatternOnly}|)`
-            } else {
-              contentPatternForCombination = `(?:${contentPatternOnly})`
-            }
-
-            let segmentPattern
-
+          let regexParts = tagRules.value.map((rule, index) => {
+            let content = rule.regex.trim().replace(/^\^/, '').replace(/\$$/, '')
+            let contentPattern = isRegexOptional(rule.regex) && content.includes('$|') 
+                                 ? `(?:${content.replace('$|', '')}|)` 
+                                 : `(?:${content})`
             if (index > 0 && rule.delimiter.trim() !== '') {
-              const escapedDelimiter = rule.delimiter.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-              if (isRuleContentOptional) {
-                segmentPattern = `(?:${escapedDelimiter}${contentPatternForCombination})?`
-              } else {
-                segmentPattern = `(?:${escapedDelimiter}${contentPatternForCombination})`
-              }
-            } else {
-              segmentPattern = contentPatternForCombination
+              const escDelim = rule.delimiter.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+              return isRegexOptional(rule.regex) ? `(?:${escDelim}${contentPattern})?` : `(?:${escDelim}${contentPattern})`
             }
-
-            regexParts.push(segmentPattern)
+            return contentPattern
           })
-
           return `^${regexParts.join('')}$`
         } catch (e) {
           combinedRegexError.value = e.message
-          console.error('Combined Regex Generation Error:', e)
           return '.*'
         }
       })
 
       const isTagNoValid = computed(() => {
-        if (combinedRegexError.value) return false
-
-        if (!tagNoForValidator.value && tagRules.value.length === 0) return true
-        if (!tagNoForValidator.value && tagRules.value.length > 0) {
-          return tagRules.value.every(rule => isRegexOptional(rule.regex))
-        }
-        if (tagRules.value.length === 0 && tagNoForValidator.value) return false
-
         try {
-          const regex = new RegExp(combinedRegexString.value)
-          return regex.test(tagNoForValidator.value)
-        } catch (e) {
-          console.error('Invalid combined regex for validation:', combinedRegexString.value, e)
-          return false
-        }
+          return new RegExp(combinedRegexString.value).test(tagNoForValidator.value || '')
+        } catch (e) { return false }
       })
 
-      // 부분별 분석 로직
       const tagParts = computed(() => {
         const parts = []
         let currentTagNo = tagNoForValidator.value || ''
-        lastPartError.value = null
-
-        if (!currentTagNo && tagRules.value.length === 0) return []
-
-        if (!currentTagNo && tagRules.value.length > 0) {
-          tagRules.value.forEach(rule => {
-            parts.push({
-              expectedDelimiter: rule.delimiter.trim(),
-              matchedValue: null,
-              regex: rule.regex,
-              isDelimiterValid: true,
-              delimiterError: null,
-              isContentValid: isRegexOptional(rule.regex),
-              contentError: isRegexOptional(rule.regex) ? null : '필수 값이 비어있음',
-              isValid: isRegexOptional(rule.regex),
-            })
-          })
-          return parts
-        }
-
         let currentIndex = 0
+        lastPartError.value = null
 
         for (let i = 0; i < tagRules.value.length; i++) {
           const rule = tagRules.value[i]
           let matchedValue = null
-          let isContentValid = false
-          let contentError = null
           let isDelimiterValid = true
-          let delimiterError = null
+          let isContentValid = false
+          
+          const remaining = currentTagNo.substring(currentIndex)
+          const delim = rule.delimiter.trim()
+          const isOptional = isRegexOptional(rule.regex)
 
-          let expectedDelimiter = rule.delimiter.trim()
-          let contentRegexRaw = rule.regex.trim()
-          let contentRegex = contentRegexRaw.replace(/^\^/, '').replace(/\$$/, '')
-
-          const remainingSegment = currentTagNo.substring(currentIndex)
-          const isRuleContentOptional = isRegexOptional(contentRegexRaw)
-
-          if (i > 0 && expectedDelimiter !== '') {
-            const delimiterPresentInSegment = remainingSegment.startsWith(expectedDelimiter)
-
-            let contentWillMatchActualValue = false
-            if (contentRegex) {
-              try {
-                contentWillMatchActualValue = new RegExp(`^(${contentRegex})`).test(remainingSegment)
-              } catch (e) {
-                /* 정규식 오류 무시 */
-              }
-            }
-
-            if (isRuleContentOptional && !contentWillMatchActualValue) {
-              if (delimiterPresentInSegment) {
-                isDelimiterValid = false
-                delimiterError = `빈 값 구성요소에 불필요한 구분자 '${expectedDelimiter}' 존재`
-              } else {
-                isDelimiterValid = true
-                delimiterError = null
-              }
-            } else {
-              if (delimiterPresentInSegment) {
-                currentIndex += expectedDelimiter.length
-                isDelimiterValid = true
-                delimiterError = null
-              } else {
-                isDelimiterValid = false
-                delimiterError = `필수 구분자 '${expectedDelimiter}' 누락`
-              }
+          if (i > 0 && delim !== '') {
+            if (remaining.startsWith(delim)) {
+              currentIndex += delim.length
+            } else if (!isOptional) {
+              isDelimiterValid = false
             }
           }
-
-          const segmentAfterDelimiter = currentTagNo.substring(currentIndex)
 
           try {
-            const matchRegex = new RegExp(`^(${contentRegex})`)
-            const match = matchRegex.exec(segmentAfterDelimiter)
-
-            if (match && match[1] !== undefined) {
+            const contentRegex = rule.regex.trim().replace(/^\^/, '').replace(/\$$/, '')
+            const match = new RegExp(`^(${contentRegex})`).exec(currentTagNo.substring(currentIndex))
+            if (match) {
               matchedValue = match[1]
               currentIndex += matchedValue.length
-            } else {
-              if (!isRuleContentOptional) {
-                contentError = '필수 구성 요소 누락'
-              }
-              matchedValue = null
-            }
-
-            const individualRegex = new RegExp(`^${contentRegex}$`)
-            isContentValid = individualRegex.test(matchedValue !== null ? matchedValue : '')
-
-            if (!isContentValid && matchedValue === null && isRuleContentOptional) {
               isContentValid = true
-              contentError = null
-            } else if (!isContentValid && contentError === null) {
-              contentError = '정규식 불일치'
+            } else if (isOptional) {
+              isContentValid = true
             }
-          } catch (e) {
-            console.error(`규칙 TAG${String(i + 1).padStart(3, '0')} 정규식 처리 중 오류 발생:`, rule.regex, e)
-            contentError = `정규식 처리 오류: ${e.message}`
-            isContentValid = false
-            matchedValue = null
-          }
-
-          const isValid = isDelimiterValid && isContentValid
+          } catch (e) { isContentValid = false }
 
           parts.push({
-            expectedDelimiter: expectedDelimiter,
-            matchedValue: matchedValue,
             regex: rule.regex,
-            isDelimiterValid: isDelimiterValid,
-            delimiterError: delimiterError,
-            isContentValid: isContentValid,
-            contentError: contentError,
-            isValid: isValid,
+            matchedValue,
+            isDelimiterValid,
+            isContentValid,
+            isValid: isDelimiterValid && isContentValid
           })
-
-          if (!isDelimiterValid || !isContentValid) {
-            if (delimiterError || contentError) {
-              lastPartError.value = `${delimiterError || ''} ${contentError || ''}`.trim()
-            }
-            return parts
-          }
+          if (!isDelimiterValid || !isContentValid) break
         }
-
-        if (currentIndex < currentTagNo.length) {
-          lastPartError.value = `규칙 외의 추가 문자열: '${currentTagNo.substring(currentIndex)}'`
-        } else if (currentIndex > currentTagNo.length) {
-          lastPartError.value = '예상보다 긴 패턴이 매칭됨 (내부 로직 오류 가능성)'
-        }
-
         return parts
       })
 
-      const addRule = () => {
-        tagRules.value.push({ delimiter: '', regex: '' })
-      }
-
-      const removeRule = index => {
-        tagRules.value.splice(index, 1)
-      }
-
+      const addRule = () => tagRules.value.push({ delimiter: '', regex: '' })
+      const removeRule = index => tagRules.value.splice(index, 1)
       const applyPasteData = () => {
-        const newRules = []
         const rows = pasteData.value.trim().split('\n')
-
-        rows.forEach(row => {
-          const columns = row.split('\t')
-          if (columns.length >= 2) {
-            newRules.push({
-              delimiter: columns[0].trim() || '',
-              regex: columns[1].trim() || '',
-            })
-          } else if (columns.length === 1 && columns[0].trim() !== '') {
-            newRules.push({
-              delimiter: '',
-              regex: columns[0].trim(),
-            })
-          }
+        const newRules = rows.map(row => {
+          const cols = row.split('\t')
+          return { delimiter: cols[0] || '', regex: cols[1] || '' }
         })
-
-        if (newRules.length > 0) {
-          tagRules.value = newRules
-        }
+        if (newRules.length) tagRules.value = newRules
         showPasteModal.value = false
-        pasteData.value = ''
       }
 
-      return {
-        tagNoForValidator,
-        combinedRegexError,
-        lastPartError,
-        tagRules,
-        showPasteModal,
-        pasteData,
-        isTagNoValid,
-        tagParts,
-        addRule,
-        removeRule,
-        applyPasteData,
-        combinedRegexString,
-      }
-    },
+      return { tagNoForValidator, combinedRegexString, isTagNoValid, tagParts, tagRules, addRule, removeRule, showPasteModal, pasteData, applyPasteData, lastPartError }
+    }
   }
 </script>
 
 <style scoped>
-  /* 기본 타이포그래피 */
-  #app {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    max-width: 1000px; /* 단일 패널이므로 너비를 적절히 축소 */
-    margin: 30px auto;
-    padding: 30px;
-    border: 1px solid #e0e0e0;
-    border-radius: 12px;
-    box-shadow: 0 5px 20px rgba(0, 0, 0, 0.08);
-    background-color: #f8f9fa;
-    color: #333;
-  }
+/* 레이아웃 초기화 및 스크롤 최적화 */
+#app {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 20px;
+  background-color: #f4f7f6;
+  min-height: 100vh;
+}
 
-  .page-main-title {
-    color: #2c3e50;
-    text-align: center;
-    margin-bottom: 40px;
-    font-size: 2.5em;
-    font-weight: 600;
-    border-bottom: 3px solid #4caf50;
-    padding-bottom: 15px;
-  }
+.main-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
 
-  /* 메인 컨텐츠 래퍼 */
-  .main-content-wrapper {
-    display: flex;
-    margin-top: 30px;
-    justify-content: center;
-  }
+.panel {
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.05);
+  padding: 24px;
+  border: 1px solid #e2e8f0;
+}
 
-  .panel {
-    flex: 1;
-    width: 100%;
-    border: 1px solid #dcdcdc;
-    border-radius: 10px;
-    padding: 30px;
-    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.05);
-    background-color: #ffffff;
-    display: flex;
-    flex-direction: column;
-    max-height: 80vh;
-    overflow-y: auto;
-    padding-right: 15px;
-    box-sizing: border-box;
-  }
+.page-main-title {
+  text-align: center;
+  margin-bottom: 24px;
+  color: #1a202c;
+}
 
-  .panel-title {
-    color: #34495e;
-    margin-top: 0;
-    margin-bottom: 25px;
-    font-size: 2em;
-    font-weight: 500;
-    padding-bottom: 10px;
-    border-bottom: 2px solid #5cb85c;
-    text-align: center;
-  }
+.panel-title {
+  font-size: 1.25rem;
+  margin-bottom: 20px;
+  color: #2d3748;
+  border-left: 4px solid #48bb78;
+  padding-left: 12px;
+}
 
-  /* Input Group */
-  .input-group {
-    margin-bottom: 20px;
-  }
+/* 입력 영역 */
+.input-group {
+  margin-bottom: 16px;
+}
+.input-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+}
+.input-group input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #edf2f7;
+  border-radius: 8px;
+  box-sizing: border-box;
+}
 
-  .input-group label {
-    display: block;
-    margin-bottom: 8px;
-    font-weight: bold;
-    color: #555;
-    font-size: 0.95em;
-  }
+/* 결과 요약 바 */
+.overall-validation-result {
+  background: #f8fafc;
+  padding: 16px;
+  border-radius: 8px;
+  border-left: 4px solid #cbd5e0;
+}
+.combined-regex-code {
+  font-family: monospace;
+  background: #eee;
+  padding: 2px 4px;
+  font-size: 0.85rem;
+}
 
-  .input-group input[type='text'] {
-    width: calc(100% - 24px);
-    padding: 12px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 1em;
-    transition:
-      border-color 0.3s ease,
-      box-shadow 0.3s ease;
-  }
+/* 테이블 영역 스크롤 제어 */
+.scrollable-table-wrapper {
+  overflow-x: auto; /* 가로 스크롤 허용 */
+  max-height: 400px; /* 너무 길어지면 내부 스크롤 */
+  overflow-y: auto;
+  border: 1px solid #edf2f7;
+  border-radius: 8px;
+  margin-bottom: 16px;
+}
 
-  .input-group input[type='text']:focus {
-    border-color: #4caf50;
-    outline: none;
-    box-shadow: 0 0 0 3px rgba(76, 175, 80, 0.2);
-  }
+table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 600px; /* 테이블이 너무 찌그러지지 않게 */
+}
 
-  /* Action Buttons */
-  .action-btn {
-    padding: 12px 20px;
-    border: none;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 1.05em;
-    font-weight: bold;
-    transition:
-      background-color 0.3s ease,
-      transform 0.2s ease;
-    width: 100%;
-  }
+th {
+  background: #f7fafc;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 12px;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  border-bottom: 2px solid #edf2f7;
+}
 
-  .action-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-  }
+td {
+  padding: 10px;
+  border-bottom: 1px solid #edf2f7;
+  font-size: 0.9rem;
+}
 
-  .action-btn:disabled {
-    background-color: #e0e0e0;
-    color: #a0a0a0;
-    cursor: not-allowed;
-    transform: none;
-  }
+.table-input {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid #cbd5e0;
+  border-radius: 4px;
+}
 
-  .primary-btn {
-    background-color: #007bff;
-    color: white;
-  }
-  .primary-btn:hover:not(:disabled) {
-    background-color: #0056b3;
-  }
+/* 버튼 스타일 */
+.table-actions {
+  display: flex;
+  gap: 8px;
+}
+.small-btn {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  cursor: pointer;
+  border: none;
+}
+.delete-btn {
+  color: #e53e3e;
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+}
 
-  .success-btn {
-    background-color: #28a745;
-    color: white;
-  }
-  .success-btn:hover:not(:disabled) {
-    background-color: #218838;
-  }
+/* 상태별 색상 */
+.text-ok { color: #38a169; font-weight: bold; }
+.text-fail { color: #e53e3e; font-weight: bold; }
+.error-banner {
+  background: #fff5f5;
+  color: #c53030;
+  padding: 12px;
+  border-radius: 8px;
+  margin-top: 12px;
+  border: 1px solid #feb2b2;
+}
 
-  .info-btn {
-    background-color: #17a2b8;
-    color: white;
-  }
-  .info-btn:hover:not(:disabled) {
-    background-color: #138496;
-  }
+/* 모달 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  padding: 20px;
+}
+.modal-content {
+  background: white;
+  padding: 24px;
+  border-radius: 12px;
+  width: 100%;
+  max-width: 500px;
+}
+.paste-textarea {
+  width: 100%;
+  margin: 16px 0;
+  border: 1px solid #cbd5e0;
+  border-radius: 8px;
+  padding: 10px;
+  box-sizing: border-box;
+}
 
-  .danger-btn {
-    background-color: #dc3545;
-    color: white;
-  }
-  .danger-btn:hover:not(:disabled) {
-    background-color: #c82333;
-  }
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
 
-  .cancel-btn {
-    background-color: #6c757d;
-    color: white;
-  }
-  .cancel-btn:hover:not(:disabled) {
-    background-color: #5a6268;
-  }
-
-  /* Validator Panel specific styles */
-  .tag-input-display {
-    background-color: #e9f7ef;
-    border: 1px solid #c8e6c9;
-    padding: 10px 15px;
-    border-radius: 5px;
-    margin-bottom: 25px;
-    font-size: 1.1em;
-    color: #333;
-  }
-
-  .tag-value-display {
-    font-weight: bold;
-    color: #2e7d32;
-  }
-
-  .panel-description {
-    color: #777;
-    font-size: 0.9em;
-    margin-bottom: 15px;
-  }
-
-  .rules-table-container {
-    margin-bottom: 20px;
-  }
-
-  .rules-table-container h4,
-  .section-sub-title {
-    color: #333;
-    margin-top: 30px;
-    margin-bottom: 15px;
-    font-size: 1.4em;
-    padding-bottom: 8px;
-    border-bottom: 1px dashed #eee;
-  }
-
-  .rules-table-container table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
-  }
-
-  .rules-table-container th,
-  .rules-table-container td {
-    border: 1px solid #ddd;
-    padding: 8px;
-    text-align: left;
-    font-size: 0.9em;
-  }
-
-  .rules-table-container th {
-    background-color: #f2f2f2;
-  }
-
-  .rules-table-container input[type='text'] {
-    width: calc(100% - 10px);
-    padding: 5px;
-    border: 1px solid #ccc;
-    border-radius: 3px;
-    box-sizing: border-box;
-    font-size: 0.9em;
-  }
-
-  .rules-table-container .table-actions {
-    margin-top: 15px;
-    display: flex;
-    gap: 10px;
-  }
-
-  .overall-validation-result {
-    padding: 15px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    background-color: #f9f9f9;
-    margin-bottom: 20px;
-    font-size: 0.95em;
-  }
-
-  .validation-summary {
-    margin: 0;
-    font-size: 1.1em;
-  }
-
-  .regex-info {
-    margin-top: 10px;
-    font-size: 0.9em;
-    color: #666;
-  }
-
-  .combined-regex-code {
-    background-color: #e9e9e9;
-    padding: 3px 6px;
-    border-radius: 3px;
-    word-break: break-all;
-    font-size: 0.9em;
-  }
-
-  .regex-error-msg {
-    color: red;
-    font-size: 0.85em;
-    display: block;
-    margin-top: 5px;
-  }
-
-  .parts-analysis-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 20px;
-  }
-
-  .parts-analysis-table thead tr {
-    background-color: #f2f2f2;
-  }
-
-  .parts-analysis-table th,
-  .parts-analysis-table td {
-    padding: 10px;
-    border: 1px solid #ddd;
-    text-align: left;
-    font-size: 0.85em;
-  }
-
-  .no-rule-message,
-  .no-input-message,
-  .overall-fail-message {
-    padding: 12px;
-    border: 1px solid #ddd;
-    text-align: center;
-    color: #999;
-    font-size: 0.9em;
-  }
-
-  .overall-fail-message {
-    color: #cc0000;
-    background-color: #ffe0e0;
-  }
-
-  /* 모달 스타일 */
-  .modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-  }
-
-  .modal-content {
-    background: white;
-    padding: 30px;
-    border-radius: 10px;
-    box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
-    width: 90%;
-    max-width: 550px;
-    box-sizing: border-box;
-  }
-
-  .modal-content h4 {
-    margin-top: 0;
-    color: #333;
-    font-size: 1.5em;
-  }
-
-  .modal-content p {
-    color: #666;
-    font-size: 0.95em;
-    margin-bottom: 20px;
-  }
-
-  .modal-content .paste-textarea {
-    width: 100%;
-    padding: 12px;
-    border: 1px solid #ccc;
-    border-radius: 6px;
-    font-size: 1em;
-    resize: vertical;
-    min-height: 150px;
-    box-sizing: border-box;
-  }
-
-  .modal-content .modal-actions {
-    margin-top: 25px;
-    display: flex;
-    justify-content: flex-end;
-    gap: 10px;
-  }
-
-  /* 반응형 디자인 */
-  @media (max-width: 600px) {
-    #app {
-      padding: 15px;
-    }
-    .page-main-title {
-      font-size: 1.8em;
-    }
-    .panel-title {
-      font-size: 1.5em;
-    }
-    .input-group input[type='text'],
-    .action-btn,
-    .modal-content .paste-textarea {
-      font-size: 0.9em;
-      padding: 10px;
-    }
-  }
+@media (max-width: 640px) {
+  #app { padding: 10px; }
+  .panel { padding: 16px; }
+}
 </style>
