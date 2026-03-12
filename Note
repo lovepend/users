@@ -1,18 +1,20 @@
-const colGridAttrDefs = ref([
-    // ... 앞부분 컬럼 (PIC_NO, TYPE, TYPE_ID, REG_IDs) 생략 ...
-    {
+{
       field: 'TOTAL',
       headerName: 'DATA QTY TOTAL',
       minWidth: 80,
       flex: 1,
       aggFunc: 'sum',
-      // 👇 천 단위 콤마 추가
+      // 👇 천 단위 콤마
       valueFormatter: params => params.value == null ? '' : Number(params.value).toLocaleString(),
+      // 👇 우측 정렬 및 Pinned Row 스타일 적용
       cellStyle: params => {
+        const style = { textAlign: 'right' } // 기본적으로 우측 정렬
+        
         if (params.node.rowPinned) {
-          return { fontWeight: 'bold', border: 'none' }
+          style.fontWeight = 'bold'
+          style.border = 'none'
         }
-        return null
+        return style
       },
     },
     {
@@ -21,13 +23,15 @@ const colGridAttrDefs = ref([
       minWidth: 80,
       flex: 1,
       aggFunc: 'sum',
-      // 👇 천 단위 콤마 추가
       valueFormatter: params => params.value == null ? '' : Number(params.value).toLocaleString(),
       cellStyle: params => {
+        const style = { textAlign: 'right' }
+        
         if (params.node.rowPinned) {
-          return { fontWeight: 'bold', border: 'none' }
+          style.fontWeight = 'bold'
+          style.border = 'none'
         }
-        return null
+        return style
       },
     },
     {
@@ -36,13 +40,14 @@ const colGridAttrDefs = ref([
       minWidth: 80,
       flex: 1,
       aggFunc: 'sum',
-      // 👇 천 단위 콤마 추가
       valueFormatter: params => params.value == null ? '' : Number(params.value).toLocaleString(),
       cellStyle: params => {
+        const style = { textAlign: 'right' }
+        
         if (params.node.rowPinned) {
-          return { fontWeight: 'bold', border: 'none' }
+          style.fontWeight = 'bold'
+          style.border = 'none'
         }
-        return null
+        return style
       },
     },
-  ])
