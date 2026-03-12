@@ -4,17 +4,15 @@
       minWidth: 80,
       flex: 1,
       aggFunc: 'sum',
-      // 👇 천 단위 콤마
-      valueFormatter: params => params.value == null ? '' : Number(params.value).toLocaleString(),
-      // 👇 우측 정렬 및 Pinned Row 스타일 적용
+      // 1. 내장 숫자 타입 사용 (자동 우측 정렬)
+      type: 'numericColumn', 
+      // 2. 가장 심플한 콤마 표시법
+      valueFormatter: params => params.value?.toLocaleString() ?? '0',
       cellStyle: params => {
-        const style = { textAlign: 'right' } // 기본적으로 우측 정렬
-        
         if (params.node.rowPinned) {
-          style.fontWeight = 'bold'
-          style.border = 'none'
+          return { fontWeight: 'bold', border: 'none', textAlign: 'right' }
         }
-        return style
+        return { textAlign: 'right' }
       },
     },
     {
@@ -23,15 +21,13 @@
       minWidth: 80,
       flex: 1,
       aggFunc: 'sum',
-      valueFormatter: params => params.value == null ? '' : Number(params.value).toLocaleString(),
+      type: 'numericColumn',
+      valueFormatter: params => params.value?.toLocaleString() ?? '0',
       cellStyle: params => {
-        const style = { textAlign: 'right' }
-        
         if (params.node.rowPinned) {
-          style.fontWeight = 'bold'
-          style.border = 'none'
+          return { fontWeight: 'bold', border: 'none', textAlign: 'right' }
         }
-        return style
+        return { textAlign: 'right' }
       },
     },
     {
@@ -40,14 +36,12 @@
       minWidth: 80,
       flex: 1,
       aggFunc: 'sum',
-      valueFormatter: params => params.value == null ? '' : Number(params.value).toLocaleString(),
+      type: 'numericColumn',
+      valueFormatter: params => params.value?.toLocaleString() ?? '0',
       cellStyle: params => {
-        const style = { textAlign: 'right' }
-        
         if (params.node.rowPinned) {
-          style.fontWeight = 'bold'
-          style.border = 'none'
+          return { fontWeight: 'bold', border: 'none', textAlign: 'right' }
         }
-        return style
+        return { textAlign: 'right' }
       },
     },
