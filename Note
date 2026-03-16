@@ -6,3 +6,12 @@
         FILTER(FilteredData, TargetHeaders)
     )
 )
+
+
+
+
+
+=FILTER(
+    FILTER(Table1, Table1[TRUE/FALSE]=TRUE),
+    (Table1[#Headers]="Tag No") + (Table1[#Headers]="Tag Desc")
+)
