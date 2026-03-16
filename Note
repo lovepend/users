@@ -1,26 +1,11 @@
-GC.Spread.Sheets.findControl(document.querySelector('.gc-spread-sheets')).version();
-
-
-GC.Spread.Sheets.ReleaseVersion;
-
-
-GC.Spread.Sheets.version;
-
-
-GC.Spread.Sheets.LicenseKey;
-
-
-VM325:1 Uncaught ReferenceError: GC is not defined
-    at <anonymous>:1:1
-(anonymous)	@	VM325:1
-
-
-
-// 화면에 있는 첫 번째 SpreadJS 호스트 요소를 찾아 버전 출력
-var spreadElement = document.querySelector('.gc-spread-sheets') || document.querySelector('[gcui-id]');
-if (spreadElement) {
-    var spread = GC.Spread.Sheets.findControl(spreadElement);
-    console.log("Version:", spread.version());
-} else {
-    console.log("스프레드 요소를 찾을 수 없습니다.");
-}
+ function yft() {
+                        return [{
+                            label: k.ribbon.review.threadedComments,
+                            thumbnailClass: "ribbon-thumbnail-threaded-comments",
+                            visibleWhen: `(!${g.TableSheetActive}\n                        && !${g.GanttSheetActive}\n                        && !${g.DataManagerActive}\n                        && !${g.ReportSheetActive})`,
+                            commandGroup: {
+                                className: "ribbon-group-threaded-comments",
+                                commands: [d.NewThreadedComment, d.DeleteThreadedComment, d.PreviousThreadedComment, d.NextThreadedComment, d.ShowThreadedComments]
+                            }
+                        }]
+                    }
