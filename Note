@@ -1,17 +1,16 @@
-=LET(
-    TargetHeaders, (Table1[#Headers]="Tag No") + (Table1[#Headers]="Tag Desc"),
-    FilteredData, FILTER(Table1, Table1[TRUE/FALSE]=TRUE),
-    VSTACK(
-        FILTER(Table1[#Headers], TargetHeaders),
-        FILTER(FilteredData, TargetHeaders)
-    )
-)
-
-
-
-
-
-=FILTER(
-    FILTER(Table1, Table1[TRUE/FALSE]=TRUE),
-    (Table1[#Headers]="Tag No") + (Table1[#Headers]="Tag Desc")
-)
+Sub DeleteCustomStyles()
+    Dim st As Style
+    Dim count As Long
+    On Error Resume Next ' 오류 발생 시 다음 스타일로 진행
+    
+    count = 0
+    For Each st In ActiveWorkbook.Styles
+        ' 기본 스타일(Built-in)이 아닌 경우만 삭제
+        If Not st.BuiltIn Then
+            st.Delete
+            count = count + 1
+        End If
+    Next st
+    
+    MsgBox count & "개의 스타일이 삭제되었습니다.", vbInformation, "삭제 완료"
+End Sub
