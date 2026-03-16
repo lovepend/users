@@ -8,3 +8,8 @@ GC.Spread.Sheets.version;
 
 
 GC.Spread.Sheets.LicenseKey;
+
+
+VM325:1 Uncaught ReferenceError: GC is not defined
+    at <anonymous>:1:1
+(anonymous)	@	VM325:1
