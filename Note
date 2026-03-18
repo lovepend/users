@@ -1,105 +1,114 @@
 <template>
   <div id="app" class="admin-tool">
-    <div class="container">
-      <header class="page-header">
-        <h2 class="title">🔍 태그 통합 관리 시스템</h2>
+    <div class="main-layout">
+      <header class="dashboard-header">
+        <div class="header-top">
+          <h2 class="title">🔍 Tag Integrated Management <span class="version-tag">v2.0</span></h2>
+        </div>
+        <div class="search-section">
+          <div class="search-row">
+            <div class="input-group project-no">
+              <label>Project No</label>
+              <input v-model="projectNo" type="text" placeholder="P0001" />
+            </div>
+            <div class="input-group keywords">
+              <label>API Fetch Keywords</label>
+              <textarea v-model="keyword" placeholder="Enter tags (space/newline separated)..."></textarea>
+            </div>
+            <button @click="fetchAndMergeData" :disabled="isLoading" class="btn-fetch">
+              <span v-if="!isLoading">조회하기</span>
+              <span v-else class="spinner"></span>
+            </button>
+          </div>
+          <div class="filter-row">
+            <input v-model="localSearchQuery" type="text" placeholder="결과 내 실시간 필터링 및 하이라이트..." class="filter-input" />
+          </div>
+        </div>
       </header>
 
-      <section class="search-panel">
-        <div class="search-grid">
-          <div class="input-field w-20">
-            <label>Project No</label>
-            <input v-model="projectNo" type="text" placeholder="P0001..." class="base-input" />
-          </div>
-          <div class="input-field flex-grow">
-            <label>API Fetch Keywords</label>
-            <textarea v-model="keyword" placeholder="TAG-01..." class="base-input multi-input"></textarea>
-          </div>
-          <div class="action-field">
-            <button @click="fetchAndMergeData" :disabled="isLoading" class="btn btn-primary">조회</button>
-          </div>
+      <div class="action-bar" v-if="mergedList.length > 0">
+        <div class="stats">
+          Total Groups: <span class="highlight">{{ filteredList.length }}</span>
         </div>
-        
-        <div class="local-search-bar">
-          <input v-model="localSearchQuery" type="text" placeholder="결과 내 필터링..." class="base-input highlight-input" />
-        </div>
-      </section>
-
-      <div class="control-bar" v-if="mergedList.length > 0">
-        <div class="left-info">그룹: <b>{{ filteredList.length }}</b>건</div>
-        <div class="right-actions">
-          <button @click="deleteSelected" class="btn btn-danger" :disabled="selectedIds.length === 0">🗑 선택 삭제</button>
+        <div class="button-group">
+          <button @click="deleteSelected" class="btn btn-outline-danger" :disabled="selectedIds.length === 0">
+            🗑 선택 삭제 ({{ selectedIds.length }})
+          </button>
           <button @click="downloadExcel" class="btn btn-success">📥 CSV 내보내기</button>
         </div>
       </div>
 
-      <main class="content-panel">
-        <div class="scroll-container">
-          <table class="modern-table">
-            <thead>
-              <tr class="main-header">
-                <th rowspan="2" class="sticky-col chk-col"><input type="checkbox" :checked="isAllSelected" @change="toggleAllSelect" /></th>
-                <th rowspan="2" class="sticky-col idx-col">Idx</th>
-                <th rowspan="2" class="sticky-col tag-col">Tag No</th>
-                <th colspan="3" class="pub-header">Published (Master)</th>
-                <th colspan="3" class="wrk-header">Working (Current)</th>
-              </tr>
-              <tr class="sub-header">
-                <th>EP ID</th><th>CLS</th><th>Deleted</th>
-                <th>EP ID</th><th>CLS</th><th>Deleted</th>
-              </tr>
-            </thead>
-            
-            <tbody v-for="group in filteredList" :key="group.TagIdx" class="group-body">
-              <tr v-for="(rowNum) in Math.max(group.pubList.length, group.wrkList.length, 1)" 
-                  :key="group.TagIdx + '-' + rowNum" 
-                  class="data-row"
-                  @click="openModal(group)"> <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col chk-col" @click.stop>
-                  <input type="checkbox" :value="group.TagIdx" v-model="selectedIds" />
-                </td>
-                <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col idx-col group-cell">
-                  {{ group.TagIdx }}
-                </td>
-                <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col tag-col group-cell tag-no" v-html="highlightText(group.TagNo)">
-                </td>
+      <div class="table-container">
+        <table class="sticky-table">
+          <thead>
+            <tr class="main-header">
+              <th rowspan="2" class="sticky-col col-chk"><input type="checkbox" :checked="isAllSelected" @change="toggleAllSelect" /></th>
+              <th rowspan="2" class="sticky-col col-idx">Idx</th>
+              <th rowspan="2" class="sticky-col col-tag">Tag No</th>
+              <th colspan="3" class="header-group pub">Published (Master)</th>
+              <th colspan="3" class="header-group wrk">Working (Current)</th>
+            </tr>
+            <tr class="sub-header">
+              <th>EP ID</th><th>CLS</th><th>Deleted</th>
+              <th>EP ID</th><th>CLS</th><th>Deleted</th>
+            </tr>
+          </thead>
+          
+          <tbody v-for="group in filteredList" :key="group.TagIdx">
+            <tr v-for="(rowNum) in Math.max(group.pubList.length, group.wrkList.length, 1)" 
+                :key="group.TagIdx + '-' + rowNum" 
+                @click="openModal(group)"
+                class="data-row">
+              
+              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-chk" @click.stop>
+                <input type="checkbox" :value="group.TagIdx" v-model="selectedIds" />
+              </td>
+              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-idx group-id">
+                {{ group.TagIdx }}
+              </td>
+              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-tag group-tag" v-html="highlightText(group.TagNo)">
+              </td>
 
-                <td class="pub-td">{{ group.pubList[rowNum-1]?.EpId || (rowNum <= group.pubList.length ? '-' : '') }}</td>
-                <td class="pub-td">{{ group.pubList[rowNum-1]?.ClsId || (rowNum <= group.pubList.length ? '-' : '') }}</td>
-                <td class="pub-td">
-                  <span v-if="group.pubList[rowNum-1]" :class="['status-text', group.pubList[rowNum-1].DelYn === 'Y' ? 'is-deleted' : 'is-active']">
-                    {{ group.pubList[rowNum-1].DelYn === 'Y' ? 'True' : 'False' }}
-                  </span>
-                </td>
+              <td class="cell-pub">{{ group.pubList[rowNum-1]?.EpId || '-' }}</td>
+              <td class="cell-pub">{{ group.pubList[rowNum-1]?.ClsId || '-' }}</td>
+              <td class="cell-pub">
+                <span v-if="group.pubList[rowNum-1]" :class="['status-dot', group.pubList[rowNum-1].DelYn === 'Y' ? 'deleted' : 'active']">
+                  {{ group.pubList[rowNum-1].DelYn === 'Y' ? 'True' : 'False' }}
+                </span>
+              </td>
 
-                <td class="wrk-td">{{ group.wrkList[rowNum-1]?.EpId || (rowNum <= group.wrkList.length ? '-' : '') }}</td>
-                <td class="wrk-td">{{ group.wrkList[rowNum-1]?.ClsId || (rowNum <= group.wrkList.length ? '-' : '') }}</td>
-                <td class="wrk-td">
-                  <span v-if="group.wrkList[rowNum-1]" :class="['status-text', group.wrkList[rowNum-1].DelYn === 'Y' ? 'is-deleted' : 'is-active']">
-                    {{ group.wrkList[rowNum-1].DelYn === 'Y' ? 'True' : 'False' }}
-                  </span>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </main>
+              <td class="cell-wrk">{{ group.wrkList[rowNum-1]?.EpId || '-' }}</td>
+              <td class="cell-wrk">{{ group.wrkList[rowNum-1]?.ClsId || '-' }}</td>
+              <td class="cell-wrk">
+                <span v-if="group.wrkList[rowNum-1]" :class="['status-dot', group.wrkList[rowNum-1].DelYn === 'Y' ? 'deleted' : 'active']">
+                  {{ group.wrkList[rowNum-1].DelYn === 'Y' ? 'True' : 'False' }}
+                </span>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
-    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal-card">
-        <header class="modal-header">
-          <h3>Tag Group Detail <small>#{{ selectedItem?.TagIdx }}</small></h3>
-          <button @click="closeModal" class="close-btn">&times;</button>
-        </header>
+    <div v-if="showModal" class="modal-backdrop" @click.self="closeModal">
+      <div class="modal-window">
+        <div class="modal-head">
+          <h3>Tag Detail Analysis <small>#{{ selectedItem?.TagNo }}</small></h3>
+          <button @click="closeModal" class="close-x">&times;</button>
+        </div>
         <div class="modal-body">
-          <div class="modal-grid-content">
-            <div class="data-box">
-              <h4 class="text-pub">Published ({{ selectedItem?.pubList.length }})</h4>
-              <pre v-for="(p, i) in selectedItem?.pubList" :key="'p'+i" class="json-pre">{{ p }}</pre>
+          <div class="data-split">
+            <div class="split-pane">
+              <h4 class="pub-label">Published Records</h4>
+              <div class="json-wrapper">
+                <pre v-for="(p, i) in selectedItem?.pubList" :key="'p'+i">{{ JSON.stringify(p, null, 2) }}</pre>
+              </div>
             </div>
-            <div class="data-box">
-              <h4 class="text-wrk">Working ({{ selectedItem?.wrkList.length }})</h4>
-              <pre v-for="(w, i) in selectedItem?.wrkList" :key="'w'+i" class="json-pre">{{ w }}</pre>
+            <div class="split-pane">
+              <h4 class="wrk-label">Working Records</h4>
+              <div class="json-wrapper">
+                <pre v-for="(w, i) in selectedItem?.wrkList" :key="'w'+i">{{ JSON.stringify(w, null, 2) }}</pre>
+              </div>
             </div>
           </div>
         </div>
@@ -109,6 +118,7 @@
 </template>
 
 <script>
+// ... (Setup 로직은 이전과 동일하며, openModal 함수 등 리턴 확인 완료)
 import { ref, computed } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 
@@ -150,7 +160,7 @@ export default {
           })
         }))
         mergedList.value = Array.from(groupMap.values()).sort((a,b) => a.TagNo.localeCompare(b.TagNo))
-      } catch (e) { alert('데이터 호출 실패') }
+      } catch (e) { alert('로드 실패') }
       finally { isLoading.value = false }
     }
 
@@ -170,59 +180,119 @@ export default {
       projectNo, keyword, localSearchQuery, mergedList, filteredList, isLoading,
       selectedIds, showModal, selectedItem,
       fetchAndMergeData, highlightText,
-      openModal: (g) => { console.log("Modal Open!", g); selectedItem.value = g; showModal.value = true },
+      openModal: (g) => { selectedItem.value = g; showModal.value = true; },
       closeModal: () => { showModal.value = false },
       toggleAllSelect: () => {
         if (selectedIds.value.length === filteredList.value.length) selectedIds.value = []
         else selectedIds.value = filteredList.value.map(g => g.TagIdx)
       },
       isAllSelected: computed(() => filteredList.value.length > 0 && selectedIds.value.length === filteredList.value.length),
-      deleteSelected: () => alert('삭제 ID: ' + selectedIds.value),
-      downloadExcel: () => alert('엑셀 다운로드')
+      deleteSelected: () => confirm('정말 삭제하시겠습니까?'),
+      downloadExcel: () => alert('CSV 준비 중')
     }
   }
 }
 </script>
 
 <style scoped>
-.container { padding: 20px; height: 100vh; display: flex; flex-direction: column; box-sizing: border-box; background: #f1f5f9; }
+/* 1. 레이아웃 구조 설계 */
+.main-layout {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f4f7fa;
+  overflow: hidden; /* 브라우저 전체 스크롤 방지 */
+}
 
-/* 1. 검색 패널 고정 */
-.search-panel { background: white; padding: 20px; border-radius: 12px; margin-bottom: 15px; flex-shrink: 0; }
-.search-grid { display: flex; gap: 15px; align-items: flex-start; }
-.multi-input { height: 45px; resize: none; transition: 0.2s; }
-.multi-input:focus { height: 100px; }
+/* 2. 헤더 섹션 */
+.dashboard-header {
+  background: #ffffff;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+.header-top .title { margin: 0 0 1rem 0; font-size: 1.5rem; color: #1e293b; display: flex; align-items: center; gap: 10px; }
+.version-tag { font-size: 0.7rem; background: #3b82f6; color: white; padding: 2px 8px; border-radius: 12px; }
 
-/* 2. 데이터 영역 (스크롤의 핵심) */
-.content-panel { flex-grow: 1; background: white; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; border: 1px solid #e2e8f0; }
-.scroll-container { flex-grow: 1; overflow: auto; position: relative; } /* 여기가 스크롤되는 구간 */
+.search-row { display: flex; gap: 1rem; align-items: flex-end; margin-bottom: 1rem; }
+.input-group { display: flex; flex-direction: column; gap: 0.5rem; }
+.input-group label { font-size: 0.8rem; font-weight: 600; color: #64748b; }
+.input-group input, .input-group textarea { border: 1px solid #cbd5e1; border-radius: 6px; padding: 0.6rem; font-size: 0.9rem; }
+.keywords textarea { width: 400px; height: 40px; }
+.filter-input { width: 100%; border: 2px solid #3b82f6; border-radius: 6px; padding: 0.7rem; background: #eff6ff; }
 
-.modern-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: auto; }
-.modern-table th { position: sticky; top: 0; z-index: 10; background: #f8fafc; border-bottom: 2px solid #e2e8f0; padding: 12px; }
-.modern-table td { padding: 12px; border: 1px solid #f1f5f9; text-align: center; white-space: nowrap; }
+.btn-fetch { background: #1e293b; color: white; border: none; padding: 0.6rem 1.5rem; border-radius: 6px; cursor: pointer; height: 40px; font-weight: 600; }
 
-/* 3. 고정 열 (좌측 Idx, TagNo 등 스크롤해도 보이게) */
-.sticky-col { position: sticky; left: 0; z-index: 5; background: #fff !important; box-shadow: 2px 0 5px rgba(0,0,0,0.05); }
-.chk-col { left: 0; width: 40px; }
-.idx-col { left: 40px; width: 80px; }
-.tag-col { left: 120px; width: 180px; }
+/* 3. 테이블 컨테이너 (틀 고정 핵심) */
+.table-container {
+  flex: 1;
+  overflow: auto; /* 가로/세로 스크롤 활성화 */
+  margin: 1rem 2rem;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
 
-/* 4. 클릭 이벤트 강조 */
-.data-row { cursor: pointer; transition: 0.1s; }
-.data-row:hover td { background-color: #f8fbff !important; }
-.group-body { border-bottom: 3px solid #cbd5e1; }
+.sticky-table {
+  width: max-content; /* 테이블이 내용만큼 늘어나게 하여 가로 스크롤 유도 */
+  min-width: 100%;
+  border-collapse: separate; /* sticky 사용 시 필수 */
+  border-spacing: 0;
+}
 
-/* 상태 색상 (DelYn 기반) */
-.status-text { font-weight: bold; }
-.is-deleted { color: #ef4444; }
-.is-active { color: #10b981; }
+/* 헤더 틀 고정 */
+.sticky-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+  padding: 12px;
+  font-size: 0.85rem;
+}
 
-/* 5. 모달 레이아웃 */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-.modal-card { background: white; width: 900px; border-radius: 12px; overflow: hidden; }
-.modal-body { padding: 20px; max-height: 600px; overflow-y: auto; }
-.modal-grid-content { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.json-pre { background: #1e293b; color: #cbd5e1; padding: 10px; border-radius: 8px; font-size: 11px; margin-bottom: 10px; overflow: auto; }
+/* 열 틀 고정 (왼쪽 3개 열) */
+.sticky-col {
+  position: sticky;
+  z-index: 10;
+  background: white !important;
+  border-right: 1px solid #e2e8f0;
+}
+.col-chk { left: 0; width: 50px; }
+.col-idx { left: 50px; width: 80px; }
+.col-tag { left: 130px; width: 220px; font-weight: bold; border-right: 2px solid #cbd5e1 !important; }
 
-::v-deep .hl { background: #fef08a; font-weight: bold; }
+/* 헤더가 2단일 때 z-index 처리 */
+.main-header th { top: 0; }
+.sub-header th { top: 45px; z-index: 19; } /* 1단 헤더 높이만큼 띄움 */
+
+/* 데이터 행 디자인 */
+.data-row:hover td { background-color: #f1f5f9 !important; cursor: pointer; }
+.group-body { border-bottom: 2px solid #e2e8f0; }
+
+.cell-pub { background: #f0f9ff; }
+.cell-wrk { background: #fffbeb; }
+
+/* 상태 표시 점 */
+.status-dot { font-weight: 700; padding: 2px 6px; border-radius: 4px; font-size: 0.75rem; }
+.active { color: #059669; background: #d1fae5; }
+.deleted { color: #dc2626; background: #fee2e2; }
+
+/* 4. 액션바 */
+.action-bar { padding: 0 2rem; display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; }
+.highlight { color: #3b82f6; font-weight: 800; }
+.button-group { display: flex; gap: 0.5rem; }
+.btn { padding: 0.5rem 1rem; border-radius: 6px; font-weight: 600; cursor: pointer; border: 1px solid transparent; }
+.btn-success { background: #10b981; color: white; }
+.btn-outline-danger { border-color: #ef4444; color: #ef4444; background: white; }
+
+/* 5. 모달 (고급화) */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; justify-content: center; align-items: center; z-index: 100; }
+.modal-window { background: white; width: 1000px; max-height: 85vh; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); }
+.modal-head { padding: 1.5rem; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; }
+.modal-body { padding: 1.5rem; overflow-y: auto; }
+.data-split { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+.json-wrapper pre { background: #1e293b; color: #cbd5e1; padding: 1rem; border-radius: 8px; font-size: 0.8rem; margin-bottom: 1rem; }
+
+::v-deep .hl { background: #fbbf24; color: #000; padding: 2px; border-radius: 2px; }
 </style>
