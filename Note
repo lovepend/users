@@ -1,31 +1,28 @@
 <template>
   <div id="app">
-    <h2 class="page-main-title">🔍 태그 통합 조회 시스템 (N개 키워드 지원)</h2>
+    <h2 class="page-main-title">🔍 태그 통합 조회 시스템 (Multi-Keyword)</h2>
 
     <div class="main-content-wrapper">
       <div class="panel full-panel">
         <h3 class="panel-title">키워드 기반 데이터 조회 및 분석</h3>
 
         <div class="search-controls">
-          <div class="input-group-container" style="display: flex; flex-direction: column; width: 100%;">
-            <div style="display: flex; gap: 15px; margin-bottom: 10px;">
-              <div class="input-item" style="flex: 1;">
-                <label>Project No</label>
-                <input v-model="projectNo" type="text" placeholder="프로젝트 No 입력..." class="custom-input" />
-              </div>
-              <div class="input-item" style="flex: 3;">
-                <label>Keywords (공백 또는 줄바꿈으로 구분)</label>
-                <textarea
-                  v-model="keyword"
-                  placeholder="여러 개의 태그 번호를 입력하세요..."
-                  class="custom-input"
-                  style="height: 80px; resize: vertical;"
-                  @keyup.ctrl.enter="fetchAndMergeData"
-                ></textarea>
-              </div>
+          <div class="input-group-container">
+            <div class="input-item">
+              <label>Project No</label>
+              <input v-model="projectNo" type="text" placeholder="프로젝트 No..." class="custom-input" />
             </div>
-            <button @click="fetchAndMergeData" :disabled="isLoading" class="search-btn" style="width: 100%;">
-              {{ isLoading ? '데이터 통합 조회 중...' : 'N개 키워드 통합 검색' }}
+            <div class="input-item" style="flex: 2;">
+              <label>Keywords (공백/줄바꿈으로 구분)</label>
+              <textarea
+                v-model="keyword"
+                placeholder="TAG01 TAG02..."
+                class="custom-input multi-input"
+                @keyup.ctrl.enter="fetchAndMergeData"
+              ></textarea>
+            </div>
+            <button @click="fetchAndMergeData" :disabled="isLoading" class="search-btn">
+              {{ isLoading ? '조회 중...' : '통합 검색' }}
             </button>
           </div>
         </div>
@@ -35,14 +32,14 @@
             <label>상태 필터:</label>
             <select v-model="filterStatus" class="custom-select">
               <option value="all">전체 보기</option>
-              <option value="deleted">삭제된 항목만 (Deleted)</option>
+              <option value="deleted">삭제된 항목만</option>
               <option value="active">사용 중인 항목만</option>
             </select>
           </div>
-          <button @click="downloadExcel" class="excel-btn">📥 엑셀 다운로드 (CSV)</button>
+          <button @click="downloadExcel" class="excel-btn">📥 엑셀 다운로드</button>
         </div>
 
-        <div v-if="errorMessage" class="message error-message" style="color: red; padding: 10px;">⚠️ {{ errorMessage }}</div>
+        <div v-if="errorMessage" class="message error-message">⚠️ {{ errorMessage }}</div>
 
         <div class="table-container" v-if="filteredList.length > 0">
           <table class="data-table">
@@ -79,9 +76,9 @@
                 <td class="wrk-bg">{{ item.wrk?.EpId || '-' }}</td>
                 <td class="wrk-bg">{{ item.wrk?.ClsId || '-' }}</td>
                 <td class="wrk-bg">
-                  <span v-if="item.wrk" :class="item.wrk.DelYn ? 'status-red' : ''">{{
-                    item.wrk.DelYn ? 'Y' : 'N'
-                  }}</span>
+                  <span v-if="item.wrk" :class="item.wrk.DelYn ? 'status-red' : ''">
+                    {{ item.wrk.DelYn ? 'Y' : 'N' }}
+                  </span>
                 </td>
                 <td class="wrk-bg">
                   <span v-if="item.wrk" :class="item.wrk.Deleted ? 'status-red' : 'status-green'">
@@ -92,10 +89,32 @@
             </tbody>
           </table>
         </div>
+
         <div v-else-if="searched && !isLoading" class="message no-results-message">데이터가 없습니다.</div>
       </div>
     </div>
+
+    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h4>Tag 상세 정보 비교 (TagIdx: {{ selectedItem?.TagIdx }})</h4>
+          <button @click="closeModal" class="close-btn">&times;</button>
+        </div>
+        <div class="modal-body" v-if="selectedItem">
+          <div class="modal-grid">
+            <div class="grid-section">
+              <h5>[Master - Published]</h5>
+              <pre>{{ JSON.stringify(selectedItem.pub, null, 2) }}</pre>
+            </div>
+            <div class="grid-section">
+              <h5>[Current - Working]</h5>
+              <pre>{{ JSON.stringify(selectedItem.wrk, null, 2) }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
 </template>
 
 <script>
@@ -112,6 +131,8 @@ export default {
     const errorMessage = ref('')
     const searched = ref(false)
     const filterStatus = ref('all')
+
+    // 모달 관련 상태
     const showModal = ref(false)
     const selectedItem = ref(null)
 
@@ -126,29 +147,21 @@ export default {
 
     const fetchAndMergeData = async () => {
       if (!keyword.value.trim()) return
-      
       isLoading.value = true
       errorMessage.value = ''
       searched.value = true
-      
-      // 1. 키워드 분리 (공백, 쉼표, 줄바꿈 기준) 후 유효한 값만 필터링
+      mergedList.value = [] // 이전 결과 초기화
+
       const keywords = keyword.value
         .split(/[\s,\n]+/)
         .map(k => k.trim())
         .filter(k => k.length > 0)
 
-      if (keywords.length === 0) {
-        isLoading.value = false
-        return
-      }
-
       const dataMap = new Map()
 
       try {
-        // 2. 모든 키워드에 대해 병렬 호출 생성
         const fetchPromises = keywords.map(async (key) => {
           const payload = { ProjectNo: projectNo.value, Keyword: key }
-          
           const [pubRes, wrkRes] = await Promise.all([
             axiosWrapper.post('/api/Admin/Tool/GetPublishedData', payload),
             axiosWrapper.post('/api/Admin/Tool/GetWorkingData', payload),
@@ -157,7 +170,6 @@ export default {
           const pubData = pubRes?.data || pubRes
           const wrkData = wrkRes?.data || wrkRes
 
-          // 3. 해당 키워드의 결과를 Map에 통합
           if (Array.isArray(pubData)) {
             pubData.forEach(item => {
               if (!dataMap.has(item.TagIdx)) {
@@ -178,30 +190,67 @@ export default {
           }
         })
 
-        // 4. 모든 요청이 끝날 때까지 대기
         await Promise.all(fetchPromises)
-        
-        // 5. 최종 리스트 업데이트
         mergedList.value = Array.from(dataMap.values())
-        
-        if (mergedList.value.length === 0) {
-          errorMessage.value = '조회된 데이터가 없습니다.'
-        }
       } catch (err) {
-        console.error(err)
-        errorMessage.value = '데이터 호출 중 오류가 발생했습니다.'
+        errorMessage.value = '데이터 호출 실패'
       } finally {
         isLoading.value = false
       }
     }
 
-    // downloadExcel, openModal, closeModal 함수는 기존과 동일하게 유지...
-    
+    const downloadExcel = () => {
+      let csvContent = '\uFEFFTagIdx,TagNo,Pub_EpId,Pub_ClsId,Pub_Deleted,Wrk_EpId,Wrk_ClsId,Wrk_DelYn,Wrk_Deleted\n'
+      filteredList.value.forEach(item => {
+        const row = [
+          item.TagIdx,
+          `"${item.TagNo}"`, // TagNo에 특수문자 대비 따옴표 처리
+          item.pub?.EpId || '',
+          item.pub?.ClsId || '',
+          item.pub?.Deleted || 'false',
+          item.wrk?.EpId || '',
+          item.wrk?.ClsId || '',
+          item.wrk?.DelYn || 'false',
+          item.wrk?.Deleted || 'false',
+        ]
+        csvContent += row.join(',') + '\n'
+      })
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+      const link = document.createElement('a')
+      link.href = URL.createObjectURL(blob)
+      link.setAttribute('download', `Tag_Export_${new Date().getTime()}.csv`)
+      link.click()
+    }
+
+    const openModal = (item) => {
+      selectedItem.value = item
+      showModal.value = true
+    }
+
+    const closeModal = () => {
+      showModal.value = false
+      selectedItem.value = null
+    }
+
+    // 중요: 모든 변수와 함수를 return 해야 템플릿에서 쓸 수 있습니다.
     return {
-      projectNo, keyword, mergedList, filteredList, isLoading, errorMessage,
-      searched, filterStatus, showModal, selectedItem,
-      fetchAndMergeData, /* ...기타 함수들 */
+      projectNo, keyword, mergedList, filteredList, isLoading, errorMessage, searched,
+      filterStatus, showModal, selectedItem,
+      fetchAndMergeData, downloadExcel, openModal, closeModal
     }
   }
 }
 </script>
+
+<style scoped>
+/* 기존 스타일 유지 + 추가 보완 */
+.multi-input {
+  min-height: 40px;
+  height: 40px;
+  transition: height 0.2s;
+}
+.multi-input:focus {
+  height: 100px; /* 클릭(포커스) 시 입력창이 늘어나도록 설정 */
+}
+/* ... 기존 스타일 소스 그대로 유지 ... */
+</style>
