@@ -2,7 +2,7 @@
   <div id="app" class="admin-tool">
     <div class="container">
       <header class="page-header">
-        <h2 class="title">🔍 태그 통합 관리 시스템</h2>
+        <h2 class="title">🔍 태그 통합 관리 시스템 <span class="badge-v">Group Mode</span></h2>
       </header>
 
       <section class="search-panel">
@@ -12,12 +12,8 @@
             <input v-model="projectNo" type="text" placeholder="P0001..." class="base-input" />
           </div>
           <div class="input-field w-50">
-            <label>API Fetch Keywords <span class="label-hint">(데이터 호출용 - 공백/줄바꿈)</span></label>
-            <textarea
-              v-model="keyword"
-              placeholder="호출할 태그들을 입력하세요..."
-              class="base-input multi-input"
-            ></textarea>
+            <label>API Fetch Keywords <span class="label-hint">(공백/줄바꿈 구분)</span></label>
+            <textarea v-model="keyword" placeholder="TAG-01..." class="base-input multi-input"></textarea>
           </div>
           <div class="action-field">
             <button @click="fetchAndMergeData" :disabled="isLoading" class="btn btn-primary">
@@ -29,25 +25,18 @@
         
         <div class="local-search-bar">
           <div class="input-field flex-grow">
-            <label>결과 내 다중 필터 <span class="label-hint">(공백 구분 입력 시 하이라이트 및 필터링)</span></label>
-            <input 
-              v-model="localSearchQuery" 
-              type="text" 
-              placeholder="화면에서 필터링할 키워드들..." 
-              class="base-input highlight-input"
-            />
+            <label>결과 내 필터링 & 하이라이트</label>
+            <input v-model="localSearchQuery" type="text" placeholder="검색어 입력..." class="base-input highlight-input" />
           </div>
         </div>
       </section>
 
       <div class="control-bar" v-if="mergedList.length > 0">
         <div class="left-info">
-          <span class="count-badge">조회 결과: <b>{{ filteredList.length }}</b> / {{ mergedList.length }}건</span>
+          <span class="count-badge">그룹 수: <b>{{ filteredList.length }}</b>개</span>
         </div>
         <div class="right-actions">
-          <button @click="deleteSelected" class="btn btn-danger" :disabled="selectedIds.length === 0">
-            🗑 선택 삭제 ({{ selectedIds.length }})
-          </button>
+          <button @click="deleteSelected" class="btn btn-danger" :disabled="selectedIds.length === 0">🗑 선택 삭제 ({{ selectedIds.length }})</button>
           <button @click="downloadExcel" class="btn btn-success">📥 CSV 내보내기</button>
         </div>
       </div>
@@ -57,48 +46,34 @@
           <table class="modern-table">
             <thead>
               <tr class="main-header">
-                <th rowspan="2" class="w-chk">
-                  <input type="checkbox" :checked="isAllSelected" @change="toggleAllSelect" />
-                </th>
+                <th rowspan="2" class="w-chk"><input type="checkbox" :checked="isAllSelected" @change="toggleAllSelect" /></th>
                 <th rowspan="2" class="sortable" @click="sortBy('TagIdx')">Idx ↕</th>
                 <th rowspan="2" class="sortable" @click="sortBy('TagNo')">Tag No ↕</th>
-                <th colspan="4" class="col-group pub">Published (Master)</th>
-                <th colspan="4" class="col-group wrk">Working (Current)</th>
+                <th colspan="2" class="col-group pub">Published (Master)</th>
+                <th colspan="2" class="col-group wrk">Working (Current)</th>
               </tr>
               <tr class="sub-header">
-                <th class="sortable" @click="sortBy('pub.EpId')">EP ID</th><th>CLS</th><th>Type</th><th>Status</th>
-                <th class="sortable" @click="sortBy('wrk.EpId')">EP ID</th><th>CLS</th><th>Del</th><th>Status</th>
+                <th>레코드 수</th><th>대표 EP ID</th>
+                <th>레코드 수</th><th>대표 EP ID</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in filteredList" :key="item.TagIdx" 
-                  :class="['data-row', { 'row-selected': selectedIds.includes(item.TagIdx) }]"
-                  @click="openModal(item)">
-                <td @click.stop>
-                  <input type="checkbox" :value="item.TagIdx" v-model="selectedIds" />
-                </td>
-                <td>{{ item.TagIdx }}</td>
-                <td v-html="highlightText(item.TagNo)"></td>
+              <tr v-for="group in filteredList" :key="group.TagIdx" 
+                  :class="['data-row', { 'row-selected': selectedIds.includes(group.TagIdx) }]"
+                  @click="openModal(group)">
+                <td @click.stop><input type="checkbox" :value="group.TagIdx" v-model="selectedIds" /></td>
+                <td>{{ group.TagIdx }}</td>
+                <td v-html="highlightText(group.TagNo)"></td>
                 
-                <td>{{ item.pub?.EpId || '-' }}</td>
-                <td>{{ item.pub?.ClsId || '-' }}</td>
-                <td>{{ item.pub?.TagTypeId || '-' }}</td>
-                <td>
-                  <span v-if="item.pub" :class="['badge', item.pub.Deleted ? 'bg-red' : 'bg-green']">
-                    {{ item.pub.Deleted ? 'Deleted' : 'Active' }}
-                  </span>
+                <td :class="group.pubList.length > 1 ? 'text-bold' : ''">
+                  {{ group.pubList.length }} 건
                 </td>
+                <td>{{ group.pubList[0]?.EpId || '-' }}</td>
 
-                <td>{{ item.wrk?.EpId || '-' }}</td>
-                <td>{{ item.wrk?.ClsId || '-' }}</td>
-                <td>
-                  <span v-if="item.wrk" :class="item.wrk.DelYn ? 'text-red' : ''">{{ item.wrk.DelYn ? 'Y' : 'N' }}</span>
+                <td :class="group.wrkList.length > 1 ? 'text-bold' : ''">
+                  {{ group.wrkList.length }} 건
                 </td>
-                <td>
-                  <span v-if="item.wrk" :class="['badge', item.wrk.Deleted ? 'bg-red' : 'bg-green']">
-                    {{ item.wrk.Deleted ? 'Deleted' : 'Active' }}
-                  </span>
-                </td>
+                <td>{{ group.wrkList[0]?.EpId || '-' }}</td>
               </tr>
             </tbody>
           </table>
@@ -107,20 +82,29 @@
     </div>
 
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal-card">
+      <div class="modal-card wide-modal">
         <header class="modal-header">
-          <h3>Tag Detail Info <small>#{{ selectedItem?.TagIdx }}</small></h3>
+          <h3>Tag Group Detail <small>Idx: {{ selectedItem?.TagIdx }} | TagNo: {{ selectedItem?.TagNo }}</small></h3>
           <button @click="closeModal" class="close-btn">&times;</button>
         </header>
         <div class="modal-body" v-if="selectedItem">
-          <div class="json-grid">
-            <div class="json-box">
-              <label>Published Data (Master)</label>
-              <pre>{{ JSON.stringify(selectedItem.pub, null, 2) }}</pre>
+          <div class="group-detail-grid">
+            <div class="detail-section">
+              <h4 class="pub-title">📢 Published Records ({{ selectedItem.pubList.length }})</h4>
+              <div v-for="(item, idx) in selectedItem.pubList" :key="'pub-'+idx" class="json-item">
+                <div class="item-label">Record #{{ idx + 1 }}</div>
+                <pre>{{ JSON.stringify(item, null, 2) }}</pre>
+              </div>
+              <div v-if="selectedItem.pubList.length === 0" class="no-data">데이터 없음</div>
             </div>
-            <div class="json-box">
-              <label>Working Data (Current)</label>
-              <pre>{{ JSON.stringify(selectedItem.wrk, null, 2) }}</pre>
+
+            <div class="detail-section">
+              <h4 class="wrk-title">🛠 Working Records ({{ selectedItem.wrkList.length }})</h4>
+              <div v-for="(item, idx) in selectedItem.wrkList" :key="'wrk-'+idx" class="json-item">
+                <div class="item-label">Record #{{ idx + 1 }}</div>
+                <pre>{{ JSON.stringify(item, null, 2) }}</pre>
+              </div>
+              <div v-if="selectedItem.wrkList.length === 0" class="no-data">데이터 없음</div>
             </div>
           </div>
         </div>
@@ -134,19 +118,15 @@ import { ref, computed } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 
 export default {
-  name: 'TagIntegratedManager',
   setup() {
     const projectNo = ref('')
     const keyword = ref('')
     const localSearchQuery = ref('')
     const mergedList = ref([])
     const isLoading = ref(false)
-    const searched = ref(false)
     const selectedIds = ref([])
     const sortKey = ref('TagNo')
     const sortOrder = ref(1)
-
-    // 모달 상태
     const showModal = ref(false)
     const selectedItem = ref(null)
 
@@ -154,41 +134,21 @@ export default {
       let list = [...mergedList.value]
       if (localSearchQuery.value.trim()) {
         const searchTerms = localSearchQuery.value.toLowerCase().split(/[\s,]+/).filter(t => t)
-        list = list.filter(item => {
-          const tagNo = item.TagNo.toLowerCase()
-          return searchTerms.some(term => tagNo.includes(term))
-        })
+        list = list.filter(g => searchTerms.some(term => g.TagNo.toLowerCase().includes(term)))
       }
       list.sort((a, b) => {
-        let valA = getNestedValue(a, sortKey.value)
-        let valB = getNestedValue(b, sortKey.value)
-        if (valA < valB) return -1 * sortOrder.value
-        if (valA > valB) return 1 * sortOrder.value
-        return 0
+        let vA = a[sortKey.value], vB = b[sortKey.value]
+        return vA < vB ? -1 * sortOrder.value : vA > vB ? 1 * sortOrder.value : 0
       })
       return list
     })
 
-    const getNestedValue = (obj, path) => path.split('.').reduce((o, i) => (o ? o[i] : ''), obj)
-
-    const highlightText = (text) => {
-      if (!localSearchQuery.value.trim()) return text
-      const searchTerms = localSearchQuery.value.split(/[\s,]+/).filter(t => t)
-      let highlighted = String(text)
-      searchTerms.forEach(term => {
-        const regex = new RegExp(`(${term})`, 'gi')
-        highlighted = highlighted.replace(regex, '<mark class="hl">$1</mark>')
-      })
-      return highlighted
-    }
-
     const fetchAndMergeData = async () => {
       if (!keyword.value.trim()) return
       isLoading.value = true
-      searched.value = true
       selectedIds.value = []
       const keywords = keyword.value.split(/[\s,\n]+/).map(k => k.trim()).filter(k => k.length > 0)
-      const dataMap = new Map()
+      const groupMap = new Map() // TagIdx 기준 그룹화
 
       try {
         await Promise.all(keywords.map(async (key) => {
@@ -197,65 +157,54 @@ export default {
             axiosWrapper.post('/api/Admin/Tool/GetPublishedData', payload),
             axiosWrapper.post('/api/Admin/Tool/GetWorkingData', payload),
           ])
-          const pubData = pubRes?.data || pubRes
-          const wrkData = wrkRes?.data || wrkRes
 
-          if (Array.isArray(pubData)) {
-            pubData.forEach(item => dataMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pub: item, wrk: null }))
-          }
-          if (Array.isArray(wrkData)) {
-            wrkData.forEach(item => {
-              const existing = dataMap.get(item.TagIdx)
-              if (existing) existing.wrk = item
-              else dataMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pub: null, wrk: item })
-            })
-          }
+          const getList = (res) => Array.isArray(res?.data || res) ? (res?.data || res) : []
+          
+          // 데이터 그룹화 로직 (누락 없이 배열에 push)
+          getList(pubRes).forEach(item => {
+            if (!groupMap.has(item.TagIdx)) groupMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pubList: [], wrkList: [] })
+            groupMap.get(item.TagIdx).pubList.push(item)
+          })
+          getList(wrkRes).forEach(item => {
+            if (!groupMap.has(item.TagIdx)) groupMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pubList: [], wrkList: [] })
+            groupMap.get(item.TagIdx).wrkList.push(item)
+          })
         }))
-        mergedList.value = Array.from(dataMap.values())
-      } catch (err) { alert('데이터 호출 실패') } 
+        mergedList.value = Array.from(groupMap.values())
+      } catch (err) { alert('데이터 호출 실패') }
       finally { isLoading.value = false }
+    }
+
+    const highlightText = (text) => {
+      if (!localSearchQuery.value.trim()) return text
+      const regex = new RegExp(`(${localSearchQuery.value.split(/[\s,]+/).filter(t=>t).join('|')})`, 'gi')
+      return String(text).replace(regex, '<mark class="hl">$1</mark>')
     }
 
     const sortBy = (key) => {
       if (sortKey.value === key) sortOrder.value *= -1
-      else { sortKey.value = key; sortOrder.value = 1; }
+      else { sortKey.value = key; sortOrder.value = 1 }
     }
-
-    const isAllSelected = computed(() => filteredList.value.length > 0 && selectedIds.value.length === filteredList.value.length)
-    const toggleAllSelect = () => {
-      if (isAllSelected.value) selectedIds.value = []
-      else selectedIds.value = filteredList.value.map(i => i.TagIdx)
-    }
-
-    const openModal = (item) => {
-      selectedItem.value = item
-      showModal.value = true
-    }
-
-    const closeModal = () => {
-      showModal.value = false
-      selectedItem.value = null
-    }
-
-    const deleteSelected = () => {
-      if(confirm(`${selectedIds.value.length}건을 삭제하시겠습니까?`)) {
-        console.log("Delete IDs:", selectedIds.value);
-        alert("삭제 로직 연결 필요");
-      }
-    }
-
-    const downloadExcel = () => { /* 기존 엑셀 로직 */ }
 
     return {
-      projectNo, keyword, localSearchQuery, mergedList, filteredList, isLoading, searched,
-      selectedIds, isAllSelected, toggleAllSelect, sortBy, highlightText,
-      openModal, closeModal, showModal, selectedItem, fetchAndMergeData, deleteSelected, downloadExcel
+      projectNo, keyword, localSearchQuery, mergedList, filteredList, isLoading,
+      selectedIds, sortKey, sortOrder, showModal, selectedItem,
+      fetchAndMergeData, sortBy, highlightText,
+      openModal: (g) => { selectedItem.value = g; showModal.value = true },
+      closeModal: () => { showModal.value = false; selectedItem.value = null },
+      toggleAllSelect: () => { 
+        if (filteredList.value.length === selectedIds.value.length) selectedIds.value = []
+        else selectedIds.value = filteredList.value.map(i => i.TagIdx)
+      },
+      isAllSelected: computed(() => filteredList.value.length > 0 && selectedIds.value.length === filteredList.value.length),
+      deleteSelected: () => confirm('정말 삭제하시겠습니까?') && console.log(selectedIds.value)
     }
   }
 }
 </script>
 
 <style scoped>
+/* 이전 스타일 유지 및 그룹 전용 스타일 추가 */
 .container { max-width: 1400px; margin: 0 auto; padding: 20px; font-family: 'Pretendard', sans-serif; }
 .search-panel { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 20px; }
 .search-grid { display: flex; gap: 20px; align-items: flex-start; }
@@ -277,17 +226,27 @@ export default {
 .modern-table { width: 100%; border-collapse: collapse; background: white; font-size: 13px; }
 .modern-table th { padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; cursor: pointer; }
 .modern-table td { padding: 12px; border: 1px solid #f1f5f9; text-align: center; }
-.data-row { cursor: pointer; }
-.data-row:hover { background: #f1f5f9; }
-.row-selected { background: #eff6ff !important; }
+.text-bold { font-weight: 800; color: #2563eb; text-decoration: underline; }
 
+.data-row:hover { background: #f1f5f9; cursor: pointer; }
+.row-selected { background: #eff6ff !important; }
 ::v-deep .hl { background: #fef08a; padding: 0 2px; border-radius: 2px; font-weight: bold; color: #1e293b; }
 
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; }
-.modal-card { background: white; width: 90%; max-width: 900px; border-radius: 15px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+/* 모달 및 그룹 리스트 스타일 */
+.wide-modal { max-width: 1100px !important; }
+.group-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 25px; }
+.detail-section { display: flex; flex-direction: column; gap: 15px; }
+.detail-section h4 { padding-bottom: 10px; border-bottom: 2px solid #eee; }
+.pub-title { color: #2563eb; }
+.wrk-title { color: #d97706; }
+.json-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; }
+.item-label { background: #e2e8f0; padding: 5px 10px; font-size: 11px; font-weight: bold; }
+.json-item pre { margin: 0; padding: 10px; font-size: 12px; background: #1e293b; color: #cbd5e1; max-height: 200px; overflow: auto; }
+.no-data { text-align: center; padding: 40px; color: #94a3b8; background: #f8fafc; border-radius: 8px; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(4px); }
+.modal-card { background: white; width: 90%; border-radius: 15px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
 .modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
-.modal-body { padding: 25px; }
-.json-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.json-box pre { background: #1e293b; color: #e2e8f0; padding: 15px; border-radius: 10px; height: 400px; overflow: auto; font-size: 12px; }
+.modal-body { padding: 25px; max-height: 80vh; overflow-y: auto; }
 .close-btn { background: none; border: none; font-size: 30px; cursor: pointer; color: #94a3b8; }
 </style>
