@@ -1,1 +1,9 @@
- http://60.100.93.131/check?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqc29uX2lkIjoxNjY4LCJ1c2VyX2luZm8iOnsiVXNlcklEIjoiNTI1OTMyNzEiLCJOYW1lIjoi67CV7KCV7LKgIiwiQ29tcGFueSI6IiIsIkRlcHQiOiLsnbTri7QiLCJUaXRsZSI6IuywqOyepV_snbTri7QiLCJFbWFpbCI6ImpjNjgwMi5wYXJrQHBhcnRuZXIuc2Ftc3VuZy5jb20iLCJMb2dpbklEIjoiamM2ODAyLnBhcmsiLCJJc1N5c3RlbUFkbWluIjpmYWxzZSwiSXNBZGFwdGVyVXNlciI6ZmFsc2UsIklzRGV2ZWxvcGVyIjpmYWxzZX0sImlhdCI6MTc3MzgwOTk0MCwiZXhwIjoxNzczODQ1OTQwfQ.ruvYHl_6QankKaxmQ8yK1STeWmNpmJ4V6H95usf-B1E&redirect=http%3A%2F%2F60.100.93.131%2FtempBuilder
+const openUrl = "http://60.100.93.131/check?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJqc29uX2lkIjoxNjY4LCJ1c2VyX2luZm8iOnsiVXNlcklEIjoiNTI1OTMyNzEiLCJOYW1lIjoi67CV7KCV7LKgIiwiQ29tcGFueSI6IiIsIkRlcHQiOiLsnbTri7QiLCJUaXRsZSI6IuywqOyepV_snbTri7QiLCJFbWFpbCI6ImpjNjgwMi5wYXJrQHBhcnRuZXIuc2Ftc3VuZy5jb20iLCJMb2dpbklEIjoiamM2ODAyLnBhcmsiLCJJc1N5c3RlbUFkbWluIjpmYWxzZSwiSXNBZGFwdGVyVXNlciI6ZmFsc2UsIklzRGV2ZWxvcGVyIjpmYWxzZX0sImlhdCI6MTc3MzgwOTk0MCwiZXhwIjoxNzczODQ1OTQwfQ.ruvYHl_6QankKaxmQ8yK1STeWmNpmJ4V6H95usf-B1E&redirect=http%3A%2F%2F60.100.93.131%2FtempBuilder";
+
+const urlObj = new URL(openUrl);
+
+// pathname(/check) + search(?token=...)를 합쳐서 변수에 할당
+const url = urlObj.pathname + urlObj.search;
+
+console.log(url); 
+// 결과: "/check?token=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
