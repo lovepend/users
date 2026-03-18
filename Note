@@ -2,7 +2,7 @@
   <div id="app" class="admin-tool">
     <div class="container">
       <header class="page-header">
-        <h2 class="title">🔍 태그 통합 관리 시스템 <span class="badge-v">Merge View</span></h2>
+        <h2 class="title">🔍 태그 통합 관리 시스템</h2>
       </header>
 
       <section class="search-panel">
@@ -11,8 +11,8 @@
             <label>Project No</label>
             <input v-model="projectNo" type="text" placeholder="P0001..." class="base-input" />
           </div>
-          <div class="input-field w-50">
-            <label>API Fetch Keywords</label>
+          <div class="input-field flex-grow">
+            <label>API Fetch Keywords <span class="label-hint">(공백/줄바꿈 구분)</span></label>
             <textarea v-model="keyword" placeholder="TAG-01..." class="base-input multi-input"></textarea>
           </div>
           <div class="action-field">
@@ -43,47 +43,46 @@
 
       <main class="content-panel">
         <div class="table-wrapper">
-          <table class="modern-table merged-table">
+          <table class="modern-table">
             <thead>
               <tr class="main-header">
-                <th class="w-chk"><input type="checkbox" :checked="isAllSelected" @change="toggleAllSelect" /></th>
-                <th class="sortable" @click="sortBy('TagIdx')">Idx</th>
-                <th class="sortable" @click="sortBy('TagNo')">Tag No</th>
-                <th colspan="3" class="col-group pub">Published (Master)</th>
-                <th colspan="3" class="col-group wrk">Working (Current)</th>
+                <th rowspan="2" class="w-chk"><input type="checkbox" :checked="isAllSelected" @change="toggleAllSelect" /></th>
+                <th rowspan="2">Idx</th>
+                <th rowspan="2">Tag No</th>
+                <th colspan="3" class="pub-header">Published (Master)</th>
+                <th colspan="3" class="wrk-header">Working (Current)</th>
               </tr>
               <tr class="sub-header">
-                <th colspan="3"></th> <th>EP ID</th><th>CLS</th><th>Status</th>
-                <th>EP ID</th><th>CLS</th><th>Status</th>
+                <th>EP ID</th><th>CLS</th><th>Stat</th>
+                <th>EP ID</th><th>CLS</th><th>Stat</th>
               </tr>
             </thead>
-            <tbody v-for="group in filteredList" :key="group.TagIdx">
-              <tr v-for="(rowIdx) in Math.max(group.pubList.length, group.wrkList.length, 1)" :key="group.TagIdx + '-' + rowIdx">
+            
+            <tbody v-for="group in filteredList" :key="group.TagIdx" class="group-body">
+              <tr v-for="(rowNum) in Math.max(group.pubList.length, group.wrkList.length, 1)" :key="group.TagIdx + '-' + rowNum" class="data-row">
                 
-                <template v-if="rowIdx === 1">
-                  <td :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" @click.stop>
-                    <input type="checkbox" :value="group.TagIdx" v-model="selectedIds" />
-                  </td>
-                  <td :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="cell-group-idx" @click="openModal(group)">
-                    {{ group.TagIdx }}
-                  </td>
-                  <td :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="cell-group-tag" @click="openModal(group)" v-html="highlightText(group.TagNo)">
-                  </td>
-                </template>
+                <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="chk-cell">
+                  <input type="checkbox" :value="group.TagIdx" v-model="selectedIds" />
+                </td>
+                <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="group-cell" @click="openModal(group)">
+                  {{ group.TagIdx }}
+                </td>
+                <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="group-cell tag-no" @click="openModal(group)" v-html="highlightText(group.TagNo)">
+                </td>
 
-                <td class="pub-td" @click="openModal(group)">{{ group.pubList[rowIdx-1]?.EpId || (rowIdx <= group.pubList.length ? '-' : '') }}</td>
-                <td class="pub-td" @click="openModal(group)">{{ group.pubList[rowIdx-1]?.ClsId || (rowIdx <= group.pubList.length ? '-' : '') }}</td>
+                <td class="pub-td" @click="openModal(group)">{{ group.pubList[rowNum-1]?.EpId || (rowNum <= group.pubList.length ? '-' : '') }}</td>
+                <td class="pub-td" @click="openModal(group)">{{ group.pubList[rowNum-1]?.ClsId || (rowNum <= group.pubList.length ? '-' : '') }}</td>
                 <td class="pub-td" @click="openModal(group)">
-                  <span v-if="group.pubList[rowIdx-1]" :class="['badge', group.pubList[rowIdx-1].Deleted ? 'bg-red' : 'bg-green']">
-                    {{ group.pubList[rowIdx-1].Deleted ? 'Del' : 'Act' }}
+                  <span v-if="group.pubList[rowNum-1]" :class="['badge', group.pubList[rowNum-1].Deleted ? 'bg-red' : 'bg-green']">
+                    {{ group.pubList[rowNum-1].Deleted ? 'D' : 'A' }}
                   </span>
                 </td>
 
-                <td class="wrk-td" @click="openModal(group)">{{ group.wrkList[rowIdx-1]?.EpId || (rowIdx <= group.wrkList.length ? '-' : '') }}</td>
-                <td class="wrk-td" @click="openModal(group)">{{ group.wrkList[rowIdx-1]?.ClsId || (rowIdx <= group.wrkList.length ? '-' : '') }}</td>
+                <td class="wrk-td" @click="openModal(group)">{{ group.wrkList[rowNum-1]?.EpId || (rowNum <= group.wrkList.length ? '-' : '') }}</td>
+                <td class="wrk-td" @click="openModal(group)">{{ group.wrkList[rowNum-1]?.ClsId || (rowNum <= group.wrkList.length ? '-' : '') }}</td>
                 <td class="wrk-td" @click="openModal(group)">
-                  <span v-if="group.wrkList[rowIdx-1]" :class="['badge', group.wrkList[rowIdx-1].Deleted ? 'bg-red' : 'bg-green']">
-                    {{ group.wrkList[rowIdx-1].Deleted ? 'Del' : 'Act' }}
+                  <span v-if="group.wrkList[rowNum-1]" :class="['badge', group.wrkList[rowNum-1].Deleted ? 'bg-red' : 'bg-green']">
+                    {{ group.wrkList[rowNum-1].Deleted ? 'D' : 'A' }}
                   </span>
                 </td>
               </tr>
@@ -94,7 +93,29 @@
     </div>
 
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
+      <div class="modal-card">
+        <header class="modal-header">
+          <h3>Tag Group Detail <small>#{{ selectedItem?.TagIdx }}</small></h3>
+          <button @click="closeModal" class="close-btn">&times;</button>
+        </header>
+        <div class="modal-body">
+          <div class="modal-grid-content">
+            <div class="data-box">
+              <h4 class="text-pub">Published ({{ selectedItem?.pubList.length }})</h4>
+              <div class="json-list">
+                <pre v-for="(p, i) in selectedItem?.pubList" :key="'p'+i">{{ p }}</pre>
+              </div>
+            </div>
+            <div class="data-box">
+              <h4 class="text-wrk">Working ({{ selectedItem?.wrkList.length }})</h4>
+              <div class="json-list">
+                <pre v-for="(w, i) in selectedItem?.wrkList" :key="'w'+i">{{ w }}</pre>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -103,6 +124,7 @@ import { ref, computed } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 
 export default {
+  name: 'TagManager',
   setup() {
     const projectNo = ref('')
     const keyword = ref('')
@@ -110,17 +132,15 @@ export default {
     const mergedList = ref([])
     const isLoading = ref(false)
     const selectedIds = ref([])
-    const sortKey = ref('TagNo')
-    const sortOrder = ref(1)
     const showModal = ref(false)
     const selectedItem = ref(null)
 
-    // 그룹화 로직 (N개 데이터 수집)
+    // 데이터 호출 및 그룹화
     const fetchAndMergeData = async () => {
       if (!keyword.value.trim()) return
       isLoading.value = true
       selectedIds.value = []
-      const keywords = keyword.value.split(/[\s,\n]+/).map(k => k.trim()).filter(k => k.length > 0)
+      const keywords = keyword.value.split(/[\s,\n]+/).map(k => k.trim()).filter(k => k)
       const groupMap = new Map()
 
       try {
@@ -128,33 +148,31 @@ export default {
           const payload = { ProjectNo: projectNo.value, Keyword: key }
           const [pubRes, wrkRes] = await Promise.all([
             axiosWrapper.post('/api/Admin/Tool/GetPublishedData', payload),
-            axiosWrapper.post('/api/Admin/Tool/GetWorkingData', payload),
+            axiosWrapper.post('/api/Admin/Tool/GetWorkingData', payload)
           ])
+          const pubData = Array.isArray(pubRes?.data || pubRes) ? (pubRes?.data || pubRes) : []
+          const wrkData = Array.isArray(wrkRes?.data || wrkRes) ? (wrkRes?.data || wrkRes) : []
 
-          const getList = (res) => Array.isArray(res?.data || res) ? (res?.data || res) : []
-          
-          getList(pubRes).forEach(item => {
+          pubData.forEach(item => {
             if (!groupMap.has(item.TagIdx)) groupMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pubList: [], wrkList: [] })
             groupMap.get(item.TagIdx).pubList.push(item)
           })
-          getList(wrkRes).forEach(item => {
+          wrkData.forEach(item => {
             if (!groupMap.has(item.TagIdx)) groupMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pubList: [], wrkList: [] })
             groupMap.get(item.TagIdx).wrkList.push(item)
           })
         }))
-        mergedList.value = Array.from(groupMap.values())
-      } catch (err) { alert('데이터 호출 실패') }
+        // 태그 번호 기준 오름차순 정렬 후 저장
+        mergedList.value = Array.from(groupMap.values()).sort((a,b) => a.TagNo.localeCompare(b.TagNo))
+      } catch (e) { alert('데이터 로드 실패') }
       finally { isLoading.value = false }
     }
 
+    // 결과 내 필터링
     const filteredList = computed(() => {
-      let list = [...mergedList.value]
-      if (localSearchQuery.value.trim()) {
-        const terms = localSearchQuery.value.toLowerCase().split(/[\s,]+/).filter(t => t)
-        list = list.filter(g => terms.some(term => g.TagNo.toLowerCase().includes(term)))
-      }
-      list.sort((a, b) => (a[sortKey.value] < b[sortKey.value] ? -1 * sortOrder.value : 1 * sortOrder.value))
-      return list
+      if (!localSearchQuery.value.trim()) return mergedList.value
+      const searchTerms = localSearchQuery.value.toLowerCase().split(/[\s,]+/).filter(t => t)
+      return mergedList.value.filter(g => searchTerms.some(t => g.TagNo.toLowerCase().includes(t)))
     })
 
     const highlightText = (text) => {
@@ -163,43 +181,79 @@ export default {
       return String(text).replace(regex, '<mark class="hl">$1</mark>')
     }
 
+    const openModal = (group) => {
+      selectedItem.value = group
+      showModal.value = true
+    }
+
+    const closeModal = () => {
+      showModal.value = false
+      selectedItem.value = null
+    }
+
     return {
-      projectNo, keyword, localSearchQuery, mergedList, filteredList, isLoading, 
+      projectNo, keyword, localSearchQuery, mergedList, filteredList, isLoading,
       selectedIds, showModal, selectedItem,
-      fetchAndMergeData, highlightText,
-      sortBy: (k) => { if(sortKey.value===k) sortOrder.value*=-1; else {sortKey.value=k; sortOrder.value=1} },
-      openModal: (g) => { selectedItem.value = g; showModal.value = true },
-      closeModal: () => { showModal.value = false },
-      toggleAllSelect: () => { 
-        if (filteredList.value.length === selectedIds.value.length) selectedIds.value = []
-        else selectedIds.value = filteredList.value.map(i => i.TagIdx)
+      fetchAndMergeData, highlightText, openModal, closeModal,
+      toggleAllSelect: () => {
+        if (selectedIds.value.length === filteredList.value.length) selectedIds.value = []
+        else selectedIds.value = filteredList.value.map(g => g.TagIdx)
       },
       isAllSelected: computed(() => filteredList.value.length > 0 && selectedIds.value.length === filteredList.value.length),
-      deleteSelected: () => confirm('선택된 그룹을 삭제하시겠습니까?') && console.log(selectedIds.value)
+      deleteSelected: () => confirm('삭제하시겠습니까?') && console.log(selectedIds.value),
+      downloadExcel: () => alert('엑셀 로직 연결')
     }
   }
 }
 </script>
 
 <style scoped>
-/* 기존 스타일은 유지하되 테이블 보더와 병합 UI 최적화 */
-.merged-table { border-collapse: separate; border-spacing: 0; }
-.merged-table tbody { border-bottom: 2px solid #cbd5e1; } /* 그룹 간 구분선 */
+/* 레이아웃 초기화 */
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; font-family: sans-serif; color: #334155; }
 
-/* 병합된 셀 스타일 */
-.cell-group-idx, .cell-group-tag { background-color: #f8fafc; font-weight: 700; border-right: 2px solid #e2e8f0 !important; }
+/* 검색창 섹션 */
+.search-panel { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 20px; }
+.search-grid { display: flex; gap: 20px; align-items: flex-start; }
+.w-20 { width: 220px; }
+.flex-grow { flex: 1; }
+.base-input { width: 100%; padding: 10px; border: 1px solid #e2e8f0; border-radius: 8px; box-sizing: border-box; }
+.multi-input { height: 45px; resize: vertical; }
+.multi-input:focus { height: 120px; }
+.action-field { padding-top: 25px; }
 
-/* 데이터 셀 스타일 */
-.pub-td { background-color: #f0f7ff; }
-.wrk-td { background-color: #fffcf0; }
+.local-search-bar { margin-top: 15px; border-top: 1px solid #f1f5f9; padding-top: 15px; }
+.highlight-input { border: 2px solid #3b82f6; background: #f0f7ff; }
 
-.modern-table td { border: 1px solid #e2e8f0; padding: 10px; text-align: center; }
-.sub-header th { background: #f1f5f9; font-size: 11px; padding: 5px; }
+/* 테이블 스타일 */
+.table-wrapper { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+.modern-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.modern-table th, .modern-table td { border: 1px solid #e2e8f0; padding: 12px; text-align: center; overflow: hidden; text-overflow: ellipsis; }
 
-.badge { padding: 2px 6px; border-radius: 4px; color: white; font-size: 11px; }
+.main-header th { background: #f8fafc; font-weight: 700; font-size: 14px; }
+.sub-header th { background: #f1f5f9; font-size: 11px; color: #64748b; }
+
+/* 병합 셀 전용 */
+.group-body { border-bottom: 3px solid #cbd5e1; }
+.group-cell { background: #f8fafc; font-weight: bold; cursor: pointer; }
+.tag-no { color: #2563eb; }
+
+.pub-td { background: #f0f7ff; cursor: pointer; }
+.wrk-td { background: #fffcf0; cursor: pointer; }
+
+/* 뱃지 */
+.badge { padding: 2px 5px; border-radius: 4px; color: white; font-size: 11px; }
 .bg-green { background: #10b981; }
 .bg-red { background: #ef4444; }
 
+/* 모달 스타일 */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; backdrop-filter: blur(4px); }
+.modal-card { background: white; width: 90%; max-width: 1000px; border-radius: 16px; overflow: hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.3); }
+.modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+.modal-body { padding: 20px; max-height: 70vh; overflow-y: auto; }
+.modal-grid-content { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.data-box pre { background: #1e293b; color: #cbd5e1; padding: 10px; border-radius: 8px; font-size: 12px; margin-bottom: 10px; overflow: auto; }
+.text-pub { color: #2563eb; } .text-wrk { color: #d97706; }
+.close-btn { background: none; border: none; font-size: 30px; cursor: pointer; color: #94a3b8; }
+
 ::v-deep .hl { background: #fef08a; font-weight: bold; }
-.data-row:hover td { background-color: #f1f5f9; }
 </style>
