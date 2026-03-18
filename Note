@@ -2,7 +2,7 @@
   <div id="app" class="admin-tool">
     <div class="container">
       <header class="page-header">
-        <h2 class="title">🔍 태그 통합 관리 시스템 <span class="version">v2.0</span></h2>
+        <h2 class="title">🔍 태그 통합 관리 시스템</h2>
       </header>
 
       <section class="search-panel">
@@ -29,11 +29,11 @@
         
         <div class="local-search-bar">
           <div class="input-field flex-grow">
-            <label>결과 내 다중 필터 <span class="label-hint">(화면 표시 필터링 & 하이라이트)</span></label>
+            <label>결과 내 다중 필터 <span class="label-hint">(공백 구분 입력 시 하이라이트 및 필터링)</span></label>
             <input 
               v-model="localSearchQuery" 
               type="text" 
-              placeholder="필터링할 키워드들을 입력하세요 (공백 구분)..." 
+              placeholder="화면에서 필터링할 키워드들..." 
               class="base-input highlight-input"
             />
           </div>
@@ -41,13 +41,15 @@
       </section>
 
       <div class="control-bar" v-if="mergedList.length > 0">
-        <div class="left-actions">
+        <div class="left-info">
+          <span class="count-badge">조회 결과: <b>{{ filteredList.length }}</b> / {{ mergedList.length }}건</span>
+        </div>
+        <div class="right-actions">
           <button @click="deleteSelected" class="btn btn-danger" :disabled="selectedIds.length === 0">
             🗑 선택 삭제 ({{ selectedIds.length }})
           </button>
-          <span class="count-badge">결과: <b>{{ filteredList.length }}</b> / {{ mergedList.length }}건</span>
+          <button @click="downloadExcel" class="btn btn-success">📥 CSV 내보내기</button>
         </div>
-        <button @click="downloadExcel" class="btn btn-success">📥 CSV 내보내기</button>
       </div>
 
       <main class="content-panel">
@@ -58,40 +60,41 @@
                 <th rowspan="2" class="w-chk">
                   <input type="checkbox" :checked="isAllSelected" @change="toggleAllSelect" />
                 </th>
-                <th rowspan="2" class="sortable" @click="sortBy('TagIdx')">Idx <span class="sort-icon">↕</span></th>
-                <th rowspan="2" class="sortable" @click="sortBy('TagNo')">Tag No <span class="sort-icon">↕</span></th>
+                <th rowspan="2" class="sortable" @click="sortBy('TagIdx')">Idx ↕</th>
+                <th rowspan="2" class="sortable" @click="sortBy('TagNo')">Tag No ↕</th>
                 <th colspan="4" class="col-group pub">Published (Master)</th>
                 <th colspan="4" class="col-group wrk">Working (Current)</th>
               </tr>
               <tr class="sub-header">
-                <th @click="sortBy('pub.EpId')">EP ID</th><th>CLS</th><th>Type</th><th>Status</th>
-                <th @click="sortBy('wrk.EpId')">EP ID</th><th>CLS</th><th>Del</th><th>Status</th>
+                <th class="sortable" @click="sortBy('pub.EpId')">EP ID</th><th>CLS</th><th>Type</th><th>Status</th>
+                <th class="sortable" @click="sortBy('wrk.EpId')">EP ID</th><th>CLS</th><th>Del</th><th>Status</th>
               </tr>
             </thead>
             <tbody>
               <tr v-for="item in filteredList" :key="item.TagIdx" 
-                  :class="['data-row', { 'row-selected': selectedIds.includes(item.TagIdx) }]">
-                <td>
-                  <input type="checkbox" :value="item.TagIdx" v-model="selectedIds" @click.stop />
+                  :class="['data-row', { 'row-selected': selectedIds.includes(item.TagIdx) }]"
+                  @click="openModal(item)">
+                <td @click.stop>
+                  <input type="checkbox" :value="item.TagIdx" v-model="selectedIds" />
                 </td>
-                <td class="cell-idx" @click="openModal(item)">{{ item.TagIdx }}</td>
-                <td class="cell-tag" @click="openModal(item)" v-html="highlightText(item.TagNo)"></td>
+                <td>{{ item.TagIdx }}</td>
+                <td v-html="highlightText(item.TagNo)"></td>
                 
-                <td @click="openModal(item)">{{ item.pub?.EpId || '-' }}</td>
-                <td @click="openModal(item)">{{ item.pub?.ClsId || '-' }}</td>
-                <td @click="openModal(item)">{{ item.pub?.TagTypeId || '-' }}</td>
-                <td @click="openModal(item)">
+                <td>{{ item.pub?.EpId || '-' }}</td>
+                <td>{{ item.pub?.ClsId || '-' }}</td>
+                <td>{{ item.pub?.TagTypeId || '-' }}</td>
+                <td>
                   <span v-if="item.pub" :class="['badge', item.pub.Deleted ? 'bg-red' : 'bg-green']">
                     {{ item.pub.Deleted ? 'Deleted' : 'Active' }}
                   </span>
                 </td>
 
-                <td @click="openModal(item)">{{ item.wrk?.EpId || '-' }}</td>
-                <td @click="openModal(item)">{{ item.wrk?.ClsId || '-' }}</td>
-                <td @click="openModal(item)">
+                <td>{{ item.wrk?.EpId || '-' }}</td>
+                <td>{{ item.wrk?.ClsId || '-' }}</td>
+                <td>
                   <span v-if="item.wrk" :class="item.wrk.DelYn ? 'text-red' : ''">{{ item.wrk.DelYn ? 'Y' : 'N' }}</span>
                 </td>
-                <td @click="openModal(item)">
+                <td>
                   <span v-if="item.wrk" :class="['badge', item.wrk.Deleted ? 'bg-red' : 'bg-green']">
                     {{ item.wrk.Deleted ? 'Deleted' : 'Active' }}
                   </span>
@@ -103,7 +106,27 @@
       </main>
     </div>
 
+    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
+      <div class="modal-card">
+        <header class="modal-header">
+          <h3>Tag Detail Info <small>#{{ selectedItem?.TagIdx }}</small></h3>
+          <button @click="closeModal" class="close-btn">&times;</button>
+        </header>
+        <div class="modal-body" v-if="selectedItem">
+          <div class="json-grid">
+            <div class="json-box">
+              <label>Published Data (Master)</label>
+              <pre>{{ JSON.stringify(selectedItem.pub, null, 2) }}</pre>
+            </div>
+            <div class="json-box">
+              <label>Working Data (Current)</label>
+              <pre>{{ JSON.stringify(selectedItem.wrk, null, 2) }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
 </template>
 
 <script>
@@ -111,26 +134,24 @@ import { ref, computed } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 
 export default {
+  name: 'TagIntegratedManager',
   setup() {
     const projectNo = ref('')
     const keyword = ref('')
-    const localSearchQuery = ref('') // 결과 내 검색 필터
+    const localSearchQuery = ref('')
     const mergedList = ref([])
     const isLoading = ref(false)
     const searched = ref(false)
-    const selectedIds = ref([]) // 체크박스 선택된 ID들
-    const sortKey = ref('TagNo') // 기본 정렬 기준
-    const sortOrder = ref(1) // 1: 오름차순, -1: 내림차순
+    const selectedIds = ref([])
+    const sortKey = ref('TagNo')
+    const sortOrder = ref(1)
 
     // 모달 상태
     const showModal = ref(false)
     const selectedItem = ref(null)
 
-    // [핵심] 결과 내 필터링 + 정렬
     const filteredList = computed(() => {
       let list = [...mergedList.value]
-
-      // 1. 다중 키워드 필터링
       if (localSearchQuery.value.trim()) {
         const searchTerms = localSearchQuery.value.toLowerCase().split(/[\s,]+/).filter(t => t)
         list = list.filter(item => {
@@ -138,30 +159,22 @@ export default {
           return searchTerms.some(term => tagNo.includes(term))
         })
       }
-
-      // 2. 정렬 로직
       list.sort((a, b) => {
         let valA = getNestedValue(a, sortKey.value)
         let valB = getNestedValue(b, sortKey.value)
-        
         if (valA < valB) return -1 * sortOrder.value
         if (valA > valB) return 1 * sortOrder.value
         return 0
       })
-
       return list
     })
 
-    // 중첩 객체 값 찾기 (예: 'pub.EpId')
-    const getNestedValue = (obj, path) => {
-      return path.split('.').reduce((o, i) => (o ? o[i] : ''), obj)
-    }
+    const getNestedValue = (obj, path) => path.split('.').reduce((o, i) => (o ? o[i] : ''), obj)
 
-    // 텍스트 하이라이트 함수
     const highlightText = (text) => {
       if (!localSearchQuery.value.trim()) return text
       const searchTerms = localSearchQuery.value.split(/[\s,]+/).filter(t => t)
-      let highlighted = text
+      let highlighted = String(text)
       searchTerms.forEach(term => {
         const regex = new RegExp(`(${term})`, 'gi')
         highlighted = highlighted.replace(regex, '<mark class="hl">$1</mark>')
@@ -174,7 +187,6 @@ export default {
       isLoading.value = true
       searched.value = true
       selectedIds.value = []
-      
       const keywords = keyword.value.split(/[\s,\n]+/).map(k => k.trim()).filter(k => k.length > 0)
       const dataMap = new Map()
 
@@ -189,7 +201,7 @@ export default {
           const wrkData = wrkRes?.data || wrkRes
 
           if (Array.isArray(pubData)) {
-            pubData.forEach(item => dataMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pub: item, wrk: dataMap.get(item.TagIdx)?.wrk || null }))
+            pubData.forEach(item => dataMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pub: item, wrk: null }))
           }
           if (Array.isArray(wrkData)) {
             wrkData.forEach(item => {
@@ -200,71 +212,82 @@ export default {
           }
         }))
         mergedList.value = Array.from(dataMap.values())
-        // 초기 정렬: TagNo 기준 오름차순
-        sortKey.value = 'TagNo'; sortOrder.value = 1; 
-      } catch (err) {
-        alert('조회 중 오류 발생')
-      } finally {
-        isLoading.value = false
-      }
+      } catch (err) { alert('데이터 호출 실패') } 
+      finally { isLoading.value = false }
     }
 
-    // 정렬 변경
     const sortBy = (key) => {
       if (sortKey.value === key) sortOrder.value *= -1
       else { sortKey.value = key; sortOrder.value = 1; }
     }
 
-    // 체크박스 제어
     const isAllSelected = computed(() => filteredList.value.length > 0 && selectedIds.value.length === filteredList.value.length)
     const toggleAllSelect = () => {
       if (isAllSelected.value) selectedIds.value = []
       else selectedIds.value = filteredList.value.map(i => i.TagIdx)
     }
 
-    const deleteSelected = async () => {
-      if (!confirm(`선택한 ${selectedIds.value.length}개의 항목을 삭제하시겠습니까?`)) return
-      console.log('삭제 요청 ID 목록:', selectedIds.value)
-      // 여기에 axios.post('/api/.../Delete', { ids: selectedIds.value }) 연결
-      alert('삭제 API 연동 대기 중...')
+    const openModal = (item) => {
+      selectedItem.value = item
+      showModal.value = true
     }
 
-    // 모달/엑셀 함수 생략 (위의 UI 연동 필수 기능 위주로 구성)
+    const closeModal = () => {
+      showModal.value = false
+      selectedItem.value = null
+    }
+
+    const deleteSelected = () => {
+      if(confirm(`${selectedIds.value.length}건을 삭제하시겠습니까?`)) {
+        console.log("Delete IDs:", selectedIds.value);
+        alert("삭제 로직 연결 필요");
+      }
+    }
+
+    const downloadExcel = () => { /* 기존 엑셀 로직 */ }
 
     return {
       projectNo, keyword, localSearchQuery, mergedList, filteredList, isLoading, searched,
       selectedIds, isAllSelected, toggleAllSelect, sortBy, highlightText,
-      fetchAndMergeData, deleteSelected, openModal: (i) => { selectedItem.value=i; showModal.value=true; }
+      openModal, closeModal, showModal, selectedItem, fetchAndMergeData, deleteSelected, downloadExcel
     }
   }
 }
 </script>
 
 <style scoped>
-.container { max-width: 1300px; margin: 0 auto; padding: 20px; font-family: sans-serif; }
-.search-panel { background: #fff; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
-.search-grid { display: flex; gap: 20px; align-items: flex-start; } /* 입력란 위쪽 정렬 고정 */
+.container { max-width: 1400px; margin: 0 auto; padding: 20px; font-family: 'Pretendard', sans-serif; }
+.search-panel { background: #fff; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); margin-bottom: 20px; }
+.search-grid { display: flex; gap: 20px; align-items: flex-start; }
 .w-20 { width: 20%; } .w-50 { width: 50%; }
-.input-field { display: flex; flex-direction: column; gap: 5px; }
-.base-input { border: 1px solid #ddd; padding: 10px; border-radius: 6px; }
-.multi-input { height: 100px; resize: vertical; }
+.input-field { display: flex; flex-direction: column; gap: 8px; }
+.base-input { border: 1px solid #e2e8f0; padding: 12px; border-radius: 8px; font-size: 14px; }
+.multi-input { height: 45px; min-height: 45px; resize: vertical; transition: height 0.3s; }
+.multi-input:focus { height: 120px; }
+.local-search-bar { margin-top: 20px; padding-top: 20px; border-top: 1px solid #f1f5f9; }
+.highlight-input { border: 2px solid #3b82f6; background: #f8fbff; }
 
-.local-search-bar { margin-top: 15px; padding-top: 15px; border-top: 1px dashed #eee; }
-.highlight-input { border: 2px solid #3b82f6; background: #f0f7ff; }
+.control-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; }
+.right-actions { display: flex; gap: 10px; }
+.btn { padding: 10px 18px; border-radius: 8px; font-weight: 600; cursor: pointer; border: none; }
+.btn-primary { background: #2563eb; color: white; }
+.btn-danger { background: #ef4444; color: white; }
+.btn-success { background: #10b981; color: white; }
 
-.control-bar { display: flex; justify-content: space-between; margin-bottom: 10px; }
-.btn-danger { background: #ef4444; color: white; padding: 8px 15px; border-radius: 6px; border: none; cursor: pointer; }
-
-/* 테이블 및 정렬 */
-.sortable { cursor: pointer; position: relative; }
-.sortable:hover { background: #edf2f7; }
-.sort-icon { font-size: 10px; color: #a0aec0; }
-.modern-table { width: 100%; border-collapse: collapse; background: white; }
-.modern-table th { padding: 10px; background: #f8fafc; border: 1px solid #e2e8f0; }
+.modern-table { width: 100%; border-collapse: collapse; background: white; font-size: 13px; }
+.modern-table th { padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; cursor: pointer; }
 .modern-table td { padding: 12px; border: 1px solid #f1f5f9; text-align: center; }
-.data-row:hover { background: #f8fbff; }
-.row-selected { background: #ebf4ff !important; }
+.data-row { cursor: pointer; }
+.data-row:hover { background: #f1f5f9; }
+.row-selected { background: #eff6ff !important; }
 
-/* 하이라이트 스타일 */
-::v-deep .hl { background: #ffeb3b; padding: 0 2px; border-radius: 2px; font-weight: bold; }
+::v-deep .hl { background: #fef08a; padding: 0 2px; border-radius: 2px; font-weight: bold; color: #1e293b; }
+
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; }
+.modal-card { background: white; width: 90%; max-width: 900px; border-radius: 15px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.3); }
+.modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; background: #f8fafc; }
+.modal-body { padding: 25px; }
+.json-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.json-box pre { background: #1e293b; color: #e2e8f0; padding: 15px; border-radius: 10px; height: 400px; overflow: auto; font-size: 12px; }
+.close-btn { background: none; border: none; font-size: 30px; cursor: pointer; color: #94a3b8; }
 </style>
