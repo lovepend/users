@@ -3,15 +3,15 @@
     <div class="main-layout">
       <header class="dashboard-header">
         <div class="search-grid">
-          <div class="input-box">
+          <div class="input-box proj-box">
             <label class="field-label">Project No</label>
             <input v-model="projectNo" type="text" class="design-input" placeholder="P0001" />
           </div>
-          <div class="input-box flex-grow">
+          <div class="input-box kw-box">
             <label class="field-label">API Keywords (Space/Comma/Enter)</label>
             <textarea v-model="keyword" class="design-textarea" placeholder="조회 키워드를 입력하세요..."></textarea>
           </div>
-          <div class="input-box">
+          <div class="input-box filter-box">
             <label class="field-label">Result Filter (Multi Search)</label>
             <input v-model="localSearchQuery" type="text" class="design-input filter-highlight" placeholder="Tag No 멀티 검색..." />
           </div>
@@ -48,17 +48,38 @@
               <th class="sub-th wrk-bg h-single">EP ID</th><th class="sub-th wrk-bg h-single">CLS</th><th class="sub-th wrk-bg h-single">Del</th>
             </tr>
           </thead>
+          
           <tbody v-for="group in filteredList" :key="group.TagIdx" class="data-group">
             <tr v-for="rowNum in Math.max(group.pubList.length, group.wrkList.length, 1)" :key="group.TagIdx + '-' + rowNum">
-              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-chk group-td"><div class="center-vh"><input type="checkbox" :value="group.TagIdx" v-model="selectedIds" /></div></td>
-              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-idx group-td clickable" @click="openModal(group)"><div class="center-vh font-bold">{{ group.TagIdx }}</div></td>
-              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-tag group-td clickable" @click="openModal(group)"><div class="cell-padding"><span class="tag-highlight" v-html="highlightText(group.TagNo)"></span></div></td>
+              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-chk group-td">
+                <div class="center-vh"><input type="checkbox" :value="group.TagIdx" v-model="selectedIds" /></div>
+              </td>
+              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-idx group-td clickable" @click="openModal(group)">
+                <div class="center-vh font-bold">{{ group.TagIdx }}</div>
+              </td>
+              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-tag group-td clickable" @click="openModal(group)">
+                <div class="cell-padding"><span class="tag-highlight" v-html="highlightText(group.TagNo)"></span></div>
+              </td>
               <td class="cell-pub data-td clickable" @click="openModal(group)">{{ group.pubList[rowNum-1]?.EpId || 'null' }}</td>
               <td class="cell-pub data-td clickable" @click="openModal(group)">{{ group.pubList[rowNum-1]?.ClsId || 'null' }}</td>
-              <td class="cell-pub data-td clickable" @click="openModal(group)"><div class="center-vh"><span v-if="group.pubList[rowNum-1]" :class="['status-badge', group.pubList[rowNum-1].Deleted ? 'is-del' : 'is-active']">{{ group.pubList[rowNum-1].Deleted ? 'Y' : 'N' }}</span><span v-else class="null-txt">null</span></div></td>
+              <td class="cell-pub data-td clickable" @click="openModal(group)">
+                <div class="center-vh">
+                  <span v-if="group.pubList[rowNum-1]" :class="['status-badge', group.pubList[rowNum-1].Deleted ? 'is-del' : 'is-active']">
+                    {{ group.pubList[rowNum-1].Deleted ? 'Y' : 'N' }}
+                  </span>
+                  <span v-else class="null-txt">null</span>
+                </div>
+              </td>
               <td class="cell-wrk data-td clickable" @click="openModal(group)">{{ group.wrkList[rowNum-1]?.EpId || 'null' }}</td>
               <td class="cell-wrk data-td clickable" @click="openModal(group)">{{ group.wrkList[rowNum-1]?.ClsId || 'null' }}</td>
-              <td class="cell-wrk data-td clickable" @click="openModal(group)"><div class="center-vh"><span v-if="group.wrkList[rowNum-1]" :class="['status-badge', group.wrkList[rowNum-1].Deleted ? 'is-del' : 'is-active']">{{ group.wrkList[rowNum-1].Deleted ? 'Y' : 'N' }}</span><span v-else class="null-txt">null</span></div></td>
+              <td class="cell-wrk data-td clickable" @click="openModal(group)">
+                <div class="center-vh">
+                  <span v-if="group.wrkList[rowNum-1]" :class="['status-badge', group.wrkList[rowNum-1].Deleted ? 'is-del' : 'is-active']">
+                    {{ group.wrkList[rowNum-1].Deleted ? 'Y' : 'N' }}
+                  </span>
+                  <span v-else class="null-txt">null</span>
+                </div>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -69,10 +90,11 @@
       <div class="modal-window">
         <div class="modal-header">
           <div class="title-area">
-            <div class="main-title">📊 Full Data Comparison Analysis</div>
+            <div class="main-title">🔍 Data Analysis Comparison</div>
             <div class="meta-info-row">
-              <span class="info-chip"><strong>TAG NO:</strong> {{ selectedItem?.TagNo }}</span>
-              <span class="info-chip"><strong>TAG IDX:</strong> {{ selectedItem?.TagIdx }}</span>
+              <span class="info-chip tag-main"><strong>TAG:</strong> {{ selectedItem?.TagNo }}</span>
+              <span class="info-chip"><strong>IDX:</strong> {{ selectedItem?.TagIdx }}</span>
+              <span class="info-chip"><strong>CLASS:</strong> {{ selectedItem?.pubList[0]?.ClsId || selectedItem?.wrkList[0]?.ClsId || 'N/A' }}</span>
             </div>
           </div>
           <div class="modal-actions">
@@ -87,18 +109,24 @@
             <table class="analysis-table auto-layout">
               <thead>
                 <tr>
-                  <th :colspan="allSystemKeys.length + 1" class="th-sys m-sticky-header m-sticky-left-base top-row">System Fields</th>
-                  <th :colspan="allAttributeKeys.length" class="th-attr top-row">Attributes</th>
+                  <th :colspan="allSystemKeys.length + 1" class="th-sys m-sticky-header m-sticky-left-base top-row">System Comparison</th>
+                  <th :colspan="allAttributeKeys.length" class="th-attr top-row">Attributes Comparison</th>
                 </tr>
                 <tr class="sub-header-row">
-                  <th class="m-sticky-header m-sticky-col-tag">Tag No</th>
+                  <th class="m-sticky-header m-sticky-col-tag">Tag Identification</th>
                   <th v-for="key in allSystemKeys" :key="'sys-h-'+key" class="m-sticky-header sys-header-cell">{{ key }}</th>
                   <th v-for="key in allAttributeKeys" :key="'attr-h-'+key" class="attr-header">{{ key }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(row, idx) in unionModalRows" :key="'row-'+idx">
-                  <td class="m-sticky-cell m-sticky-col-tag"><strong>{{ row.TagNo }}</strong></td>
+                  <td class="m-sticky-cell m-sticky-col-tag">
+                    <div class="tag-id-box">
+                      <div class="u-pub-label">PUB</div>
+                      <div class="u-wrk-label">WRK</div>
+                    </div>
+                    <div class="tag-val-box"><strong>{{ row.TagNo }}</strong></div>
+                  </td>
                   <td v-for="key in allSystemKeys" :key="'sys-d-'+key" class="m-sticky-cell-dynamic">
                     <div class="union-cell">
                       <div class="u-pub">{{ row.sysMap[key]?.pub || '-' }}</div>
@@ -141,15 +169,16 @@ export default {
     const selectedItem = ref(null)
     const isJsonMode = ref(false)
 
+    // 메인 필터링
     const filteredList = computed(() => {
       const query = localSearchQuery.value.trim();
       if (!query) return mergedList.value;
-      const searchKeywords = query.split(/[\s,\n]+/).map(k => k.trim().toLowerCase()).filter(k => k);
-      return mergedList.value.filter(g => searchKeywords.some(kw => String(g.TagNo).toLowerCase().includes(kw)));
+      const kws = query.split(/[\s,\n]+/).map(k => k.trim().toLowerCase()).filter(k => k);
+      return mergedList.value.filter(g => kws.some(kw => String(g.TagNo).toLowerCase().includes(kw)));
     });
 
     const fetchAndMergeData = async () => {
-      if (!keyword.value.trim()) return alert('키워드를 입력하세요.');
+      if (!keyword.value.trim()) return alert('조회 키워드를 입력하세요.');
       isLoading.value = true;
       const groupMap = new Map();
       try {
@@ -179,9 +208,7 @@ export default {
       if (!selectedItem.value) return [];
       const keys = new Set();
       const ignore = ['Attributes', 'attributes', 'TagNo', 'TagIdx', '_id'];
-      const extract = (list) => list.forEach(item => {
-        Object.keys(item).forEach(k => { if(!ignore.includes(k)) keys.add(k); });
-      });
+      const extract = (list) => list.forEach(item => { Object.keys(item).forEach(k => { if(!ignore.includes(k)) keys.add(k); }); });
       extract(selectedItem.value.pubList); extract(selectedItem.value.wrkList);
       return Array.from(keys).sort();
     });
@@ -232,7 +259,7 @@ export default {
       closeModal: () => { showModal.value = false; },
       toggleAllSelect: () => { selectedIds.value = (selectedIds.value.length === filteredList.value.length) ? [] : filteredList.value.map(g => g.TagIdx) },
       isAllSelected: computed(() => filteredList.value.length > 0 && selectedIds.value.length === filteredList.value.length),
-      deleteSelected: () => confirm('삭제하시겠습니까?'),
+      deleteSelected: () => confirm('정말 삭제하시겠습니까?'),
       downloadExcel: () => alert('CSV 생성 중...')
     };
   }
@@ -240,91 +267,86 @@ export default {
 </script>
 
 <style scoped>
-/* 기본 레이아웃 */
+/* 1. 레이아웃 & 헤더 밀림 방지 */
 .admin-tool { font-family: 'Inter', 'Pretendard', sans-serif; color: #1e293b; background: #f8fafc; }
 .main-layout { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
 
-/* 메인 테이블 스타일 (헤더 2배, Idx 200px) */
-.dashboard-header { background: #fff; padding: 20px 30px; border-bottom: 1px solid #e2e8f0; }
-.search-grid { display: flex; gap: 15px; align-items: flex-end; }
-.input-box { display: flex; flex-direction: column; gap: 6px; }
-.flex-grow { flex: 1; }
-.design-input, .design-textarea { border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 13px; }
-.primary-gradient-btn { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; padding: 0 24px; border-radius: 8px; font-weight: 700; height: 42px; cursor: pointer; }
+.dashboard-header { background: #fff; padding: 20px 30px; border-bottom: 1px solid #e2e8f0; z-index: 1000; }
+.search-grid { 
+  display: flex; 
+  gap: 15px; 
+  align-items: flex-end; 
+  flex-wrap: nowrap; /* 헤더 밀림 방지 핵심 */
+}
+.proj-box { width: 120px; flex-shrink: 0; }
+.kw-box { flex: 2; min-width: 300px; }
+.filter-box { flex: 1; min-width: 200px; }
+.btn-box { flex-shrink: 0; }
 
-.action-bar { padding: 12px 30px; display: flex; justify-content: space-between; align-items: center; background: #fff; border-bottom: 1px solid #e2e8f0; }
-.btn-action { padding: 8px 18px; border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; border: none; margin-left: 8px; }
-.btn-danger-custom { background: #fee2e2; color: #dc2626; }
-.btn-success-custom { background: #dcfce7; color: #16a34a; }
+.field-label { font-size: 11px; font-weight: 800; color: #64748b; margin-bottom: 6px; display: block; }
+.design-input, .design-textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px 14px; font-size: 13px; box-sizing: border-box; }
+.design-textarea { height: 42px; resize: none; }
+.primary-gradient-btn { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; padding: 0 24px; border-radius: 8px; font-weight: 700; height: 42px; cursor: pointer; transition: 0.2s; }
+.primary-gradient-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 6px rgba(37, 99, 235, 0.2); }
 
-.table-outer-container { flex: 1; overflow: auto; margin: 15px 30px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
+/* 2. 메인 테이블 (틀고정 완벽 구현) */
+.table-outer-container { flex: 1; overflow: auto; margin: 15px 30px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; position: relative; }
 .master-table { width: 100%; border-collapse: separate; border-spacing: 0; }
-.h-double { height: 80px !important; }
-.h-single { height: 40px !important; }
-.master-table th { position: sticky; z-index: 150; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; font-size: 11px; }
-.sticky-col { position: sticky; left: 0; z-index: 130; background: #fff !important; }
+
+/* 헤더 틀고정 핵심 */
+.master-table thead th { position: sticky; z-index: 500; background: #f1f5f9; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; font-size: 11px; }
+.header-row-top th { top: 0; }
+.header-row-sub th { top: 40px; } /* 상단 헤더 높이가 40px일 때 */
+
+/* 좌측 틀고정 */
+.sticky-col { position: sticky; left: 0; z-index: 600 !important; background: #fff !important; }
 .col-chk { width: 50px; left: 0; }
 .col-idx { width: 200px; left: 50px; }
-.col-tag { width: 220px; left: 250px; border-right: 4px double #e2e8f0 !important; }
+.col-tag { width: 220px; left: 250px; border-right: 4px double #cbd5e1 !important; }
 
-/* [모달 - 동적 너비 적용] */
-.modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.8); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal-window { background: #fff; width: 96%; height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
-.modal-header { padding: 20px 30px; background: #1e293b; color: #fff; display: flex; justify-content: space-between; align-items: center; }
-.main-title { font-size: 20px; font-weight: 800; color: #38bdf8; }
-.btn-mode-toggle { background: linear-gradient(135deg, #475569, #334155); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 700; }
-.btn-modal-close { background: #ef4444; color: white; border: none; width: 36px; height: 36px; border-radius: 8px; cursor: pointer; font-size: 20px; }
+.master-table td { height: 48px; border-bottom: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; vertical-align: middle; }
+.group-td { border-bottom: 3px solid #94a3b8 !important; }
 
-.modal-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 20px; }
-.modal-table-container { flex: 1; overflow: auto; border: 1px solid #e2e8f0; border-radius: 8px; }
+/* 3. 모달 (출처 배지 및 레이아웃) */
+.modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85); display: flex; align-items: center; justify-content: center; z-index: 2000; }
+.modal-window { background: #fff; width: 96%; height: 90vh; border-radius: 20px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5); }
 
-/* 핵심: 동적 넓이 조절 테이블 */
-.analysis-table.auto-layout { 
-  width: max-content; /* 테이블 자체가 내용물에 맞춰 늘어남 */
-  min-width: 100%;    /* 모달보다 작을 땐 꽉 채우기 */
-  table-layout: auto; /* 브라우저가 셀 내용에 따라 너비 계산 */
-  border-collapse: separate; 
-  border-spacing: 0; 
+.modal-header { padding: 25px 35px; background: #0f172a; color: #fff; display: flex; justify-content: space-between; align-items: center; }
+.tag-main { background: #3b82f6 !important; color: white !important; font-size: 14px !important; }
+.info-chip { background: rgba(255,255,255,0.1); padding: 6px 14px; border-radius: 8px; font-size: 12px; margin-right: 10px; border: 1px solid rgba(255,255,255,0.2); }
+
+.btn-mode-toggle { 
+  background: linear-gradient(135deg, #334155, #1e293b); color: white; border: 1px solid #475569; 
+  padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 700; margin-right: 15px;
 }
+.btn-modal-close { background: #ef4444; color: white; border: none; width: 38px; height: 38px; border-radius: 10px; cursor: pointer; font-size: 18px; }
 
-.analysis-table th, .analysis-table td {
-  white-space: nowrap; /* 텍스트 줄바꿈 방지 -> 옆으로 늘어나게 함 */
-  padding: 0;
-}
+.modal-body { flex: 1; overflow: hidden; display: flex; flex-direction: column; padding: 25px; background: #f8fafc; }
+.modal-table-container { flex: 1; overflow: auto; border: 1px solid #e2e8f0; border-radius: 12px; background: #fff; }
 
-.m-sticky-header { 
-  position: sticky; top: 0; z-index: 200; 
-  background: #f8fafc; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1;
-  padding: 12px 20px; font-size: 11px; text-align: center;
-}
+/* 동적 분석 테이블 */
+.analysis-table.auto-layout { width: max-content; min-width: 100%; table-layout: auto; border-collapse: separate; border-spacing: 0; }
+.m-sticky-header { position: sticky; top: 0; z-index: 700; background: #f8fafc; border-bottom: 2px solid #cbd5e1; border-right: 1px solid #cbd5e1; padding: 12px 20px; font-size: 12px; }
 .m-sticky-col-tag { 
-  position: sticky; left: 0; z-index: 220; 
-  background: #f1f5f9 !important; border-right: 4px double #cbd5e1 !important; 
-  min-width: 180px;
+  position: sticky; left: 0; z-index: 800; background: #fff !important; 
+  border-right: 5px double #cbd5e1 !important; padding: 10px 20px;
+  display: flex; align-items: center; gap: 15px;
 }
 
-.sys-header-cell { min-width: 150px; } /* 시스템 열 최소 너비 */
-.attr-header { min-width: 180px; background: #f0f9ff; color: #0369a1; }
+/* PUB/WRK 라벨 박스 */
+.tag-id-box { display: flex; flex-direction: column; gap: 4px; }
+.u-pub-label { font-size: 9px; font-weight: 900; padding: 2px 4px; border-radius: 3px; background: #dbeafe; color: #1e40af; text-align: center; }
+.u-wrk-label { font-size: 9px; font-weight: 900; padding: 2px 4px; border-radius: 3px; background: #ffedd5; color: #9a3412; text-align: center; }
 
-/* 합집합 셀 디자인 */
-.union-cell { display: flex; flex-direction: column; width: 100%; }
-.u-pub { 
-  padding: 10px 15px; background: #f0f7ff; color: #1d4ed8; 
-  font-weight: 700; font-size: 12px; border-bottom: 1px solid #dbeafe; 
-}
-.u-wrk { 
-  padding: 10px 15px; background: #fff; color: #ea580c; 
-  font-weight: 700; font-size: 12px; 
-}
-
-.m-sticky-cell-dynamic { border-bottom: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; }
-.attr-data-cell { border-bottom: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; }
+/* 데이터 셀 */
+.union-cell { display: flex; flex-direction: column; width: 100%; min-width: 150px; }
+.u-pub { padding: 12px 18px; background: #f0f7ff; color: #1d4ed8; font-weight: 700; font-size: 13px; border-bottom: 1px solid #e0e7ff; }
+.u-wrk { padding: 12px 18px; background: #fff; color: #ea580c; font-weight: 700; font-size: 13px; }
 
 .status-badge { padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 800; color: #fff; }
 .is-active { background: #10b981; }
 .is-del { background: #ef4444; }
 .hl { background: #fef08a; font-weight: 900; color: #b91c1c; }
-
-.json-viewer-container { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; height: 100%; }
-.json-pane pre { flex: 1; background: #0f172a; color: #38bdf8; padding: 20px; border-radius: 12px; overflow: auto; }
+.clickable { cursor: pointer; }
+.clickable:hover { background-color: #f8fafc; }
 </style>
