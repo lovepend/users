@@ -6,29 +6,32 @@
           <div class="project-box">
             <div class="input-group">
               <label>Project No</label>
-              <input v-model="projectNo" type="text" class="base-input unified-height" />
+              <input v-model="projectNo" type="text" placeholder="P0001" class="base-input unified-height" />
             </div>
             <div class="filter-wrapper">
               <label class="sub-label">결과 내 실시간 필터</label>
-              <input v-model="localSearchQuery" type="text" class="filter-input unified-height" />
+              <input v-model="localSearchQuery" type="text" placeholder="Tag No 검색..." class="filter-input unified-height" />
             </div>
           </div>
+          
           <div class="keyword-box">
             <label>API Fetch Keywords</label>
-            <textarea v-model="keyword" class="base-input keyword-input"></textarea>
+            <textarea v-model="keyword" placeholder="TAG-01, TAG-02..." class="base-input keyword-input"></textarea>
           </div>
+          
           <div class="button-box">
             <button @click="fetchAndMergeData" :disabled="isLoading" class="btn-fetch-large">
-              데이터 통합 조회
+              <span v-if="!isLoading">데이터 통합 조회하기</span>
+              <span v-else class="loader"></span>
             </button>
           </div>
         </div>
       </header>
 
       <div class="action-bar" v-if="mergedList.length > 0">
-        <div class="stats">조회 결과: <b>{{ filteredList.length }}</b>건</div>
+        <div class="stats">조회된 그룹: <b>{{ filteredList.length }}</b>건</div>
         <div class="right-buttons">
-          <button @click="deleteSelected" class="btn btn-danger">🗑 선택 삭제</button>
+          <button @click="deleteSelected" class="btn btn-danger" :disabled="selectedIds.length === 0">🗑 선택 삭제</button>
           <button @click="downloadExcel" class="btn btn-success">📥 CSV 내보내기</button>
         </div>
       </div>
@@ -42,22 +45,18 @@
               </th>
               <th rowspan="2" class="sticky-header sticky-col col-idx border-bottom-none">Idx</th>
               <th rowspan="2" class="sticky-header sticky-col col-tag border-bottom-none">Tag No</th>
-              
               <th colspan="3" class="pub-header-top h-40">Published (Master)</th>
               <th colspan="3" class="wrk-header-top h-40">Working (Current)</th>
             </tr>
             <tr class="sub-header">
-              <th class="pub-sub h-40">EP ID</th>
-              <th class="pub-sub h-40">CLS</th>
-              <th class="pub-sub h-40">Deleted</th>
-              <th class="wrk-sub h-40">EP ID</th>
-              <th class="wrk-sub h-40">CLS</th>
-              <th class="wrk-sub h-40">Deleted</th>
+              <th class="pub-sub h-40">EP ID</th><th class="pub-sub h-40">CLS</th><th class="pub-sub h-40">Deleted</th>
+              <th class="wrk-sub h-40">EP ID</th><th class="wrk-sub h-40">CLS</th><th class="wrk-sub h-40">Deleted</th>
             </tr>
           </thead>
           
           <tbody v-for="group in filteredList" :key="group.TagIdx" class="group-tbody">
             <tr v-for="(rowNum) in Math.max(group.pubList.length, group.wrkList.length, 1)" :key="group.TagIdx + '-' + rowNum">
+              
               <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-chk group-fixed border-right">
                 <div class="cell-content center"><input type="checkbox" :value="group.TagIdx" v-model="selectedIds" /></div>
               </td>
@@ -73,6 +72,7 @@
               <td class="cell-pub clickable" @click="openModal(group)">
                 <div class="cell-content center">
                   <span v-if="group.pubList[rowNum-1]" :class="['badge', group.pubList[rowNum-1].Deleted ? 'red' : 'green']">{{ group.pubList[rowNum-1].Deleted }}</span>
+                  <span v-else>-</span>
                 </div>
               </td>
               <td class="cell-wrk clickable" @click="openModal(group)"><div class="cell-content">{{ group.wrkList[rowNum-1]?.EpId || '-' }}</div></td>
@@ -80,11 +80,27 @@
               <td class="cell-wrk clickable" @click="openModal(group)">
                 <div class="cell-content center">
                   <span v-if="group.wrkList[rowNum-1]" :class="['badge', group.wrkList[rowNum-1].Deleted ? 'red' : 'green']">{{ group.wrkList[rowNum-1].Deleted }}</span>
+                  <span v-else>-</span>
                 </div>
               </td>
             </tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>상세 정보 확인 <small>#{{ selectedItem?.TagNo }}</small></h3>
+          <button @click="closeModal" class="btn-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-grid">
+            <div class="data-pane"><h4 class="pub-title">Published</h4><pre>{{ JSON.stringify(selectedItem?.pubList, null, 2) }}</pre></div>
+            <div class="data-pane"><h4 class="wrk-title">Working</h4><pre>{{ JSON.stringify(selectedItem?.wrkList, null, 2) }}</pre></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -105,89 +121,131 @@ export default {
     const showModal = ref(false)
     const selectedItem = ref(null)
 
+    // [기능] 데이터 API 호출 및 그룹화 로직
     const fetchAndMergeData = async () => {
-      if (!keyword.value.trim()) return alert('키워드 입력 필수');
+      if (!keyword.value.trim()) return alert('키워드를 입력하세요.');
       isLoading.value = true;
+      selectedIds.value = [];
       const groupMap = new Map();
+
       try {
-        const keywords = keyword.value.split(/[\s,\n]+/).filter(k => k.trim());
+        const keywords = keyword.value.split(/[\s,\n]+/).map(k => k.trim()).filter(k => k);
         await Promise.all(keywords.map(async (key) => {
-          const payload = { ProjectNo: projectNo.value, Keyword: key.trim() };
+          const payload = { ProjectNo: projectNo.value, Keyword: key };
           const [pubRes, wrkRes] = await Promise.all([
             axiosWrapper.post('/api/Admin/Tool/GetPublishedData', payload),
             axiosWrapper.post('/api/Admin/Tool/GetWorkingData', payload)
           ]);
+
           const pData = pubRes?.data || pubRes || [];
           const wData = wrkRes?.data || wrkRes || [];
-          pData.forEach(i => {
-            if(!groupMap.has(i.TagIdx)) groupMap.set(i.TagIdx, { TagIdx: i.TagIdx, TagNo: i.TagNo, pubList: [], wrkList: [] });
-            groupMap.get(i.TagIdx).pubList.push(i);
+
+          pData.forEach(item => {
+            if (!groupMap.has(item.TagIdx)) groupMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pubList: [], wrkList: [] });
+            groupMap.get(item.TagIdx).pubList.push(item);
           });
-          wData.forEach(i => {
-            if(!groupMap.has(i.TagIdx)) groupMap.set(i.TagIdx, { TagIdx: i.TagIdx, TagNo: i.TagNo, pubList: [], wrkList: [] });
-            groupMap.get(i.TagIdx).wrkList.push(i);
+          wData.forEach(item => {
+            if (!groupMap.has(item.TagIdx)) groupMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pubList: [], wrkList: [] });
+            groupMap.get(item.TagIdx).wrkList.push(item);
           });
         }));
-        mergedList.value = Array.from(groupMap.values()).sort((a,b) => String(a.TagNo).localeCompare(b.TagNo));
-      } finally { isLoading.value = false; }
+        mergedList.value = Array.from(groupMap.values()).sort((a, b) => String(a.TagNo).localeCompare(String(b.TagNo)));
+      } catch (e) { alert('데이터 로딩 실패'); } finally { isLoading.value = false; }
     };
 
+    // [기능] 필터 및 하이라이트
     const filteredList = computed(() => {
-      if (!localSearchQuery.value) return mergedList.value;
-      return mergedList.value.filter(g => String(g.TagNo).toLowerCase().includes(localSearchQuery.value.toLowerCase()));
+      if (!localSearchQuery.value.trim()) return mergedList.value;
+      const q = localSearchQuery.value.toLowerCase();
+      return mergedList.value.filter(g => String(g.TagNo).toLowerCase().includes(q));
     });
+
+    const highlightText = (text) => {
+      if (!localSearchQuery.value.trim()) return text;
+      const regex = new RegExp(`(${localSearchQuery.value.trim()})`, 'gi');
+      return String(text).replace(regex, '<mark class="hl">$1</mark>');
+    };
+
+    // [기능] 체크박스 및 모달 제어
+    const toggleAllSelect = () => {
+      if (selectedIds.value.length === filteredList.value.length) selectedIds.value = [];
+      else selectedIds.value = filteredList.value.map(g => g.TagIdx);
+    };
 
     return {
       projectNo, keyword, localSearchQuery, mergedList, filteredList, isLoading, selectedIds, showModal, selectedItem,
-      fetchAndMergeData,
-      highlightText: (t) => t, 
-      openModal: (g) => { console.log(g); alert('상세 모달 오픈'); },
-      toggleAllSelect: () => { /* 전체선택 로직 */ },
-      isAllSelected: computed(() => false)
-    }
+      fetchAndMergeData, highlightText, toggleAllSelect,
+      openModal: (g) => { selectedItem.value = g; showModal.value = true; },
+      closeModal: () => { showModal.value = false; },
+      isAllSelected: computed(() => filteredList.value.length > 0 && selectedIds.value.length === filteredList.value.length),
+      deleteSelected: () => confirm(`선택한 ${selectedIds.value.length}건을 삭제하시겠습니까?`),
+      downloadExcel: () => alert('CSV 다운로드 기능을 실행합니다.')
+    };
   }
 }
 </script>
 
 <style scoped>
+/* 1. 레이아웃 & 높이 통일 */
 .main-layout { height: 100vh; display: flex; flex-direction: column; background: #f1f5f9; overflow: hidden; }
 .dashboard-header { background: white; padding: 20px 30px; border-bottom: 1px solid #cbd5e1; flex-shrink: 0; }
-.unified-height { height: 38px !important; box-sizing: border-box; }
+.unified-height { height: 38px !important; box-sizing: border-box; } 
 
-/* 🛠 헤더 높이 해결 핵심 CSS */
+.search-grid { display: flex; gap: 30px; align-items: flex-start; }
+.project-box { width: 220px; display: flex; flex-direction: column; gap: 12px; }
+.filter-input { width: 100%; border: 2px solid #3b82f6; border-radius: 4px; padding: 0 10px; background: #eff6ff; }
+.keyword-box { flex: 1; }
+.keyword-input { width: 100%; height: 45px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; }
+.btn-fetch-large { min-width: 240px; height: 45px; background: #1e293b; color: white; border-radius: 4px; font-weight: bold; cursor: pointer; }
+
+/* 2. 헤더 공백 제거 및 틀 고정 */
 .table-container { flex: 1; overflow: auto; margin: 0 30px 20px; background: white; border: 1px solid #cbd5e1; }
 .modern-table { width: 100%; border-collapse: separate; border-spacing: 0; }
 
-/* 헤더 셀 공통: padding 제거하고 height 강제 고정 */
-.modern-table th { padding: 0; margin: 0; box-sizing: border-box; vertical-align: middle; border-right: 1px solid #cbd5e1; border-bottom: 1px solid #cbd5e1; }
-.h-40 { height: 40px !important; }
+/* 헤더 높이 강제 설정 */
+.h-40 { height: 40px !important; padding: 0 !important; }
 
-/* 1단 헤더 고정 (top 0) */
-.main-header th { position: sticky; top: 0; z-index: 50; background: #f1f5f9; }
+/* 상단 헤더 고정 */
+.main-header th { position: sticky; top: 0; z-index: 50; background: #f1f5f9; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; }
+.sub-header th { position: sticky; top: 40px; z-index: 49; background: #f8fafc; border-bottom: 2px solid #94a3b8; border-right: 1px solid #cbd5e1; }
 
-/* 2단 헤더 고정 (top 40px - 1단 헤더 높이만큼 정확히 띄움) */
-.sub-header th { position: sticky; top: 40px; z-index: 49; background: #f8fafc; }
-
-/* Idx, TagNo 고정 컬럼 (rowspan="2" 이므로 높이는 80px 자동 계산됨) */
-.sticky-col { position: sticky; left: 0; z-index: 45; background: white !important; }
+/* 좌측 열 고정 (Sticky Left) */
+.sticky-col { position: sticky; left: 0; z-index: 40; background: white !important; border-right: 1px solid #cbd5e1; }
 .col-chk { left: 0; width: 60px; }
 .col-idx { left: 60px; width: 80px; }
 .col-tag { left: 140px; width: 220px; }
 
-/* 모서리 부분 (헤더이면서 고정컬럼인 곳) z-index 최상위 */
-.main-header .sticky-col { z-index: 60 !important; top: 0; }
-.sub-header .sticky-col { z-index: 59 !important; top: 40px; }
+/* 모서리 (z-index 최상위) */
+.main-header .sticky-col { z-index: 60 !important; }
+.sub-header .sticky-col { z-index: 59 !important; }
 
-/* 나머지 스타일 */
-.cell-content { min-height: 55px; display: flex; align-items: center; padding: 8px 12px; }
-.center { justify-content: center; width: 100%; }
+/* 3. 데이터 셀 및 가독성 */
+.cell-content { min-height: 55px; display: flex; align-items: center; padding: 8px 12px; box-sizing: border-box; }
+.center, .center-content { justify-content: center; display: flex; align-items: center; width: 100%; }
+
 .tag-text { color: #2563eb; font-weight: bold; }
 .group-fixed { background: #f8fafc !important; }
 .border-bold-right { border-right: 3px double #94a3b8 !important; }
+.cell-pub { background: #f0f9ff; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
+.cell-wrk { background: #fffbeb; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
+
 .badge { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; color: white; }
 .red { background: #ef4444; }
 .green { background: #10b981; }
 .group-tbody { border-bottom: 4px solid #cbd5e1; }
-.action-bar { padding: 10px 30px; display: flex; justify-content: space-between; align-items: center; }
+.clickable { cursor: pointer; }
+.clickable:hover { filter: brightness(0.96); }
+
+/* 액션바 & 모달 */
+.action-bar { padding: 10px 30px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
 .right-buttons { display: flex; gap: 8px; }
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal-content { background: white; width: 1000px; border-radius: 12px; overflow: hidden; }
+.modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+.modal-body { padding: 25px; max-height: 70vh; overflow-y: auto; }
+.modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.data-pane pre { background: #1e293b; color: #e2e8f0; padding: 15px; border-radius: 8px; font-size: 12px; overflow: auto; }
+.btn-close { background: none; border: none; font-size: 24px; cursor: pointer; }
+
+::v-deep .hl { background: #fbbf24; color: black; font-weight: bold; }
 </style>
