@@ -4,35 +4,78 @@
       <header class="dashboard-header">
         <div class="search-grid">
           <div class="project-box">
-            <label>Project No</label>
-            <input v-model="projectNo" type="text" class="base-input unified-height" />
-            <label class="sub-label">실시간 필터</label>
-            <input v-model="localSearchQuery" type="text" class="filter-input unified-height" />
+            <div class="input-group">
+              <label>Project No</label>
+              <input v-model="projectNo" type="text" class="base-input unified-height" placeholder="P0001" />
+            </div>
+            <div class="filter-wrapper">
+              <label class="sub-label">결과 내 실시간 필터</label>
+              <input v-model="localSearchQuery" type="text" class="filter-input unified-height" placeholder="Tag No 검색..." />
+            </div>
           </div>
           <div class="keyword-box">
-            <label>API Keywords</label>
-            <textarea v-model="keyword" class="base-input keyword-input"></textarea>
+            <label>API Fetch Keywords</label>
+            <textarea v-model="keyword" class="base-input keyword-input" placeholder="키워드를 입력하세요 (공백/엔터 구분)"></textarea>
           </div>
           <div class="button-box">
-            <button @click="fetchAndMergeData" :disabled="isLoading" class="btn-fetch-large">조회하기</button>
+            <button @click="fetchAndMergeData" :disabled="isLoading" class="btn-fetch-large">
+              {{ isLoading ? '조회 중...' : '데이터 통합 조회' }}
+            </button>
           </div>
         </div>
       </header>
 
+      <div class="action-bar" v-if="mergedList.length > 0">
+        <div class="stats">조회 결과: <b>{{ filteredList.length }}</b>건</div>
+        <div class="right-buttons">
+          <button @click="deleteSelected" class="btn btn-danger" :disabled="selectedIds.length === 0">🗑 선택 삭제</button>
+          <button @click="downloadExcel" class="btn btn-success">📥 CSV 내보내기</button>
+        </div>
+      </div>
+
       <div class="table-container">
-        <table class="modern-table">
+        <table class="modern-table auto-layout">
+          <thead>
+            <tr class="main-header">
+              <th rowspan="2" class="sticky-header sticky-col col-chk">
+                <div class="center-vh"><input type="checkbox" :checked="isAllSelected" @change="toggleAllSelect" /></div>
+              </th>
+              <th rowspan="2" class="sticky-header sticky-col col-idx">Idx</th>
+              <th rowspan="2" class="sticky-header sticky-col col-tag">Tag No</th>
+              <th colspan="3" class="pub-header-top h-40">Published (Master)</th>
+              <th colspan="3" class="wrk-header-top h-40">Working (Current)</th>
+            </tr>
+            <tr class="sub-header">
+              <th class="h-40">EP ID</th><th class="h-40">CLS</th><th class="h-40">Deleted</th>
+              <th class="h-40">EP ID</th><th class="h-40">CLS</th><th class="h-40">Deleted</th>
+            </tr>
+          </thead>
+          
           <tbody v-for="group in filteredList" :key="group.TagIdx" class="group-tbody">
-            <tr v-for="(rowNum) in Math.max(group.pubList.length, group.wrkList.length, 1)" :key="group.TagIdx + '-' + rowNum" @click="openModal(group)" class="clickable-row">
-               <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-idx group-fixed">
-                 {{ group.TagIdx }}
-               </td>
-               <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-tag group-fixed">
-                 <span v-html="highlightText(group.TagNo)"></span>
-               </td>
-               <td class="cell-pub">{{ group.pubList[rowNum-1]?.EpId || '-' }}</td>
-               <td class="cell-pub">{{ group.pubList[rowNum-1]?.ClsId || '-' }}</td>
-               <td class="cell-wrk">{{ group.wrkList[rowNum-1]?.EpId || '-' }}</td>
-               <td class="cell-wrk">{{ group.wrkList[rowNum-1]?.ClsId || '-' }}</td>
+            <tr v-for="(rowNum) in Math.max(group.pubList.length, group.wrkList.length, 1)" :key="group.TagIdx + '-' + rowNum">
+              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-chk group-fixed">
+                <div class="center-vh"><input type="checkbox" :value="group.TagIdx" v-model="selectedIds" /></div>
+              </td>
+              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-idx group-fixed clickable" @click="openModal(group)">
+                <div class="center-vh font-bold auto-width">{{ group.TagIdx }}</div>
+              </td>
+              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-tag group-fixed clickable" @click="openModal(group)">
+                <div class="cell-content tag-text auto-width" v-html="highlightText(group.TagNo)"></div>
+              </td>
+              <td class="cell-pub clickable" @click="openModal(group)"><div class="cell-content">{{ group.pubList[rowNum-1]?.EpId || '-' }}</div></td>
+              <td class="cell-pub clickable" @click="openModal(group)"><div class="cell-content">{{ group.pubList[rowNum-1]?.ClsId || '-' }}</div></td>
+              <td class="cell-pub clickable" @click="openModal(group)">
+                <div class="cell-content center-vh">
+                  <span v-if="group.pubList[rowNum-1]" :class="['badge', group.pubList[rowNum-1].Deleted ? 'red' : 'green']">{{ group.pubList[rowNum-1].Deleted }}</span>
+                </div>
+              </td>
+              <td class="cell-wrk clickable" @click="openModal(group)"><div class="cell-content">{{ group.wrkList[rowNum-1]?.EpId || '-' }}</div></td>
+              <td class="cell-wrk clickable" @click="openModal(group)"><div class="cell-content">{{ group.wrkList[rowNum-1]?.ClsId || '-' }}</div></td>
+              <td class="cell-wrk clickable" @click="openModal(group)">
+                <div class="cell-content center-vh">
+                  <span v-if="group.wrkList[rowNum-1]" :class="['badge', group.wrkList[rowNum-1].Deleted ? 'red' : 'green']">{{ group.wrkList[rowNum-1].Deleted }}</span>
+                </div>
+              </td>
             </tr>
           </tbody>
         </table>
@@ -42,37 +85,37 @@
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
       <div class="modal-content modal-xl">
         <div class="modal-header">
-          <div class="header-title">
-            <h3>상세 데이터 비교 분석</h3>
-            <span class="tag-badge">{{ selectedItem?.TagNo }}</span>
+          <div class="header-info">
+            <h3>상세 데이터 분석</h3>
+            <span class="tag-label">{{ selectedItem?.TagNo }}</span>
           </div>
-          <div class="header-actions">
-            <button @click="toggleJsonView" class="btn-toggle-json">
-              {{ isJsonMode ? '📊 테이블로 보기' : '{} JSON 원본보기' }}
+          <div class="header-btns">
+            <button @click="isJsonMode = !isJsonMode" class="btn-mode">
+              {{ isJsonMode ? '📊 테이블 뷰' : '{} JSON 원본' }}
             </button>
             <button @click="closeModal" class="btn-close">&times;</button>
           </div>
         </div>
 
         <div class="modal-body modal-scroll">
-          <div v-if="!isJsonMode" class="modal-table-wrapper">
+          <div v-if="!isJsonMode" class="modal-table-container">
             <table class="analysis-table">
               <thead>
                 <tr>
-                  <th colspan="5" class="header-section-basic">기본 정보 (System Info)</th>
-                  <th :colspan="allAttributeKeys.length" class="header-section-attr">특성 정보 (Attributes)</th>
+                  <th colspan="4" class="h-info">시스템 기본정보</th>
+                  <th :colspan="allAttributeKeys.length" class="h-attr">특성(Attributes) 합집합</th>
                 </tr>
                 <tr>
-                  <th class="w-80">Source</th>
-                  <th class="w-150">Tag No</th> <th class="w-120">EP ID</th>
-                  <th class="w-100">Class</th>  <th class="w-60">삭제</th>
-                  <th v-for="key in allAttributeKeys" :key="key" class="attr-key">{{ key }}</th>
+                  <th class="w-100">구분</th>
+                  <th class="w-120">EP ID</th>
+                  <th class="w-120">Class</th>
+                  <th class="w-80">삭제</th>
+                  <th v-for="key in allAttributeKeys" :key="key" class="attr-head">{{ key }}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr v-for="(row, idx) in modalRows" :key="idx" :class="row.source">
                   <td><span :class="['label', row.source]">{{ row.source }}</span></td>
-                  <td class="font-bold">{{ row.TagNo }}</td>
                   <td>{{ row.EpId }}</td>
                   <td>{{ row.ClsId }}</td>
                   <td><span :class="['badge', row.Deleted ? 'red' : 'green']">{{ row.Deleted }}</span></td>
@@ -84,16 +127,14 @@
             </table>
           </div>
 
-          <div v-else class="json-viewer-container">
-            <div class="json-split">
-              <div class="json-box">
-                <h4>Published Raw Data</h4>
-                <pre>{{ JSON.stringify(selectedItem?.pubList, null, 2) }}</pre>
-              </div>
-              <div class="json-box">
-                <h4>Working Raw Data</h4>
-                <pre>{{ JSON.stringify(selectedItem?.wrkList, null, 2) }}</pre>
-              </div>
+          <div v-else class="json-split-view">
+            <div class="json-pane">
+              <h5>Published Data</h5>
+              <pre>{{ JSON.stringify(selectedItem?.pubList, null, 2) }}</pre>
+            </div>
+            <div class="json-pane">
+              <h5>Working Data</h5>
+              <pre>{{ JSON.stringify(selectedItem?.wrkList, null, 2) }}</pre>
             </div>
           </div>
         </div>
@@ -104,97 +145,166 @@
 
 <script>
 import { ref, computed } from 'vue'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 
 export default {
   setup() {
+    const projectNo = ref('')
+    const keyword = ref('')
+    const localSearchQuery = ref('')
+    const mergedList = ref([])
+    const isLoading = ref(false)
+    const selectedIds = ref([])
     const showModal = ref(false)
     const selectedItem = ref(null)
-    const isJsonMode = ref(false) // JSON 뷰 전환 상태
+    const isJsonMode = ref(false)
 
-    // [로직] Attributes 합집합 추출 (ATT_ID 기준)
+    const fetchAndMergeData = async () => {
+      if (!keyword.value.trim()) return alert('키워드 입력 필수');
+      isLoading.value = true;
+      const groupMap = new Map();
+      try {
+        const keys = keyword.value.split(/[\s,\n]+/).map(k => k.trim()).filter(k => k);
+        await Promise.all(keys.map(async (k) => {
+          const payload = { ProjectNo: projectNo.value, Keyword: k };
+          const [pubRes, wrkRes] = await Promise.all([
+            axiosWrapper.post('/api/Admin/Tool/GetPublishedData', payload),
+            axiosWrapper.post('/api/Admin/Tool/GetWorkingData', payload)
+          ]);
+          const pList = pubRes?.data || pubRes || [];
+          const wList = wrkRes?.data || wrkRes || [];
+          
+          pList.forEach(i => {
+            if(!groupMap.has(i.TagIdx)) groupMap.set(i.TagIdx, { TagIdx: i.TagIdx, TagNo: i.TagNo, pubList: [], wrkList: [] });
+            groupMap.get(i.TagIdx).pubList.push(i);
+          });
+          wList.forEach(i => {
+            if(!groupMap.has(i.TagIdx)) groupMap.set(i.TagIdx, { TagIdx: i.TagIdx, TagNo: i.TagNo, pubList: [], wrkList: [] });
+            groupMap.get(i.TagIdx).wrkList.push(i);
+          });
+        }));
+        mergedList.value = Array.from(groupMap.values()).sort((a,b) => String(a.TagNo).localeCompare(b.TagNo));
+      } catch(e) { console.error(e); }
+      finally { isLoading.value = false; }
+    };
+
+    // [모달] Attributes 합집합 헤더 계산
     const allAttributeKeys = computed(() => {
       if (!selectedItem.value) return [];
       const keys = new Set();
-      const extract = (list) => list.forEach(item => {
-        // item.attributes가 배열인지 확인 후 순회
-        if (Array.isArray(item.attributes)) {
-          item.attributes.forEach(attr => {
-            if (attr.ATT_ID) keys.add(attr.ATT_ID);
-          });
+      const gather = (list) => list.forEach(row => {
+        if (Array.isArray(row.attributes)) {
+          row.attributes.forEach(attr => { if(attr.ATT_ID) keys.add(attr.ATT_ID); });
         }
       });
-      extract(selectedItem.value.pubList);
-      extract(selectedItem.value.wrkList);
+      gather(selectedItem.value.pubList);
+      gather(selectedItem.value.wrkList);
       return Array.from(keys).sort();
     });
 
-    // [로직] 모달 로우 데이터 생성 (TagNo, ClsId 추가 및 attrMap 매핑 수정)
+    // [모달] 데이터 행 가공 및 attrMap 생성
     const modalRows = computed(() => {
       if (!selectedItem.value) return [];
-      const mapData = (item, source) => {
+      const process = (item, src) => {
         const attrMap = {};
-        // ⭐ 배열 형태의 attributes를 { ATT_ID: VALUE } 객체로 변환
         if (Array.isArray(item.attributes)) {
-          item.attributes.forEach(a => {
-            if (a.ATT_ID) attrMap[a.ATT_ID] = a.VALUE;
-          });
+          item.attributes.forEach(a => { if(a.ATT_ID) attrMap[a.ATT_ID] = a.VALUE; });
         }
-        return {
-          source,
-          TagNo: item.TagNo || selectedItem.value.TagNo, // 기본정보 보강
-          EpId: item.EpId || '-',
-          ClsId: item.ClsId || '-', // 기본정보 보강
-          Deleted: !!item.Deleted,
-          attrMap // 변환된 객체 저장
-        };
+        return { source: src, EpId: item.EpId || '-', ClsId: item.ClsId || '-', Deleted: !!item.Deleted, attrMap };
       };
+      const result = [];
+      selectedItem.value.pubList.forEach(i => result.push(process(i, 'Published')));
+      selectedItem.value.wrkList.forEach(i => result.push(process(i, 'Working')));
+      return result;
+    });
 
-      const rows = [];
-      selectedItem.value.pubList.forEach(i => rows.push(mapData(i, 'Published')));
-      selectedItem.value.wrkList.forEach(i => rows.push(mapData(i, 'Working')));
-      return rows;
+    const filteredList = computed(() => {
+      const q = localSearchQuery.value.trim().toLowerCase();
+      return q ? mergedList.value.filter(g => String(g.TagNo).toLowerCase().includes(q)) : mergedList.value;
     });
 
     return {
-      showModal, selectedItem, isJsonMode,
-      allAttributeKeys, modalRows,
-      toggleJsonView: () => { isJsonMode.value = !isJsonMode.value; },
-      openModal: (g) => { 
-        selectedItem.value = g; 
-        showModal.value = true; 
-        isJsonMode.value = false; // 열 때 기본은 테이블 뷰
+      projectNo, keyword, localSearchQuery, mergedList, filteredList, isLoading, selectedIds, showModal, selectedItem, isJsonMode,
+      allAttributeKeys, modalRows, fetchAndMergeData,
+      highlightText: (t) => {
+        const q = localSearchQuery.value.trim();
+        return q ? String(t).replace(new RegExp(`(${q})`, 'gi'), '<mark class="hl">$1</mark>') : t;
       },
-      closeModal: () => { showModal.value = false; }
+      openModal: (g) => { selectedItem.value = g; showModal.value = true; isJsonMode.value = false; },
+      closeModal: () => { showModal.value = false; },
+      toggleAllSelect: () => {
+        selectedIds.value = selectedIds.value.length === filteredList.value.length ? [] : filteredList.value.map(g => g.TagIdx);
+      },
+      isAllSelected: computed(() => filteredList.value.length > 0 && selectedIds.value.length === filteredList.value.length),
+      deleteSelected: () => confirm('삭제하시겠습니까?'),
+      downloadExcel: () => alert('CSV 다운로드 시작')
     };
   }
 }
 </script>
 
 <style scoped>
-/* 모달 헤더 보강 */
-.header-title { display: flex; align-items: center; gap: 15px; }
-.tag-badge { background: #1e293b; color: #fff; padding: 4px 12px; border-radius: 20px; font-size: 14px; font-weight: 600; }
-.header-actions { display: flex; gap: 10px; align-items: center; }
+/* 1. 메인 레이아웃 및 틀 고정 테이블 */
+.main-layout { height: 100vh; display: flex; flex-direction: column; background: #f1f5f9; overflow: hidden; }
+.dashboard-header { background: white; padding: 20px 30px; border-bottom: 1px solid #cbd5e1; flex-shrink: 0; }
+.search-grid { display: flex; gap: 20px; align-items: flex-start; }
+.project-box { width: 220px; display: flex; flex-direction: column; gap: 8px; }
+.unified-height { height: 36px !important; border: 1px solid #cbd5e1; border-radius: 4px; padding: 0 10px; }
+.filter-input { border: 2px solid #3b82f6; background: #eff6ff; }
+.keyword-box { flex: 1; }
+.keyword-input { width: 100%; height: 45px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; resize: none; }
+.btn-fetch-large { min-width: 160px; height: 45px; background: #1e293b; color: white; border-radius: 4px; font-weight: bold; cursor: pointer; border: none; }
 
-/* JSON 뷰어 스타일 */
-.btn-toggle-json { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; color: #475569; }
-.btn-toggle-json:hover { background: #e2e8f0; }
+.table-container { flex: 1; overflow: auto; margin: 0 30px 20px; background: white; border: 1px solid #cbd5e1; }
+.modern-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+.h-40 { height: 40px !important; padding: 0 !important; }
+.main-header th { position: sticky; top: 0; z-index: 50; background: #f1f5f9; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; font-size: 12px; }
+.sub-header th { position: sticky; top: 40px; z-index: 49; background: #f8fafc; border-bottom: 2px solid #cbd5e1; border-right: 1px solid #cbd5e1; font-size: 11px; }
 
-.json-viewer-container { padding: 10px; background: #1e293b; border-radius: 8px; }
-.json-split { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
-.json-box h4 { color: #94a3b8; margin-bottom: 10px; font-size: 14px; }
-.json-box pre { background: #0f172a; color: #38bdf8; padding: 15px; border-radius: 6px; font-size: 12px; overflow: auto; max-height: 60vh; border: 1px solid #334155; }
+/* 좌측 틀 고정 및 N개 로우 테두리 대응 */
+.sticky-col { position: sticky; z-index: 40; background: white !important; }
+.col-chk { left: 0; min-width: 50px; }
+.col-idx { left: 50px; min-width: 80px; }
+.col-tag { left: 130px; min-width: 200px; border-right: 3px double #cbd5e1 !important; }
+.group-fixed { box-shadow: inset -1px -1px 0 #cbd5e1; background: #fcfcfd !important; }
+.main-header .sticky-col { z-index: 60 !important; top: 0; }
+.sub-header .sticky-col { z-index: 59 !important; top: 40px; }
 
-/* 테이블 헤더 색상 구분 */
-.header-section-basic { background: #f8fafc !important; color: #1e293b; }
-.header-section-attr { background: #eff6ff !important; color: #1d4ed8; }
+.cell-content { min-height: 48px; display: flex; align-items: center; padding: 5px 12px; font-size: 13px; }
+.tag-text { color: #2563eb; font-weight: bold; }
+.group-tbody { border-bottom: 2px solid #94a3b8; }
+.cell-pub { background: #f0f9ff; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
+.cell-wrk { background: #ffffff; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
 
-/* 특성 컬럼 강조 */
-.attr-key { background: #f1f5f9; font-family: 'Consolas', monospace; color: #64748b; font-size: 11px; }
+/* 2. 상세 모달 고도화 스타일 */
+.modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal-content.modal-xl { background: white; width: 95%; max-width: 1600px; border-radius: 10px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
+.modal-header { padding: 15px 25px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+.header-info { display: flex; align-items: center; gap: 15px; }
+.tag-label { background: #1e293b; color: #fff; padding: 3px 10px; border-radius: 4px; font-size: 13px; font-weight: bold; }
+.btn-mode { background: #f1f5f9; border: 1px solid #cbd5e1; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold; }
+
+.modal-body { padding: 20px; }
+.modal-scroll { max-height: 75vh; overflow-y: auto; }
+
+/* 합집합 테이블 디자인 */
+.analysis-table { width: 100%; border-collapse: collapse; font-size: 12px; border: 1px solid #cbd5e1; }
+.analysis-table th, .analysis-table td { border: 1px solid #cbd5e1; padding: 10px; text-align: left; }
+.h-info { background: #f1f5f9; color: #475569; text-align: center; }
+.h-attr { background: #e0f2fe; color: #0369a1; text-align: center; }
+.attr-head { background: #f8fafc; font-family: monospace; font-size: 11px; color: #64748b; }
+.label { font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px; }
+.Published .label { background: #bae6fd; color: #0369a1; }
+.Working .label { background: #e2e8f0; color: #475569; }
 .empty { color: #cbd5e1; font-style: italic; }
 
-/* 나머지 스타일은 기존과 동일 */
-.modal-xl { width: 95%; max-width: 1600px; }
-.analysis-table th, .analysis-table td { border: 1px solid #e2e8f0; padding: 12px; text-align: left; }
-.font-bold { font-weight: bold; color: #334155; }
+/* JSON 뷰어 */
+.json-split-view { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.json-pane h5 { margin-bottom: 10px; color: #64748b; }
+.json-pane pre { background: #1e293b; color: #38bdf8; padding: 15px; border-radius: 6px; font-size: 11px; overflow: auto; max-height: 60vh; }
+
+.badge { padding: 3px 8px; border-radius: 4px; color: white; font-size: 11px; font-weight: bold; }
+.red { background: #ef4444; } .green { background: #10b981; }
+.action-bar { padding: 10px 30px; display: flex; justify-content: space-between; align-items: center; }
+.hl { background: #fbbf24; color: black; font-weight: bold; border-radius: 2px; }
 </style>
