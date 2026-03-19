@@ -2,37 +2,35 @@
   <div id="app" class="admin-tool">
     <div class="main-layout">
       <header class="dashboard-header">
-        <div class="search-section">
-          <div class="search-grid">
-            <div class="input-group project-box">
-              <label>Project No</label>
-              <input v-model="projectNo" type="text" placeholder="P0001" class="base-input" />
-            </div>
-            
-            <div class="input-group keyword-box">
-              <label>API Fetch Keywords</label>
-              <textarea v-model="keyword" placeholder="TAG-01, TAG-02..." class="base-input keyword-input"></textarea>
-            </div>
-            
-            <div class="button-box">
-              <button @click="fetchAndMergeData" :disabled="isLoading" class="btn-fetch-large">
-                <span v-if="!isLoading">데이터 통합 조회하기</span>
-                <span v-else class="loader"></span>
-              </button>
+        <div class="search-grid">
+          <div class="input-group project-box">
+            <label>Project No</label>
+            <input v-model="projectNo" type="text" placeholder="P0001" class="base-input" />
+            <div class="filter-wrapper">
+              <label class="sub-label">결과 내 필터</label>
+              <input v-model="localSearchQuery" type="text" placeholder="Tag No 필터..." class="filter-input" />
             </div>
           </div>
           
-          <div class="filter-row">
-            <input v-model="localSearchQuery" type="text" placeholder="결과 내 실시간 필터링 (Tag No)..." class="filter-input" />
+          <div class="input-group keyword-box">
+            <label>API Fetch Keywords</label>
+            <textarea v-model="keyword" placeholder="TAG-01, TAG-02..." class="base-input keyword-input"></textarea>
+          </div>
+          
+          <div class="button-box">
+            <button @click="fetchAndMergeData" :disabled="isLoading" class="btn-fetch-large">
+              <span v-if="!isLoading">데이터 통합 조회하기</span>
+              <span v-else class="loader"></span>
+            </button>
           </div>
         </div>
       </header>
 
       <div class="action-bar" v-if="mergedList.length > 0">
         <div class="stats">검색 결과: <b>{{ filteredList.length }}</b> 그룹</div>
-        <div class="button-group">
-          <button @click="deleteSelected" class="btn btn-danger" :disabled="selectedIds.length === 0">선택 삭제</button>
-          <button @click="downloadExcel" class="btn btn-success">CSV 내보내기</button>
+        <div class="right-buttons">
+          <button @click="deleteSelected" class="btn btn-danger" :disabled="selectedIds.length === 0">🗑 선택 삭제</button>
+          <button @click="downloadExcel" class="btn btn-success">📥 CSV 내보내기</button>
         </div>
       </div>
 
@@ -40,51 +38,45 @@
         <table class="modern-table">
           <thead>
             <tr class="main-header">
-              <th rowspan="2" class="sticky-col col-chk">
-                <div class="center-content"><input type="checkbox" :checked="isAllSelected" @change="toggleAllSelect" /></div>
-              </th>
-              <th rowspan="2" class="sticky-col col-idx sortable" @click="sortBy('TagIdx')">Idx ↕</th>
-              <th rowspan="2" class="sticky-col col-tag sortable" @click="sortBy('TagNo')">Tag No ↕</th>
+              <th rowspan="2" class="sticky-col col-chk"><input type="checkbox" :checked="isAllSelected" @change="toggleAllSelect" /></th>
+              <th rowspan="2" class="sticky-col col-idx">Idx</th>
+              <th rowspan="2" class="sticky-col col-tag">Tag No</th>
               <th colspan="3" class="pub-header">Published (Master)</th>
               <th colspan="3" class="wrk-header">Working (Current)</th>
             </tr>
             <tr class="sub-header">
-              <th class="sortable" @click="sortByNested('pubList', 'EpId')">EP ID</th>
-              <th>CLS</th>
-              <th>Deleted</th>
-              <th class="sortable" @click="sortByNested('wrkList', 'EpId')">EP ID</th>
-              <th>CLS</th>
-              <th>Deleted</th>
+              <th>EP ID</th><th>CLS</th><th>Deleted</th>
+              <th>EP ID</th><th>CLS</th><th>Deleted</th>
             </tr>
           </thead>
           
-          <tbody v-for="group in filteredList" :key="group.TagIdx" class="tag-group-boundary">
-            <tr v-for="(rowNum) in Math.max(group.pubList.length, group.wrkList.length, 1)" 
-                :key="group.TagIdx + '-' + rowNum" 
-                class="data-row"
-                @click="openModal(group)">
+          <tbody v-for="group in filteredList" :key="group.TagIdx" class="group-tbody">
+            <tr v-for="(rowNum) in Math.max(group.pubList.length, group.wrkList.length, 1)" :key="group.TagIdx + '-' + rowNum">
               
-              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-chk group-fixed" @click.stop>
-                <div class="center-content"><input type="checkbox" :value="group.TagIdx" v-model="selectedIds" /></div>
+              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-chk group-fixed border-right">
+                <div class="cell-content center"><input type="checkbox" :value="group.TagIdx" v-model="selectedIds" /></div>
               </td>
-              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-idx group-fixed">
-                {{ group.TagIdx }}
+              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" 
+                  class="sticky-col col-idx group-fixed clickable border-right" @click="openModal(group)">
+                <div class="cell-content center">{{ group.TagIdx }}</div>
               </td>
-              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-tag group-fixed tag-text" v-html="highlightText(group.TagNo)">
+              <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" 
+                  class="sticky-col col-tag group-fixed clickable border-bold-right" @click="openModal(group)">
+                <div class="cell-content tag-text" v-html="highlightText(group.TagNo)"></div>
               </td>
 
-              <td class="cell-pub">{{ group.pubList[rowNum-1]?.EpId || '-' }}</td>
-              <td class="cell-pub">{{ group.pubList[rowNum-1]?.ClsId || '-' }}</td>
-              <td class="cell-pub">
-                <span v-if="group.pubList[rowNum-1]" :class="['status-badge', group.pubList[rowNum-1].Deleted ? 'is-true' : 'is-false']">
+              <td class="cell-pub clickable" @click="openModal(group)">{{ group.pubList[rowNum-1]?.EpId || '-' }}</td>
+              <td class="cell-pub clickable" @click="openModal(group)">{{ group.pubList[rowNum-1]?.ClsId || '-' }}</td>
+              <td class="cell-pub clickable" @click="openModal(group)">
+                <span v-if="group.pubList[rowNum-1]" :class="['badge', group.pubList[rowNum-1].Deleted ? 'red' : 'green']">
                   {{ group.pubList[rowNum-1].Deleted }}
                 </span>
               </td>
 
-              <td class="cell-wrk">{{ group.wrkList[rowNum-1]?.EpId || '-' }}</td>
-              <td class="cell-wrk">{{ group.wrkList[rowNum-1]?.ClsId || '-' }}</td>
-              <td class="cell-wrk">
-                <span v-if="group.wrkList[rowNum-1]" :class="['status-badge', group.wrkList[rowNum-1].Deleted ? 'is-true' : 'is-false']">
+              <td class="cell-wrk clickable" @click="openModal(group)">{{ group.wrkList[rowNum-1]?.EpId || '-' }}</td>
+              <td class="cell-wrk clickable" @click="openModal(group)">{{ group.wrkList[rowNum-1]?.ClsId || '-' }}</td>
+              <td class="cell-wrk clickable" @click="openModal(group)">
+                <span v-if="group.wrkList[rowNum-1]" :class="['badge', group.wrkList[rowNum-1].Deleted ? 'red' : 'green']">
                   {{ group.wrkList[rowNum-1].Deleted }}
                 </span>
               </td>
@@ -94,7 +86,27 @@
       </div>
     </div>
 
+    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h3>상세 정보 확인 <small>#{{ selectedItem?.TagNo }}</small></h3>
+          <button @click="closeModal" class="btn-close">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="modal-grid">
+            <div class="data-pane">
+              <h4 class="pub-title">Published Data</h4>
+              <pre>{{ JSON.stringify(selectedItem?.pubList, null, 2) }}</pre>
+            </div>
+            <div class="data-pane">
+              <h4 class="wrk-title">Working Data</h4>
+              <pre>{{ JSON.stringify(selectedItem?.wrkList, null, 2) }}</pre>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
 </template>
 
 <script>
@@ -109,60 +121,63 @@ export default {
     const mergedList = ref([])
     const isLoading = ref(false)
     const selectedIds = ref([])
-    const sortKey = ref('TagNo')
-    const sortOrder = ref(1)
+    const showModal = ref(false)
+    const selectedItem = ref(null)
 
-    // 데이터 호출 (이전 로직 유지)
     const fetchAndMergeData = async () => {
       if (!keyword.value.trim()) return
       isLoading.value = true
-      const keywords = keyword.value.split(/[\s,\n]+/).filter(k => k)
       const groupMap = new Map()
-
       try {
+        const keywords = keyword.value.split(/[\s,\n]+/).filter(k => k)
         await Promise.all(keywords.map(async (key) => {
           const payload = { ProjectNo: projectNo.value, Keyword: key }
           const [pubRes, wrkRes] = await Promise.all([
             axiosWrapper.post('/api/Admin/Tool/GetPublishedData', payload),
             axiosWrapper.post('/api/Admin/Tool/GetWorkingData', payload)
           ])
-          const getArr = (r) => r?.data || r || []
-          getArr(pubRes).forEach(item => {
-            if (!groupMap.has(item.TagIdx)) groupMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pubList: [], wrkList: [] })
-            groupMap.get(item.TagIdx).pubList.push(item)
+          const pData = pubRes?.data || pubRes || []
+          const wData = wrkRes?.data || wrkRes || []
+          
+          pData.forEach(i => {
+            if(!groupMap.has(i.TagIdx)) groupMap.set(i.TagIdx, { TagIdx: i.TagIdx, TagNo: i.TagNo, pubList: [], wrkList: [] })
+            groupMap.get(i.TagIdx).pubList.push(i)
           })
-          getArr(wrkRes).forEach(item => {
-            if (!groupMap.has(item.TagIdx)) groupMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pubList: [], wrkList: [] })
-            groupMap.get(item.TagIdx).wrkList.push(item)
+          wData.forEach(i => {
+            if(!groupMap.has(i.TagIdx)) groupMap.set(i.TagIdx, { TagIdx: i.TagIdx, TagNo: i.TagNo, pubList: [], wrkList: [] })
+            groupMap.get(i.TagIdx).wrkList.push(i)
           })
         }))
-        mergedList.value = Array.from(groupMap.values())
-      } catch (e) { alert('조회 실패') }
-      finally { isLoading.value = false }
+        mergedList.value = Array.from(groupMap.values()).sort((a,b) => a.TagNo.localeCompare(b.TagNo))
+      } finally { isLoading.value = false }
     }
 
-    // 정렬 로직
-    const sortBy = (key) => {
-      sortOrder.value = sortKey.value === key ? sortOrder.value * -1 : 1
-      sortKey.value = key
+    const openModal = (group) => {
+      console.log('Opening Modal:', group) // 디버깅용
+      selectedItem.value = group
+      showModal.value = true
     }
 
-    const filteredList = computed(() => {
-      let list = [...mergedList.value]
-      if (localSearchQuery.value.trim()) {
-        list = list.filter(g => g.TagNo.toLowerCase().includes(localSearchQuery.value.toLowerCase()))
-      }
-      list.sort((a, b) => (a[sortKey.value] < b[sortKey.value] ? -1 : 1) * sortOrder.value)
-      return list
-    })
+    const closeModal = () => { showModal.value = false }
+
+    const highlightText = (text) => {
+      if (!localSearchQuery.value) return text
+      const regex = new RegExp(`(${localSearchQuery.value})`, 'gi')
+      return String(text).replace(regex, '<mark class="hl">$1</mark>')
+    }
 
     return {
-      projectNo, keyword, localSearchQuery, mergedList, filteredList, isLoading, selectedIds,
-      fetchAndMergeData, sortBy,
-      highlightText: (t) => t, // 생략
-      toggleAllSelect: () => { /* 생략 */ },
-      isAllSelected: computed(() => false),
-      openModal: (g) => { /* 모달 로직 */ }
+      projectNo, keyword, localSearchQuery, mergedList, isLoading, selectedIds, showModal, selectedItem,
+      fetchAndMergeData, openModal, closeModal, highlightText,
+      filteredList: computed(() => {
+        if (!localSearchQuery.value) return mergedList.value
+        return mergedList.value.filter(g => g.TagNo.toLowerCase().includes(localSearchQuery.value.toLowerCase()))
+      }),
+      toggleAllSelect: () => {
+        if (selectedIds.value.length === mergedList.value.length) selectedIds.value = []
+        else selectedIds.value = mergedList.value.map(g => g.TagIdx)
+      },
+      isAllSelected: computed(() => mergedList.value.length > 0 && selectedIds.value.length === mergedList.value.length)
     }
   }
 }
@@ -170,57 +185,73 @@ export default {
 
 <style scoped>
 /* 전체 레이아웃 */
-.main-layout { height: 100vh; display: flex; flex-direction: column; background: #f8fafc; }
+.main-layout { height: 100vh; display: flex; flex-direction: column; background: #f1f5f9; font-family: sans-serif; }
 
-/* 1. 검색바 (요청사항 반영) */
+/* 1. 검색바 (정렬 교정) */
 .dashboard-header { background: white; padding: 20px 30px; border-bottom: 1px solid #e2e8f0; }
-.search-grid { display: flex; gap: 20px; align-items: flex-start; } /* 위쪽 기준 정렬 */
+.search-grid { display: flex; gap: 25px; align-items: flex-start; }
 
-.project-box { width: 150px; } /* 프로젝트란 축소 */
-.keyword-box { flex: 2; } /* 키워드란 2배 확장 */
-.button-box { align-self: flex-end; padding-bottom: 5px; }
+.project-box { width: 180px; display: flex; flex-direction: column; gap: 15px; }
+.filter-wrapper { border-top: 1px dashed #cbd5e1; padding-top: 10px; }
+.sub-label { font-size: 11px; color: #64748b; margin-bottom: 4px; display: block; }
 
-.base-input { width: 100%; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px; font-size: 14px; }
-.keyword-input { height: 45px; transition: height 0.2s; }
-.keyword-input:focus { height: 120px; }
+.keyword-box { flex: 1; }
+.keyword-input { height: 45px; width: 100%; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; transition: 0.2s; }
+.keyword-input:focus { height: 100px; outline-color: #3b82f6; }
 
-.btn-fetch-large { 
-  min-width: 200px; height: 45px; background: #1e293b; color: white; 
-  border: none; border-radius: 6px; font-weight: bold; cursor: pointer;
-}
+.btn-fetch-large { min-width: 220px; height: 45px; align-self: flex-start; background: #1e293b; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
 
-/* 2. 테이블 (그룹 시각화 강조) */
-.table-container { flex: 1; overflow: auto; margin: 20px; background: white; border: 1px solid #e2e8f0; border-radius: 8px; }
+/* 2. 액션바 (우측 정렬) */
+.action-bar { padding: 10px 30px; display: flex; justify-content: space-between; align-items: center; }
+.right-buttons { display: flex; gap: 10px; }
+.btn { padding: 8px 16px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; }
+.btn-danger { background: #ef4444; color: white; }
+.btn-success { background: #10b981; color: white; }
+
+/* 3. 테이블 (높이 및 공백 해결) */
+.table-container { flex: 1; overflow: auto; margin: 0 30px 20px 30px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; }
 .modern-table { width: 100%; border-collapse: separate; border-spacing: 0; }
 
-/* 그룹 테두리 강조 (tbody 단위) */
-.tag-group-boundary { border-bottom: 4px solid #cbd5e1; }
-.tag-group-boundary:hover { background-color: #f1f5f9; }
+/* 헤더 */
+.main-header th { position: sticky; top: 0; z-index: 30; background: #f8fafc; border-bottom: 1px solid #e2e8f0; padding: 12px; font-size: 13px; }
+.sub-header th { position: sticky; top: 43px; z-index: 29; background: #f8fafc; border-bottom: 2px solid #cbd5e1; padding: 8px; font-size: 11px; }
 
-/* 틀 고정 및 셀 정렬 */
-.sticky-col { position: sticky; top: 0; z-index: 10; background: #fff !important; border-right: 1px solid #e2e8f0; }
-.col-chk { left: 0; width: 60px; }
-.col-idx { left: 60px; width: 80px; }
-.col-tag { left: 140px; width: 200px; border-right: 3px double #cbd5e1 !important; }
+/* 틀 고정 열 및 높이 매칭 */
+.sticky-col { position: sticky; z-index: 20; background: white !important; }
+.col-chk { left: 0; width: 50px; }
+.col-idx { left: 50px; width: 70px; }
+.col-tag { left: 120px; width: 200px; }
 
-.center-content { display: flex; justify-content: center; align-items: center; height: 100%; }
+/* 셀 높이 균형 및 테두리 */
+.modern-table td { padding: 0; border-bottom: 1px solid #f1f5f9; border-right: 1px solid #f1f5f9; vertical-align: middle; }
+.cell-content { padding: 12px; min-height: 45px; display: flex; align-items: center; }
+.center { justify-content: center; }
+.tag-text { color: #2563eb; font-weight: bold; }
+.border-right { border-right: 1px solid #e2e8f0 !important; }
+.border-bold-right { border-right: 3px double #cbd5e1 !important; }
 
-/* 데이터 셀 스타일 */
-.modern-table td { padding: 12px; border: 1px solid #f1f5f9; text-align: center; }
-.group-fixed { background: #f8fafc !important; font-weight: 600; }
-.tag-text { color: #2563eb; text-align: left !important; padding-left: 15px !important; }
+/* 그룹 구분선 */
+.group-tbody { border-bottom: 4px solid #e2e8f0; }
 
-/* Deleted 상태 뱃지 */
-.status-badge { padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; }
-.is-true { background: #fee2e2; color: #dc2626; }  /* True: 빨간색 */
-.is-false { background: #d1fae5; color: #059669; } /* False: 초록색 */
+/* 데이터 셀 색상 */
+.cell-pub { background: #f0f7ff; }
+.cell-wrk { background: #fffcf0; }
+.clickable { cursor: pointer; }
+.clickable:hover { filter: brightness(0.95); }
 
-/* 헤더 스타일 */
-.main-header th { position: sticky; top: 0; z-index: 20; background: #f1f5f9; padding: 12px; border: 1px solid #cbd5e1; }
-.sub-header th { position: sticky; top: 45px; z-index: 19; background: #f8fafc; font-size: 11px; border: 1px solid #cbd5e1; }
-.sortable { cursor: pointer; user-select: none; }
-.sortable:hover { background: #e2e8f0; }
+/* 뱃지 */
+.badge { padding: 2px 6px; border-radius: 4px; font-size: 11px; font-weight: bold; color: white; }
+.red { background: #ef4444; }
+.green { background: #10b981; }
 
-.cell-pub { background-color: #f0f7ff; }
-.cell-wrk { background-color: #fffcf0; }
+/* 4. 모달 */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal-content { background: white; width: 1000px; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 25px rgba(0,0,0,0.2); }
+.modal-header { padding: 20px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+.modal-body { padding: 25px; max-height: 70vh; overflow-y: auto; }
+.modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.data-pane pre { background: #1e293b; color: #e2e8f0; padding: 15px; border-radius: 8px; font-size: 12px; overflow: auto; }
+.btn-close { background: none; border: none; font-size: 24px; cursor: pointer; }
+
+::v-deep .hl { background: yellow; color: black; }
 </style>
