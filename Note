@@ -62,18 +62,20 @@
               <td v-if="rowNum === 1" :rowspan="Math.max(group.pubList.length, group.wrkList.length, 1)" class="sticky-col col-tag group-fixed clickable" @click="openModal(group)">
                 <div class="cell-content tag-text" v-html="highlightText(group.TagNo)"></div>
               </td>
-              <td class="cell-pub clickable" @click="openModal(group)"><div class="cell-content">{{ group.pubList[rowNum-1]?.EpId || '-' }}</div></td>
-              <td class="cell-pub clickable" @click="openModal(group)"><div class="cell-content">{{ group.pubList[rowNum-1]?.ClsId || '-' }}</div></td>
+              <td class="cell-pub clickable" @click="openModal(group)"><div class="cell-content">{{ group.pubList[rowNum-1]?.EpId || 'null' }}</div></td>
+              <td class="cell-pub clickable" @click="openModal(group)"><div class="cell-content">{{ group.pubList[rowNum-1]?.ClsId || 'null' }}</div></td>
               <td class="cell-pub clickable" @click="openModal(group)">
                 <div class="cell-content center-vh">
                   <span v-if="group.pubList[rowNum-1]" :class="['badge', group.pubList[rowNum-1].Deleted ? 'red' : 'green']">{{ group.pubList[rowNum-1].Deleted ? 'Y' : 'N' }}</span>
+                  <span v-else>null</span>
                 </div>
               </td>
-              <td class="cell-wrk clickable" @click="openModal(group)"><div class="cell-content">{{ group.wrkList[rowNum-1]?.EpId || '-' }}</div></td>
-              <td class="cell-wrk clickable" @click="openModal(group)"><div class="cell-content">{{ group.wrkList[rowNum-1]?.ClsId || '-' }}</div></td>
+              <td class="cell-wrk clickable" @click="openModal(group)"><div class="cell-content">{{ group.wrkList[rowNum-1]?.EpId || 'null' }}</div></td>
+              <td class="cell-wrk clickable" @click="openModal(group)"><div class="cell-content">{{ group.wrkList[rowNum-1]?.ClsId || 'null' }}</div></td>
               <td class="cell-wrk clickable" @click="openModal(group)">
                 <div class="cell-content center-vh">
                   <span v-if="group.wrkList[rowNum-1]" :class="['badge', group.wrkList[rowNum-1].Deleted ? 'red' : 'green']">{{ group.wrkList[rowNum-1].Deleted ? 'Y' : 'N' }}</span>
+                  <span v-else>null</span>
                 </div>
               </td>
             </tr>
@@ -125,7 +127,7 @@
                       {{ row.Deleted ? 'Deleted' : 'Active' }}
                     </span>
                   </td>
-                  <td v-for="key in allAttributeKeys" :key="key + idx" :class="{ 'empty': row.attrMap[key] === '-' }">
+                  <td v-for="key in allAttributeKeys" :key="key + idx" :class="{ 'is-null': row.attrMap[key] === 'null' }">
                     {{ row.attrMap[key] }}
                   </td>
                 </tr>
@@ -165,7 +167,6 @@ export default {
     const selectedItem = ref(null)
     const isJsonMode = ref(false)
 
-    // 데이터 조회 및 병합 로직
     const fetchAndMergeData = async () => {
       if (!keyword.value.trim()) return alert('키워드를 입력하세요.');
       isLoading.value = true;
@@ -193,7 +194,6 @@ export default {
       finally { isLoading.value = false; }
     };
 
-    // 모달용 Attributes 합집합 헤더 추출
     const allAttributeKeys = computed(() => {
       if (!selectedItem.value) return [];
       const keys = new Set();
@@ -208,7 +208,6 @@ export default {
       return Array.from(keys).sort();
     });
 
-    // 모달용 데이터 행 가공 (TagNo, Deleted 보강)
     const modalRows = computed(() => {
       if (!selectedItem.value) return [];
       const process = (item, src) => {
@@ -217,21 +216,26 @@ export default {
         if (Array.isArray(rawAttrs)) {
           rawAttrs.forEach(a => {
             if (a.ATT_ID) {
-              let val = '-';
-              if (a.VALUE !== null && a.VALUE !== undefined && String(a.VALUE).trim() !== '') {
+              let val = 'null'; // 기본값을 '-' 대신 'null'로 설정
+              if (a.VALUE !== null && a.VALUE !== undefined && String(a.VALUE).trim() !== '' && String(a.VALUE).toLowerCase() !== 'null') {
                 val = String(a.VALUE);
-              } else if (a.VALUE_DBL !== null && a.VALUE_DBL !== 0) {
+              } else if (a.VALUE_DBL !== null && a.VALUE_DBL !== undefined && a.VALUE_DBL !== 0) {
                 val = String(a.VALUE_DBL);
               }
               attrMap[a.ATT_ID] = val;
             }
           });
         }
+        // 헤더에 존재하지만 이 행에는 없는 키들에 대해서도 null 처리
+        allAttributeKeys.value.forEach(key => {
+          if (!attrMap[key]) attrMap[key] = 'null';
+        });
+
         return {
           source: src,
           TagNo: item.TagNo || selectedItem.value.TagNo,
-          EpId: item.EpId || '-',
-          ClsId: item.ClsId || item.Cls || '-',
+          EpId: item.EpId || 'null',
+          ClsId: item.ClsId || item.Cls || 'null',
           Deleted: !!item.Deleted,
           attrMap
         };
@@ -268,7 +272,7 @@ export default {
 </script>
 
 <style scoped>
-/* 1. 기본 레이아웃 */
+/* 1. 레이아웃 및 메인 테이블 (공백 제거) */
 .main-layout { height: 100vh; display: flex; flex-direction: column; background: #f1f5f9; overflow: hidden; }
 .dashboard-header { background: white; padding: 20px 30px; border-bottom: 1px solid #cbd5e1; flex-shrink: 0; }
 .search-grid { display: flex; gap: 20px; align-items: flex-start; }
@@ -279,11 +283,9 @@ export default {
 .keyword-input { width: 100%; height: 45px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; resize: none; font-size: 13px; }
 .btn-fetch-large { min-width: 160px; height: 45px; background: #1e293b; color: white; border-radius: 4px; font-weight: bold; cursor: pointer; border: none; }
 
-/* 2. 메인 테이블 (헤더 공백 제거용 스타일) */
 .table-container { flex: 1; overflow: auto; margin: 0 30px 20px; background: white; border: 1px solid #cbd5e1; }
 .modern-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; }
 
-/* 헤더 상하 공백 제거를 위한 고정 높이 및 수직 정렬 */
 .main-header th, .sub-header th { 
   position: sticky; z-index: 50; background: #f1f5f9; 
   border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1;
@@ -293,13 +295,10 @@ export default {
 .sub-header th { top: 40px; z-index: 49; background: #f8fafc; }
 .sub-th { font-size: 11px; font-weight: 600; color: #64748b; }
 
-/* 틀 고정 */
 .sticky-col { position: sticky; z-index: 40; background: white !important; }
 .col-chk { left: 0; width: 50px; }
 .col-idx { left: 50px; width: 80px; }
 .col-tag { left: 130px; width: 200px; border-right: 3px double #cbd5e1 !important; }
-.main-header .sticky-col { z-index: 60 !important; }
-.sub-header .sticky-col { z-index: 59 !important; }
 
 .cell-content { min-height: 48px; display: flex; align-items: center; padding: 5px 12px; font-size: 13px; white-space: nowrap; overflow: hidden; }
 .tag-text { color: #2563eb; font-weight: bold; }
@@ -307,7 +306,7 @@ export default {
 .cell-pub { background: #f0f9ff; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
 .cell-wrk { background: #ffffff; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; }
 
-/* 3. 모달 (동적 너비 스타일) */
+/* 2. 모달 및 동적 테이블 (null 강조) */
 .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.7); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal-content.modal-xl { background: white; width: 95%; max-width: 1600px; border-radius: 10px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.4); }
 .modal-header { padding: 15px 25px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
@@ -318,7 +317,6 @@ export default {
 .modal-body { padding: 20px; }
 .modal-scroll { max-height: 75vh; overflow-y: auto; }
 
-/* 모달 동적 테이블 핵심 스타일 */
 .modal-table-wrapper { border: 1px solid #cbd5e1; border-radius: 4px; overflow-x: auto; }
 .analysis-table.dynamic-width { width: max-content; min-width: 100%; table-layout: auto; border-collapse: collapse; }
 .analysis-table th, .analysis-table td { padding: 12px 15px; border: 1px solid #cbd5e1; text-align: left; white-space: nowrap; }
@@ -327,12 +325,10 @@ export default {
 .h-attr { background: #e0f2fe; color: #0369a1; font-weight: bold; text-align: center; }
 .attr-head { background: #f1f5f9; color: #64748b; font-size: 11px; font-family: monospace; }
 .text-blue { color: #2563eb; }
-.min-w-100 { min-width: 100px; } .min-w-150 { min-width: 150px; } .min-w-120 { min-width: 120px; } .min-w-80 { min-width: 80px; }
+.is-null { color: #cbd5e1; font-style: italic; font-size: 11px; } /* null 텍스트 스타일링 */
 
-/* 배지 및 기타 */
 .badge { padding: 2px 8px; border-radius: 12px; font-size: 11px; color: white; font-weight: bold; }
 .red { background: #ef4444; } .green { background: #10b981; }
-.action-bar { padding: 10px 30px; display: flex; justify-content: space-between; align-items: center; }
 .hl { background: #fbbf24; color: black; font-weight: bold; border-radius: 2px; }
 .json-viewer { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
 .json-pane pre { background: #1e293b; color: #38bdf8; padding: 15px; border-radius: 6px; font-size: 11px; overflow: auto; max-height: 60vh; }
