@@ -15,11 +15,12 @@
           </div>
           <div class="keyword-box">
             <label>API Fetch Keywords</label>
-            <textarea v-model="keyword" class="base-input keyword-input" placeholder="Space/Line separated..."></textarea>
+            <textarea v-model="keyword" class="base-input keyword-input" placeholder="키워드를 입력하세요 (공백/엔터 구분)"></textarea>
           </div>
           <div class="button-box">
             <button @click="fetchAndMergeData" :disabled="isLoading" class="btn-fetch-large">
-              데이터 통합 조회
+              <span v-if="!isLoading">데이터 통합 조회</span>
+              <span v-else>조회 중...</span>
             </button>
           </div>
         </div>
@@ -85,38 +86,31 @@
     <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
       <div class="modal-content modal-large">
         <div class="modal-header">
-          <h3>Tag Detail Analysis <small>#{{ selectedItem?.TagNo }} (Idx: {{ selectedItem?.TagIdx }})</small></h3>
+          <h3>상세 분석 <small>#{{ selectedItem?.TagNo }} (Idx: {{ selectedItem?.TagIdx }})</small></h3>
           <button @click="closeModal" class="btn-close">&times;</button>
         </div>
-        
         <div class="modal-body modal-scroll">
           <div class="modal-table-wrapper">
             <table class="analysis-table">
               <thead>
                 <tr>
-                  <th colspan="4" class="fixed-info-header">Basic Info</th>
-                  <th :colspan="allAttributeKeys.length" class="attributes-header">Attributes (Dynamic Union)</th>
+                  <th colspan="4" class="fixed-info-header">기본 정보</th>
+                  <th :colspan="allAttributeKeys.length" class="attributes-header">Attributes (합집합)</th>
                 </tr>
                 <tr>
-                  <th class="col-source">Source</th>
+                  <th class="col-source">구분</th>
                   <th class="col-epid">EP ID</th>
                   <th class="col-cls">CLS</th>
-                  <th class="col-del">Deleted</th>
+                  <th class="col-del">삭제여부</th>
                   <th v-for="key in allAttributeKeys" :key="key" class="col-attr">{{ key }}</th>
                 </tr>
               </thead>
-              
               <tbody>
                 <tr v-for="(row, index) in modalTableData" :key="index" :class="[row.source === 'Published' ? 'row-pub' : 'row-wrk']">
-                  <td>
-                    <span :class="['source-label', row.source === 'Published' ? 'label-pub' : 'label-wrk']">{{ row.source }}</span>
-                  </td>
+                  <td><span :class="['source-label', row.source === 'Published' ? 'label-pub' : 'label-wrk']">{{ row.source }}</span></td>
                   <td>{{ row.EpId }}</td>
                   <td>{{ row.ClsId }}</td>
-                  <td>
-                    <span :class="['badge', row.Deleted ? 'red' : 'green']">{{ row.Deleted }}</span>
-                  </td>
-                  
+                  <td><span :class="['badge', row.Deleted ? 'red' : 'green']">{{ row.Deleted }}</span></td>
                   <td v-for="key in allAttributeKeys" :key="key + index" :class="{'empty-cell': !row.attrs[key]}">
                     {{ row.attrs[key] || '-' }}
                   </td>
@@ -145,124 +139,106 @@ export default {
     const showModal = ref(false)
     const selectedItem = ref(null)
 
-    // [기능] 데이터 API 호출 및 그룹 병합 (예제 데이터 포함)
+    // [로직] 실제 API 호출 및 데이터 병합 (수정완료)
     const fetchAndMergeData = async () => {
-      if (!keyword.value.trim()) return alert('키워드 입력 필수');
+      if (!keyword.value.trim()) return alert('키워드를 입력해주세요.');
       isLoading.value = true;
       selectedIds.value = [];
       const groupMap = new Map();
+
       try {
-        const keywords = keyword.value.split(/[\s,\n]+/).filter(k => k.trim());
+        const keywords = keyword.value.split(/[\s,\n]+/).map(k => k.trim()).filter(k => k);
         
-        // --- [실제 환경에서는 아래 axios 코드를 활성화하세요] ---
-        /*
+        // 병렬 호출로 속도 최적화
         await Promise.all(keywords.map(async (key) => {
-          const payload = { ProjectNo: projectNo.value, Keyword: key.trim() };
+          const payload = { ProjectNo: projectNo.value, Keyword: key };
+          
           const [pubRes, wrkRes] = await Promise.all([
             axiosWrapper.post('/api/Admin/Tool/GetPublishedData', payload),
             axiosWrapper.post('/api/Admin/Tool/GetWorkingData', payload)
           ]);
+
+          // 응답 데이터 구조 유연하게 처리
           const pData = pubRes?.data || pubRes || [];
           const wData = wrkRes?.data || wrkRes || [];
-          // ... (그룹 병합 로직) ...
+
+          // Published 병합
+          pData.forEach(item => {
+            if (!groupMap.has(item.TagIdx)) {
+              groupMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pubList: [], wrkList: [] });
+            }
+            groupMap.get(item.TagIdx).pubList.push(item);
+          });
+
+          // Working 병합
+          wData.forEach(item => {
+            if (!groupMap.has(item.TagIdx)) {
+              groupMap.set(item.TagIdx, { TagIdx: item.TagIdx, TagNo: item.TagNo, pubList: [], wrkList: [] });
+            }
+            groupMap.get(item.TagIdx).wrkList.push(item);
+          });
         }));
-        */
-        // --------------------------------------------------------
 
-        // --- [테스트용 예제 데이터 및 병합 로직] ---
-        await new Promise(resolve => setTimeout(resolve, 500)); // 로딩 흉내
-        // 요청하신 예제 데이터 구조 반영
-        const mockPub = [
-          { TagIdx: 1, TagNo: 'TAG-001', EpId: 'EP-M1', ClsId: 'CLS-A', Deleted: false, attributes: [ {ATT_ID: 'Size', VALUE: '100'}, {ATT_ID: 'Material', VALUE: 'CS'} ] },
-          { TagIdx: 1, TagNo: 'TAG-001', EpId: 'EP-M2', ClsId: 'CLS-A', Deleted: false, attributes: [ {ATT_ID: 'Size', VALUE: '200'}, {ATT_ID: 'Pressure', VALUE: '10K'} ] }
-        ];
-        const mockWrk = [
-          { TagIdx: 1, TagNo: 'TAG-001', EpId: 'EP-W1', ClsId: 'CLS-A', Deleted: false, attributes: [ {ATT_ID: 'Size', VALUE: '100'}, {ATT_ID: 'Material', VALUE: 'SUS'}, {ATT_ID: 'Temp', VALUE: '80C'} ] },
-          { TagIdx: 2, TagNo: 'TAG-002', EpId: 'EP-W2', ClsId: 'CLS-B', Deleted: true, attributes: [] }
-        ];
+        // TagNo 기준으로 정렬하여 저장
+        mergedList.value = Array.from(groupMap.values()).sort((a, b) => 
+          String(a.TagNo).localeCompare(String(b.TagNo))
+        );
 
-        mockPub.forEach(i => {
-          if(!groupMap.has(i.TagIdx)) groupMap.set(i.TagIdx, { TagIdx: i.TagIdx, TagNo: i.TagNo, pubList: [], wrkList: [] });
-          groupMap.get(i.TagIdx).pubList.push(i);
-        });
-        mockWrk.forEach(i => {
-          if(!groupMap.has(i.TagIdx)) groupMap.set(i.TagIdx, { TagIdx: i.TagIdx, TagNo: i.TagNo, pubList: [], wrkList: [] });
-          groupMap.get(i.TagIdx).wrkList.push(i);
-        });
-        // ------------------------------------------
-
-        mergedList.value = Array.from(groupMap.values()).sort((a,b) => String(a.TagNo).localeCompare(b.TagNo));
-      } finally { isLoading.value = false; }
+      } catch (error) {
+        console.error(error);
+        alert('데이터 호출 중 오류가 발생했습니다.');
+      } finally {
+        isLoading.value = false;
+      }
     };
 
-    // [기능] 필터/하이라이트/체크박스 (기존 유지)
-    const filteredList = computed(() => {
-      if (!localSearchQuery.value) return mergedList.value;
-      return mergedList.value.filter(g => String(g.TagNo).toLowerCase().includes(localSearchQuery.value.toLowerCase()));
-    });
-
-    // ⭐ [모달 핵심 로직 1] Published + Working 데이터의 Attributes 합집합 헤더 계산
+    // [모달 로직] Attributes 합집합 추출
     const allAttributeKeys = computed(() => {
       if (!selectedItem.value) return [];
       const keys = new Set();
-      // Published 리스트 전수조사
-      selectedItem.value.pubList.forEach(item => {
-        if (item.attributes) item.attributes.forEach(attr => keys.add(attr.ATT_ID));
+      const gather = (list) => list.forEach(item => {
+        if (item.attributes && Array.isArray(item.attributes)) {
+          item.attributes.forEach(attr => { if(attr.ATT_ID) keys.add(attr.ATT_ID); });
+        }
       });
-      // Working 리스트 전수조사
-      selectedItem.value.wrkList.forEach(item => {
-        if (item.attributes) item.attributes.forEach(attr => keys.add(attr.ATT_ID));
-      });
-      return Array.from(keys).sort(); // 가나다순 정렬
+      gather(selectedItem.value.pubList);
+      gather(selectedItem.value.wrkList);
+      return Array.from(keys).sort();
     });
 
-    // ⭐ [모달 핵심 로직 2] 모달 테이블에 뿌릴 통합 데이터 가공 (N개 로우)
+    // [모달 로직] 테이블용 데이터 가공
     const modalTableData = computed(() => {
       if (!selectedItem.value) return [];
       const result = [];
-      const keys = allAttributeKeys.value;
-
-      // Helper: attribute 배열을 {ATT_ID: VALUE} 객체로 변환
-      const parseAttrs = (attrs) => {
-        if (!attrs) return {};
-        return attrs.reduce((acc, curr) => {
+      const formatRow = (item, src) => ({
+        source: src,
+        EpId: item.EpId || '-',
+        ClsId: item.ClsId || '-',
+        Deleted: !!item.Deleted,
+        attrs: (item.attributes || []).reduce((acc, curr) => {
           acc[curr.ATT_ID] = curr.VALUE;
           return acc;
-        }, {});
-      };
-
-      // 1. Published 데이터 가공 및 추가
-      selectedItem.value.pubList.forEach(item => {
-        result.push({
-          source: 'Published',
-          EpId: item.EpId,
-          ClsId: item.ClsId,
-          Deleted: item.Deleted,
-          attrs: parseAttrs(item.attributes) // { 'Size': '100', 'Material': 'CS' } 형태
-        });
+        }, {})
       });
 
-      // 2. Working 데이터 가공 및 추가
-      selectedItem.value.wrkList.forEach(item => {
-        result.push({
-          source: 'Working',
-          EpId: item.EpId,
-          ClsId: item.ClsId,
-          Deleted: item.Deleted,
-          attrs: parseAttrs(item.attributes)
-        });
-      });
+      selectedItem.value.pubList.forEach(i => result.push(formatRow(i, 'Published')));
+      selectedItem.value.wrkList.forEach(i => result.push(formatRow(i, 'Working')));
+      return result;
+    });
 
-      return result; // Published 개수 + Working 개수만큼의 배열
+    // 필터 및 기타 유틸
+    const filteredList = computed(() => {
+      if (!localSearchQuery.value.trim()) return mergedList.value;
+      const q = localSearchQuery.value.toLowerCase();
+      return mergedList.value.filter(g => String(g.TagNo).toLowerCase().includes(q));
     });
 
     return {
       projectNo, keyword, localSearchQuery, mergedList, filteredList, isLoading, selectedIds, showModal, selectedItem,
-      allAttributeKeys, modalTableData, // 모달 계산 속성 리턴
-      fetchAndMergeData,
+      allAttributeKeys, modalTableData, fetchAndMergeData,
       highlightText: (t) => {
-        if (!localSearchQuery.value) return t;
-        const reg = new RegExp(`(${localSearchQuery.value})`, 'gi');
+        if (!localSearchQuery.value.trim()) return t;
+        const reg = new RegExp(`(${localSearchQuery.value.trim()})`, 'gi');
         return String(t).replace(reg, '<mark class="hl">$1</mark>');
       },
       openModal: (g) => { selectedItem.value = g; showModal.value = true; },
@@ -273,86 +249,63 @@ export default {
       },
       isAllSelected: computed(() => filteredList.value.length > 0 && selectedIds.value.length === filteredList.value.length),
       deleteSelected: () => confirm('삭제하시겠습니까?'),
-      downloadExcel: () => alert('CSV 다운로드')
+      downloadExcel: () => alert('Excel 다운로드 로직을 구현하세요.')
     }
   }
 }
 </script>
 
 <style scoped>
-/* 1. 기본 레이아웃 & 메인 테이블 스타일 (기존 유지) */
-.main-layout { height: 100vh; display: flex; flex-direction: column; background: #f1f5f9; overflow: hidden; font-family: sans-serif; }
+/* 메인 레이아웃 및 테이블 스타일 (이전의 완벽한 버전 유지) */
+.main-layout { height: 100vh; display: flex; flex-direction: column; background: #f1f5f9; overflow: hidden; }
 .dashboard-header { background: white; padding: 20px 30px; border-bottom: 1px solid #cbd5e1; flex-shrink: 0; }
 .search-grid { display: flex; gap: 25px; align-items: flex-start; }
 .project-box { width: 220px; display: flex; flex-direction: column; gap: 10px; }
 .unified-height { height: 38px !important; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 4px; padding: 0 10px; }
 .filter-input { border: 2px solid #3b82f6; background: #eff6ff; }
-.keyword-box textarea { width: 100%; height: 45px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; resize: none; transition: height 0.2s; }
-.keyword-box textarea:focus { height: 100px; }
+.keyword-box { flex: 1; }
+.keyword-input { width: 100%; height: 45px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 10px; resize: none; }
 .btn-fetch-large { min-width: 180px; height: 45px; background: #1e293b; color: white; border-radius: 4px; font-weight: bold; cursor: pointer; border: none; }
+
+/* 테이블 공백 제거 및 틀 고정 */
 .table-container { flex: 1; overflow: auto; margin: 0 30px 20px; background: white; border: 1px solid #cbd5e1; }
 .modern-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: auto; }
 .h-40 { height: 40px !important; padding: 0 !important; }
-.main-header th { position: sticky; top: 0; z-index: 50; background: #f1f5f9; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; }
-.sub-header th { position: sticky; top: 40px; z-index: 49; background: #f8fafc; border-bottom: 2px solid #cbd5e1; border-right: 1px solid #cbd5e1; }
+.main-header th { position: sticky; top: 0; z-index: 50; background: #f1f5f9; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #cbd5e1; font-size: 0.85rem; }
+.sub-header th { position: sticky; top: 40px; z-index: 49; background: #f8fafc; border-bottom: 2px solid #cbd5e1; border-right: 1px solid #cbd5e1; font-size: 0.8rem; }
+
+/* 좌측 고정 열 테두리 강화 */
 .sticky-col { position: sticky; z-index: 40; background: white !important; }
 .col-chk { left: 0; min-width: 50px; }
 .col-idx { left: 50px; min-width: 80px; }
 .col-tag { left: 130px; min-width: 200px; border-right: 3px double #cbd5e1 !important; }
 .group-fixed { box-shadow: inset -1px -1px 0 #cbd5e1; background: #fcfcfd !important; }
-.main-header .sticky-col { z-index: 60 !important; top: 0; }
-.sub-header .sticky-col { z-index: 59 !important; top: 40px; }
-.center-vh { display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; }
+
+/* 데이터 셀 */
 .cell-content { min-height: 50px; display: flex; align-items: center; padding: 8px 12px; font-size: 0.9rem; }
 .auto-width { white-space: nowrap; width: max-content; }
 .tag-text { color: #2563eb; font-weight: bold; }
 .group-tbody { border-bottom: 3px solid #94a3b8; }
 .cell-pub { background: #f0f9ff; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
 .cell-wrk { background: #fffdfa; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; }
-.badge { padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; color: white; }
-.red { background: #ef4444; } .green { background: #10b981; }
-.action-bar { padding: 10px 30px; display: flex; justify-content: space-between; align-items: center; }
-.right-buttons { display: flex; gap: 8px; }
-.btn { padding: 8px 15px; border-radius: 4px; font-size: 0.85rem; cursor: pointer; font-weight: bold; border: none; }
-.btn-danger { background: #fee2e2; color: #dc2626; } .btn-success { background: #d1fae5; color: #059669; }
-.hl { background: #fbbf24; color: black; font-weight: bold; border-radius: 2px; }
 
-/* ⭐ [추가/수정] 모달 스타일 (고도화) */
-.modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal-content.modal-large { background: white; width: 1200px; max-width: 95vw; border-radius: 12px; overflow: hidden; box-shadow: 0 20px 40px rgba(0,0,0,0.25); border: 1px solid #e2e8f0; }
-.modal-header { padding: 18px 25px; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; background: #fafafa; }
-.modal-header h3 { margin: 0; font-size: 1.25rem; font-weight: 800; color: #1e293b; }
-.modal-header h3 small { font-size: 0.85rem; color: #64748b; font-weight: normal; margin-left: 8px; }
-.modal-body { padding: 0; background: #f9fafb; }
-.modal-scroll { max-height: 75vh; overflow-y: auto; padding: 25px; } /* 내부 스크롤 보장 */
-.btn-close { background: none; border: none; font-size: 28px; cursor: pointer; color: #94a3b8; }
-
-/* ⭐ [핵심] 모달 합집합 테이블 디자인 */
-.modal-table-wrapper { background: white; border-radius: 8px; border: 1px solid #e2e8f0; overflow-x: auto; box-shadow: 0 4px 6px rgba(0,0,0,0.03); }
-.analysis-table { width: 100%; border-collapse: separate; border-spacing: 0; table-layout: fixed; /* 고정폭 레이아웃 */ }
-
-/* 헤더 영역 구분색 */
-.fixed-info-header { background: #f1f5f9; color: #475569; border-right: 2px solid #cbd5e1 !important; }
-.attributes-header { background: #e0f2fe; color: #0369a1; }
-
-.analysis-table th { position: sticky; top: -25px; /* modal-body 패딩 보정 */ z-index: 2; padding: 12px 15px; font-weight: bold; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; font-size: 0.8rem; text-align: left; }
-.analysis-table td { padding: 10px 15px; border-bottom: 1px solid #e2e8f0; border-right: 1px solid #e2e8f0; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-/* 컬럼폭 설정 */
-.col-source { width: 100px; } .col-epid { width: 120px; } .col-cls { width: 90px; } .col-del { width: 80px; }
-.col-attr { width: 150px; /* ATT_ID 폭 고정 */ font-family: monospace; }
-
-/* 로우 색상 구분 */
-.row-pub { background-color: #f0f9ff; }
-.row-pub td:nth-child(4) { border-right: 2px solid #cbd5e1 !important; /* 구분선 */ }
-.row-wrk { background-color: white; }
-.row-wrk td:nth-child(4) { border-right: 2px solid #cbd5e1 !important; /* 구분선 */ }
-
-/* Source Label */
-.source-label { padding: 2px 8px; border-radius: 12px; font-size: 0.7rem; font-weight: bold; text-transform: uppercase; letter-spacing: 0.5px; }
-.label-pub { background: #e0f2fe; color: #0369a1; }
-.label-wrk { background: #f3f4f6; color: #4b5563; }
-
-/* 데이터 없는 셀 처리 */
-.empty-cell { color: #cbd5e1; }
+/* 모달 스타일 */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+.modal-content.modal-large { background: white; width: 1100px; max-width: 95vw; border-radius: 8px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+.modal-header { padding: 15px 25px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+.modal-body { padding: 20px; }
+.modal-scroll { max-height: 70vh; overflow-y: auto; }
+.modal-table-wrapper { border: 1px solid #e2e8f0; border-radius: 4px; overflow-x: auto; }
+.analysis-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.analysis-table th { background: #f8fafc; padding: 10px; border: 1px solid #e2e8f0; text-align: left; }
+.analysis-table td { padding: 10px; border: 1px solid #e2e8f0; }
+.fixed-info-header { background: #edf2f7 !important; }
+.attributes-header { background: #ebf8ff !important; color: #2b6cb0; }
+.row-pub { background: #f0f9ff; }
+.source-label { font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px; }
+.label-pub { background: #bee3f8; color: #2c5282; }
+.label-wrk { background: #e2e8f0; color: #4a5568; }
+.badge { padding: 3px 8px; border-radius: 4px; color: white; font-size: 11px; }
+.red { background: #f56565; } .green { background: #48bb78; }
+.hl { background: #fbbf24; color: black; font-weight: bold; }
 </style>
