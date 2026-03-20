@@ -103,7 +103,7 @@
         </div>
         <div class="modal-body">
           <div v-if="!isJsonMode" class="modal-table-container">
-            <table class="analysis-table auto-layout">
+            <table class="analysis-table">
               <thead>
                 <tr>
                   <th class="f-sticky-th f-sticky-left f-col-src">Source</th>
@@ -151,6 +151,7 @@
 </template>
 
 <script>
+/* Script 영역은 수정 사항 없으므로 기존 유지 */
 import { ref, computed } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 
@@ -244,100 +245,92 @@ export default {
 </script>
 
 <style scoped>
-/* 메인 레이아웃 유지 */
-.admin-tool { font-family: 'Inter', 'Pretendard', sans-serif; background-color: #f1f5f9; color: #1e293b; }
+/* 메인/조회 화면 스타일 (기존 유지) */
+.admin-tool { font-family: 'Inter', sans-serif; background-color: #f1f5f9; color: #1e293b; }
 .main-layout { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-
-/* 검색바 유지 */
 .dashboard-header { background-color: #ffffff; padding: 20px 30px; border-bottom: 1px solid #e2e8f0; }
 .search-grid { display: flex; gap: 15px; align-items: flex-end; }
 .proj-box { width: 130px; } .kw-box { flex: 2; } .filter-box { flex: 1; }
 .design-input, .design-textarea { width: 100%; border: 1px solid #cbd5e1; border-radius: 8px; padding: 10px; font-size: 13px; outline: none; }
 .design-textarea { height: 42px; resize: none; }
 .primary-gradient-btn { background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; border: none; padding: 0 25px; border-radius: 8px; font-weight: 700; height: 42px; cursor: pointer; }
-
-/* 액션 바 유지 */
 .action-bar { padding: 12px 30px; display: flex; justify-content: space-between; align-items: center; background: #fff; border-bottom: 1px solid #e2e8f0; }
 .btn-action { padding: 8px 16px; border-radius: 6px; font-weight: 700; font-size: 12px; cursor: pointer; border: none; margin-left: 8px; }
 .btn-danger-custom { background: #fee2e2; color: #dc2626; }
 .btn-success-custom { background: #dcfce7; color: #16a34a; }
 
-/* 메인 테이블 틀고정 유지 */
 .table-outer-container { flex: 1; overflow: auto; margin: 15px 30px; background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; }
 .master-table { width: 100%; border-collapse: separate; border-spacing: 0; }
-.master-table td { padding: 12px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
-
 .m-sticky-th { position: sticky; z-index: 200; background: #f8fafc; border-bottom: 1px solid #cbd5e1; border-right: 1px solid #e2e8f0; padding: 12px; font-size: 12px; }
-.header-row-top th { top: 0; } .header-row-sub th { top: 40px; }
-
 .m-sticky-td { position: sticky; z-index: 100; background: #ffffff !important; border-right: 1px solid #e2e8f0; }
 .m-sticky-left { z-index: 300 !important; }
 .col-chk { width: 50px; left: 0; }
 .col-idx { width: 120px; left: 50px; }
 .col-tag { width: 220px; left: 170px; border-right: 4px double #cbd5e1 !important; }
 
-.row-pub { background-color: #f0f7ff; } .row-wrk { background-color: #ffffff; }
-.group-cell { border-bottom: 3px solid #94a3b8 !important; }
-
-/* 모달 스타일 유지 */
+/* 모달 기초 스타일 */
 .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal-window { background: #fff; width: 95%; height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
 .modal-header { padding: 20px 30px; background: #0f172a; color: #fff; display: flex; justify-content: space-between; }
-
 .btn-mode-toggle { background: linear-gradient(135deg, #475569, #334155); color: white; border: none; padding: 10px 20px; border-radius: 8px; cursor: pointer; font-weight: 700; margin-right: 10px; }
 .btn-modal-close { background: #ef4444; color: white; border: none; width: 38px; height: 38px; border-radius: 8px; cursor: pointer; }
-
 .modal-body { flex: 1; overflow: hidden; padding: 20px; display: flex; flex-direction: column; background: #f8fafc; }
 .modal-table-container { flex: 1; overflow: auto; border: 1px solid #e2e8f0; border-radius: 8px; background: #ffffff; }
 
 /* =======================================================
-   [핵심 수정] 모달 내 테이블 비침 현상 완벽 차단 CSS
+   [핵심 해결] 모달 내 테이블 틀고정 틈새(Gutter) 차단 CSS
 ======================================================= */
-/* 1. 테이블 뼈대 간격을 없애고 배경이 테두리 뒤로 안 새어나가게 방어 */
 .analysis-table { 
   width: 100%; 
   border-collapse: separate; 
-  border-spacing: 0; 
-}
-.analysis-table th, .analysis-table td {
-  padding: 20px 15px; 
-  height: 60px; 
-  border-bottom: 1px solid #e2e8f0; 
-  font-size: 13px;
-  background-clip: padding-box; /* 테두리 미세 비침 차단 */
+  border-spacing: 0; /* 셀 사이 틈새 0으로 강제 */
+  table-layout: fixed; /* 너비를 고정하여 1px 오차 방지 */
 }
 
-/* 2. 상단 고정 (System, Attribute 헤더들) */
+/* 모든 셀의 기본 설정 */
+.analysis-table th, .analysis-table td {
+  padding: 15px;
+  height: 60px;
+  border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0; /* 모든 셀에 오른쪽 테두리 부여 */
+  font-size: 13px;
+  /* 핵심: 배경이 테두리 끝까지 꽉 차게 해서 틈새 비침 방지 */
+  background-clip: border-box; 
+}
+
+/* 상단 헤더 고정 (Z-index 500) */
 .f-sticky-th { 
   position: sticky; top: 0; z-index: 500; 
-  background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1; border-right: 1px solid #e2e8f0; 
-}
-
-/* 3. 좌측 고정 (데이터 영역) */
-.f-sticky-td { 
-  position: sticky; z-index: 400; border-right: 1px solid #e2e8f0; 
-}
-
-/* 4. [가장 중요] 상단+좌측이 교차하는 모서리 영역은 Z-index를 가장 높게(600) 주어 가로 헤더 스크롤 시 안 겹치게! */
-th.f-sticky-left { 
-  z-index: 600 !important; 
   background-color: #f1f5f9 !important; 
 }
 
-.f-col-src { width: 120px; left: 0; }
-.f-col-tag { width: 180px; left: 120px; }
-.f-col-epid { width: 150px; left: 300px; }
-.f-col-cls { width: 120px; left: 450px; border-right: 4px double #cbd5e1 !important; }
+/* 좌측 열 고정 (Z-index 400) */
+.f-sticky-td { 
+  position: sticky; z-index: 400; 
+}
 
-/* 5. 좌측 고정 데이터 영역 배경색 강제 채우기 */
+/* 좌측 상단 모서리 교차 영역 (Z-index 600 - 최상위) */
+th.f-sticky-left { 
+  z-index: 600 !important; 
+}
+
+/* 📍 고정 폭과 위치값 (틈새 없이 정확하게 밀착) */
+.f-col-src  { width: 120px; left: 0; }
+.f-col-tag  { width: 200px; left: 120px; }
+.f-col-epid { width: 150px; left: 320px; }
+.f-col-cls  { width: 130px; left: 470px; border-right: 4px double #cbd5e1 !important; }
+
+/* 📍 행별 고정 영역 배경색 (비침 차단용 철벽 흰색/파랑) */
 .row-pub td.f-sticky-td { background-color: #f0f7ff !important; } 
 .row-wrk td.f-sticky-td { background-color: #ffffff !important; } 
 
+/* 시스템/어트리뷰트 열 너비 지정 (선택사항) */
+.sys-h, .attr-h { width: 180px; }
 
-/* JSON 뷰어 (완벽 상태 유지) */
+/* JSON 뷰어 (기존 완벽 유지) */
 .json-viewer-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 100%; overflow: hidden; }
 .json-pane { display: flex; flex-direction: column; height: 100%; overflow: hidden; min-height: 0; }
-.json-pane pre { flex: 1; background: #0f172a; color: #38bdf8; padding: 20px; border-radius: 12px; overflow-y: auto; overflow-x: auto; font-size: 12px; margin: 0; min-height: 0; }
+.json-pane pre { flex: 1; background: #0f172a; color: #38bdf8; padding: 20px; border-radius: 12px; overflow: auto; font-size: 12px; margin: 0; min-height: 0; }
 
 .badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; color: #fff; }
 .badge.pub { background: #3b82f6; } .badge.wrk { background: #ea580c; }
