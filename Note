@@ -90,11 +90,10 @@ import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { sortBy } from 'lodash-es'
 
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-import { sAlert } from '@/utils/messages/alert-common' // sConfirm 제외(오류 방지)
+import { sAlert } from '@/utils/messages/alert-common'
 import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
 import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-// --- 설정 및 상태 ---
 const { isSetupAdmin } = storeToRefs(useAppPermissionStore())
 const appMenu = useAppMenuStore()
 
@@ -112,15 +111,14 @@ const showModal = ref(false)
 const isJsonMode = ref(true) 
 const selectedRow = ref(null)
 
-// --- 유틸리티: sConfirm 대체 (라우팅 오류 방지) ---
+// --- 브라우저 표준 컨펌 (라우팅 오류 방지) ---
 const safeConfirm = (msg) => {
   return new Promise((resolve) => {
-    const res = window.confirm(msg);
-    resolve(res);
+    resolve(window.confirm(msg));
   });
 };
 
-// --- 데이터 필터링 로직 ---
+// --- 결과 필터 및 하이라이트 ---
 const filteredData = computed(() => {
   if (!localFilterQuery.value.trim()) return rawDataList.value
   const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
@@ -139,7 +137,7 @@ const highlightRenderer = (p) => {
   return text
 }
 
-// --- 조회 및 가공 ---
+// --- 조회 로직 ---
 const onSearch = () => getData()
 const getData = async () => {
   if (!manualProjNo.value) return sAlert.Warning(`Project No를 입력하세요.`)
@@ -147,8 +145,6 @@ const getData = async () => {
   
   try {
     const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
-    if (searchKeys.length === 0) return sAlert.Warning('조회 키워드를 입력하세요.')
-
     let combined = []
     for (const key of searchKeys) {
       const payload = { ProjectNo: manualProjNo.value.trim(), Keyword: key }
@@ -156,12 +152,8 @@ const getData = async () => {
         axiosWrapper.post('/api/Admin/Tool/GetPublishedData', payload),
         axiosWrapper.post('/api/Admin/Tool/GetWorkingData', payload)
       ])
-      if (p.status === 'fulfilled' && Array.isArray(p.value)) {
-        combined.push(...p.value.map(i => ({ ...i, Source: 'Published' })))
-      }
-      if (w.status === 'fulfilled' && Array.isArray(w.value)) {
-        combined.push(...w.value.map(i => ({ ...i, Source: 'Working' })))
-      }
+      if (p.status === 'fulfilled' && Array.isArray(p.value)) combined.push(...p.value.map(i => ({ ...i, Source: 'Published' })))
+      if (w.status === 'fulfilled' && Array.isArray(w.value)) combined.push(...w.value.map(i => ({ ...i, Source: 'Working' })))
     }
 
     const allAttIds = new Set()
@@ -196,39 +188,38 @@ const getData = async () => {
 
     rawDataList.value = sortBy(processedData, ['TagNo', 'Source'])
   } catch (err) {
-    console.error(err)
-    sAlert.Error("데이터 처리 중 오류가 발생했습니다.")
+    console.error(err); sAlert.Error("조회 중 오류 발생");
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-// --- 삭제 로직 ---
+// --- ⭐ 삭제 버튼 실행 함수 ⭐ ---
 const onDelete = async () => {
   const selectedNodes = gridApi.value?.getSelectedNodes() || []
   if (selectedNodes.length === 0) return
 
-  const confirm = await safeConfirm(`선택한 ${selectedNodes.length}개의 항목을 삭제하시겠습니까?`)
+  const confirm = await safeConfirm(`선택한 ${selectedNodes.length}개의 항목을 정말 삭제하시겠습니까?`)
   if (!confirm) return
 
   try {
     gridApi.value.setGridOption('loading', true)
-    const deletePromises = selectedNodes.map(node => {
+    const promises = selectedNodes.map(node => {
       const { TagIdx, Source } = node.data
       const endpoint = Source === 'Published' ? '/api/Admin/Tool/DeletePublishedData' : '/api/Admin/Tool/DeleteWorkingData'
       return axiosWrapper.post(endpoint, { ProjectNo: manualProjNo.value, TagIdx })
     })
-    await Promise.all(deletePromises)
-    sAlert.Success('삭제가 완료되었습니다.')
+    await Promise.all(promises)
+    sAlert.Success('성공적으로 삭제되었습니다.')
     await getData()
   } catch (e) {
-    sAlert.Error('삭제 중 오류가 발생했습니다.')
+    sAlert.Error('삭제 처리 중 오류가 발생했습니다.')
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-// --- 컬럼 및 그리드 바인딩 ---
+// --- 컬럼 정의 (체크박스 포함) ---
 const mainColDefs = computed(() => {
   const fixedCols = [
     { 
@@ -250,7 +241,6 @@ const mainColDefs = computed(() => {
       return colFilterKws.some(kw => colTitle.includes(kw))
     })
   }
-
   return [...fixedCols, ...filterByColName(dynamicAttCols.value), ...filterByColName(dynamicRemainingCols.value)]
 })
 
@@ -265,6 +255,7 @@ const gridBindProps = computed(() => ({
   defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true, cellStyle: { background: '#fff' } }
 }))
 
+// --- 모달 설정 ---
 const modalGridBindProps = computed(() => {
   if (!selectedRow.value) return {}
   const rows = []
@@ -276,7 +267,6 @@ const modalGridBindProps = computed(() => {
   })
   const attrs = selectedRow.value.Attributes || selectedRow.value.attributes || []
   attrs.forEach(a => { if(a) rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' }) })
-
   return {
     columnDefs: [
       { headerName: 'Category', field: 'category', width: 110, pinned: 'left', cellStyle: { background: '#f8fafc', fontWeight: 'bold' } },
@@ -309,6 +299,6 @@ defineOptions({ name: 'PubWrkFinalManager' })
 
 ::v-deep(.filter-highlight) { background-color: #ffeb3b !important; color: #000 !important; font-weight: bold; }
 ::v-deep(.ag-pinned-left-cols-container) { border-right: 2px solid #cbd5e1 !important; background: #fff; }
-::v-deep(.badge) { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; display: inline-block; min-width: 70px; text-align: center; }
+::v-deep(.badge) { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; display: inline-block; min-width: 75px; text-align: center; cursor: pointer; }
 ::v-deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; border-right: 1px solid #dee2e6 !important; }
 </style>
