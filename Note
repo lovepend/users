@@ -2,20 +2,25 @@
   <div class="panel panel-expandable m-0 p-0 h-100">
     <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
       <template #actions>
-        <div class="d-flex align-items-center gap-3 me-2">
+        <div class="d-flex align-items-center gap-3 ms-auto me-2">
           <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-primary">Project No</span>
-            <input type="text" class="form-control form-control-sm" style="width: 80px;" v-model="manualProjNo" />
+            <span class="fw-bold text-primary text-nowrap">Project No</span>
+            <input type="text" class="form-control form-control-sm custom-input-width" v-model="manualProjNo" />
           </label>
           <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold">조회 키워드</span>
-            <textarea class="form-control form-control-sm" style="width: 180px; height: 31px; resize: none;" v-model="searchKeywordRef" placeholder="공백/엔터 구분"></textarea>
+            <span class="fw-bold text-nowrap">조회 키워드</span>
+            <textarea class="form-control form-control-sm custom-input-width" style="height: 31px; resize: none;" v-model="searchKeywordRef" placeholder="공백/엔터 구분"></textarea>
           </label>
           <button class="btn btn-xs btn-primary" @click="onSearch">조회</button>
           
-          <div class="ms-3 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-success"><i class="fa-filter"></i> 결과 필터</span>
-            <input type="text" class="form-control form-control-sm border-success" style="width: 180px;" v-model="localFilterQuery" placeholder="필터 키워드" />
+          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
+            <span class="fw-bold text-success text-nowrap"><i class="fa-search"></i> 결과 필터</span>
+            <input type="text" class="form-control form-control-sm border-success custom-input-width" v-model="localFilterQuery" placeholder="결과 내 검색" />
+          </div>
+
+          <div class="ms-1 d-flex align-items-center gap-2">
+            <span class="fw-bold text-warning text-nowrap"><i class="fa-columns"></i> 컬럼 필터</span>
+            <textarea class="form-control form-control-sm border-warning custom-input-width" style="height: 31px; resize: none;" v-model="columnFilterQuery" placeholder="표시할 컬럼명"></textarea>
           </div>
         </div>
         <panel-toolbar />
@@ -87,15 +92,17 @@ const gridApi = shallowRef()
 const manualProjNo = ref(appMenu.currentProjNo || '')
 const searchKeywordRef = ref('')
 const localFilterQuery = ref('')
+const columnFilterQuery = ref('') // 컬럼 필터용 상태
 const rawDataList = ref([])
-const dynamicAttCols = ref([]) // 동적 Attribute 컬럼
-const dynamicRemainingCols = ref([]) // 그 외 나머지 시스템 컬럼
+const dynamicAttCols = ref([])
+const dynamicRemainingCols = ref([])
 const isDisabledDeleteBtn = ref(true)
 
 const showModal = ref(false)
 const isJsonMode = ref(true) 
 const selectedRow = ref(null)
 
+// 1. 결과 데이터 필터링
 const filteredData = computed(() => {
   if (!localFilterQuery.value.trim()) return rawDataList.value
   const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
@@ -115,6 +122,7 @@ const highlightRenderer = (p) => {
   return text
 }
 
+// 2. 서버 데이터 조회 및 가공
 const onSearch = () => getData()
 const getData = async () => {
   if (!manualProjNo.value) return sAlert.Warning(`Project No를 입력하세요.`)
@@ -136,15 +144,11 @@ const getData = async () => {
 
     const allAttIds = new Set()
     const allKeys = new Set()
-    
-    // 고정 컬럼과 제외할 키 정의
     const fixedKeys = ['Source', 'TagIdx', 'TagNo', 'EpId', 'ClsId', 'Attributes', 'attributes', 'DELETED']
 
     combined.forEach(item => {
-      // Attribute 수집
       const attrs = item.Attributes || item.attributes || []
       attrs.forEach(a => { if (a.ATT_ID) allAttIds.add(a.ATT_ID) })
-      // 모든 일반 키 수집
       Object.keys(item).forEach(k => { if (!fixedKeys.includes(k)) allKeys.add(k) })
     })
 
@@ -160,14 +164,14 @@ const getData = async () => {
       return flatItem
     })
 
-    // 1. 동적 Attribute 컬럼
+    // 동적 Attribute 컬럼
     dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
       headerName: id, field: `ATT_${id}`, minWidth: 130,
       headerClass: 'att-column-header',
       cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000', fontStyle: p.value === 'null' ? 'italic' : 'normal' })
     }))
 
-    // 2. 동적 나머지 시스템 컬럼
+    // 동적 시스템 컬럼
     dynamicRemainingCols.value = Array.from(allKeys).sort().map(k => ({
       headerName: k, field: k, minWidth: 150,
       cellRenderer: (p) => (k === 'TagDesc' ? highlightRenderer(p) : p.value)
@@ -179,7 +183,9 @@ const getData = async () => {
   }
 }
 
+// 3. 컬럼 가시성 필터링 (핵심 로직)
 const mainColDefs = computed(() => {
+  // 항상 표시되는 고정 컬럼
   const fixedCols = [
     { headerName: 'Source', field: 'Source', width: 95, pinned: 'left', cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;cursor:pointer;">${p.value}</span>` },
     { field: 'TagIdx', headerName: 'TagIdx', width: 100, pinned: 'left' },
@@ -187,8 +193,23 @@ const mainColDefs = computed(() => {
     { field: 'EpId', headerName: 'EP ID', width: 100, pinned: 'left', cellRenderer: highlightRenderer },
     { field: 'ClsId', headerName: 'Class', width: 100, pinned: 'left', cellRenderer: highlightRenderer },
   ]
-  // 배치 순서: 고정 -> Attributes -> 나머지 전체
-  return [...fixedCols, ...dynamicAttCols.value, ...dynamicRemainingCols.value]
+
+  // 컬럼 필터 키워드 파싱
+  const colFilterKws = columnFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
+
+  // 필터 적용 함수
+  const filterByColName = (cols) => {
+    if (colFilterKws.length === 0) return cols // 필터 없으면 전체 반환
+    return cols.filter(c => {
+      const colTitle = String(c.headerName || c.field).toLowerCase()
+      return colFilterKws.some(kw => colTitle.includes(kw))
+    })
+  }
+
+  const visibleAttCols = filterByColName(dynamicAttCols.value)
+  const visibleRemainingCols = filterByColName(dynamicRemainingCols.value)
+
+  return [...fixedCols, ...visibleAttCols, ...visibleRemainingCols]
 })
 
 const gridBindProps = computed(() => ({
@@ -202,6 +223,7 @@ const gridBindProps = computed(() => ({
   defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true, cellStyle: { background: '#fff' } }
 }))
 
+// --- 모달 설정 ---
 const modalGridBindProps = computed(() => {
   if (!selectedRow.value) return {}
   const rows = []
@@ -231,10 +253,15 @@ const closeModal = () => { showModal.value = false; selectedRow.value = null; }
 const onGridReady = p => { gridApi.value = p.api }
 const onSelectionChanged = () => { if (gridApi.value) isDisabledDeleteBtn.value = gridApi.value.getSelectedNodes().length === 0 }
 
-defineOptions({ name: 'PubWrkIntegratedManager' })
+defineOptions({ name: 'PubWrkFinalManager' })
 </script>
 
 <style scoped lang="scss">
+/* 입력창 넓이 및 레이아웃 */
+.custom-input-width {
+  width: 160px !important;
+}
+
 .custom-modal-overlay {
   position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center;
 }
@@ -243,7 +270,7 @@ defineOptions({ name: 'PubWrkIntegratedManager' })
 }
 .modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
 .modal-body-content { flex: 1; overflow: hidden; background: #fff; }
-.modal-grid-wrapper { flex: 1; height: 100%; width: 100%; padding: 0; }
+.modal-grid-wrapper { flex: 1; height: 100%; width: 100%; }
 
 .json-container { padding: 15px; background: #1e293b; overflow: auto; height: 100%; }
 .json-content { margin: 0; color: #f1f5f9; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5; }
@@ -252,4 +279,10 @@ defineOptions({ name: 'PubWrkIntegratedManager' })
 ::v-deep(.ag-pinned-left-cols-container) { border-right: 2px solid #cbd5e1 !important; background: #fff; }
 ::v-deep(.badge) { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; }
 ::v-deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; border-right: 1px solid #dee2e6 !important; }
+
+/* 모달 내 그리드 스타일 보정 */
+::v-deep(.modal-grid-wrapper .ag-root-wrapper) {
+  border-radius: 0;
+  border: none;
+}
 </style>
