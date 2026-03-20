@@ -35,7 +35,7 @@
               :showCreate="false" 
               :showMultiCreate="false" 
               :showSave="false" 
-              :showDelete="isSetupAdmin" 
+              :showDelete="true"
               :isDisabledDeleteBtn="isDisabledDeleteBtn"
               @delete="onDelete"
             />
@@ -105,20 +105,20 @@ const columnFilterQuery = ref('')
 const rawDataList = ref([])
 const dynamicAttCols = ref([])
 const dynamicRemainingCols = ref([])
-const isDisabledDeleteBtn = ref(true)
+
+// ⭐ 보완: 버튼이 아예 안 보인다면 초기값을 false로 두어 활성화 상태를 테스트
+const isDisabledDeleteBtn = ref(false) 
 
 const showModal = ref(false)
 const isJsonMode = ref(true) 
 const selectedRow = ref(null)
 
-// --- 브라우저 표준 컨펌 (라우팅 오류 방지) ---
 const safeConfirm = (msg) => {
   return new Promise((resolve) => {
     resolve(window.confirm(msg));
   });
 };
 
-// --- 결과 필터 및 하이라이트 ---
 const filteredData = computed(() => {
   if (!localFilterQuery.value.trim()) return rawDataList.value
   const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
@@ -137,7 +137,6 @@ const highlightRenderer = (p) => {
   return text
 }
 
-// --- 조회 로직 ---
 const onSearch = () => getData()
 const getData = async () => {
   if (!manualProjNo.value) return sAlert.Warning(`Project No를 입력하세요.`)
@@ -188,19 +187,21 @@ const getData = async () => {
 
     rawDataList.value = sortBy(processedData, ['TagNo', 'Source'])
   } catch (err) {
-    console.error(err); sAlert.Error("조회 중 오류 발생");
+    console.error(err); sAlert.Error("조회 오류");
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-// --- ⭐ 삭제 버튼 실행 함수 ⭐ ---
 const onDelete = async () => {
   const selectedNodes = gridApi.value?.getSelectedNodes() || []
-  if (selectedNodes.length === 0) return
+  if (selectedNodes.length === 0) {
+      sAlert.Warning("삭제할 항목을 선택해주세요.");
+      return;
+  }
 
-  const confirm = await safeConfirm(`선택한 ${selectedNodes.length}개의 항목을 정말 삭제하시겠습니까?`)
-  if (!confirm) return
+  const confirm = await safeConfirm(`선택한 ${selectedNodes.length}개의 항목을 정말 삭제하시겠습니까?`);
+  if (!confirm) return;
 
   try {
     gridApi.value.setGridOption('loading', true)
@@ -210,16 +211,15 @@ const onDelete = async () => {
       return axiosWrapper.post(endpoint, { ProjectNo: manualProjNo.value, TagIdx })
     })
     await Promise.all(promises)
-    sAlert.Success('성공적으로 삭제되었습니다.')
+    sAlert.Success('삭제 완료');
     await getData()
   } catch (e) {
-    sAlert.Error('삭제 처리 중 오류가 발생했습니다.')
+    sAlert.Error('삭제 중 오류 발생');
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-// --- 컬럼 정의 (체크박스 포함) ---
 const mainColDefs = computed(() => {
   const fixedCols = [
     { 
@@ -255,7 +255,6 @@ const gridBindProps = computed(() => ({
   defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true, cellStyle: { background: '#fff' } }
 }))
 
-// --- 모달 설정 ---
 const modalGridBindProps = computed(() => {
   if (!selectedRow.value) return {}
   const rows = []
@@ -282,7 +281,14 @@ const modalGridBindProps = computed(() => {
 const onCellClicked = (p) => { if (p.column.getColId() === 'Source') { selectedRow.value = p.data; showModal.value = true; isJsonMode.value = true; } }
 const closeModal = () => { showModal.value = false; selectedRow.value = null; }
 const onGridReady = p => { gridApi.value = p.api }
-const onSelectionChanged = () => { if (gridApi.value) isDisabledDeleteBtn.value = gridApi.value.getSelectedNodes().length === 0 }
+
+// ⭐ 보완: 선택 여부에 따라 버튼 활성화/비활성화 로직
+const onSelectionChanged = () => { 
+    if (gridApi.value) {
+        const selectedCount = gridApi.value.getSelectedNodes().length;
+        isDisabledDeleteBtn.value = selectedCount === 0;
+    }
+}
 
 defineOptions({ name: 'PubWrkFinalManager' })
 </script>
