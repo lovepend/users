@@ -1,6 +1,6 @@
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100">
-    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 조회' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
+    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
       <template #actions>
         <div class="d-flex align-items-center gap-3 me-2">
           <label class="d-flex align-items-center gap-2">
@@ -12,6 +12,7 @@
             <textarea class="form-control form-control-sm" style="width: 180px; height: 31px; resize: none;" v-model="searchKeywordRef" placeholder="공백/엔터 구분"></textarea>
           </label>
           <button class="btn btn-xs btn-primary" @click="onSearch">조회</button>
+          
           <div class="ms-3 ps-3 border-start d-flex align-items-center gap-2">
             <span class="fw-bold text-success"><i class="fa-filter"></i> 결과 필터</span>
             <input type="text" class="form-control form-control-sm border-success" style="width: 180px;" v-model="localFilterQuery" placeholder="필터 키워드" />
@@ -39,22 +40,21 @@
         <div class="modal-header-dark">
           <div class="d-flex align-items-center gap-2">
             <span class="badge" :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }">{{ selectedRow?.Source }}</span>
-            <span class="fw-bold text-white">Detail Analysis: {{ selectedRow?.TagNo }}</span>
+            <span class="fw-bold text-white">Detail View: {{ selectedRow?.TagNo }}</span>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-xs" :class="isJsonMode ? 'btn-info' : 'btn-outline-info'" @click="isJsonMode = !isJsonMode">
-              {{ isJsonMode ? 'Switch to Table' : 'Switch to JSON' }}
+            <button class="btn btn-xs" :class="isJsonMode ? 'btn-outline-info' : 'btn-info'" @click="isJsonMode = !isJsonMode">
+              {{ isJsonMode ? 'Table View' : 'JSON View' }}
             </button>
             <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
           </div>
         </div>
-        
         <div class="modal-body-content">
-          <div v-if="!isJsonMode" class="h-100 w-100">
-            <ag-grid-vue v-bind="modalGridBindProps" class="ag-theme-alpine w-100 h-100" />
-          </div>
-          <div v-else class="h-100 w-100 json-container">
+          <div v-if="isJsonMode" class="h-100 w-100 json-container">
             <pre class="json-content"><code>{{ JSON.stringify(selectedRow, null, 2) }}</code></pre>
+          </div>
+          <div v-else class="h-100 w-100">
+            <ag-grid-vue v-bind="modalGridBindProps" class="ag-theme-alpine w-100 h-100" />
           </div>
         </div>
       </div>
@@ -83,14 +83,13 @@ const manualProjNo = ref(appMenu.currentProjNo || '')
 const searchKeywordRef = ref('')
 const localFilterQuery = ref('')
 const rawDataList = ref([])
+const dynamicAttCols = ref([]) 
 const isDisabledDeleteBtn = ref(true)
 
-// 모달 및 뷰 모드 상태
 const showModal = ref(false)
-const isJsonMode = ref(false) // 기본은 테이블 뷰
+const isJsonMode = ref(true) 
 const selectedRow = ref(null)
 
-// --- 필터 및 하이라이트 ---
 const filteredData = computed(() => {
   if (!localFilterQuery.value.trim()) return rawDataList.value
   const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
@@ -100,15 +99,14 @@ const filteredData = computed(() => {
   })
 })
 
-const highlightRenderer = (params) => {
-  if (!params.value || !localFilterQuery.value.trim()) return params.value
+const highlightRenderer = (p) => {
+  if (!p.value || !localFilterQuery.value.trim()) return p.value
   const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
-  let text = String(params.value)
+  let text = String(p.value)
   kws.forEach(kw => { text = text.replace(new RegExp(`(${kw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`) })
   return text
 }
 
-// --- 서버 데이터 조회 ---
 const onSearch = () => getData()
 const getData = async () => {
   if (!manualProjNo.value) return sAlert.Warning(`Project No를 입력하세요.`)
@@ -126,58 +124,101 @@ const getData = async () => {
       if (p.status === 'fulfilled' && p.value) combined.push(...p.value.map(i => ({ ...i, Source: 'Published' })))
       if (w.status === 'fulfilled' && w.value) combined.push(...w.value.map(i => ({ ...i, Source: 'Working' })))
     }
-    rawDataList.value = _.sortBy(combined.filter(i => !i.DELETED), ['TagNo', 'Source'])
+
+    const allAttIds = new Set()
+    // 1차 순회: 모든 Attribute ID 수집
+    combined.forEach(item => {
+      const attrs = item.Attributes || item.attributes || []
+      attrs.forEach(a => allAttIds.add(a.ATT_ID))
+    })
+
+    // 2차 순회: 데이터 가공 및 'null' 처리
+    const processedData = combined.filter(i => !i.DELETED).map(item => {
+      const flatItem = { ...item }
+      const attrs = item.Attributes || item.attributes || []
+      
+      // 모든 수집된 ID에 대해 일단 'null'로 초기화
+      allAttIds.forEach(id => { flatItem[`ATT_${id}`] = 'null' })
+
+      // 실제 값이 있는 경우 VALUE만 매핑 (DBL, UOM 제외)
+      attrs.forEach(a => {
+        if (a.VALUE !== undefined && a.VALUE !== null && a.VALUE !== '') {
+          flatItem[`ATT_${a.ATT_ID}`] = a.VALUE
+        } else {
+          flatItem[`ATT_${a.ATT_ID}`] = 'null'
+        }
+      })
+      return flatItem
+    })
+
+    dynamicAttCols.value = Array.from(allAttIds).map(id => ({
+      headerName: id,
+      field: `ATT_${id}`,
+      minWidth: 130,
+      headerClass: 'att-column-header',
+      cellStyle: params => ({ 
+        background: '#fff9db', 
+        color: params.value === 'null' ? '#adb5bd' : '#000', // null인 경우 흐리게 표시
+        fontStyle: params.value === 'null' ? 'italic' : 'normal'
+      })
+    }))
+
+    rawDataList.value = _.sortBy(processedData, ['TagNo', 'Source'])
   } finally { gridApi.value.setGridOption('loading', false) }
 }
 
-// --- 모달 AG Grid 설정 (셀 단위 분리) ---
+const mainColDefs = computed(() => {
+  const fixedCols = [
+    { headerName: 'Source', field: 'Source', width: 95, pinned: 'left', cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;cursor:pointer;">${p.value}</span>` },
+    { field: 'TagIdx', headerName: 'TagIdx', width: 100, pinned: 'left' },
+    { field: 'TagNo', headerName: 'TagNo', width: 150, pinned: 'left', cellRenderer: highlightRenderer },
+    { field: 'EpId', headerName: 'EP ID', width: 100, pinned: 'left', cellRenderer: highlightRenderer },
+    { field: 'ClsId', headerName: 'Class', width: 100, pinned: 'left', cellRenderer: highlightRenderer },
+  ]
+  const otherCols = [
+    { field: 'TagDesc', headerName: 'Description', minWidth: 250, cellRenderer: highlightRenderer },
+    { field: 'CHGE_DTM', headerName: 'Updated', width: 170, valueFormatter: p => p.value ? new Date(p.value).toLocaleString() : '-' }
+  ]
+  return [...fixedCols, ...dynamicAttCols.value, ...otherCols]
+})
+
+const gridBindProps = computed(() => ({
+  columnDefs: mainColDefs.value,
+  rowData: filteredData.value,
+  style: 'width: 100%; height: 100%',
+  class: 'ag-theme-custom',
+  pagination: true,
+  paginationPageSize: 100,
+  loadingOverlayComponent: AggridLoadingOverlay,
+  defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true, cellStyle: { background: '#fff' } }
+}))
+
 const modalGridBindProps = computed(() => {
   if (!selectedRow.value) return {}
   const rows = []
   const ignore = ['Attributes', 'attributes', 'Source']
-  
-  // 1. 일반 속성 행 추가
   Object.entries(selectedRow.value).forEach(([k, v]) => {
-    if (!ignore.includes(k)) rows.push({ category: 'System', key: k, value: typeof v === 'object' ? JSON.stringify(v) : v })
+    if (!ignore.includes(k) && !k.startsWith('ATT_')) {
+      rows.push({ category: 'System', key: k, value: typeof v === 'object' ? JSON.stringify(v) : v })
+    }
   })
-  
-  // 2. 어트리뷰트 리스트 행 추가 (셀 분리)
   const attrs = selectedRow.value.Attributes || selectedRow.value.attributes || []
-  attrs.forEach(a => {
-    rows.push({ category: 'Attribute', key: a.ATT_ID || 'N/A', value: a.VALUE ?? a.VALUE_DBL ?? '-' })
-  })
+  attrs.forEach(a => { rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' }) })
 
   return {
     columnDefs: [
-      { headerName: 'Category', field: 'category', pinned: 'left', width: 110, cellStyle: { background: '#f1f5f9', fontWeight: '600' } },
-      { headerName: 'ID / Key', field: 'key', pinned: 'left', width: 220 },
-      { headerName: 'Value', field: 'value', flex: 1, cellStyle: { color: '#0369a1' } }
+      { headerName: 'Category', field: 'category', width: 110, pinned: 'left', cellStyle: { background: '#f1f5f9', fontWeight: '600' } },
+      { headerName: 'ID / Key', field: 'key', width: 200, pinned: 'left' },
+      { headerName: 'Value', field: 'value', flex: 1, cellStyle: p => ({ color: p.value === 'null' ? '#adb5bd' : '#334155' }) }
     ],
     rowData: rows,
     defaultColDef: { sortable: true, filter: true, resizable: true },
-    headerHeight: 32,
-    rowHeight: 30
+    headerHeight: 32, rowHeight: 30
   }
 })
 
-const onCellClicked = (p) => { if (p.column.getColId() === 'Source') { selectedRow.value = p.data; showModal.value = true; isJsonMode.value = false; } }
+const onCellClicked = (p) => { if (p.column.getColId() === 'Source') { selectedRow.value = p.data; showModal.value = true; isJsonMode.value = true; } }
 const closeModal = () => { showModal.value = false; selectedRow.value = null; }
-
-// --- 메인 그리드 설정 ---
-const colDefs = [
-  { headerName: 'Source', field: 'Source', minWidth: 100, pinned: 'left', cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;cursor:pointer;">${p.value}</span>` },
-  { field: 'TagIdx', headerName: 'TagIdx', minWidth: 100, pinned: 'left' },
-  { field: 'TagNo', headerName: 'TagNo', minWidth: 160, pinned: 'left', cellRenderer: highlightRenderer },
-  { field: 'EpId', headerName: 'EP ID', minWidth: 100, cellRenderer: highlightRenderer },
-  { field: 'ClsId', headerName: 'Class', minWidth: 100, cellRenderer: highlightRenderer },
-  { field: 'TagDesc', headerName: 'Description', minWidth: 300, flex: 1, cellRenderer: highlightRenderer }
-]
-const gridBindProps = computed(() => ({
-  columnDefs: colDefs, rowData: filteredData.value, style: 'width: 100%; height: 100%', class: 'ag-theme-custom',
-  pagination: true, paginationPageSize: 100, loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true, cellStyle: { background: '#fff' } }
-}))
-
 const onGridReady = p => { gridApi.value = p.api }
 const onSelectionChanged = () => { isDisabledDeleteBtn.value = gridApi.value.getSelectedNodes().length === 0 }
 
@@ -185,34 +226,21 @@ defineOptions({ name: 'PubWrkFinalManager' })
 </script>
 
 <style scoped lang="scss">
-/* 모달 레이아웃 최적화 */
 .custom-modal-overlay {
-  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center;
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center;
 }
 .custom-modal-window {
-  background: #fff; width: 900px; height: 85%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  background: #fff; width: 950px; height: 85%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.3);
 }
 .modal-header-dark {
   background: #0f172a; color: #fff; padding: 10px 16px; display: flex; justify-content: space-between; align-items: center;
 }
-.modal-body-content { flex: 1; overflow: hidden; background: #fff; position: relative; }
+.modal-body-content { flex: 1; overflow: hidden; background: #fff; }
+.json-container { padding: 15px; background: #1e293b; overflow: auto; }
+.json-content { margin: 0; color: #f1f5f9; font-family: 'Consolas', monospace; font-size: 13px; }
 
-/* JSON 뷰 스타일 */
-.json-container {
-  padding: 15px; background: #1e293b; overflow: auto;
-}
-.json-content {
-  margin: 0; color: #f1f5f9; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5;
-}
-
-/* 필터 하이라이트 */
-::v-deep(.filter-highlight) {
-  background-color: #ffeb3b; color: #000; padding: 0 2px; border-radius: 2px; font-weight: bold;
-}
-
-/* 그리드 스타일 보정 */
-::v-deep(.ag-pinned-left-cols-container) { border-right: 1.5px solid #cbd5e1 !important; background: #fff; }
+::v-deep(.filter-highlight) { background-color: #ffeb3b; color: #000; padding: 0 2px; border-radius: 2px; font-weight: bold; }
+::v-deep(.ag-pinned-left-cols-container) { border-right: 2px solid #cbd5e1 !important; background: #fff; }
 ::v-deep(.badge) { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; }
+::v-deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; }
 </style>
