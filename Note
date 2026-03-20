@@ -1,6 +1,219 @@
-  28 |              />
-  29 |            </label>
-  30 |            <button class="btn btn-xs btn-primary" @click="onSearch">Search</button>
-     |                                     ^
-  31 |          </div>
-  32 |
+<template>
+  <div class="panel panel-expandable m-0 p-0 h-100">
+    <PageTitle
+      icon="fa-square-check"
+      :title="'Tag List 통합 조회 (Pub/Wrk)'"
+    >
+      <template #actions>
+        <div class="d-flex align-items-center gap-3 me-2">
+          <label class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-primary">Project No</span>
+            <input
+              type="text"
+              placeholder="e.g. P0001"
+              class="form-control form-control-sm"
+              style="width: 100px;"
+              v-model="manualProjNo"
+            />
+          </label>
+
+          <label class="d-flex align-items-center gap-2">
+            <span class="fw-500">Keyword</span>
+            <input
+              type="text"
+              placeholder="Input Keyword"
+              class="form-control form-control-sm"
+              v-model="searchKeywordRef"
+              @keyup.enter="onSearch"
+            />
+          </label>
+          <button class="btn btn-xs btn-primary" @click="onSearch">Search</button>
+        </div>
+
+        <div class="form-check form-switch m-0 ms-2">
+          <label class="form-check-label text-dark user-select-none cursor-pointer">
+            <input class="form-check-input" type="checkbox" v-model="isWorkingRef" />
+            <span :class="isWorkingRef ? 'text-warning fw-bold' : 'text-primary fw-bold'">
+              {{ isWorkingLabel }} View
+            </span>
+          </label>
+        </div>
+        <panel-toolbar />
+      </template>
+    </PageTitle>
+
+    <div class="panel-body m-0 p-0 h-100">
+      <div class="panel m-0 p-0 h-100">
+        <div class="panel-heading p-0 m-0">
+          <div class="w-100 h-100">
+            <BasicToolBar
+              @delete-data="deleteSelectedData"
+              :showCreate="false"
+              :showMultiCreate="false"
+              :showDelete="isSetupAdmin"
+              :isDisabledDeleteBtn="isDisabledDeleteBtn"
+              :showSave="false"
+            />
+          </div>
+        </div>
+        
+        <div class="panel-body overflow-hidden m-0 p-0 h-100">
+          <ag-grid-vue 
+            v-bind="gridBindProps" 
+            @grid-ready="onGridReady"
+            @selection-changed="onSelectionChanged"
+          />
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+  import { ref, watch, shallowRef, computed } from 'vue'
+  import { storeToRefs } from 'pinia'
+
+  // Library & Store
+  import { useAppPermissionStore } from '@/stores/app-permission'
+  import { useAppMenuStore } from '@/stores/app-menu'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import * as _ from 'lodash-es'
+
+  // Components
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+  import { sAlert } from '@/utils/messages/alert-common'
+  import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
+  import PageTitle from '@/components/toolBar/PageTitle.vue'
+
+  const appPermission = useAppPermissionStore()
+  const { isSetupAdmin } = storeToRefs(appPermission)
+  const appMenu = useAppMenuStore()
+
+  // --- 상태 정의 (기존 에러 발생 변수들 정리) ---
+  const gridApi = shallowRef()
+  const manualProjNo = ref(appMenu.currentProjNo || '') 
+  const searchKeywordRef = ref('')
+  const isWorkingRef = ref(false)
+  const isWorkingLabel = computed(() => isWorkingRef.value ? 'Working' : 'Published')
+  const tagDataListRef = ref([]) // 초기값 빈 배열
+  const isDisabledDeleteBtn = ref(true)
+
+  // 토글 변경 시 데이터가 있으면 즉시 재조회
+  watch(isWorkingRef, () => {
+    if (tagDataListRef.value.length > 0) getData()
+  })
+
+  const onSearch = () => getData()
+
+  // --- API 호출 로직 ---
+  const getData = async () => {
+    if (!manualProjNo.value) {
+      sAlert.Warning(`Project No를 입력해주세요.`)
+      return
+    }
+
+    gridApi.value.setGridOption('loading', true)
+
+    const url = isWorkingRef.value ? `/api/Admin/Tool/GetWorkingData` : `/api/Admin/Tool/GetPublishedData`
+    const sourceTag = isWorkingRef.value ? 'Working' : 'Published'
+
+    try {
+      const response = await axiosWrapper.post(url, {
+        ProjectNo: manualProjNo.value.trim(),
+        Keyword: searchKeywordRef.value.trim(),
+      })
+
+      if (_.isEmpty(response)) {
+        tagDataListRef.value = []
+        sAlert.Info('조회된 데이터가 없습니다.')
+      } else {
+        // 출처(Source) 칼럼 데이터를 포함하여 매핑
+        tagDataListRef.value = response
+          .filter(item => !item.DELETED)
+          .map(item => ({
+            ...item,
+            Source: sourceTag 
+          }))
+      }
+    } catch (error) {
+      sAlert.Error('데이터 로드 실패')
+      tagDataListRef.value = []
+    } finally {
+      gridApi.value.setGridOption('loading', false)
+    }
+  }
+
+  // --- AG Grid 설정 ---
+  const colDefs = [
+    {
+      headerName: 'Source',
+      field: 'Source',
+      minWidth: 100,
+      maxWidth: 100,
+      pinned: 'left',
+      cellRenderer: params => {
+        const color = params.value === 'Working' ? '#ed6c02' : '#0288d1'
+        return `<span class="badge" style="background-color: ${color}; color: white; border-radius: 4px; padding: 2px 6px; font-size: 11px;">${params.value}</span>`
+      }
+    },
+    { field: 'TagIdx', headerName: 'TagIdx', minWidth: 120, pinned: 'left' },
+    { field: 'TagNo', headerName: 'TagNo', minWidth: 160, pinned: 'left' },
+    { field: 'EpId', headerName: 'EP ID', minWidth: 100 },
+    { field: 'ClsId', headerName: 'Class', minWidth: 120 },
+    { field: 'TagDesc', headerName: 'Description', minWidth: 300, flex: 1 },
+    { 
+      field: 'CHGE_DTM', 
+      headerName: 'Last Updated', 
+      minWidth: 180,
+      valueFormatter: p => p.value ? new Date(p.value).toLocaleString() : '-' 
+    }
+  ]
+
+  const gridBindProps = computed(() => ({
+    columnDefs: colDefs,
+    rowData: tagDataListRef.value,
+    style: 'width: 100%; height: 100%',
+    class: 'ag-theme-custom',
+    rowSelection: 'multiple',
+    pagination: true,
+    paginationPageSize: 100,
+    loadingOverlayComponent: AggridLoadingOverlay,
+    defaultColDef: {
+      sortable: true,
+      filter: true,
+      resizable: true,
+      floatingFilter: true,
+      cellStyle: { 'background-color': '#ffffff' } // 비침 방지
+    }
+  }))
+
+  const onGridReady = params => {
+    gridApi.value = params.api
+    // 초기 로딩 시 데이터 조회는 하지 않음 (Search 클릭 시에만 수행)
+  }
+
+  const onSelectionChanged = () => {
+    const nodes = gridApi.value.getSelectedNodes()
+    isDisabledDeleteBtn.value = nodes.length === 0
+  }
+
+  const deleteSelectedData = async () => {
+    const rows = gridApi.value.getSelectedRows()
+    if (_.isEmpty(rows)) return
+    const confirm = await sAlert.Confirm(`선택한 ${rows.length}건을 삭제하시겠습니까?`)
+    if (confirm.isConfirmed) {
+      // 삭제 처리 후
+      getData()
+    }
+  }
+
+  defineOptions({ name: 'PubWrkIntegratedGrid' })
+</script>
+
+<style scoped lang="scss">
+  /* 틀고정 경계선 및 비침 방지 */
+  ::v-deep(.ag-pinned-left-cols-container) {
+    border-right: 1.5px solid #bdc3c7 !important;
+    background-color: #fff;
+  }
+</style>
