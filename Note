@@ -279,9 +279,7 @@ export default {
 .row-pub { background-color: #f0f7ff; } .row-wrk { background-color: #ffffff; }
 .group-cell { border-bottom: 3px solid #94a3b8 !important; }
 
-/* =========================================
-   [중요] 모달 스타일 수정 (비침 방지 핵심)
-========================================= */
+/* 모달 스타일 */
 .modal-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.85); display: flex; align-items: center; justify-content: center; z-index: 1000; }
 .modal-window { background: #fff; width: 95%; height: 90vh; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; }
 .modal-header { padding: 20px 30px; background: #0f172a; color: #fff; display: flex; justify-content: space-between; }
@@ -294,24 +292,26 @@ export default {
 
 .analysis-table td { padding: 20px 15px; height: 60px; border-bottom: 1px solid #e2e8f0; font-size: 13px; }
 
-/* 모달 틀고정 배경색 강제 지정 (스크롤 비침 해결) */
+/* 모달 틀고정 배경색 강제 지정 */
 .f-sticky-th { position: sticky; top: 0; z-index: 500; background-color: #f1f5f9; border-bottom: 2px solid #cbd5e1; border-right: 1px solid #e2e8f0; }
 .f-sticky-td { position: sticky; z-index: 400; border-right: 1px solid #e2e8f0; }
 
-/* 고정 열별 좌측 위치 */
 .f-col-src { width: 120px; left: 0; }
 .f-col-tag { width: 180px; left: 120px; }
 .f-col-epid { width: 150px; left: 300px; }
 .f-col-cls { width: 120px; left: 450px; border-right: 4px double #cbd5e1 !important; }
 
-/* ✅ [핵심수정] 행 데이터에 따라 고정열 배경색을 흰색/연파랑으로 꽉 채움 */
-.row-pub td.f-sticky-td { background-color: #f0f7ff !important; } /* Published 라인 고정영역 배경 */
-.row-wrk td.f-sticky-td { background-color: #ffffff !important; } /* Working 라인 고정영역 배경 */
+.row-pub td.f-sticky-td { background-color: #f0f7ff !important; } 
+.row-wrk td.f-sticky-td { background-color: #ffffff !important; } 
 
-/* JSON 뷰어 */
+/* =========================================
+   [수정됨] JSON 뷰어 - 스크롤바 확실하게 생성
+========================================= */
 .json-viewer-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; height: 100%; overflow: hidden; }
-.json-pane { display: flex; flex-direction: column; height: 100%; overflow: hidden; }
-.json-pane pre { flex: 1; background: #0f172a; color: #38bdf8; padding: 20px; border-radius: 12px; overflow: auto; font-size: 12px; margin: 0; }
+/* min-height: 0 추가로 자식이 부모 영역을 못 뚫고 나가게 방어 */
+.json-pane { display: flex; flex-direction: column; height: 100%; overflow: hidden; min-height: 0; }
+/* overflow-y/x auto 추가로 세로/가로 스크롤바 생성 허용 */
+.json-pane pre { flex: 1; background: #0f172a; color: #38bdf8; padding: 20px; border-radius: 12px; overflow-y: auto; overflow-x: auto; font-size: 12px; margin: 0; min-height: 0; }
 
 .badge { padding: 4px 8px; border-radius: 6px; font-size: 10px; font-weight: 900; color: #fff; }
 .badge.pub { background: #3b82f6; } .badge.wrk { background: #ea580c; }
