@@ -2,7 +2,7 @@
   <div class="panel panel-expandable m-0 p-0 h-100">
     <PageTitle
       icon="fa-square-check"
-      :title="'Tag List 통합 조회 (Pub/Wrk)'"
+      :title="'Tag 통합 분석 조회 (Published + Working)'"
     >
       <template #actions>
         <div class="d-flex align-items-center gap-3 me-2">
@@ -27,16 +27,8 @@
               @keyup.enter="onSearch"
             />
           </label>
+          
           <button class="btn btn-xs btn-primary" @click="onSearch">Search</button>
-        </div>
-
-        <div class="form-check form-switch m-0 ms-2">
-          <label class="form-check-label text-dark user-select-none cursor-pointer">
-            <input class="form-check-input" type="checkbox" v-model="isWorkingRef" />
-            <span :class="isWorkingRef ? 'text-warning fw-bold' : 'text-primary fw-bold'">
-              {{ isWorkingLabel }} View
-            </span>
-          </label>
         </div>
         <panel-toolbar />
       </template>
@@ -70,7 +62,7 @@
 </template>
 
 <script setup>
-  import { ref, watch, shallowRef, computed } from 'vue'
+  import { ref, computed, shallowRef } from 'vue'
   import { storeToRefs } from 'pinia'
 
   // Library & Store
@@ -89,23 +81,16 @@
   const { isSetupAdmin } = storeToRefs(appPermission)
   const appMenu = useAppMenuStore()
 
-  // --- 상태 정의 (기존 에러 발생 변수들 정리) ---
+  // --- 상태 정의 ---
   const gridApi = shallowRef()
   const manualProjNo = ref(appMenu.currentProjNo || '') 
   const searchKeywordRef = ref('')
-  const isWorkingRef = ref(false)
-  const isWorkingLabel = computed(() => isWorkingRef.value ? 'Working' : 'Published')
-  const tagDataListRef = ref([]) // 초기값 빈 배열
+  const tagDataListRef = ref([]) 
   const isDisabledDeleteBtn = ref(true)
-
-  // 토글 변경 시 데이터가 있으면 즉시 재조회
-  watch(isWorkingRef, () => {
-    if (tagDataListRef.value.length > 0) getData()
-  })
 
   const onSearch = () => getData()
 
-  // --- API 호출 로직 ---
+  // --- 데이터 조회 로직 (동시 호출 및 통합) ---
   const getData = async () => {
     if (!manualProjNo.value) {
       sAlert.Warning(`Project No를 입력해주세요.`)
@@ -113,31 +98,46 @@
     }
 
     gridApi.value.setGridOption('loading', true)
+    tagDataListRef.value = [] // 조회 시작 시 초기화
 
-    const url = isWorkingRef.value ? `/api/Admin/Tool/GetWorkingData` : `/api/Admin/Tool/GetPublishedData`
-    const sourceTag = isWorkingRef.value ? 'Working' : 'Published'
+    const payload = {
+      ProjectNo: manualProjNo.value.trim(),
+      Keyword: searchKeywordRef.value.trim(),
+    }
 
     try {
-      const response = await axiosWrapper.post(url, {
-        ProjectNo: manualProjNo.value.trim(),
-        Keyword: searchKeywordRef.value.trim(),
-      })
+      // Published와 Working 데이터를 동시에 호출
+      const [pubRes, wrkRes] = await Promise.allSettled([
+        axiosWrapper.post('/api/Admin/Tool/GetPublishedData', payload),
+        axiosWrapper.post('/api/Admin/Tool/GetWorkingData', payload)
+      ])
 
-      if (_.isEmpty(response)) {
-        tagDataListRef.value = []
+      let combinedData = []
+
+      // Published 데이터 처리
+      if (pubRes.status === 'fulfilled' && !_.isEmpty(pubRes.value)) {
+        const pubList = pubRes.value
+          .filter(item => !item.DELETED)
+          .map(item => ({ ...item, Source: 'Published' }))
+        combinedData = [...combinedData, ...pubList]
+      }
+
+      // Working 데이터 처리
+      if (wrkRes.status === 'fulfilled' && !_.isEmpty(wrkRes.value)) {
+        const wrkList = wrkRes.value
+          .filter(item => !item.DELETED)
+          .map(item => ({ ...item, Source: 'Working' }))
+        combinedData = [...combinedData, ...wrkList]
+      }
+
+      if (combinedData.length === 0) {
         sAlert.Info('조회된 데이터가 없습니다.')
       } else {
-        // 출처(Source) 칼럼 데이터를 포함하여 매핑
-        tagDataListRef.value = response
-          .filter(item => !item.DELETED)
-          .map(item => ({
-            ...item,
-            Source: sourceTag 
-          }))
+        // TagNo 순으로 정렬하여 그리드에 삽입
+        tagDataListRef.value = _.sortBy(combinedData, ['TagNo', 'Source'])
       }
     } catch (error) {
-      sAlert.Error('데이터 로드 실패')
-      tagDataListRef.value = []
+      sAlert.Error('데이터 로드 중 오류가 발생했습니다.')
     } finally {
       gridApi.value.setGridOption('loading', false)
     }
@@ -152,9 +152,12 @@
       maxWidth: 100,
       pinned: 'left',
       cellRenderer: params => {
-        const color = params.value === 'Working' ? '#ed6c02' : '#0288d1'
+        const isWrk = params.value === 'Working'
+        const color = isWrk ? '#ed6c02' : '#0288d1'
         return `<span class="badge" style="background-color: ${color}; color: white; border-radius: 4px; padding: 2px 6px; font-size: 11px;">${params.value}</span>`
-      }
+      },
+      // 소스별로 필터링 가능하도록 설정
+      filter: 'agSetColumnFilter'
     },
     { field: 'TagIdx', headerName: 'TagIdx', minWidth: 120, pinned: 'left' },
     { field: 'TagNo', headerName: 'TagNo', minWidth: 160, pinned: 'left' },
@@ -183,13 +186,12 @@
       filter: true,
       resizable: true,
       floatingFilter: true,
-      cellStyle: { 'background-color': '#ffffff' } // 비침 방지
+      cellStyle: { 'background-color': '#ffffff' }
     }
   }))
 
   const onGridReady = params => {
     gridApi.value = params.api
-    // 초기 로딩 시 데이터 조회는 하지 않음 (Search 클릭 시에만 수행)
   }
 
   const onSelectionChanged = () => {
@@ -202,18 +204,22 @@
     if (_.isEmpty(rows)) return
     const confirm = await sAlert.Confirm(`선택한 ${rows.length}건을 삭제하시겠습니까?`)
     if (confirm.isConfirmed) {
-      // 삭제 처리 후
+      // 삭제 처리 후 재조회
       getData()
     }
   }
 
-  defineOptions({ name: 'PubWrkIntegratedGrid' })
+  defineOptions({ name: 'PubWrkAllInOneGrid' })
 </script>
 
 <style scoped lang="scss">
-  /* 틀고정 경계선 및 비침 방지 */
+  /* 틀고정 경계선 및 스타일 */
   ::v-deep(.ag-pinned-left-cols-container) {
     border-right: 1.5px solid #bdc3c7 !important;
     background-color: #fff;
+  }
+
+  ::v-deep(.badge) {
+    font-weight: bold;
   }
 </style>
