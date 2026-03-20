@@ -43,6 +43,7 @@
         </div>
         <div class="panel-body overflow-hidden m-0 p-0 h-100">
           <ag-grid-vue 
+            v-if="gridBindProps"
             v-bind="gridBindProps" 
             @grid-ready="onGridReady" 
             @selection-changed="onSelectionChanged" 
@@ -87,7 +88,7 @@ import { storeToRefs } from 'pinia'
 import { useAppPermissionStore } from '@/stores/app-permission'
 import { useAppMenuStore } from '@/stores/app-menu'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import * as _ from 'lodash-es'
+import { sortBy } from 'lodash-es' // lodash 전체 대신 필요한 함수만 로드
 
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 import { sAlert, sConfirm } from '@/utils/messages/alert-common'
@@ -111,25 +112,17 @@ const showModal = ref(false)
 const isJsonMode = ref(true) 
 const selectedRow = ref(null)
 
-// --- 1. 데이터 결과 필터링 (결과 내 검색) ---
-const filteredData = computed(() => {
-  if (!localFilterQuery.value.trim()) return rawDataList.value
-  const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
-  return rawDataList.value.filter(i => {
-    const target = `${i.TagNo} ${i.EpId} ${i.ClsId} ${i.TagDesc} ${i.Source}`.toLowerCase()
-    return kws.some(kw => target.includes(kw))
-  })
-})
-
+// 1. 하이라이트 렌더러 (null 방지)
 const highlightRenderer = (p) => {
-  if (!p.value || !localFilterQuery.value.trim()) return p.value
+  const val = p.value === null || p.value === undefined ? '' : String(p.value)
+  if (!val || !localFilterQuery.value.trim()) return val
   const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
-  let text = String(p.value)
+  let text = val
   kws.forEach(kw => { text = text.replace(new RegExp(`(${kw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`) })
   return text
 }
 
-// --- 2. 서버 데이터 조회 및 속성 추출 ---
+// 2. 조회 및 데이터 가공 (안정성 강화)
 const onSearch = () => getData()
 const getData = async () => {
   if (!manualProjNo.value) return sAlert.Warning(`Project No를 입력하세요.`)
@@ -137,6 +130,8 @@ const getData = async () => {
   
   try {
     const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
+    if (searchKeys.length === 0) return sAlert.Warning('조회 키워드를 입력하세요.')
+
     let combined = []
     for (const key of searchKeys) {
       const payload = { ProjectNo: manualProjNo.value.trim(), Keyword: key }
@@ -144,8 +139,12 @@ const getData = async () => {
         axiosWrapper.post('/api/Admin/Tool/GetPublishedData', payload),
         axiosWrapper.post('/api/Admin/Tool/GetWorkingData', payload)
       ])
-      if (p.status === 'fulfilled' && p.value) combined.push(...p.value.map(i => ({ ...i, Source: 'Published' })))
-      if (w.status === 'fulfilled' && w.value) combined.push(...w.value.map(i => ({ ...i, Source: 'Working' })))
+      if (p.status === 'fulfilled' && Array.isArray(p.value)) {
+        combined.push(...p.value.map(i => ({ ...i, Source: 'Published' })))
+      }
+      if (w.status === 'fulfilled' && Array.isArray(w.value)) {
+        combined.push(...w.value.map(i => ({ ...i, Source: 'Working' })))
+      }
     }
 
     const allAttIds = new Set()
@@ -154,24 +153,23 @@ const getData = async () => {
 
     combined.forEach(item => {
       const attrs = item.Attributes || item.attributes || []
-      attrs.forEach(a => { if (a.ATT_ID) allAttIds.add(a.ATT_ID) })
+      attrs.forEach(a => { if (a && a.ATT_ID) allAttIds.add(a.ATT_ID) })
       Object.keys(item).forEach(k => { if (!fixedKeys.includes(k)) allKeys.add(k) })
     })
 
-    const processedData = combined.filter(i => !i.DELETED).map(item => {
+    const processedData = combined.filter(i => i && !i.DELETED).map(item => {
       const flatItem = { ...item }
       const attrs = item.Attributes || item.attributes || []
       
-      // 속성값 추출 (VALUE만 사용, 0이나 false도 값으로 인정)
       allAttIds.forEach(id => {
-        const target = attrs.find(a => a.ATT_ID === id)
-        const hasVal = target && target.VALUE !== undefined && target.VALUE !== null && String(target.VALUE).length > 0
+        const target = attrs.find(a => a && a.ATT_ID === id)
+        const hasVal = target && target.VALUE !== undefined && target.VALUE !== null && String(target.VALUE).trim().length > 0
         flatItem[`ATT_${id}`] = hasVal ? target.VALUE : 'null'
       })
       return flatItem
     })
 
-    // 동적 컬럼 생성
+    // 동적 컬럼 설정
     dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
       headerName: id, field: `ATT_${id}`, minWidth: 130, headerClass: 'att-column-header',
       cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000', fontStyle: p.value === 'null' ? 'italic' : 'normal' })
@@ -181,15 +179,18 @@ const getData = async () => {
       headerName: k, field: k, minWidth: 150, cellRenderer: (p) => (k === 'TagDesc' ? highlightRenderer(p) : p.value)
     }))
 
-    rawDataList.value = _.sortBy(processedData, ['TagNo', 'Source'])
+    rawDataList.value = sortBy(processedData, ['TagNo', 'Source'])
+  } catch (err) {
+    console.error("Data Fetching Error:", err)
+    sAlert.Error("데이터를 가져오는 중 오류가 발생했습니다.")
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-// --- 3. 삭제 처리 (병렬 최적화) ---
+// 3. 삭제 처리
 const onDelete = async () => {
-  const selectedNodes = gridApi.value.getSelectedNodes()
+  const selectedNodes = gridApi.value?.getSelectedNodes() || []
   if (selectedNodes.length === 0) return
 
   const confirm = await sConfirm(`선택한 ${selectedNodes.length}개의 항목을 삭제하시겠습니까?`)
@@ -197,24 +198,22 @@ const onDelete = async () => {
 
   try {
     gridApi.value.setGridOption('loading', true)
-    // 병렬 실행으로 속도 개선
     const deletePromises = selectedNodes.map(node => {
       const { TagIdx, Source } = node.data
       const endpoint = Source === 'Published' ? '/api/Admin/Tool/DeletePublishedData' : '/api/Admin/Tool/DeleteWorkingData'
       return axiosWrapper.post(endpoint, { ProjectNo: manualProjNo.value, TagIdx })
     })
-
     await Promise.all(deletePromises)
     sAlert.Success('삭제가 완료되었습니다.')
     await getData()
   } catch (e) {
-    sAlert.Error('삭제 중 오류가 발생했습니다.')
+    sAlert.Error('삭제 처리 중 오류가 발생했습니다.')
   } finally {
-    gridApi.value.setGridOption('loading', false)
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-// --- 4. 컬럼 정의 (체크박스 및 가시성 필터) ---
+// 4. 컬럼 정의 (필터 로직 포함)
 const mainColDefs = computed(() => {
   const fixedCols = [
     { 
@@ -240,6 +239,7 @@ const mainColDefs = computed(() => {
   return [...fixedCols, ...filterByColName(dynamicAttCols.value), ...filterByColName(dynamicRemainingCols.value)]
 })
 
+// 5. 그리드 바인딩 옵션
 const gridBindProps = computed(() => ({
   columnDefs: mainColDefs.value,
   rowData: filteredData.value,
@@ -251,18 +251,28 @@ const gridBindProps = computed(() => ({
   defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true, cellStyle: { background: '#fff' } }
 }))
 
-// --- 5. 상세 모달 설정 ---
+// 6. 결과 필터링 데이터
+const filteredData = computed(() => {
+  if (!localFilterQuery.value.trim()) return rawDataList.value
+  const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
+  return rawDataList.value.filter(i => {
+    const target = `${i.TagNo || ''} ${i.EpId || ''} ${i.ClsId || ''} ${i.TagDesc || ''} ${i.Source || ''}`.toLowerCase()
+    return kws.some(kw => target.includes(kw))
+  })
+})
+
+// 7. 모달 테이블 뷰 데이터
 const modalGridBindProps = computed(() => {
   if (!selectedRow.value) return {}
   const rows = []
   const ignore = ['Attributes', 'attributes', 'Source']
   Object.entries(selectedRow.value).forEach(([k, v]) => {
     if (!ignore.includes(k) && !k.startsWith('ATT_')) {
-      rows.push({ category: 'System', key: k, value: typeof v === 'object' ? JSON.stringify(v) : v })
+      rows.push({ category: 'System', key: k, value: typeof v === 'object' ? JSON.stringify(v) : (v ?? '-') })
     }
   })
   const attrs = selectedRow.value.Attributes || selectedRow.value.attributes || []
-  attrs.forEach(a => { rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' }) })
+  attrs.forEach(a => { if(a) rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' }) })
 
   return {
     columnDefs: [
@@ -296,8 +306,7 @@ defineOptions({ name: 'PubWrkFinalManager' })
 
 ::v-deep(.filter-highlight) { background-color: #ffeb3b !important; color: #000 !important; font-weight: bold; }
 ::v-deep(.ag-pinned-left-cols-container) { border-right: 2px solid #cbd5e1 !important; background: #fff; }
-::v-deep(.badge) { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; }
+::v-deep(.badge) { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; display: inline-block; min-width: 65px; text-align: center; }
 ::v-deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; border-right: 1px solid #dee2e6 !important; }
-
 ::v-deep(.modal-grid-wrapper .ag-root-wrapper) { border-radius: 0; border: none; }
 </style>
