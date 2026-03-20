@@ -31,7 +31,14 @@
       <div class="panel m-0 p-0 h-100">
         <div class="panel-heading p-0 m-0">
           <div class="w-100 h-100">
-            <BasicToolBar :showCreate="false" :showMultiCreate="false" :showSave="false" :showDelete="isSetupAdmin" :isDisabledDeleteBtn="isDisabledDeleteBtn" />
+            <BasicToolBar 
+              :showCreate="false" 
+              :showMultiCreate="false" 
+              :showSave="false" 
+              :showDelete="isSetupAdmin" 
+              :isDisabledDeleteBtn="isDisabledDeleteBtn"
+              @delete="onDelete"
+            />
           </div>
         </div>
         <div class="panel-body overflow-hidden m-0 p-0 h-100">
@@ -40,6 +47,8 @@
             @grid-ready="onGridReady" 
             @selection-changed="onSelectionChanged" 
             @cell-clicked="onCellClicked" 
+            rowSelection="multiple"
+            :suppressRowClickSelection="true"
           />
         </div>
       </div>
@@ -81,7 +90,7 @@ import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import * as _ from 'lodash-es'
 
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-import { sAlert } from '@/utils/messages/alert-common'
+import { sAlert, sConfirm } from '@/utils/messages/alert-common'
 import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
 import PageTitle from '@/components/toolBar/PageTitle.vue'
 
@@ -92,7 +101,7 @@ const gridApi = shallowRef()
 const manualProjNo = ref(appMenu.currentProjNo || '')
 const searchKeywordRef = ref('')
 const localFilterQuery = ref('')
-const columnFilterQuery = ref('') // 컬럼 필터용 상태
+const columnFilterQuery = ref('')
 const rawDataList = ref([])
 const dynamicAttCols = ref([])
 const dynamicRemainingCols = ref([])
@@ -102,7 +111,7 @@ const showModal = ref(false)
 const isJsonMode = ref(true) 
 const selectedRow = ref(null)
 
-// 1. 결과 데이터 필터링
+// --- 데이터 필터링 ---
 const filteredData = computed(() => {
   if (!localFilterQuery.value.trim()) return rawDataList.value
   const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
@@ -116,22 +125,19 @@ const highlightRenderer = (p) => {
   if (!p.value || !localFilterQuery.value.trim()) return p.value
   const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
   let text = String(p.value)
-  kws.forEach(kw => { 
-    text = text.replace(new RegExp(`(${kw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`) 
-  })
+  kws.forEach(kw => { text = text.replace(new RegExp(`(${kw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`) })
   return text
 }
 
-// 2. 서버 데이터 조회 및 가공
+// --- 조회 로직 ---
 const onSearch = () => getData()
 const getData = async () => {
   if (!manualProjNo.value) return sAlert.Warning(`Project No를 입력하세요.`)
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
   
-  const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
-  let combined = []
-
   try {
+    const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
+    let combined = []
     for (const key of searchKeys) {
       const payload = { ProjectNo: manualProjNo.value.trim(), Keyword: key }
       const [p, w] = await Promise.allSettled([
@@ -164,17 +170,13 @@ const getData = async () => {
       return flatItem
     })
 
-    // 동적 Attribute 컬럼
     dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
-      headerName: id, field: `ATT_${id}`, minWidth: 130,
-      headerClass: 'att-column-header',
+      headerName: id, field: `ATT_${id}`, minWidth: 130, headerClass: 'att-column-header',
       cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000', fontStyle: p.value === 'null' ? 'italic' : 'normal' })
     }))
 
-    // 동적 시스템 컬럼
     dynamicRemainingCols.value = Array.from(allKeys).sort().map(k => ({
-      headerName: k, field: k, minWidth: 150,
-      cellRenderer: (p) => (k === 'TagDesc' ? highlightRenderer(p) : p.value)
+      headerName: k, field: k, minWidth: 150, cellRenderer: (p) => (k === 'TagDesc' ? highlightRenderer(p) : p.value)
     }))
 
     rawDataList.value = _.sortBy(processedData, ['TagNo', 'Source'])
@@ -183,33 +185,58 @@ const getData = async () => {
   }
 }
 
-// 3. 컬럼 가시성 필터링 (핵심 로직)
+// --- 삭제 로직 (API 연결) ---
+const onDelete = async () => {
+  const selectedNodes = gridApi.value.getSelectedNodes()
+  if (selectedNodes.length === 0) return
+
+  const confirm = await sConfirm(`선택한 ${selectedNodes.length}개의 항목을 삭제하시겠습니까?`)
+  if (!confirm) return
+
+  try {
+    gridApi.value.setGridOption('loading', true)
+    for (const node of selectedNodes) {
+      const { TagIdx, Source } = node.data
+      const endpoint = Source === 'Published' ? '/api/Admin/Tool/DeletePublishedData' : '/api/Admin/Tool/DeleteWorkingData'
+      await axiosWrapper.post(endpoint, { ProjectNo: manualProjNo.value, TagIdx })
+    }
+    sAlert.Success('삭제가 완료되었습니다.')
+    await getData() // 삭제 후 재조회
+  } catch (e) {
+    sAlert.Error('삭제 중 오류가 발생했습니다.')
+  } finally {
+    gridApi.value.setGridOption('loading', false)
+  }
+}
+
+// --- 컬럼 정의 (체크박스 추가) ---
 const mainColDefs = computed(() => {
-  // 항상 표시되는 고정 컬럼
   const fixedCols = [
-    { headerName: 'Source', field: 'Source', width: 95, pinned: 'left', cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;cursor:pointer;">${p.value}</span>` },
+    { 
+      headerName: 'Source', 
+      field: 'Source', 
+      width: 120, 
+      pinned: 'left', 
+      checkboxSelection: true,      // 체크박스 활성화
+      headerCheckboxSelection: true, // 헤더 전체 선택 활성화
+      cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;cursor:pointer;">${p.value}</span>` 
+    },
     { field: 'TagIdx', headerName: 'TagIdx', width: 100, pinned: 'left' },
     { field: 'TagNo', headerName: 'TagNo', width: 150, pinned: 'left', cellRenderer: highlightRenderer },
     { field: 'EpId', headerName: 'EP ID', width: 100, pinned: 'left', cellRenderer: highlightRenderer },
     { field: 'ClsId', headerName: 'Class', width: 100, pinned: 'left', cellRenderer: highlightRenderer },
   ]
 
-  // 컬럼 필터 키워드 파싱
   const colFilterKws = columnFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
-
-  // 필터 적용 함수
   const filterByColName = (cols) => {
-    if (colFilterKws.length === 0) return cols // 필터 없으면 전체 반환
+    if (colFilterKws.length === 0) return cols
     return cols.filter(c => {
       const colTitle = String(c.headerName || c.field).toLowerCase()
       return colFilterKws.some(kw => colTitle.includes(kw))
     })
   }
 
-  const visibleAttCols = filterByColName(dynamicAttCols.value)
-  const visibleRemainingCols = filterByColName(dynamicRemainingCols.value)
-
-  return [...fixedCols, ...visibleAttCols, ...visibleRemainingCols]
+  return [...fixedCols, ...filterByColName(dynamicAttCols.value), ...filterByColName(dynamicRemainingCols.value)]
 })
 
 const gridBindProps = computed(() => ({
@@ -257,21 +284,12 @@ defineOptions({ name: 'PubWrkFinalManager' })
 </script>
 
 <style scoped lang="scss">
-/* 입력창 넓이 및 레이아웃 */
-.custom-input-width {
-  width: 160px !important;
-}
-
-.custom-modal-overlay {
-  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center;
-}
-.custom-modal-window {
-  background: #fff; width: 1000px; height: 85%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.4);
-}
+.custom-input-width { width: 160px !important; }
+.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.custom-modal-window { background: #fff; width: 1000px; height: 85%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.4); }
 .modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
 .modal-body-content { flex: 1; overflow: hidden; background: #fff; }
 .modal-grid-wrapper { flex: 1; height: 100%; width: 100%; }
-
 .json-container { padding: 15px; background: #1e293b; overflow: auto; height: 100%; }
 .json-content { margin: 0; color: #f1f5f9; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5; }
 
@@ -279,10 +297,4 @@ defineOptions({ name: 'PubWrkFinalManager' })
 ::v-deep(.ag-pinned-left-cols-container) { border-right: 2px solid #cbd5e1 !important; background: #fff; }
 ::v-deep(.badge) { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; }
 ::v-deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; border-right: 1px solid #dee2e6 !important; }
-
-/* 모달 내 그리드 스타일 보정 */
-::v-deep(.modal-grid-wrapper .ag-root-wrapper) {
-  border-radius: 0;
-  border: none;
-}
 </style>
