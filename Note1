@@ -1,298 +1,231 @@
-<template>
-  <div class="panel panel-expandable m-0 p-0 h-100">
-    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
-      <template #actions>
-        <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-primary text-nowrap">Project No</span>
-            <input type="text" class="form-control form-control-sm custom-input-width" v-model="manualProjNo" />
-          </label>
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-nowrap">조회 키워드</span>
-            <textarea class="form-control form-control-sm custom-input-width" style="height: 31px; resize: none;" v-model="searchKeywordRef" placeholder="공백/엔터 구분"></textarea>
-          </label>
-          <button class="btn btn-xs btn-primary" @click="onSearch">조회</button>
-          
-          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap"><i class="fa-search"></i> 결과 필터</span>
-            <input type="text" class="form-control form-control-sm border-success custom-input-width" v-model="localFilterQuery" placeholder="결과 내 검색" />
-          </div>
-
-          <div class="ms-1 d-flex align-items-center gap-2">
-            <span class="fw-bold text-warning text-nowrap"><i class="fa-columns"></i> 컬럼 필터</span>
-            <textarea class="form-control form-control-sm border-warning custom-input-width" style="height: 31px; resize: none;" v-model="columnFilterQuery" placeholder="표시할 컬럼명"></textarea>
-          </div>
-        </div>
-        <panel-toolbar />
-      </template>
-    </PageTitle>
-
-    <div class="panel-body m-0 p-0 h-100">
-      <div class="panel m-0 p-0 h-100">
-        <div class="panel-heading p-0 m-0">
-          <div class="w-100 h-100">
-            <BasicToolBar 
-              :showCreate="false" 
-              :showMultiCreate="false" 
-              :showSave="false" 
-              :showDelete="true" 
-              :isDisabledDeleteBtn="isDisabledDeleteBtn"
-              @delete="() => onDelete()"
-            />
-          </div>
-        </div>
-        <div class="panel-body overflow-hidden m-0 p-0 h-100">
-          <ag-grid-vue 
-            v-bind="gridBindProps" 
-            @grid-ready="onGridReady" 
-            @selection-changed="onSelectionChanged" 
-            @cell-clicked="onCellClicked" 
-            rowSelection="multiple"
-            :suppressRowClickSelection="true"
-          />
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
-      <div class="custom-modal-window">
-        <div class="modal-header-dark">
-          <div class="d-flex align-items-center gap-2">
-            <span class="badge" :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }">{{ selectedRow?.Source }}</span>
-            <span class="fw-bold text-white">Detail View: {{ selectedRow?.TagNo }}</span>
-          </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-xs" :class="isJsonMode ? 'btn-outline-info' : 'btn-info'" @click="isJsonMode = !isJsonMode">
-              {{ isJsonMode ? 'Table View' : 'JSON View' }}
-            </button>
-            <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
-          </div>
-        </div>
-        <div class="modal-body-content d-flex flex-column">
-          <div v-if="isJsonMode" class="h-100 w-100 json-container">
-            <pre class="json-content"><code>{{ JSON.stringify(selectedRow, null, 2) }}</code></pre>
-          </div>
-          <div v-else class="modal-grid-wrapper">
-            <ag-grid-vue v-bind="modalGridBindProps" class="ag-theme-alpine w-100 h-100" />
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup>
-import { ref, computed, shallowRef } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useAppPermissionStore } from '@/stores/app-permission'
-import { useAppMenuStore } from '@/stores/app-menu'
-import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import { sortBy } from 'lodash-es'
-
-import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-import { sAlert } from '@/utils/messages/alert-common'
-import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
-import PageTitle from '@/components/toolBar/PageTitle.vue'
-
-const { isSetupAdmin } = storeToRefs(useAppPermissionStore())
-const appMenu = useAppMenuStore()
-
-const gridApi = shallowRef()
-const manualProjNo = ref(appMenu.currentProjNo || '')
-const searchKeywordRef = ref('')
-const localFilterQuery = ref('')
-const columnFilterQuery = ref('')
-const rawDataList = ref([])
-const dynamicAttCols = ref([])
-const dynamicRemainingCols = ref([])
-const isDisabledDeleteBtn = ref(true)
-
-const showModal = ref(false)
-const isJsonMode = ref(true) 
-const selectedRow = ref(null)
-
-const safeConfirm = (msg) => {
-  return new Promise((resolve) => {
-    resolve(window.confirm(msg));
-  });
-};
-
-// --- 조회 로직 (API 경로 변경 반영) ---
-const onSearch = () => getData()
-const getData = async () => {
-  if (!manualProjNo.value) return sAlert.Warning(`Project No를 입력하세요.`)
-  if (gridApi.value) gridApi.value.setGridOption('loading', true)
-  
-  try {
-    const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
-    if (searchKeys.length === 0) return sAlert.Warning('조회 키워드를 입력하세요.')
-
-    let combined = []
-    for (const key of searchKeys) {
-      const payload = { ProjectNo: manualProjNo.value.trim(), Keyword: key }
-      
-      // ⭐ 요청하신 새로운 API 경로 반영
-      const [p, w] = await Promise.allSettled([
-        axiosWrapper.post('/api/Data/SearchPublishData', payload),
-        axiosWrapper.post('/api/Data/SearchWorkingData', payload)
-      ])
-      
-      if (p.status === 'fulfilled' && Array.isArray(p.value)) {
-        combined.push(...p.value.map(i => ({ ...i, Source: 'Published' })))
-      }
-      if (w.status === 'fulfilled' && Array.isArray(w.value)) {
-        combined.push(...w.value.map(i => ({ ...i, Source: 'Working' })))
-      }
+리턴 구조가 좀 달라 졌나봐..
+아래 참조해서 수정해줄래? 
+/api/Data/SearchPublishData
+[
+    {
+        "EP_ID": "TeEP",
+        "EP_IC": "TeEP",
+        "DELETED": false,
+        "DEL_USER": null,
+        "DEL_DTM": null,
+        "PROJ_NO": "TE1002",
+        "TAG_IDX": "69b375da1f1300043633fa54",
+        "TAG_NO": "TEST102_DESC",
+        "TAG_TYPE_ID": "",
+        "CLS_ID": "TEST101_CLS",
+        "TAG_DESC": null,
+        "BF_TAG_NO": "TEST102",
+        "PIC_NO": "52593271",
+        "DSN_SKL": null,
+        "PRNT_TAG_IDX": null,
+        "ATTRIBUTES": [
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "ASSEMBLY_NAME",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "SYSTEM_NAME",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TAG001",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TAG002",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST001",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST002",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST003",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST004",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST005",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": "METRIC_METER",
+                "VALUE_DBL": 100,
+                "ATT_ID": "TEST006",
+                "VALUE": "100"
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST007",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST008",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST009",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST010",
+                "VALUE": "false"
+            }
+        ],
+        "CRTER_NO": "52593271",
+        "CRTE_DTM": "2026-03-13T02:26:27Z",
+        "CHGER_NO": "52593271",
+        "CHGE_DTM": "2026-03-13T02:27:19.883Z",
+        "_id": "69b375df1f1300043633fa5b"
     }
+]
 
-    const allAttIds = new Set()
-    const allKeys = new Set()
-    const fixedKeys = ['Source', 'TagIdx', 'TagNo', 'EpId', 'ClsId', 'Attributes', 'attributes', 'DELETED']
 
-    combined.forEach(item => {
-      const attrs = item.Attributes || item.attributes || []
-      attrs.forEach(a => { if (a && a.ATT_ID) allAttIds.add(a.ATT_ID) })
-      Object.keys(item).forEach(k => { if (!fixedKeys.includes(k)) allKeys.add(k) })
-    })
 
-    const processedData = combined.filter(i => i && !i.DELETED).map(item => {
-      const flatItem = { ...item }
-      const attrs = item.Attributes || item.attributes || []
-      allAttIds.forEach(id => {
-        const target = attrs.find(a => a && a.ATT_ID === id)
-        const hasVal = target && target.VALUE !== undefined && target.VALUE !== null && String(target.VALUE).trim().length > 0
-        flatItem[`ATT_${id}`] = hasVal ? target.VALUE : 'null'
-      })
-      return flatItem
-    })
-
-    dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
-      headerName: id, field: `ATT_${id}`, minWidth: 130, headerClass: 'att-column-header',
-      cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000', fontStyle: p.value === 'null' ? 'italic' : 'normal' })
-    }))
-
-    dynamicRemainingCols.value = Array.from(allKeys).sort().map(k => ({
-      headerName: k, field: k, minWidth: 150
-    }))
-
-    rawDataList.value = sortBy(processedData, ['TagNo', 'Source'])
-  } catch (err) {
-    console.error(err); sAlert.Error("데이터 처리 중 오류 발생");
-  } finally {
-    if (gridApi.value) gridApi.value.setGridOption('loading', false)
-  }
-}
-
-// --- 삭제 로직 (인자 간섭 해결본) ---
-const onDelete = async () => {
-  // 1. 선택된 데이터 확인
-  const selectedNodes = gridApi.value?.getSelectedNodes() || []
-  if (selectedNodes.length === 0) {
-    sAlert.Warning("삭제할 항목을 체크박스로 선택해주세요.");
-    return;
-  }
-
-  // 2. 사용자 확인
-  const confirm = await safeConfirm(`${selectedNodes.length}개의 항목을 삭제하시겠습니까?`);
-  if (!confirm) return;
-
-  try {
-    gridApi.value.setGridOption('loading', true)
-    
-    // 3. 루프를 돌며 API 호출
-    for (const node of selectedNodes) {
-      const { TagIdx, Source } = node.data;
-      // 삭제 API는 기존 경로 유지 (변경 필요시 수정 가능)
-      const endpoint = Source === 'Published' 
-        ? '/api/Admin/Tool/DeletePublishedData' 
-        : '/api/Admin/Tool/DeleteWorkingData';
-      
-      await axiosWrapper.post(endpoint, { 
-        ProjectNo: manualProjNo.value.trim(), 
-        TagIdx: TagIdx 
-      });
-    }
-
-    sAlert.Success('삭제되었습니다.');
-    await getData(); // 리스트 새로고침
-  } catch (e) {
-    console.error(e);
-    sAlert.Error('삭제 중 오류가 발생했습니다.');
-  } finally {
-    if (gridApi.value) gridApi.value.setGridOption('loading', false)
-  }
-}
-
-// --- 그리드 설정 및 기타 ---
-const filteredData = computed(() => {
-  if (!localFilterQuery.value.trim()) return rawDataList.value
-  const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
-  return rawDataList.value.filter(i => {
-    const target = `${i.TagNo || ''} ${i.EpId || ''} ${i.ClsId || ''} ${i.Source || ''}`.toLowerCase()
-    return kws.some(kw => target.includes(kw))
-  })
-})
-
-const mainColDefs = computed(() => {
-  const fixedCols = [
-    { 
-      headerName: 'Source', field: 'Source', width: 130, pinned: 'left', 
-      checkboxSelection: true, headerCheckboxSelection: true,
-      cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;cursor:pointer;">${p.value}</span>` 
+/api/Data/SearchWorkingData
+{
+  "TAG_NO_PASSED": "Passed",
+  "NEW_YN": false,
+  "DEL_YN": false,
+  "EP_ID": "TeEP",
+  "EP_IC": "TeEP",
+  "DELETED": false,
+  "DEL_USER": null,
+  "DEL_DTM": null,
+  "PROJ_NO": "TE1002",
+  "TAG_IDX": "69b375da1f1300043633fa54",
+  "TAG_NO": "TEST102_DESC",
+  "TAG_TYPE_ID": "",
+  "CLS_ID": "TEST101_CLS",
+  "TAG_DESC": null,
+  "BF_TAG_NO": "TEST102",
+  "PIC_NO": "52593271",
+  "DSN_SKL": null,
+  "PRNT_TAG_IDX": null,
+  "ATTRIBUTES": [
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "TEST010",
+      "VALUE": "false"
     },
-    { field: 'TagIdx', headerName: 'TagIdx', width: 100, pinned: 'left' },
-    { field: 'TagNo', headerName: 'TagNo', width: 150, pinned: 'left' },
-    { field: 'EpId', headerName: 'EP ID', width: 100, pinned: 'left' },
-    { field: 'ClsId', headerName: 'Class', width: 100, pinned: 'left' },
-  ]
-  return [...fixedCols, ...dynamicAttCols.value, ...dynamicRemainingCols.value]
-})
-
-const gridBindProps = computed(() => ({
-  columnDefs: mainColDefs.value,
-  rowData: filteredData.value,
-  style: 'width: 100%; height: 100%',
-  class: 'ag-theme-custom',
-  pagination: true,
-  paginationPageSize: 100,
-  loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true, cellStyle: { background: '#fff' } }
-}))
-
-const modalGridBindProps = computed(() => {
-  if (!selectedRow.value) return {}
-  const rows = []
-  Object.entries(selectedRow.value).forEach(([k, v]) => {
-    if (k !== 'Attributes' && k !== 'attributes' && !k.startsWith('ATT_')) {
-      rows.push({ category: 'System', key: k, value: v ?? '-' })
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "ASSEMBLY_NAME",
+      "VALUE": null
+    },
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "SYSTEM_NAME",
+      "VALUE": null
+    },
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "TAG001",
+      "VALUE": null
+    },
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "TAG002",
+      "VALUE": null
+    },
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "TEST001",
+      "VALUE": null
+    },
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "TEST002",
+      "VALUE": null
+    },
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "TEST003",
+      "VALUE": null
+    },
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "TEST004",
+      "VALUE": null
+    },
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "TEST005",
+      "VALUE": null
+    },
+    {
+      "UOM_ID": "METRIC_METER",
+      "VALUE_DBL": 100,
+      "ATT_ID": "TEST006",
+      "VALUE": "100"
+    },
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "TEST007",
+      "VALUE": null
+    },
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "TEST008",
+      "VALUE": null
+    },
+    {
+      "UOM_ID": null,
+      "VALUE_DBL": 0,
+      "ATT_ID": "TEST009",
+      "VALUE": null
     }
-  })
-  return {
-    columnDefs: [
-      { headerName: 'Category', field: 'category', width: 110 },
-      { headerName: 'Property', field: 'key', width: 220 },
-      { headerName: 'Value', field: 'value', flex: 1 }
-    ],
-    rowData: rows
-  }
-})
+  ],
+  "CRTER_NO": "52593271",
+  "CRTE_DTM": "2026-03-13T02:26:27Z",
+  "CHGER_NO": "52593271",
+  "CHGE_DTM": "2026-03-13T02:27:53.462Z",
+  "_id": "69b375da1f1300043633fa55"
+}
 
-const onCellClicked = (p) => { if (p.column.getColId() === 'Source') { selectedRow.value = p.data; showModal.value = true; isJsonMode.value = true; } }
-const closeModal = () => { showModal.value = false; selectedRow.value = null; }
-const onGridReady = p => { gridApi.value = p.api }
-const onSelectionChanged = () => { if (gridApi.value) isDisabledDeleteBtn.value = gridApi.value.getSelectedNodes().length === 0 }
 
-defineOptions({ name: 'PubWrkFinalManager' })
-</script>
 
-<style scoped lang="scss">
-.custom-input-width { width: 160px !important; }
-.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.custom-modal-window { background: #fff; width: 1000px; height: 85%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.4); }
-.modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
-.modal-body-content { flex: 1; overflow: hidden; background: #fff; }
-.json-container { padding: 15px; background: #1e293b; overflow: auto; height: 100%; }
-.json-content { margin: 0; color: #f1f5f9; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5; }
-::v-deep(.badge) { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; display: inline-block; min-width: 75px; text-align: center; cursor: pointer; }
-::v-deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; }
-</style>
