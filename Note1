@@ -100,7 +100,7 @@
 </template>
 
 <script setup>
-import { ref, computed, shallowRef, watch } from 'vue'
+import { ref, computed, shallowRef, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
@@ -113,16 +113,21 @@ import PageTitle from '@/components/toolBar/PageTitle.vue'
 
 const router = useRouter()
 const appMenu = useAppMenuStore()
-// 스토어에서 현재 프로젝트와 EP ID 실시간 참조
 const { currentProjNo, currentEpId } = storeToRefs(appMenu)
 
 const gridApi = shallowRef()
-const manualProjNo = ref(currentProjNo.value || '')
+// manualProjNo는 빈 값으로 시작하고 watch에서 할당하도록 변경
+const manualProjNo = ref('')
 
-// 상단바 등에서 프로젝트가 바뀌면 자동으로 분석 도구의 Project No도 변경
+/**
+ * [중요 수정] 실시간 동기화 로직
+ * 컴포넌트가 활성화될 때(immediate) 스토어의 최신 프로젝트 번호를 가져옵니다.
+ */
 watch(currentProjNo, (newVal) => {
-  if (newVal) manualProjNo.value = newVal
-})
+  if (newVal) {
+    manualProjNo.value = newVal
+  }
+}, { immediate: true })
 
 const searchKeywordRef = ref('')
 const localFilterQuery = ref('')
@@ -132,7 +137,6 @@ const dynamicAttCols = ref([])
 const dynamicRemainingCols = ref([])
 const isDisabledDeleteBtn = ref(true)
 
-// 모달 및 데이터 상태
 const showModal = ref(false)
 const selectedRow = ref(null)
 const isJsonMode = ref(false)
@@ -140,7 +144,6 @@ const showClassModal = ref(false)
 const classModalData = ref([])
 const clickedClassId = ref('')
 
-// Class 모달 내 컬럼 정의 (하이퍼링크 스타일링)
 const classModalColDefs = [
   { 
     headerName: 'Register No (Link)', 
@@ -153,17 +156,13 @@ const classModalColDefs = [
   { headerName: 'Project No', field: 'PROJ_NO', width: 120 }
 ]
 
-/**
- * 🛠️ 핵심 로직: Register No 클릭 시 새 탭으로 바로가기
- * 형식: http://localhost:1001/register-mapping-setup?reg_type_id=...&proj_no=...&ep_id=...
- */
+// Register No 클릭 시 새 탭으로 바로가기 (현재 선택된 Proj/EP 반영)
 const onClassGridCellClicked = (p) => {
   if (p.column.getColId() === 'TYPE_ID' && p.value) {
-    // 1. 이동에 필요한 데이터 취합 (현재 입력된 정보 혹은 로우 데이터)
-    const targetProjNo = p.data.PROJ_NO || manualProjNo.value.trim() || currentProjNo.value;
+    // 1. 현재 화면의 입력값 혹은 스토어의 최신값을 우선 사용
+    const targetProjNo = manualProjNo.value || currentProjNo.value;
     const targetEpId = p.data.EP_ID || currentEpId.value;
 
-    // 2. Vue Router를 이용해 전체 경로 및 쿼리 파라미터 생성
     const routeData = router.resolve({
       path: '/register-mapping-setup',
       query: {
@@ -172,13 +171,10 @@ const onClassGridCellClicked = (p) => {
         ep_id: targetEpId
       }
     })
-
-    // 3. 새 탭 열기
     window.open(routeData.href, '_blank')
   }
 }
 
-// 필터 하이라이트 렌더러 (기존 로직 보존)
 const highlightRenderer = (p) => {
   const val = (p.value === null || p.value === undefined) ? '' : String(p.value)
   if (!val || !localFilterQuery.value.trim()) return val
@@ -191,17 +187,18 @@ const highlightRenderer = (p) => {
   return text
 }
 
-// 조회 로직 (기존 로직 보존)
 const onSearch = () => getData()
 
 const getData = async () => {
-  if (!manualProjNo.value) return sAlert.Warning(`Project No를 입력하세요.`)
+  const pNo = manualProjNo.value?.trim() || currentProjNo.value
+  if (!pNo) return sAlert.Warning(`Project No를 입력하세요.`)
+  
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
   try {
     const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
     let combined = []
     for (const key of searchKeys) {
-      const payload = { ProjectNo: manualProjNo.value.trim(), Keyword: key }
+      const payload = { ProjectNo: pNo, Keyword: key }
       const [p, w] = await Promise.allSettled([
         axiosWrapper.post('/api/Data/SearchPublishData', payload),
         axiosWrapper.post('/api/Data/SearchWorkingData', payload)
@@ -215,7 +212,6 @@ const getData = async () => {
         combined.push(...data.map(i => ({ ...i, Source: 'Working' })))
       }
     }
-    // 동적 속성 컬럼 및 나머지 컬럼 구성 로직 보존
     const allAttIds = new Set(); const allKeys = new Set()
     const fixedKeys = ['Source', 'TAG_IDX', 'TAG_NO', 'EP_ID', 'CLS_ID', 'ATTRIBUTES', 'DELETED', '_id']
     combined.forEach(item => {
@@ -241,21 +237,20 @@ const getData = async () => {
   finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
 }
 
-// 메인 그리드 셀 클릭 이벤트 (기존 상세 보기 + 신규 Class 모달)
 const onCellClicked = async (p) => {
   const colId = p.column.getColId()
-  // Source 클릭 -> 데이터뷰/JSON뷰
+  const pNo = manualProjNo.value?.trim() || currentProjNo.value
+
   if (colId === 'Source') {
     selectedRow.value = p.data; showModal.value = true; isJsonMode.value = false;
   } 
-  // Class 클릭 -> 연결된 Register No 리스트 모달
   else if (colId === 'CLS_ID' && p.value) {
     clickedClassId.value = p.value
     try {
       if (gridApi.value) gridApi.value.setGridOption('loading', true)
       const res = await axiosWrapper.post('/api/Register/GetByClassIDs', {
         ContainDeleted: false,
-        ProjectNo: manualProjNo.value.trim(),
+        ProjectNo: pNo,
         ClassIDs: [p.value]
       })
       classModalData.value = Array.isArray(res) ? res : [res]
@@ -268,7 +263,6 @@ const onCellClicked = async (p) => {
 const closeModal = () => { showModal.value = false; selectedRow.value = null; }
 const closeClassModal = () => { showClassModal.value = false; classModalData.value = []; }
 
-// 메인 그리드 컬럼 정의 (컬럼 필터 기능 포함)
 const mainColDefs = computed(() => {
   const fixedCols = [
     { 
@@ -288,7 +282,6 @@ const mainColDefs = computed(() => {
   return [...fixedCols, ...filteredAtts, ...filteredRems]
 })
 
-// 결과 필터링 로직 (기존 보존)
 const filteredData = computed(() => {
   if (!localFilterQuery.value.trim()) return rawDataList.value
   const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
@@ -304,7 +297,6 @@ const gridBindProps = computed(() => ({
   defaultColDef: { sortable: true, filter: true, resizable: true }
 }))
 
-// 상세 모달용 그리드 설정
 const modalGridBindProps = computed(() => {
   if (!selectedRow.value) return {}
   const rows = []
@@ -323,16 +315,16 @@ const modalGridBindProps = computed(() => {
   }
 })
 
-// 삭제 기능 (기존 로직 보존)
 const onDelete = async () => {
   const nodes = gridApi.value?.getSelectedNodes() || []
+  const pNo = manualProjNo.value?.trim() || currentProjNo.value
   if (!nodes.length) return sAlert.Warning("항목을 선택해주세요.");
   if (!confirm(`${nodes.length}건을 삭제하시겠습니까?`)) return;
   try {
     gridApi.value.setGridOption('loading', true)
     for (const n of nodes) {
       const url = n.data.Source === 'Published' ? '/api/Admin/Tool/DeletePublishedData' : '/api/Admin/Tool/DeleteWorkingData'
-      await axiosWrapper.post(url, { ProjectNo: manualProjNo.value.trim(), TagIdx: n.data.TAG_IDX });
+      await axiosWrapper.post(url, { ProjectNo: pNo, TagIdx: n.data.TAG_IDX });
     }
     sAlert.Success('삭제 완료'); await getData();
   } catch (e) { sAlert.Error('삭제 중 에러 발생'); } 
@@ -341,11 +333,10 @@ const onDelete = async () => {
 
 const onGridReady = p => { gridApi.value = p.api }
 const onSelectionChanged = () => { if (gridApi.value) isDisabledDeleteBtn.value = gridApi.value.getSelectedNodes().length === 0 }
-defineOptions({ name: 'TagAnalysisFinal' })
+defineOptions({ name: 'TagAnalysisFinalSync' })
 </script>
 
 <style scoped lang="scss">
-/* 공통 스타일 보존 및 개선 */
 .custom-input-width { width: 160px !important; }
 .custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .custom-modal-window { background: #fff; width: 1000px; height: 85%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
@@ -354,8 +345,6 @@ defineOptions({ name: 'TagAnalysisFinal' })
 .modal-grid-container { flex: 1; width: 100%; height: 100%; background: #fff; border: 1px solid #dee2e6 !important; }
 .json-wrapper { flex: 1; background: #1e293b; overflow: auto; padding: 15px; }
 .json-content { margin: 0; color: #f1f5f9; font-family: 'Consolas', monospace; font-size: 13px; white-space: pre-wrap; word-wrap: break-word; }
-
-/* 유틸리티 스타일 */
 ::v-deep(.filter-highlight) { background-color: #ffeb3b !important; color: #000 !important; padding: 0 2px; border-radius: 2px; font-weight: bold; }
 ::v-deep(.badge) { min-width: 80px; text-align: center; cursor: pointer; border: none; }
 ::v-deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; }
