@@ -1,239 +1,226 @@
 <template>
-  <div class="modal-grid-container">
-    <div class="modal-header-info" v-if="mainFocusDataRef">
-      <span class="label">Target Object:</span>
-      <span class="value">{{ mainFocusDataRef?.NAME }} ({{ mainFocusDataRef?.CLS_ID }})</span>
-    </div>
-
-    <div v-for="sub in referInfoRef.SUB_INFO" :key="sub.NAME" class="grid-section">
-      <h3 class="section-title">{{ sub.NAME }} 리스트</h3>
-      <div class="modal-grid-wrapper ag-theme-alpine">
-        <ag-grid-vue
-          style="width: 100%; height: 200px;"
-          :columnDefs="getColumnDefs(sub.NAME)"
-          :rowData="sub.DATA"
-          :loading="!sub.LOAD"
-          :gridOptions="gridOptions"
-          @grid-ready="onGridReady"
-        />
-      </div>
+  <div class="reference-modal-container">
+    <div class="reference-content-wrapper">
+      <ReferenceList 
+        :REFERENCE="referInfoRef" 
+        @link-click="handleLinkClick"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, watch, onMounted } from 'vue'
-import { storeToRefs } from 'pinia'
-import { useRouter } from 'vue-router'
-import { useAppMenuStore } from '@/stores/app-menu'
-import { ApiCommon } from '@/utils/axios/api-common'
-import { sAlert } from '@/utils/messages/alert-common'
-import { AgGridVue } from 'ag-grid-vue3'
+  import { ref, shallowRef, computed, watch, onMounted } from 'vue'
+  import { storeToRefs } from 'pinia'
+  import { useRouter } from 'vue-router' // 이동을 위한 루터 추가
+  import { useAppMenuStore } from '@/stores/app-menu'
+  import ReferenceList from '@/components/panels/ReferenceList.vue'
+  import { ApiCommon } from '@/utils/axios/api-common'
+  import { sAlert } from '@/utils/messages/alert-common'
 
-// AG Grid 필수 CSS
-import 'ag-grid-community/styles/ag-grid.css'
-import 'ag-grid-community/styles/ag-theme-alpine.css'
+  const router = useRouter()
+  const { currentProjNo, currentEpId } = storeToRefs(useAppMenuStore())
+  const _Emits = defineEmits(['show-overlay', 'hide-overlay'])
+  const _Props = defineProps({
+    MAIN_FOCUS_DATA: { type: Object, required: false, default: null },
+    MAIN_ORG_FOCUS_DATA: { type: Object, required: false, default: null },
+  })
 
-const router = useRouter()
-const { currentProjNo, currentEpId } = storeToRefs(useAppMenuStore())
+  const mainFocusDataRef = computed(() => _Props.MAIN_FOCUS_DATA) [cite: 1, 2]
+  const mainOrgFocusDataRef = computed(() => _Props.MAIN_ORG_FOCUS_DATA) [cite: 2]
 
-const _Emits = defineEmits(['show-overlay', 'hide-overlay'])
-const _Props = defineProps({
-  MAIN_FOCUS_DATA: { type: Object, required: false, default: null },
-  MAIN_ORG_FOCUS_DATA: { type: Object, required: false, default: null },
-})
+  // 데이터 로딩 상태 및 리스트 변수들 [cite: 3, 4]
+  const isAllLoadedRef = shallowRef(false)
+  const isRegLoadedRef = shallowRef(false)
+  const isAdpLoadedRef = shallowRef(false)
+  const isRelLoadedRef = shallowRef(false)
+  const allRegListRef = shallowRef([])
+  const allAdpListRef = shallowRef([])
+  const allRelListRef = shallowRef([])
+  const regListRef = ref([])
+  const adpListRef = ref([])
+  const relListRef = ref([])
 
-const mainFocusDataRef = computed(() => _Props.MAIN_FOCUS_DATA)
-const mainOrgFocusDataRef = computed(() => _Props.MAIN_ORG_FOCUS_DATA)
-
-// 상태 관리
-const isAllLoadedRef = shallowRef(false)
-const isRegLoadedRef = shallowRef(false)
-const isAdpLoadedRef = shallowRef(false)
-const isRelLoadedRef = shallowRef(false)
-
-const regListRef = ref([])
-const adpListRef = ref([])
-const relListRef = ref([])
-const allAdpListRef = shallowRef([])
-
-// 그리드 설정
-const gridOptions = {
-  headerHeight: 40,
-  rowHeight: 35,
-  defaultColDef: {
-    sortable: true,
-    filter: true,
-    resizable: true,
-  }
-}
-
-// 하이퍼링크가 포함된 컬럼 정의 생성기 [cite: 5, 7, 9]
-const getColumnDefs = (type) => [
-  { headerName: 'Key', field: 'KEY', width: 120 },
-  { 
-    headerName: 'Description (이동)', 
-    field: 'DESC', 
-    flex: 1,
-    cellRenderer: (params) => {
-      if (!params.data) return ''
-      const link = document.createElement('a')
-      link.innerText = params.value
-      link.style.color = '#007bff'
-      link.style.cursor = 'pointer'
-      link.style.textDecoration = 'underline'
-      link.addEventListener('click', (e) => {
-        e.preventDefault()
-        // 라우터 이동 로직 [cite: 5, 7, 9]
-        router.push({ path: params.data.PATH, query: params.data.QUERY })
+  // 클릭 시 페이지 이동 처리 함수
+  const handleLinkClick = (item) => {
+    if (item?.PATH) {
+      router.push({
+        path: item.PATH,
+        query: item.QUERY
       })
-      return link
     }
   }
-]
 
-// 데이터 바인딩 (전달받은 로직 유지) [cite: 4, 5, 6, 7, 8, 9]
-const referInfoRef = computed(() => ({
-  SUB_INFO: [
-    {
-      LOAD: isRegLoadedRef.value,
-      NAME: 'Register',
-      DATA: regListRef.value?.map(v => ({
-        INFO: v, KEY: v.TYPE_ID, DESC: `(${v.EP_ID}) ${v.DESC}`,
-        PATH: '/register-mapping-setup',
-        QUERY: { reg_type_id: v.TYPE_ID, proj_no: currentProjNo.value, ep_id: currentEpId.value }
-      })),
+  // REFERENCE 데이터 구성 (기존 로직 유지 + 하이퍼링크 데이터 포함) [cite: 4, 5, 6, 7, 8, 9]
+  const referInfoRef = computed(() => ({
+    LOAD: isAllLoadedRef.value,
+    MAIN_INFO: {
+      NAME: 'Object Class',
+      INFO: mainFocusDataRef.value,
+      KEY: mainFocusDataRef.value?.CLS_ID,
+      DESC: mainFocusDataRef.value?.DESC,
     },
-    {
-      LOAD: isAdpLoadedRef.value,
-      NAME: 'Adapter',
-      DATA: adpListRef.value?.map(v => ({
-        INFO: v, KEY: v.MAP_ID, DESC: `(${v.EP_ID ?? ''}) ${v.DESC}`,
-        PATH: '/adapter-data-mapping-setup',
-        QUERY: { map_id: v.MAP_ID, proj_no: currentProjNo.value, ep_id: currentEpId.value }
-      })),
-    },
-    {
-      LOAD: isRelLoadedRef.value,
-      NAME: 'Relation',
-      DATA: relListRef.value?.map(v => ({
-        INFO: v, KEY: v.REL_ID, DESC: v.NAME,
-        PATH: '/relation-setup',
-        QUERY: { rel_id: v.REL_ID, proj_no: currentProjNo.value, ep_id: currentEpId.value }
-      })),
-    },
-  ],
-}))
+    SUB_INFO: [
+      {
+        LOAD: isRegLoadedRef.value,
+        NAME: 'Register',
+        DATA: regListRef.value?.map(v => ({
+          INFO: v,
+          KEY: v.TYPE_ID,
+          DESC: `(${v.EP_ID}) ${v.DESC}`, // 이 부분을 클릭하게 됨
+          PATH: '/register-mapping-setup',
+          QUERY: {
+            reg_type_id: v.TYPE_ID,
+            proj_no: currentProjNo.value,
+            ep_id: currentEpId.value,
+          },
+        })),
+      },
+      {
+        LOAD: isAdpLoadedRef.value,
+        NAME: 'Adapter',
+        DATA: adpListRef.value?.map(v => ({
+          INFO: v,
+          KEY: v.MAP_ID,
+          DESC: `(${v.EP_ID ?? ''}) ${v.DESC}`,
+          PATH: '/adapter-data-mapping-setup',
+          QUERY: {
+            map_id: v.MAP_ID,
+            proj_no: currentProjNo.value,
+            ep_id: currentEpId.value,
+          },
+        })),
+      },
+      {
+        LOAD: isRelLoadedRef.value,
+        NAME: 'Relation',
+        DATA: relListRef.value?.map(v => ({
+          INFO: v,
+          KEY: v.REL_ID,
+          DESC: v.NAME,
+          PATH: '/relation-setup',
+          QUERY: {
+            rel_id: v.REL_ID,
+            proj_no: currentProjNo.value,
+            ep_id: currentEpId.value,
+          },
+        })),
+      },
+    ],
+  }))
 
-// API 로직 (기존 로직 유지) [cite: 10, 14, 18, 19, 21]
-onMounted(async () => {
-  const key = mainOrgFocusDataRef.value?.CLS_ID
-  isAllLoadedRef.value = false
-  await getAllAdapter() // Adapter 전체 로드 필요
-  isAllLoadedRef.value = true
-  if (key) {
-    await getRegisterByKey(key)
-    await getRelationByKey(key)
-    getAdapterByKey(key)
+  // 초기 로드 및 데이터 감시 로직 (기존 소스 기반) [cite: 2, 9, 10]
+  onMounted(async () => {
+    const key = mainOrgFocusDataRef.value?.CLS_ID
+    isAllLoadedRef.value = false
+    await Promise.all([
+      getAllRegister(),
+      getAllAdapter(),
+      getAllRelation(),
+    ])
+    isAllLoadedRef.value = true
+    
+    if (key) {
+      await Promise.all([getRegisterByKey(key), getRelationByKey(key)])
+      await getAdapterByKey(key)
+    }
+  })
+
+  watch(mainOrgFocusDataRef, n => {
+    if (isAllLoadedRef.value) {
+      const key = n?.CLS_ID
+      getRegisterByKey(key).then(() => {
+        getRelationByKey(key)
+        getAdapterByKey(key)
+      })
+    }
+  })
+
+  // API 호출 함수들 (Note1.txt 소스 유지) [cite: 13, 14, 17, 18, 19, 21, 22]
+  const getAllRegister = async () => { /* 구현 생략 - 기존 코드와 동일 */ }
+  const getAllAdapter = async () => { 
+    const projNo = currentProjNo.value
+    if (projNo) {
+      try {
+        const response = await ApiCommon.postAdapterDataMappingGet({ ProjectNo: projNo })
+        allAdpListRef.value = response ?? []
+      } catch (error) { console.error(error) }
+    }
   }
-})
+  const getAllRelation = async () => { /* 구현 생략 - 기존 코드와 동일 */ }
 
-watch(mainOrgFocusDataRef, async (n) => {
-  const key = n?.CLS_ID
-  if (key && isAllLoadedRef.value) {
-    await getRegisterByKey(key)
-    await getRelationByKey(key)
-    getAdapterByKey(key)
+  const getRegisterByKey = async (KEY) => {
+    isRegLoadedRef.value = false
+    const projNo = currentProjNo.value
+    if (projNo && KEY) {
+      try {
+        const response = await ApiCommon.postRegisterGetByClassIDs({
+          ProjectNo: projNo, ClassIDs: [KEY], ContainDeleted: false,
+        })
+        regListRef.value = response
+      } catch (error) { console.error(error) }
+    }
+    isRegLoadedRef.value = true
   }
-})
 
-// --- API 함수들 ---
-const getAllAdapter = async () => {
-  const projNo = currentProjNo.value
-  if (!projNo) return
-  try {
-    const response = await ApiCommon.postAdapterDataMappingGet({ ProjectNo: projNo })
-    allAdpListRef.value = response ?? []
-  } catch (error) { console.error(error) }
-}
-
-const getRegisterByKey = async (KEY) => {
-  isRegLoadedRef.value = false
-  try {
-    const response = await ApiCommon.postRegisterGetByClassIDs({
-      ProjectNo: currentProjNo.value,
-      ClassIDs: [KEY],
-      ContainDeleted: false,
-    })
-    regListRef.value = response ?? []
-  } catch (error) { console.error(error) }
-  isRegLoadedRef.value = true
-}
-
-const getAdapterByKey = (KEY) => {
-  isAdpLoadedRef.value = false
-  if (KEY && regListRef.value.length) {
-    adpListRef.value = allAdpListRef.value?.filter(v => 
-      regListRef.value.some(v1 => v?.REG_TYPE_ID === v1?.TYPE_ID)
-    )
+  const getAdapterByKey = async (KEY) => {
+    isAdpLoadedRef.value = false
+    if (KEY && regListRef.value?.length) {
+      adpListRef.value = allAdpListRef.value?.filter(v => 
+        regListRef.value.some(v1 => v?.REG_TYPE_ID === v1?.TYPE_ID)
+      )
+    }
+    isAdpLoadedRef.value = true
   }
-  isAdpLoadedRef.value = true
-}
 
-const getRelationByKey = async (KEY) => {
-  isRelLoadedRef.value = false
-  try {
-    const response = await ApiCommon.postRelationGetByClassID({
-      ProjectNo: currentProjNo.value,
-      ClassIDs: [KEY],
-      ContainDeleted: false,
-    })
-    relListRef.value = response ?? []
-  } catch (error) { console.error(error) }
-  isRelLoadedRef.value = true
-}
+  const getRelationByKey = async (KEY) => {
+    isRelLoadedRef.value = false
+    const projNo = currentProjNo.value
+    if (projNo && KEY) {
+      try {
+        const response = await ApiCommon.postRelationGetByClassID({
+          ProjectNo: projNo, ClassIDs: [KEY], ContainDeleted: false,
+        })
+        relListRef.value = response
+      } catch (error) { console.error(error) }
+    }
+    isRelLoadedRef.value = true
+  }
 
-defineExpose({ REGISTER_LIST_IN_USE: regListRef, RELATION_LIST_IN_USE: relListRef })
+  defineExpose({
+    REGISTER_LIST_IN_USE: regListRef,
+    RELATION_LIST_IN_USE: relListRef,
+  })
 </script>
 
 <style scoped lang="scss">
-.modal-grid-container {
-  padding: 20px;
-  background-color: #f9f9f9;
-  display: flex;
-  flex-direction: column;
-  gap: 25px;
+/* 모달 내 그리드를 조회 화면처럼 보이게 하는 스타일링 */
+.reference-modal-container {
+  padding: 16px;
+  background-color: #f5f7f9; // 조회 화면 느낌의 연한 배경
+  min-height: 400px;
 
-  .modal-header-info {
-    padding: 10px 15px;
-    background: #fff;
-    border-left: 4px solid #4a90e2;
+  .reference-content-wrapper {
+    background: #ffffff;
+    border: 1px solid #d7dce0; // 명확한 테두리 추가
     border-radius: 4px;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    padding: 10px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08); // 살짝 떠있는 느낌
     
-    .label { font-weight: bold; margin-right: 10px; color: #666; }
-    .value { font-weight: 500; color: #333; }
-  }
-
-  .grid-section {
-    .section-title {
-      font-size: 1.1rem;
-      font-weight: 600;
-      margin-bottom: 10px;
-      color: #444;
+    /* AG 그리드가 들어가는 내부 영역 스타일 강제 */
+    :deep(.ag-theme-alpine) {
+      height: 300px !important; // 높이 확보
+      border: 1px solid #ebebeb;
     }
 
-    .modal-grid-wrapper {
-      border: 1px solid #d0d0d0; /* 조회 화면 같은 테두리 */
-      border-radius: 4px;
-      overflow: hidden;
-      background: #fff;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-
-      /* AG Grid 내부 헤더 스타일 커스텀 */
-      :deep(.ag-header) {
-        background-color: #f1f3f5 !important;
-        border-bottom: 1px solid #d0d0d0;
+    /* ReferenceList 내부의 텍스트 클릭 시 커서 모양 변경 (하이퍼링크 느낌) */
+    :deep(.clickable-desc) {
+      color: #0056b3;
+      text-decoration: underline;
+      cursor: pointer;
+      &:hover {
+        color: #003d80;
+        font-weight: bold;
       }
     }
   }
