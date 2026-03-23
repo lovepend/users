@@ -32,8 +32,7 @@
         <div class="panel-heading p-0 m-0">
           <div class="w-100 h-100">
             <BasicToolBar 
-              :showCreate="false" :showMultiCreate="false" :showSave="false" :showDelete="true"
-              :isDisabledDeleteBtn="isDisabledDeleteBtn"
+              :showCreate="false" :showDelete="true" :isDisabledDeleteBtn="isDisabledDeleteBtn"
               @delete="() => onDelete()"
             />
           </div>
@@ -58,11 +57,23 @@
             <span class="badge" :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }">{{ selectedRow?.Source }}</span>
             <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
           </div>
-          <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
+          <div class="d-flex gap-2">
+            <button class="btn btn-xs" :class="isJsonMode ? 'btn-outline-info' : 'btn-info'" @click="isJsonMode = !isJsonMode">
+              {{ isJsonMode ? 'Switch to Table' : 'Switch to JSON' }}
+            </button>
+            <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
+          </div>
         </div>
-        <div class="modal-body-content p-2 d-flex flex-column" style="height: calc(100% - 50px);">
-          <div class="ag-theme-alpine w-100 h-100 border">
-            <ag-grid-vue v-bind="modalGridBindProps" />
+        
+        <div class="modal-body-content">
+          <div v-if="isJsonMode" class="h-100 w-100 json-container">
+            <pre class="json-content"><code>{{ JSON.stringify(selectedRow, null, 2) }}</code></pre>
+          </div>
+          
+          <div v-else class="h-100 w-100 p-2 d-flex flex-column">
+            <div class="ag-theme-alpine flex-grow-1 w-100" style="min-height: 0;">
+              <ag-grid-vue v-bind="modalGridBindProps" class="w-100 h-100" />
+            </div>
           </div>
         </div>
       </div>
@@ -90,18 +101,19 @@ const rawDataList = ref([])
 const dynamicAttCols = ref([])
 const dynamicRemainingCols = ref([])
 const isDisabledDeleteBtn = ref(true)
+
+// 모달 관련 상태
 const showModal = ref(false)
 const selectedRow = ref(null)
+const isJsonMode = ref(false) // 기본은 테이블 뷰
 
-// --- ✨ 하이라이트 렌더러 함수 ---
+// --- 하이라이트 렌더러 ---
 const highlightRenderer = (p) => {
   const val = (p.value === null || p.value === undefined) ? '' : String(p.value)
   if (!val || !localFilterQuery.value.trim()) return val
-  
   const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
   let text = val
   kws.forEach(kw => {
-    // 특수문자 이스케이프 처리 후 정규식 생성
     const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     text = text.replace(new RegExp(`(${escapedKw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
   })
@@ -109,22 +121,18 @@ const highlightRenderer = (p) => {
 }
 
 const onSearch = () => getData()
-
 const getData = async () => {
   if (!manualProjNo.value) return sAlert.Warning(`Project No를 입력하세요.`)
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
-  
   try {
     const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
     let combined = []
-
     for (const key of searchKeys) {
       const payload = { ProjectNo: manualProjNo.value.trim(), Keyword: key }
       const [p, w] = await Promise.allSettled([
         axiosWrapper.post('/api/Data/SearchPublishData', payload),
         axiosWrapper.post('/api/Data/SearchWorkingData', payload)
       ])
-      
       if (p.status === 'fulfilled' && p.value) {
         const data = Array.isArray(p.value) ? p.value : [p.value]; combined.push(...data.map(i => ({ ...i, Source: 'Published' })))
       }
@@ -132,43 +140,31 @@ const getData = async () => {
         const data = Array.isArray(w.value) ? w.value : [w.value]; combined.push(...data.map(i => ({ ...i, Source: 'Working' })))
       }
     }
-
     const allAttIds = new Set(); const allKeys = new Set()
     const fixedKeys = ['Source', 'TAG_IDX', 'TAG_NO', 'EP_ID', 'CLS_ID', 'ATTRIBUTES', 'DELETED', '_id']
-
     combined.forEach(item => {
       const attrs = item.ATTRIBUTES || []
       attrs.forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
       Object.keys(item).forEach(k => { if (!fixedKeys.includes(k) && typeof item[k] !== 'object') allKeys.add(k) })
     })
-
     const processedData = combined.filter(i => i && !i.DELETED).map(item => {
-      const flatItem = { ...item }
-      const attrs = item.ATTRIBUTES || []
+      const flatItem = { ...item }; const attrs = item.ATTRIBUTES || []
       allAttIds.forEach(id => {
         const target = attrs.find(a => a?.ATT_ID === id)
         flatItem[`ATT_${id}`] = (target && target.VALUE !== null) ? target.VALUE : 'null'
       })
       return flatItem
     })
-
-    // 속성 컬럼에도 하이라이트 적용
     dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
       headerName: id, field: `ATT_${id}`, minWidth: 130, headerClass: 'att-column-header',
-      cellRenderer: highlightRenderer,
-      cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000' })
+      cellRenderer: highlightRenderer, cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000' })
     }))
-
     dynamicRemainingCols.value = Array.from(allKeys).sort().map(k => ({
       headerName: k, field: k, minWidth: 150, cellRenderer: highlightRenderer
     }))
-
     rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
-  } catch (err) {
-    console.error(err); sAlert.Error("조회 오류");
-  } finally {
-    if (gridApi.value) gridApi.value.setGridOption('loading', false)
-  }
+  } catch (err) { console.error(err); sAlert.Error("조회 오류"); }
+  finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
 }
 
 const onDelete = async () => {
@@ -178,11 +174,11 @@ const onDelete = async () => {
   try {
     gridApi.value.setGridOption('loading', true)
     for (const n of nodes) {
-      await axiosWrapper.post(n.data.Source === 'Published' ? '/api/Admin/Tool/DeletePublishedData' : '/api/Admin/Tool/DeleteWorkingData', 
-      { ProjectNo: manualProjNo.value.trim(), TagIdx: n.data.TAG_IDX });
+      const url = n.data.Source === 'Published' ? '/api/Admin/Tool/DeletePublishedData' : '/api/Admin/Tool/DeleteWorkingData'
+      await axiosWrapper.post(url, { ProjectNo: manualProjNo.value.trim(), TagIdx: n.data.TAG_IDX });
     }
     sAlert.Success('삭제 완료'); await getData();
-  } catch (e) { sAlert.Error('삭제 실패'); } 
+  } catch (e) { sAlert.Error('삭제 실패'); }
   finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
 }
 
@@ -197,10 +193,8 @@ const filteredData = computed(() => {
 
 const mainColDefs = computed(() => {
   const fixedCols = [
-    { 
-      headerName: 'Source', field: 'Source', width: 130, pinned: 'left', checkboxSelection: true, headerCheckboxSelection: true,
-      cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;">${p.value}</span>` 
-    },
+    { headerName: 'Source', field: 'Source', width: 130, pinned: 'left', checkboxSelection: true, headerCheckboxSelection: true,
+      cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;">${p.value}</span>` },
     { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
     { field: 'EP_ID', headerName: 'EP ID', width: 120, pinned: 'left', cellRenderer: highlightRenderer },
     { field: 'CLS_ID', headerName: 'Class', width: 150, pinned: 'left', cellRenderer: highlightRenderer },
@@ -208,10 +202,7 @@ const mainColDefs = computed(() => {
   const colFilterKws = columnFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
   const filterByColName = (cols) => {
     if (colFilterKws.length === 0) return cols
-    return cols.filter(c => {
-      const colTitle = String(c.headerName || c.field).toLowerCase()
-      return colFilterKws.some(kw => colTitle.includes(kw))
-    })
+    return cols.filter(c => String(c.headerName || c.field).toLowerCase().includes(colFilterKws[0])) // 첫번째 키워드로 필터링 (보강 가능)
   }
   return [...fixedCols, ...filterByColName(dynamicAttCols.value), ...filterByColName(dynamicRemainingCols.value)]
 })
@@ -236,11 +227,11 @@ const modalGridBindProps = computed(() => {
       { headerName: 'Property', field: 'key', width: 220 },
       { headerName: 'Value', field: 'value', flex: 1, cellStyle: p => ({ color: p.value === 'null' ? '#adb5bd' : '#000' }) }
     ],
-    rowData: rows, domLayout: 'normal', headerHeight: 35, rowHeight: 32
+    rowData: rows, headerHeight: 35, rowHeight: 32
   }
 })
 
-const onCellClicked = (p) => { if (p.column.getColId() === 'Source') { selectedRow.value = p.data; showModal.value = true; } }
+const onCellClicked = (p) => { if (p.column.getColId() === 'Source') { selectedRow.value = p.data; showModal.value = true; isJsonMode.value = false; } }
 const closeModal = () => { showModal.value = false; selectedRow.value = null; }
 const onGridReady = p => { gridApi.value = p.api }
 const onSelectionChanged = () => { if (gridApi.value) isDisabledDeleteBtn.value = gridApi.value.getSelectedNodes().length === 0 }
@@ -251,15 +242,13 @@ defineOptions({ name: 'PubWrkFinalManager' })
 <style scoped lang="scss">
 .custom-input-width { width: 160px !important; }
 .custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.custom-modal-window { background: #fff; width: 1000px; height: 85%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.4); }
 .modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-.modal-body-content { flex-grow: 1; min-height: 0; background: #fff; }
+.modal-body-content { flex-grow: 1; min-height: 0; background: #fff; position: relative; }
+.json-container { padding: 15px; background: #1e293b; overflow: auto; color: #f1f5f9; font-family: 'Consolas', monospace; font-size: 13px; }
 
-/* 하이라이트 스타일 */
 ::v-deep(.filter-highlight) { background-color: #ffeb3b !important; color: #000 !important; padding: 0 2px; border-radius: 2px; font-weight: bold; }
 ::v-deep(.badge) { min-width: 80px; text-align: center; cursor: pointer; }
 ::v-deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; }
-
-/* AG Grid 테두리 강제 설정 (깨짐 방지) */
 .ag-theme-alpine { border: 1px solid #dee2e6 !important; }
 </style>
