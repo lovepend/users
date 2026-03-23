@@ -1,308 +1,1226 @@
-<template>
-  <div class="panel panel-expandable m-0 p-0 h-100">
-    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
-      <template #actions>
-        <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap">Project No</span>
-            <input 
-              type="text" 
-              class="form-control form-control-sm custom-input-width" 
-              v-model="manualProjNo" 
-              placeholder="예: TE1002"
-            />
-          </label>
+/api/Register/GetByClassIDs
 
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-nowrap">조회 키워드</span>
-            <textarea 
-              class="form-control form-control-sm custom-input-width" 
-              style="height: 31px; resize: none;" 
-              v-model="searchKeywordRef" 
-              placeholder="Tag No (공백/엔터 구분)"
-            ></textarea>
-          </label>
-
-          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
-            <i class="fa fa-search me-1"></i>조회
-          </button>
-          
-          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap"><i class="fa-search"></i> 결과 필터</span>
-            <input type="text" class="form-control form-control-sm border-success custom-input-width" v-model="localFilterQuery" placeholder="결과 내 검색" />
-          </div>
-
-          <div class="ms-1 d-flex align-items-center gap-2">
-            <span class="fw-bold text-primary text-nowrap"><i class="fa-columns"></i> 컬럼 필터</span>
-            <textarea class="form-control form-control-sm border-primary custom-input-width" style="height: 31px; resize: none;" v-model="columnFilterQuery" placeholder="표시할 컬럼명"></textarea>
-          </div>
-        </div>
-        <panel-toolbar />
-      </template>
-    </PageTitle>
-
-    <div class="panel-body m-0 p-0 h-100">
-      <div class="panel m-0 p-0 h-100">
-        <div class="panel-heading p-0 m-0">
-          <div class="w-100 h-100">
-            <BasicToolBar 
-              :showCreate="false" :showMultiCreate="false" :showSave="false" :showDelete="true"
-              :isDisabledDeleteBtn="isDisabledDeleteBtn"
-              @delete="() => onDelete()"
-            />
-          </div>
-        </div>
-        <div class="panel-body overflow-hidden m-0 p-0 h-100">
-          <ag-grid-vue 
-            v-bind="gridBindProps" 
-            @grid-ready="onGridReady" 
-            @selection-changed="onSelectionChanged" 
-            @cell-clicked="onCellClicked" 
-            rowSelection="multiple"
-            :suppressRowClickSelection="true"
-          />
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
-      <div class="custom-modal-window shadow-lg">
-        <div class="modal-header-dark">
-          <div class="d-flex align-items-center gap-2">
-            <span class="badge shadow-sm" :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }">{{ selectedRow?.Source }}</span>
-            <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
-          </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-xs btn-outline-light" @click="isJsonMode = !isJsonMode">
-              {{ isJsonMode ? 'Table View' : 'JSON View' }}
-            </button>
-            <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
-          </div>
-        </div>
-        
-        <div class="modal-body-content">
-          <div v-if="isJsonMode" class="json-wrapper">
-            <pre class="json-content"><code>{{ JSON.stringify(selectedRow, null, 2) }}</code></pre>
-          </div>
-          
-          <div v-else class="modal-grid-container ag-theme-alpine">
-            <ag-grid-vue v-bind="modalGridBindProps" class="w-100 h-100" />
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup>
-import { ref, computed, shallowRef } from 'vue'
-import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import { sortBy } from 'lodash-es'
-import { useAppMenuStore } from '@/stores/app-menu'
-import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-import { sAlert } from '@/utils/messages/alert-common'
-import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
-import PageTitle from '@/components/toolBar/PageTitle.vue'
-
-const appMenu = useAppMenuStore()
-const gridApi = shallowRef()
-const manualProjNo = ref(appMenu.currentProjNo || '')
-const searchKeywordRef = ref('')
-const localFilterQuery = ref('')
-const columnFilterQuery = ref('')
-const rawDataList = ref([])
-const dynamicAttCols = ref([])
-const dynamicRemainingCols = ref([])
-const isDisabledDeleteBtn = ref(true)
-
-const showModal = ref(false)
-const selectedRow = ref(null)
-const isJsonMode = ref(false)
-
-// --- 하이라이트 렌더러 함수 ---
-const highlightRenderer = (p) => {
-  const val = (p.value === null || p.value === undefined) ? '' : String(p.value)
-  if (!val || !localFilterQuery.value.trim()) return val
-  
-  const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
-  let text = val
-  kws.forEach(kw => {
-    const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    text = text.replace(new RegExp(`(${escapedKw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
-  })
-  return text
+payload 
+{
+    "ContainDeleted": false,
+    "ProjectNo": "TE1002",
+    "ClassIDs": [
+        "TAG301_CLS"
+    ]
 }
 
-const onSearch = () => getData()
 
-const getData = async () => {
-  if (!manualProjNo.value) return sAlert.Warning(`Project No를 입력하세요.`)
-  if (gridApi.value) gridApi.value.setGridOption('loading', true)
-  
-  try {
-    const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
-    let combined = []
-
-    for (const key of searchKeys) {
-      const payload = { ProjectNo: manualProjNo.value.trim(), Keyword: key }
-      const [p, w] = await Promise.allSettled([
-        axiosWrapper.post('/api/Data/SearchPublishData', payload),
-        axiosWrapper.post('/api/Data/SearchWorkingData', payload)
-      ])
-      
-      if (p.status === 'fulfilled' && p.value) {
-        const data = Array.isArray(p.value) ? p.value : [p.value]
-        combined.push(...data.map(i => ({ ...i, Source: 'Published' })))
-      }
-      if (w.status === 'fulfilled' && w.value) {
-        const data = Array.isArray(w.value) ? w.value : [w.value]
-        combined.push(...data.map(i => ({ ...i, Source: 'Working' })))
-      }
-    }
-
-    const allAttIds = new Set(); const allKeys = new Set()
-    const fixedKeys = ['Source', 'TAG_IDX', 'TAG_NO', 'EP_ID', 'CLS_ID', 'ATTRIBUTES', 'DELETED', '_id']
-
-    combined.forEach(item => {
-      const attrs = item.ATTRIBUTES || []
-      attrs.forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
-      Object.keys(item).forEach(k => { 
-        if (!fixedKeys.includes(k) && typeof item[k] !== 'object') allKeys.add(k) 
-      })
-    })
-
-    const processedData = combined.filter(i => i && !i.DELETED).map(item => {
-      const flatItem = { ...item }
-      const attrs = item.ATTRIBUTES || []
-      allAttIds.forEach(id => {
-        const target = attrs.find(a => a?.ATT_ID === id)
-        flatItem[`ATT_${id}`] = (target && target.VALUE !== null) ? target.VALUE : 'null'
-      })
-      return flatItem
-    })
-
-    dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
-      headerName: id, field: `ATT_${id}`, minWidth: 130, headerClass: 'att-column-header',
-      cellRenderer: highlightRenderer,
-      cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000' })
-    }))
-
-    dynamicRemainingCols.value = Array.from(allKeys).sort().map(k => ({
-      headerName: k, field: k, minWidth: 150, cellRenderer: highlightRenderer
-    }))
-
-    rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
-  } catch (err) {
-    console.error(err); sAlert.Error("조회 중 오류가 발생했습니다.");
-  } finally {
-    if (gridApi.value) gridApi.value.setGridOption('loading', false)
-  }
-}
-
-const onDelete = async () => {
-  const nodes = gridApi.value?.getSelectedNodes() || []
-  if (nodes.length === 0) return sAlert.Warning("항목을 선택해주세요.");
-  if (!confirm(`${nodes.length}건을 삭제하시겠습니까?`)) return;
-  try {
-    gridApi.value.setGridOption('loading', true)
-    for (const n of nodes) {
-      const url = n.data.Source === 'Published' ? '/api/Admin/Tool/DeletePublishedData' : '/api/Admin/Tool/DeleteWorkingData'
-      await axiosWrapper.post(url, { ProjectNo: manualProjNo.value.trim(), TagIdx: n.data.TAG_IDX });
-    }
-    sAlert.Success('삭제 완료'); await getData();
-  } catch (e) { sAlert.Error('삭제 중 에러 발생'); } 
-  finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
-}
-
-const filteredData = computed(() => {
-  if (!localFilterQuery.value.trim()) return rawDataList.value
-  const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
-  return rawDataList.value.filter(i => {
-    const target = `${i.TAG_NO || ''} ${i.EP_ID || ''} ${i.CLS_ID || ''} ${i.Source || ''}`.toLowerCase()
-    return kws.some(kw => target.includes(kw))
-  })
-})
-
-const mainColDefs = computed(() => {
-  const fixedCols = [
-    { 
-      headerName: 'Source', field: 'Source', width: 130, pinned: 'left', checkboxSelection: true, headerCheckboxSelection: true,
-      cellRenderer: p => `<span class="badge shadow-sm" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;">${p.value}</span>` 
+preview
+[
+    {
+        "PROJ_NO": "TE1002",
+        "TYPE_ID": "201STATUS",
+        "EP_ID": "TeEP",
+        "DESC": "Stusts201",
+        "REMARK": null,
+        "NEW_TAG_YN": true,
+        "ALL_TAG_YN": false,
+        "VND_YN": false,
+        "SEQ": 0,
+        "CMPLX_YN": false,
+        "CMPL_SETT": null,
+        "MAP_ATT": [],
+        "MAP_CLS_ID": [
+            "STATUS_CLS",
+            "TAG_CLS",
+            "TAG303_CLS",
+            "TAG302_CLS",
+            "TAG301_CLS"
+        ],
+        "MAP_OPER": null,
+        "MAP_REL": [],
+        "LNK_ATT": [
+            {
+                "ATT_ID": "TAG_NO",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG_DESC",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "BF_TAG_NO",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "CLS_ID",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG_IDX",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "PRNT_TAG_IDX",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG_TYPE_ID",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "EP_ID",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": false,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "PROJ_NO",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "PIC_NO",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "CRTER_NO",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "CRTE_DTM",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "CHGER_NO",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "CHGE_DTM",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "_id",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": false,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "EP_IC",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "ASSEMBLY_NAME",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "SYSTEM_NAME",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS001",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS002",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": false,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS003",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": "JoinTable.TAG_NO",
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS004",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": "JoinTable.TAG_DESC",
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS005",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS006",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS007",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS008",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS009",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS010",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS011",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS012",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS013",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS014",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS015",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS016",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS017",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS018",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS019",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "STATUS020",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            }
+        ],
+        "JOIN_TABLS": [
+            {
+                "PROJ_NO": null,
+                "ALIAS": "JoinTable",
+                "TYPE": "REGISTER",
+                "TABL_ID": "103TEST"
+            }
+        ],
+        "DELETED": false,
+        "DEL_USER": null,
+        "DEL_DTM": null,
+        "CRTER_NO": "52593271",
+        "CRTE_DTM": "2025-04-17T01:31:30.771Z",
+        "CHGER_NO": "52593271",
+        "CHGE_DTM": "2026-02-10T02:20:19.453Z",
+        "_id": "68252cb6761c000f90cb2179"
     },
-    { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'EP_ID', headerName: 'EP ID', width: 120, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'CLS_ID', headerName: 'Class', width: 150, pinned: 'left', cellRenderer: highlightRenderer },
-  ]
-  const colFilterKws = columnFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
-  const filterByColName = (cols) => {
-    if (colFilterKws.length === 0) return cols
-    return cols.filter(c => {
-      const colTitle = String(c.headerName || c.field).toLowerCase()
-      return colFilterKws.some(kw => colTitle.includes(kw))
-    })
-  }
-  return [...fixedCols, ...filterByColName(dynamicAttCols.value), ...filterByColName(dynamicRemainingCols.value)]
-})
-
-const gridBindProps = computed(() => ({
-  columnDefs: mainColDefs.value, rowData: filteredData.value, style: 'width: 100%; height: 100%', class: 'ag-theme-custom shadow-sm',
-  pagination: true, paginationPageSize: 100, loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, filter: true, resizable: true }
-}))
-
-const modalGridBindProps = computed(() => {
-  if (!selectedRow.value) return {}
-  const rows = []
-  Object.entries(selectedRow.value).forEach(([k, v]) => {
-    if (k !== 'ATTRIBUTES' && !k.startsWith('ATT_') && k !== 'Source') rows.push({ category: 'System', key: k, value: v ?? '-' })
-  })
-  const attrs = selectedRow.value.ATTRIBUTES || []
-  attrs.forEach(a => rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' }))
-  return {
-    columnDefs: [
-      { headerName: 'Category', field: 'category', width: 120, cellStyle: { fontWeight: 'bold', background: '#f8f9fa' } },
-      { headerName: 'Property', field: 'key', width: 220 },
-      { headerName: 'Value', field: 'value', flex: 1, cellStyle: p => ({ color: p.value === 'null' ? '#adb5bd' : '#000' }) }
-    ],
-    rowData: rows, headerHeight: 35, rowHeight: 32
-  }
-})
-
-const onCellClicked = (p) => { if (p.column.getColId() === 'Source') { selectedRow.value = p.data; showModal.value = true; isJsonMode.value = false; } }
-const closeModal = () => { showModal.value = false; selectedRow.value = null; }
-const onGridReady = p => { gridApi.value = p.api }
-const onSelectionChanged = () => { if (gridApi.value) isDisabledDeleteBtn.value = gridApi.value.getSelectedNodes().length === 0 }
-
-defineOptions({ name: 'PubWrkFinalManager' })
-</script>
-
-<style scoped lang="scss">
-.custom-input-width { width: 160px !important; }
-.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.custom-modal-window { background: #fff; width: 1000px; height: 85%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
-.modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-.modal-body-content { flex-grow: 1; min-height: 0; background: #fff; display: flex; flex-direction: column; }
-
-/* 테이블 뷰 레이아웃 및 테마 강제 적용 */
-.modal-grid-container {
-  flex: 1;
-  width: 100%;
-  height: 100%;
-  padding: 10px;
-  background: #fff;
-  &.ag-theme-alpine {
-    --ag-border-color: #dee2e6;
-    --ag-header-background-color: #f1f5f9;
-    border: 1px solid #dee2e6 !important;
-  }
-}
-
-/* JSON 뷰 레이아웃 및 스크롤 최적화 */
-.json-wrapper { flex: 1; background: #1e293b; overflow: auto; padding: 15px; }
-.json-content { margin: 0; color: #f1f5f9; font-family: 'Consolas', monospace; font-size: 13px; white-space: pre-wrap; word-wrap: break-word; overflow: visible; }
-
-/* 하이라이트 및 배지 스타일 */
-::v-deep(.filter-highlight) { background-color: #ffeb3b !important; color: #000 !important; padding: 0 2px; border-radius: 2px; font-weight: bold; }
-::v-deep(.badge) { min-width: 80px; text-align: center; cursor: pointer; border: none; }
-::v-deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; }
-</style>
+    {
+        "PROJ_NO": "TE1002",
+        "TYPE_ID": "301TAG",
+        "EP_ID": "TeEP",
+        "DESC": "Tag301",
+        "REMARK": null,
+        "NEW_TAG_YN": true,
+        "ALL_TAG_YN": false,
+        "VND_YN": false,
+        "SEQ": 0,
+        "CMPLX_YN": false,
+        "CMPL_SETT": null,
+        "MAP_ATT": [],
+        "MAP_CLS_ID": [
+            "TAG301_CLS"
+        ],
+        "MAP_OPER": null,
+        "MAP_REL": [],
+        "LNK_ATT": [
+            {
+                "ATT_ID": "TAG_NO",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG_DESC",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "BF_TAG_NO",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "CLS_ID",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG_IDX",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "PRNT_TAG_IDX",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG_TYPE_ID",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "EP_ID",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": false,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "PROJ_NO",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "PIC_NO",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "CRTER_NO",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "CRTE_DTM",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "CHGER_NO",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "CHGE_DTM",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "_id",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": false,
+                "PUB_YN": false,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "EP_IC",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "ASSEMBLY_NAME",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "SYSTEM_NAME",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG001",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": "",
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG002",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": "",
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG003",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": "",
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG004",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": "",
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG005",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": "",
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG006",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": "",
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG007",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": "",
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG008",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": "",
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG009",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": "",
+                "JOIN_VAL_ATT_ID": "",
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG010",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": "",
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG011",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": "",
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG012",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": "",
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG013",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": "",
+                "JOIN_VAL_ATT_ID": "",
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG014",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": "",
+                "JOIN_VAL_ATT_ID": "",
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG015",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": "",
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG016",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": "",
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG017",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": "",
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG018",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG019",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            },
+            {
+                "ATT_ID": "TAG020",
+                "CPY_DESC": null,
+                "JOIN_KEY_ATT_ID": null,
+                "JOIN_VAL_ATT_ID": null,
+                "KEY_YN": false,
+                "EDIT_YN": true,
+                "PUB_YN": true,
+                "PUB_ONLY": false,
+                "DEF_VAL": null,
+                "MIN_VAL": null,
+                "MAX_VAL": null,
+                "UOM_ID": null,
+                "UOM_DIGIT": 0
+            }
+        ],
+        "JOIN_TABLS": [],
+        "DELETED": false,
+        "DEL_USER": null,
+        "DEL_DTM": null,
+        "CRTER_NO": "52593271",
+        "CRTE_DTM": "2025-04-17T01:32:09.076Z",
+        "CHGER_NO": "52593271",
+        "CHGE_DTM": "2026-03-11T23:09:22.929Z",
+        "_id": "68252cb6761c000f90cb217a"
+    }
+]
