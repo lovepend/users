@@ -4,7 +4,7 @@
       <template #actions>
         <div class="d-flex align-items-center gap-3 ms-auto me-2">
           <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-primary text-nowrap">Project No</span>
+            <span class="fw-bold text-dark text-nowrap">Project No</span>
             <input type="text" class="form-control form-control-sm custom-input-width" v-model="manualProjNo" />
           </label>
           <label class="d-flex align-items-center gap-2">
@@ -19,8 +19,8 @@
           </div>
 
           <div class="ms-1 d-flex align-items-center gap-2">
-            <span class="fw-bold text-warning text-nowrap"><i class="fa-columns"></i> 컬럼 필터</span>
-            <textarea class="form-control form-control-sm border-warning custom-input-width" style="height: 31px; resize: none;" v-model="columnFilterQuery" placeholder="표시할 컬럼명"></textarea>
+            <span class="fw-bold text-primary text-nowrap"><i class="fa-columns"></i> 컬럼 필터</span>
+            <textarea class="form-control form-control-sm border-primary custom-input-width" style="height: 31px; resize: none;" v-model="columnFilterQuery" placeholder="표시할 컬럼명"></textarea>
           </div>
         </div>
         <panel-toolbar />
@@ -60,8 +60,10 @@
           </div>
           <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
         </div>
-        <div class="modal-body-content">
-          <ag-grid-vue v-bind="modalGridBindProps" class="ag-theme-alpine w-100 h-100" />
+        <div class="modal-body-content d-flex flex-column h-100 w-100">
+          <div class="flex-grow-1 w-100" style="min-height: 0;">
+            <ag-grid-vue v-bind="modalGridBindProps" class="ag-theme-alpine w-100 h-100" />
+          </div>
         </div>
       </div>
     </div>
@@ -86,7 +88,7 @@ const gridApi = shallowRef()
 const manualProjNo = ref(appMenu.currentProjNo || '')
 const searchKeywordRef = ref('')
 const localFilterQuery = ref('')
-const columnFilterQuery = ref('')
+const columnFilterQuery = ref('') // 누락되었던 컬럼 필터 쿼리 연동
 const rawDataList = ref([])
 const dynamicAttCols = ref([])
 const dynamicRemainingCols = ref([])
@@ -112,12 +114,10 @@ const getData = async () => {
         axiosWrapper.post('/api/Data/SearchWorkingData', payload)
       ])
       
-      // Publish 데이터 처리 (배열 보장)
       if (p.status === 'fulfilled' && p.value) {
         const data = Array.isArray(p.value) ? p.value : [p.value]
         combined.push(...data.map(i => ({ ...i, Source: 'Published' })))
       }
-      // Working 데이터 처리 (단일 객체 대응 로직 추가)
       if (w.status === 'fulfilled' && w.value) {
         const data = Array.isArray(w.value) ? w.value : [w.value]
         combined.push(...data.map(i => ({ ...i, Source: 'Working' })))
@@ -141,7 +141,6 @@ const getData = async () => {
       const attrs = item.ATTRIBUTES || []
       allAttIds.forEach(id => {
         const target = attrs.find(a => a && a.ATT_ID === id)
-        // 값이 null인 경우 'null' 문자열로 표시하여 구분
         flatItem[`ATT_${id}`] = (target && target.VALUE !== null) ? target.VALUE : 'null'
       })
       return flatItem
@@ -186,15 +185,17 @@ const onDelete = async () => {
   }
 }
 
-// 필터 로직
+// 🛠️ 1. 결과 필터 복구 (null 방어 로직 추가)
 const filteredData = computed(() => {
   if (!localFilterQuery.value.trim()) return rawDataList.value
-  const kw = localFilterQuery.value.toLowerCase()
-  return rawDataList.value.filter(i => 
-    `${i.TAG_NO} ${i.EP_ID} ${i.CLS_ID}`.toLowerCase().includes(kw)
-  )
+  const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
+  return rawDataList.value.filter(i => {
+    const target = `${i.TAG_NO || ''} ${i.EP_ID || ''} ${i.CLS_ID || ''} ${i.Source || ''}`.toLowerCase()
+    return kws.some(kw => target.includes(kw))
+  })
 })
 
+// 🛠️ 2. 컬럼 필터 로직 완벽 복구
 const mainColDefs = computed(() => {
   const fixedCols = [
     { 
@@ -207,7 +208,22 @@ const mainColDefs = computed(() => {
     { field: 'CLS_ID', headerName: 'Class', width: 150, pinned: 'left' },
     { field: 'TAG_IDX', headerName: 'TagIdx', width: 120 },
   ]
-  return [...fixedCols, ...dynamicAttCols.value, ...dynamicRemainingCols.value]
+
+  // 입력된 키워드들에 맞춰 표시할 동적 컬럼만 걸러내는 로직
+  const colFilterKws = columnFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
+  const filterByColName = (cols) => {
+    if (colFilterKws.length === 0) return cols
+    return cols.filter(c => {
+      const colTitle = String(c.headerName || c.field).toLowerCase()
+      return colFilterKws.some(kw => colTitle.includes(kw))
+    })
+  }
+
+  return [
+    ...fixedCols, 
+    ...filterByColName(dynamicAttCols.value), 
+    ...filterByColName(dynamicRemainingCols.value)
+  ]
 })
 
 const gridBindProps = computed(() => ({
@@ -224,23 +240,22 @@ const gridBindProps = computed(() => ({
 const modalGridBindProps = computed(() => {
   if (!selectedRow.value) return {}
   const rows = []
-  // 시스템 필드
   Object.entries(selectedRow.value).forEach(([k, v]) => {
-    if (k !== 'ATTRIBUTES' && !k.startsWith('ATT_')) {
+    if (k !== 'ATTRIBUTES' && !k.startsWith('ATT_') && k !== 'Source') {
       rows.push({ category: 'System', key: k, value: v ?? '-' })
     }
   })
-  // 속성 필드
   const attrs = selectedRow.value.ATTRIBUTES || []
   attrs.forEach(a => rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' }))
   
   return {
     columnDefs: [
       { headerName: 'Category', field: 'category', width: 120 },
-      { headerName: 'Property', field: 'key', width: 200 },
-      { headerName: 'Value', field: 'value', flex: 1 }
+      { headerName: 'Property', field: 'key', width: 220 },
+      { headerName: 'Value', field: 'value', flex: 1, cellStyle: p => ({ color: p.value === 'null' ? '#94a3b8' : '#1e293b' }) }
     ],
-    rowData: rows
+    rowData: rows,
+    headerHeight: 35, rowHeight: 32
   }
 })
 
@@ -255,9 +270,9 @@ defineOptions({ name: 'PubWrkFinalManager' })
 <style scoped lang="scss">
 .custom-input-width { width: 160px !important; }
 .custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.4); }
 .modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
-.modal-body-content { flex: 1; padding: 0; background: #fff; }
+.modal-body-content { flex: 1; overflow: hidden; background: #fff; } /* 🛠️ 모달 안쪽 컨텐츠가 넘치지 않게 overflow: hidden 추가 */
 ::v-deep(.badge) { min-width: 80px; text-align: center; cursor: pointer; }
 ::v-deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; }
 </style>
