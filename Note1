@@ -37,7 +37,7 @@
               :showSave="false" 
               :showDelete="true"
               :isDisabledDeleteBtn="isDisabledDeleteBtn"
-              @delete="() => onDelete()"
+              @delete="onDeleteClick"
             />
           </div>
         </div>
@@ -117,24 +117,6 @@ const safeConfirm = (msg) => {
   });
 };
 
-const filteredData = computed(() => {
-  if (!localFilterQuery.value.trim()) return rawDataList.value
-  const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
-  return rawDataList.value.filter(i => {
-    const target = `${i.TagNo || ''} ${i.EpId || ''} ${i.ClsId || ''} ${i.TagDesc || ''} ${i.Source || ''}`.toLowerCase()
-    return kws.some(kw => target.includes(kw))
-  })
-})
-
-const highlightRenderer = (p) => {
-  const val = (p.value === null || p.value === undefined) ? '' : String(p.value)
-  if (!val || !localFilterQuery.value.trim()) return val
-  const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
-  let text = val
-  kws.forEach(kw => { text = text.replace(new RegExp(`(${kw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`) })
-  return text
-}
-
 const onSearch = () => getData()
 const getData = async () => {
   if (!manualProjNo.value) return sAlert.Warning(`Project No를 입력하세요.`)
@@ -168,19 +150,17 @@ const getData = async () => {
       const attrs = item.Attributes || item.attributes || []
       allAttIds.forEach(id => {
         const target = attrs.find(a => a && a.ATT_ID === id)
-        const hasVal = target && target.VALUE !== undefined && target.VALUE !== null && String(target.VALUE).trim().length > 0
-        flatItem[`ATT_${id}`] = hasVal ? target.VALUE : 'null'
+        flatItem[`ATT_${id}`] = (target && target.VALUE) ? target.VALUE : 'null'
       })
       return flatItem
     })
 
     dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
-      headerName: id, field: `ATT_${id}`, minWidth: 130, headerClass: 'att-column-header',
-      cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000', fontStyle: p.value === 'null' ? 'italic' : 'normal' })
+      headerName: id, field: `ATT_${id}`, minWidth: 130, headerClass: 'att-column-header'
     }))
 
     dynamicRemainingCols.value = Array.from(allKeys).sort().map(k => ({
-      headerName: k, field: k, minWidth: 150, cellRenderer: (p) => (k === 'TagDesc' ? highlightRenderer(p) : p.value)
+      headerName: k, field: k, minWidth: 150
     }))
 
     rawDataList.value = sortBy(processedData, ['TagNo', 'Source'])
@@ -191,72 +171,81 @@ const getData = async () => {
   }
 }
 
-// --- 🛠️ 수정된 삭제 로직 ---
-const onDelete = async () => {
-  // 1. gridApi 존재 여부 확인
-  if (!gridApi.value) return;
+// --- 🛠️ 삭제 로직 검토 및 수정 ---
+const onDeleteClick = async () => {
+  console.log("🛠️ [Delete Step 1] 삭제 함수 진입");
 
-  // 2. 인자로 들어오는 값 무시하고 gridApi에서 직접 선택된 노드 추출
+  if (!gridApi.value) {
+    console.error("❌ 오류: gridApi가 없습니다.");
+    return;
+  }
+
   const selectedNodes = gridApi.value.getSelectedNodes();
-  
+  console.log("🛠️ [Delete Step 2] 선택된 노드 데이터:", selectedNodes.map(n => n.data));
+
   if (selectedNodes.length === 0) {
     sAlert.Warning("삭제할 항목을 체크박스로 선택해주세요.");
     return;
   }
 
-  const confirm = await safeConfirm(`선택한 ${selectedNodes.length}개의 항목을 삭제하시겠습니까?`);
-  if (!confirm) return;
+  const confirmResult = await safeConfirm(`${selectedNodes.length}건을 삭제하시겠습니까?`);
+  if (!confirmResult) return;
 
   try {
     gridApi.value.setGridOption('loading', true);
     
-    // 3. 페이로드 구성 및 전송
-    const promises = selectedNodes.map(node => {
+    // ⭐ 루프 돌면서 개별 요청 날리기
+    for (const node of selectedNodes) {
       const { TagIdx, Source } = node.data;
-      const endpoint = Source === 'Published' ? '/api/Admin/Tool/DeletePublishedData' : '/api/Admin/Tool/DeleteWorkingData';
+      // 엔드포인트가 정확한지 다시 확인 (현재 프로젝트 표준 따름)
+      const url = Source === 'Published' 
+        ? '/api/Admin/Tool/DeletePublishedData' 
+        : '/api/Admin/Tool/DeleteWorkingData';
       
-      // 실제 API 호출 (ProjectNo와 TagIdx를 명확히 전달)
-      return axiosWrapper.post(endpoint, { 
+      const payload = { 
         ProjectNo: manualProjNo.value.trim(), 
         TagIdx: TagIdx 
-      });
-    });
+      };
 
-    await Promise.all(promises);
-    sAlert.Success('성공적으로 삭제되었습니다.');
-    
-    // 4. 리스트 새로고침
-    await getData();
+      console.log(`🚀 [Delete Step 3] 요청 전송: ${url}`, payload);
+      
+      // await를 사용하여 순차적으로 던지거나 Promise.all을 사용
+      await axiosWrapper.post(url, payload);
+    }
+
+    sAlert.Success('삭제가 완료되었습니다.');
+    await getData(); // 리스트 갱신
   } catch (e) {
-    console.error("Delete Error:", e);
-    sAlert.Error('삭제 처리 중 오류가 발생했습니다.');
+    console.error("❌ 삭제 API 호출 중 에러:", e);
+    sAlert.Error('삭제 중 오류가 발생했습니다. 콘솔을 확인하세요.');
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false);
   }
 }
+
+// --- 나머지 그리드 설정 ---
+const filteredData = computed(() => {
+  if (!localFilterQuery.value.trim()) return rawDataList.value
+  const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
+  return rawDataList.value.filter(i => {
+    const target = `${i.TagNo} ${i.EpId} ${i.ClsId} ${i.Source}`.toLowerCase()
+    return kws.some(kw => target.includes(kw))
+  })
+})
 
 const mainColDefs = computed(() => {
   const fixedCols = [
     { 
       headerName: 'Source', field: 'Source', width: 130, pinned: 'left', 
       checkboxSelection: true, headerCheckboxSelection: true,
-      cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;cursor:pointer;">${p.value}</span>` 
+      cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;">${p.value}</span>` 
     },
     { field: 'TagIdx', headerName: 'TagIdx', width: 100, pinned: 'left' },
-    { field: 'TagNo', headerName: 'TagNo', width: 150, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'EpId', headerName: 'EP ID', width: 100, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'ClsId', headerName: 'Class', width: 100, pinned: 'left', cellRenderer: highlightRenderer },
+    { field: 'TagNo', headerName: 'TagNo', width: 150, pinned: 'left' },
+    { field: 'EpId', headerName: 'EP ID', width: 100, pinned: 'left' },
+    { field: 'ClsId', headerName: 'Class', width: 100, pinned: 'left' },
   ]
-
-  const colFilterKws = columnFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
-  const filterByColName = (cols) => {
-    if (colFilterKws.length === 0) return cols
-    return cols.filter(c => {
-      const colTitle = String(c.headerName || c.field).toLowerCase()
-      return colFilterKws.some(kw => colTitle.includes(kw))
-    })
-  }
-  return [...fixedCols, ...filterByColName(dynamicAttCols.value), ...filterByColName(dynamicRemainingCols.value)]
+  return [...fixedCols, ...dynamicAttCols.value, ...dynamicRemainingCols.value]
 })
 
 const gridBindProps = computed(() => ({
@@ -267,40 +256,31 @@ const gridBindProps = computed(() => ({
   pagination: true,
   paginationPageSize: 100,
   loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true, cellStyle: { background: '#fff' } }
+  defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true }
 }))
 
 const modalGridBindProps = computed(() => {
   if (!selectedRow.value) return {}
   const rows = []
-  const ignore = ['Attributes', 'attributes', 'Source']
   Object.entries(selectedRow.value).forEach(([k, v]) => {
-    if (!ignore.includes(k) && !k.startsWith('ATT_')) {
-      rows.push({ category: 'System', key: k, value: typeof v === 'object' ? JSON.stringify(v) : (v ?? '-') })
+    if (k !== 'Attributes' && k !== 'attributes') {
+      rows.push({ category: 'System', key: k, value: v ?? '-' })
     }
   })
-  const attrs = selectedRow.value.Attributes || selectedRow.value.attributes || []
-  attrs.forEach(a => { if(a) rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' }) })
   return {
     columnDefs: [
-      { headerName: 'Category', field: 'category', width: 110, pinned: 'left', cellStyle: { background: '#f8fafc', fontWeight: 'bold' } },
-      { headerName: 'Property Name', field: 'key', width: 220, pinned: 'left' },
-      { headerName: 'Value', field: 'value', flex: 1, cellStyle: p => ({ color: p.value === 'null' ? '#94a3b8' : '#1e293b' }) }
+      { headerName: 'Category', field: 'category', width: 110 },
+      { headerName: 'Property', field: 'key', width: 200 },
+      { headerName: 'Value', field: 'value', flex: 1 }
     ],
-    rowData: rows,
-    defaultColDef: { sortable: true, filter: true, resizable: true },
-    headerHeight: 35, rowHeight: 32
+    rowData: rows
   }
 })
 
-const onCellClicked = (p) => { if (p.column.getColId() === 'Source') { selectedRow.value = p.data; showModal.value = true; isJsonMode.value = true; } }
+const onCellClicked = (p) => { if (p.column.getColId() === 'Source') { selectedRow.value = p.data; showModal.value = true; } }
 const closeModal = () => { showModal.value = false; selectedRow.value = null; }
 const onGridReady = p => { gridApi.value = p.api }
-const onSelectionChanged = () => { 
-    if (gridApi.value) {
-        isDisabledDeleteBtn.value = gridApi.value.getSelectedNodes().length === 0;
-    }
-}
+const onSelectionChanged = () => { if (gridApi.value) isDisabledDeleteBtn.value = gridApi.value.getSelectedNodes().length === 0 }
 
 defineOptions({ name: 'PubWrkFinalManager' })
 </script>
@@ -308,15 +288,9 @@ defineOptions({ name: 'PubWrkFinalManager' })
 <style scoped lang="scss">
 .custom-input-width { width: 160px !important; }
 .custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.custom-modal-window { background: #fff; width: 1000px; height: 85%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.4); }
+.custom-modal-window { background: #fff; width: 1000px; height: 85%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
 .modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
 .modal-body-content { flex: 1; overflow: hidden; background: #fff; }
-.modal-grid-wrapper { flex: 1; height: 100%; width: 100%; }
-.json-container { padding: 15px; background: #1e293b; overflow: auto; height: 100%; }
-.json-content { margin: 0; color: #f1f5f9; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5; }
-
-::v-deep(.filter-highlight) { background-color: #ffeb3b !important; color: #000 !important; font-weight: bold; }
-::v-deep(.ag-pinned-left-cols-container) { border-right: 2px solid #cbd5e1 !important; background: #fff; }
-::v-deep(.badge) { font-size: 11px; font-weight: bold; padding: 3px 8px; border-radius: 4px; display: inline-block; min-width: 75px; text-align: center; cursor: pointer; }
-::v-deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; border-right: 1px solid #dee2e6 !important; }
+.json-container { padding: 15px; background: #1e293b; overflow: auto; height: 100%; color: #fff; }
+::v-deep(.badge) { min-width: 75px; text-align: center; cursor: pointer; }
 </style>
