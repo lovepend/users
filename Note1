@@ -101,7 +101,7 @@
 
 <script setup>
 import { ref, computed, shallowRef, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router' // useRoute 추가
 import { storeToRefs } from 'pinia'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { sortBy } from 'lodash-es'
@@ -112,22 +112,40 @@ import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
 import PageTitle from '@/components/toolBar/PageTitle.vue'
 
 const router = useRouter()
+const route = useRoute()
 const appMenu = useAppMenuStore()
 const { currentProjNo, currentEpId } = storeToRefs(appMenu)
 
 const gridApi = shallowRef()
-// manualProjNo는 빈 값으로 시작하고 watch에서 할당하도록 변경
 const manualProjNo = ref('')
 
 /**
- * [중요 수정] 실시간 동기화 로직
- * 컴포넌트가 활성화될 때(immediate) 스토어의 최신 프로젝트 번호를 가져옵니다.
+ * 🛠️ 핵심 추가 로직 1: 현재 URL에 프로젝트 정보 업데이트
+ * 화면 진입 시 혹은 프로젝트 변경 시 URL 쿼리 파라미터를 갱신합니다.
  */
+const updateUrlParams = () => {
+  const pNo = manualProjNo.value || currentProjNo.value
+  const eId = currentEpId.value
+  
+  if (pNo) {
+    router.replace({
+      query: { ...route.query, proj_no: pNo, ep_id: eId }
+    })
+  }
+}
+
+// 스토어 값이 바뀔 때마다 입력창 동기화 + URL 동기화
 watch(currentProjNo, (newVal) => {
   if (newVal) {
     manualProjNo.value = newVal
+    updateUrlParams()
   }
 }, { immediate: true })
+
+// 화면 처음 켜질 때 URL 세팅
+onMounted(() => {
+  updateUrlParams()
+})
 
 const searchKeywordRef = ref('')
 const localFilterQuery = ref('')
@@ -156,10 +174,8 @@ const classModalColDefs = [
   { headerName: 'Project No', field: 'PROJ_NO', width: 120 }
 ]
 
-// Register No 클릭 시 새 탭으로 바로가기 (현재 선택된 Proj/EP 반영)
 const onClassGridCellClicked = (p) => {
   if (p.column.getColId() === 'TYPE_ID' && p.value) {
-    // 1. 현재 화면의 입력값 혹은 스토어의 최신값을 우선 사용
     const targetProjNo = manualProjNo.value || currentProjNo.value;
     const targetEpId = p.data.EP_ID || currentEpId.value;
 
@@ -192,7 +208,6 @@ const onSearch = () => getData()
 const getData = async () => {
   const pNo = manualProjNo.value?.trim() || currentProjNo.value
   if (!pNo) return sAlert.Warning(`Project No를 입력하세요.`)
-  
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
   try {
     const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
@@ -240,7 +255,6 @@ const getData = async () => {
 const onCellClicked = async (p) => {
   const colId = p.column.getColId()
   const pNo = manualProjNo.value?.trim() || currentProjNo.value
-
   if (colId === 'Source') {
     selectedRow.value = p.data; showModal.value = true; isJsonMode.value = false;
   } 
@@ -333,7 +347,7 @@ const onDelete = async () => {
 
 const onGridReady = p => { gridApi.value = p.api }
 const onSelectionChanged = () => { if (gridApi.value) isDisabledDeleteBtn.value = gridApi.value.getSelectedNodes().length === 0 }
-defineOptions({ name: 'TagAnalysisFinalSync' })
+defineOptions({ name: 'TagAnalysisFinalUrlSync' })
 </script>
 
 <style scoped lang="scss">
