@@ -58,22 +58,20 @@
             <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-xs" :class="isJsonMode ? 'btn-outline-info' : 'btn-info'" @click="isJsonMode = !isJsonMode">
-              {{ isJsonMode ? 'Switch to Table' : 'Switch to JSON' }}
+            <button class="btn btn-xs btn-outline-light" @click="isJsonMode = !isJsonMode">
+              {{ isJsonMode ? 'Table View' : 'JSON View' }}
             </button>
             <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
           </div>
         </div>
         
         <div class="modal-body-content">
-          <div v-if="isJsonMode" class="h-100 w-100 json-container">
+          <div v-if="isJsonMode" class="json-wrapper">
             <pre class="json-content"><code>{{ JSON.stringify(selectedRow, null, 2) }}</code></pre>
           </div>
           
-          <div v-else class="h-100 w-100 p-2 d-flex flex-column">
-            <div class="ag-theme-alpine flex-grow-1 w-100" style="min-height: 0;">
-              <ag-grid-vue v-bind="modalGridBindProps" class="w-100 h-100" />
-            </div>
+          <div v-else class="modal-grid-container ag-theme-alpine">
+            <ag-grid-vue v-bind="modalGridBindProps" class="w-100 h-100" />
           </div>
         </div>
       </div>
@@ -102,12 +100,11 @@ const dynamicAttCols = ref([])
 const dynamicRemainingCols = ref([])
 const isDisabledDeleteBtn = ref(true)
 
-// 모달 관련 상태
 const showModal = ref(false)
 const selectedRow = ref(null)
-const isJsonMode = ref(false) // 기본은 테이블 뷰
+const isJsonMode = ref(false)
 
-// --- 하이라이트 렌더러 ---
+// 하이라이트 렌더러
 const highlightRenderer = (p) => {
   const val = (p.value === null || p.value === undefined) ? '' : String(p.value)
   if (!val || !localFilterQuery.value.trim()) return val
@@ -202,7 +199,7 @@ const mainColDefs = computed(() => {
   const colFilterKws = columnFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
   const filterByColName = (cols) => {
     if (colFilterKws.length === 0) return cols
-    return cols.filter(c => String(c.headerName || c.field).toLowerCase().includes(colFilterKws[0])) // 첫번째 키워드로 필터링 (보강 가능)
+    return cols.filter(c => String(c.headerName || c.field).toLowerCase().includes(colFilterKws[0]))
   }
   return [...fixedCols, ...filterByColName(dynamicAttCols.value), ...filterByColName(dynamicRemainingCols.value)]
 })
@@ -227,7 +224,9 @@ const modalGridBindProps = computed(() => {
       { headerName: 'Property', field: 'key', width: 220 },
       { headerName: 'Value', field: 'value', flex: 1, cellStyle: p => ({ color: p.value === 'null' ? '#adb5bd' : '#000' }) }
     ],
-    rowData: rows, headerHeight: 35, rowHeight: 32
+    rowData: rows, headerHeight: 35, rowHeight: 32,
+    // 🛠️ 스타일 깨짐 방지: 그리드 내부 테두리 강제 설정
+    suppressCellFocus: true
   }
 })
 
@@ -244,11 +243,48 @@ defineOptions({ name: 'PubWrkFinalManager' })
 .custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .custom-modal-window { background: #fff; width: 1000px; height: 85%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.4); }
 .modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
-.modal-body-content { flex-grow: 1; min-height: 0; background: #fff; position: relative; }
-.json-container { padding: 15px; background: #1e293b; overflow: auto; color: #f1f5f9; font-family: 'Consolas', monospace; font-size: 13px; }
+
+/* 🛠️ 모달 바디 레이아웃 최적화 */
+.modal-body-content { 
+  flex-grow: 1; 
+  min-height: 0; 
+  background: #fff; 
+  display: flex; 
+  flex-direction: column;
+}
+
+/* 🛠️ 테이블 뷰 컨테이너 (그리드 스타일 강제) */
+.modal-grid-container {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  padding: 10px;
+  background: #fff;
+  &.ag-theme-alpine {
+    --ag-border-color: #dee2e6;
+    --ag-header-background-color: #f1f5f9;
+  }
+}
+
+/* 🛠️ JSON 뷰 컨테이너 (이중 스크롤 해결) */
+.json-wrapper {
+  flex: 1;
+  background: #1e293b;
+  overflow: auto; /* 외부 스크롤 하나만 */
+  padding: 15px;
+}
+.json-content {
+  margin: 0;
+  padding: 0;
+  color: #f1f5f9;
+  font-family: 'Consolas', monospace;
+  font-size: 13px;
+  white-space: pre-wrap; /* 가로 스크롤 방지 및 자동 줄바꿈 원하면 pre-wrap, 아니면 pre */
+  word-wrap: break-word;
+  overflow: visible; /* pre 내부 스크롤 제거 */
+}
 
 ::v-deep(.filter-highlight) { background-color: #ffeb3b !important; color: #000 !important; padding: 0 2px; border-radius: 2px; font-weight: bold; }
 ::v-deep(.badge) { min-width: 80px; text-align: center; cursor: pointer; }
 ::v-deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; }
-.ag-theme-alpine { border: 1px solid #dee2e6 !important; }
 </style>
