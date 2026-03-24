@@ -1,62 +1,38 @@
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100">
-    <PageTitle
-      icon="fa-search-plus"
-      :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')"
-    >
+    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
       <template #actions>
-        <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap">Project No</span>
-            <input
-              type="text"
-              class="form-control form-control-sm custom-input-width"
-              v-model="manualProjNo"
-              placeholder="예: SN2661"
-            />
-          </label>
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-nowrap">Register ID</span>
-            <input
-              type="text"
-              class="form-control form-control-sm custom-input-width"
-              v-model="regTypeId"
-              placeholder="예: PIEP_T_002_T"
-            />
-          </label>
+        <div class="d-flex align-items-center gap-2 ms-auto me-2">
+          <div class="d-flex align-items-center gap-1">
+            <span class="fw-bold text-dark text-nowrap small">Project</span>
+            <input type="text" class="form-control form-control-sm" style="width: 100px" v-model="manualProjNo" placeholder="SN2661" />
+          </div>
+          <div class="d-flex align-items-center gap-1">
+            <span class="fw-bold text-nowrap small">Reg ID</span>
+            <input type="text" class="form-control form-control-sm" style="width: 130px" v-model="regTypeId" placeholder="PIEP_T_002_T" />
+          </div>
 
-          <div class="d-flex align-items-center gap-2 border-start ps-3 ms-2">
-            <span class="fw-bold text-nowrap">조회 대상</span>
-            <div
-              class="form-check form-check-inline mb-0"
-              v-for="opt in ['Publish', 'Working', 'MergeData']"
-              :key="opt"
-            >
-              <input class="form-check-input" type="radio" :id="opt" :value="opt" v-model="selectedType" />
-              <label class="form-check-label" :for="opt">{{ opt }}</label>
+          <div class="d-flex align-items-center gap-2 border-start ps-2 ms-1" style="font-size: 11px;">
+            <div class="form-check form-check-inline m-0" v-for="opt in ['Publish', 'Working', 'MergeData', 'All']" :key="opt">
+              <input class="form-check-input" type="radio" :id="'radio_' + opt" :value="opt" v-model="selectedType" />
+              <label class="form-check-label fw-bold" :for="'radio_' + opt">{{ opt }}</label>
             </div>
           </div>
 
-          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
-            <i class="fa fa-search me-1"></i>조회
+          <button class="btn btn-xs btn-primary shadow-sm px-2" @click="onSearch">
+            <i class="fa fa-search"></i> 조회
           </button>
 
-          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap">결과 필터</span>
-            <textarea
-              class="form-control form-control-sm border-success filter-textarea"
-              v-model="localFilterQuery"
-              placeholder="내용 (공백/엔터/, 구분)"
-            ></textarea>
+          <div class="ms-1 ps-2 border-start d-flex align-items-center gap-1">
+            <span class="fw-bold text-success text-nowrap small">결과</span>
+            <textarea class="form-control form-control-sm border-success filter-textarea" 
+              v-model="localFilterQuery" placeholder="내용 (엔터/,)"></textarea>
           </div>
 
-          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-info text-nowrap">헤더 필터</span>
-            <textarea
-              class="form-control form-control-sm border-info filter-textarea"
-              v-model="headerFilterQuery"
-              placeholder="헤더명 (공백/엔터/, 구분)"
-            ></textarea>
+          <div class="ms-1 ps-2 border-start d-flex align-items-center gap-1">
+            <span class="fw-bold text-info text-nowrap small">헤더</span>
+            <textarea class="form-control form-control-sm border-info filter-textarea" 
+              v-model="headerFilterQuery" placeholder="헤더명 (엔터/,)"></textarea>
           </div>
         </div>
         <panel-toolbar />
@@ -64,7 +40,7 @@
     </PageTitle>
 
     <div class="panel-body m-0 p-0 h-100">
-      <div class="panel m-0 p-0 h-100">
+      <div class="panel m-0 p-0 h-100 border-0">
         <div class="panel-body overflow-hidden m-0 p-0 h-100">
           <ag-grid-vue
             v-bind="gridBindProps"
@@ -80,9 +56,7 @@
       <div class="custom-modal-window shadow-lg">
         <div class="modal-header-dark">
           <h5 class="m-0"><i class="fa fa-code me-2"></i>Raw Data Preview [{{ selectedTagNo }}]</h5>
-          <button class="btn btn-link text-white p-0" @click="showModal = false">
-            <i class="fa fa-times text-white"></i>
-          </button>
+          <button class="btn btn-link text-white p-0" @click="showModal = false"><i class="fa fa-times text-white"></i></button>
         </div>
         <div class="modal-body-content">
           <div class="json-wrapper">
@@ -95,245 +69,164 @@
 </template>
 
 <script setup>
-  import { ref, computed, shallowRef } from 'vue'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sAlert } from '@/utils/messages/alert-common'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-  import PageTitle from '@/components/toolBar/PageTitle.vue'
+import { ref, computed, shallowRef } from 'vue'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
+import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-  const manualProjNo = ref('SN2661')
-  const regTypeId = ref('PIEP_T_002_T')
-  const selectedType = ref('Working')
-  const containDeleted = ref(false)
+const manualProjNo = ref('SN2661')
+const regTypeId = ref('PIEP_T_002_T')
+const selectedType = ref('Working') // 기본값
+const containDeleted = ref(false)
 
-  const localFilterQuery = ref('') // 결과 내용 필터
-  const headerFilterQuery = ref('') // 헤더명 필터
+const localFilterQuery = ref('') 
+const headerFilterQuery = ref('') 
 
-  const gridApi = shallowRef()
-  const rawDataList = ref([])
-  const allColumnsRaw = ref([]) // 필터 전 전체 컬럼 정의
-  const diffMap = ref(new Map())
+const gridApi = shallowRef()
+const rawDataList = ref([])
+const allColumnsRaw = ref([]) 
+const diffMap = ref(new Map())
 
-  const showModal = ref(false)
-  const selectedTagNo = ref('')
-  const selectedJson = ref(null)
+const showModal = ref(false)
+const selectedTagNo = ref('')
+const selectedJson = ref(null)
 
-  // 🔍 공통 헬퍼: 공백, 줄바꿈, 콤마를 구분자로 N개 키워드 추출
-  const getKeywords = query => {
-    if (!query.trim()) return []
-    return query
-      .split(/[\s,\n]+/)
-      .filter(k => k.trim() !== '')
-      .map(k => k.toLowerCase())
+const getKeywords = query => {
+  if (!query.trim()) return []
+  return query.split(/[\s,\n]+/).filter(k => k.trim() !== '').map(k => k.toLowerCase())
+}
+
+const getCellStyle = p => {
+  const styles = {}
+  if (diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)) {
+    styles.backgroundColor = '#fff9db'; styles.fontWeight = 'bold'; styles.color = '#d94111'
   }
-
-  /**
-   * 🎨 셀 스타일 및 렌더러
-   */
-  const diffCellRenderer = p => {
-    let val = p.value ?? ''
-    if (p.colDef.field === 'TAG_NO') {
-      val = `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${val}</span>`
+  const keywords = getKeywords(localFilterQuery.value)
+  if (keywords.length > 0 && p.value) {
+    if (keywords.some(k => String(p.value).toLowerCase().includes(k))) {
+      styles.backgroundColor = '#e8f5e9'; styles.border = '1px solid #28a745'
     }
-    const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-    if (diffInfo) {
-      return `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</div>`
-    }
-    return val
   }
+  return Object.keys(styles).length > 0 ? styles : null
+}
 
-  const getCellStyle = p => {
-    const styles = {}
-    // 1. Diff 하이라이트
-    const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-    if (diffInfo) {
-      styles.backgroundColor = '#fff9db'
-      styles.fontWeight = 'bold'
-      styles.color = '#d94111'
+const onSearch = async () => {
+  if (!manualProjNo.value || !regTypeId.value) return sAlert.Warning('Project No와 Register ID를 입력하세요.')
+  if (gridApi.value) gridApi.value.setGridOption('loading', true)
+
+  try {
+    const payload = {
+      ProjectNo: manualProjNo.value.trim(),
+      REG_TYPE_ID: regTypeId.value.trim(),
+      Type: selectedType.value === 'All' ? 'MergeData' : selectedType.value,
+      ContainDeleted: containDeleted.value,
     }
-    // 2. 결과 필터 하이라이트 (N개 키워드 매칭)
-    const keywords = getKeywords(localFilterQuery.value)
-    if (keywords.length > 0 && p.value) {
-      const valStr = String(p.value).toLowerCase()
-      if (keywords.some(k => valStr.includes(k))) {
-        styles.backgroundColor = '#e8f5e9'
-        styles.border = '1px solid #28a745'
-      }
+
+    const res = await axiosWrapper.post('/api/Data/GetMergedData', payload)
+    const rootKey = regTypeId.value.trim()
+    const resultData = res[rootKey] || Object.values(res)[0]
+
+    if (!resultData) {
+      rawDataList.value = []
+      return sAlert.Info('데이터가 없습니다.')
     }
-    return Object.keys(styles).length > 0 ? styles : null
-  }
 
-  const onSearch = async () => {
-    if (!manualProjNo.value || !regTypeId.value) return sAlert.Warning('입력값을 확인하세요.')
-    if (gridApi.value) gridApi.value.setGridOption('loading', true)
+    // Diff 맵핑
+    const newDiffMap = new Map()
+    if (resultData.DiffData) {
+      resultData.DiffData.forEach(diff => {
+        (diff.Property || []).forEach(prop => {
+          if (prop.PUB_VALUE !== prop.WRK_VALUE) {
+            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE, wrk: prop.WRK_VALUE })
+          }
+        })
+      })
+    }
+    diffMap.value = newDiffMap
 
-    try {
-      const payload = {
-        ProjectNo: manualProjNo.value.trim(),
-        REG_TYPE_ID: regTypeId.value.trim(),
-        Type: selectedType.value,
-        ContainDeleted: containDeleted.value,
-      }
+    // 🌟 데이터 소스 처리 (All 조건 추가)
+    let sourceData = []
+    if (selectedType.value === 'All') {
+      sourceData = [...(resultData.PubData || []), ...(resultData.WrkData || []), ...(resultData.MergeData || [])]
+    } else {
+      sourceData = selectedType.value === 'Working' ? (resultData.WrkData || []) :
+                   selectedType.value === 'Publish' ? (resultData.PubData || []) : (resultData.MergeData || [])
+    }
 
-      // 🌟 API 주소 앞에 '/' 추가
-      const res = await axiosWrapper.post('/api/Data/GetMergedData', payload)
-      const rootKey = regTypeId.value.trim()
-      const resultData = res[rootKey] || Object.values(res)[0]
-
-      if (!resultData) {
-        rawDataList.value = []
-        return sAlert.Info('데이터가 없습니다.')
-      }
-
-      // Diff 맵핑
-      const newDiffMap = new Map()
-      if (resultData.DiffData) {
-        resultData.DiffData.forEach(diff => {
-          ;(diff.Property || []).forEach(prop => {
-            if (prop.PUB_VALUE !== prop.WRK_VALUE) {
-              newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE, wrk: prop.WRK_VALUE })
-            }
-          })
+    const attrKeys = new Set()
+    const processed = sourceData.map(item => {
+      const flat = { ...item, _raw: item }
+      if (Array.isArray(item.ATTRIBUTES)) {
+        item.ATTRIBUTES.forEach(attr => {
+          flat[attr.ATT_ID] = attr.VALUE
+          attrKeys.add(attr.ATT_ID)
         })
       }
-      diffMap.value = newDiffMap
+      return flat
+    })
 
-      const sourceData =
-        selectedType.value === 'Working'
-          ? resultData.WrkData || []
-          : selectedType.value === 'Publish'
-            ? resultData.PubData || []
-            : resultData.MergeData || []
+    const fixedFields = ['TAG_NO', 'EP_ID', 'CLS_ID', 'TAG_DESC']
+    const allUniqueKeys = Array.from(new Set([...fixedFields, ...Array.from(attrKeys)]))
 
-      const attrKeys = new Set()
-      const processed = sourceData.map(item => {
-        const flat = { ...item, _raw: item }
-        if (Array.isArray(item.ATTRIBUTES)) {
-          item.ATTRIBUTES.forEach(attr => {
-            flat[attr.ATT_ID] = attr.VALUE
-            attrKeys.add(attr.ATT_ID)
-          })
-        }
-        return flat
-      })
+    allColumnsRaw.value = allUniqueKeys.map(key => ({
+      headerName: key,
+      field: key,
+      minWidth: 150,
+      pinned: key === 'TAG_NO' ? 'left' : null,
+      cellRenderer: (p) => {
+        let val = p.value ?? ''
+        if (p.colDef.field === 'TAG_NO') return `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${val}</span>`
+        const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+        return d ? `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</div>` : val
+      },
+      cellStyle: getCellStyle,
+      tooltipValueGetter: p => {
+        const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+        return d ? `[차이] Pub: ${d.pub} / Wrk: ${d.wrk}` : null
+      },
+    }))
 
-      const fixedFields = ['TAG_NO', 'EP_ID', 'CLS_ID', 'TAG_DESC']
-      const allUniqueKeys = Array.from(new Set([...fixedFields, ...Array.from(attrKeys)]))
-
-      // 전체 컬럼 정의 생성
-      allColumnsRaw.value = allUniqueKeys.map(key => ({
-        headerName: key,
-        field: key,
-        minWidth: 150,
-        pinned: key === 'TAG_NO' ? 'left' : null,
-        cellRenderer: diffCellRenderer,
-        cellStyle: getCellStyle,
-        tooltipValueGetter: p => {
-          const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-          return d ? `[차이] Pub: ${d.pub} / Wrk: ${d.wrk}` : null
-        },
-      }))
-
-      rawDataList.value = processed
-    } catch (e) {
-      sAlert.Error('조회 실패')
-    } finally {
-      if (gridApi.value) gridApi.value.setGridOption('loading', false)
-    }
+    rawDataList.value = processed
+  } catch (e) {
+    sAlert.Error('조회 실패')
+  } finally {
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
+}
 
-  /**
-   * 📋 헤더 필터링 (컬럼 동적 표시)
-   */
-  const filteredColumns = computed(() => {
-    const keywords = getKeywords(headerFilterQuery.value)
-    if (keywords.length === 0) return allColumnsRaw.value
-    return allColumnsRaw.value.filter(
-      col => col.field === 'TAG_NO' || keywords.some(k => col.headerName.toLowerCase().includes(k))
-    )
-  })
+const filteredColumns = computed(() => {
+  const keywords = getKeywords(headerFilterQuery.value)
+  if (keywords.length === 0) return allColumnsRaw.value
+  return allColumnsRaw.value.filter(col => col.field === 'TAG_NO' || keywords.some(k => col.headerName.toLowerCase().includes(k)))
+})
 
-  const onCellClicked = p => {
-    if (p.colDef.field === 'TAG_NO' && p.value) {
-      selectedTagNo.value = p.value
-      selectedJson.value = p.data._raw
-      showModal.value = true
-    }
+const onCellClicked = p => {
+  if (p.colDef.field === 'TAG_NO' && p.value) {
+    selectedTagNo.value = p.value; selectedJson.value = p.data._raw; showModal.value = true
   }
+}
 
-  const gridBindProps = computed(() => ({
-    columnDefs: filteredColumns.value,
-    rowData: rawDataList.value,
-    style: 'width: 100%; height: 100%',
-    class: 'ag-theme-custom shadow-sm',
-    pagination: true,
-    paginationPageSize: 100,
-    loadingOverlayComponent: AggridLoadingOverlay,
-    defaultColDef: { sortable: true, filter: true, resizable: true },
-  }))
+const gridBindProps = computed(() => ({
+  columnDefs: filteredColumns.value,
+  rowData: rawDataList.value,
+  style: 'width: 100%; height: 100%',
+  class: 'ag-theme-custom shadow-sm',
+  pagination: true,
+  paginationPageSize: 100,
+  loadingOverlayComponent: AggridLoadingOverlay,
+  defaultColDef: { sortable: true, filter: true, resizable: true },
+}))
 
-  const onGridReady = p => {
-    gridApi.value = p.api
-  }
+const onGridReady = p => { gridApi.value = p.api }
 </script>
 
 <style scoped>
-  .custom-input-width {
-    width: 140px !important;
-  }
-  .filter-textarea {
-    width: 150px;
-    height: 31px;
-    resize: none;
-    font-size: 11px;
-    line-height: 1.2;
-    padding: 4px;
-  }
-  ::v-deep(.diff-wrapper) {
-    display: flex;
-    align-items: center;
-  }
-
-  /* 모달 */
-  .custom-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .custom-modal-window {
-    background: #fff;
-    width: 900px;
-    height: 80%;
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .modal-header-dark {
-    background: #1e293b;
-    color: #fff;
-    padding: 12px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-  .modal-body-content {
-    flex: 1;
-    background: #0f172a;
-    padding: 20px;
-    overflow: auto;
-  }
-  .json-content {
-    color: #38bdf8;
-    font-family: 'Consolas', monospace;
-    font-size: 13px;
-    margin: 0;
-  }
+.filter-textarea { width: 130px; height: 28px; resize: none; font-size: 11px; line-height: 1.2; padding: 2px 5px; overflow: hidden; }
+::v-deep(.diff-wrapper) { display: flex; align-items: center; }
+.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.modal-body-content { flex: 1; background: #0f172a; padding: 20px; overflow: auto; }
+.json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; margin: 0; }
 </style>
