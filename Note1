@@ -5,15 +5,15 @@
         <div class="d-flex align-items-center gap-2 ms-auto me-2">
           <div class="d-flex align-items-center gap-1">
             <span class="fw-bold text-dark text-nowrap small">Project</span>
-            <input type="text" class="form-control form-control-sm" style="width: 100px" v-model="manualProjNo" placeholder="SN2661" />
+            <input type="text" class="form-control form-control-sm" style="width: 100px" v-model="manualProjNo" />
           </div>
           <div class="d-flex align-items-center gap-1">
             <span class="fw-bold text-nowrap small">Reg ID</span>
-            <input type="text" class="form-control form-control-sm" style="width: 130px" v-model="regTypeId" placeholder="PIEP_T_002_T" />
+            <input type="text" class="form-control form-control-sm" style="width: 130px" v-model="regTypeId" />
           </div>
 
           <div class="d-flex align-items-center gap-2 border-start ps-2 ms-1" style="font-size: 11px;">
-            <div class="form-check form-check-inline m-0" v-for="opt in ['Publish', 'Working', 'MergeData', 'All']" :key="opt">
+            <div class="form-check form-check-inline m-0" v-for="opt in ['Working', 'Publish', 'MergeData', 'All']" :key="opt">
               <input class="form-check-input" type="radio" :id="'radio_' + opt" :value="opt" v-model="selectedType" />
               <label class="form-check-label fw-bold" :for="'radio_' + opt">{{ opt }}</label>
             </div>
@@ -39,17 +39,13 @@
       </template>
     </PageTitle>
 
-    <div class="panel-body m-0 p-0 h-100">
-      <div class="panel m-0 p-0 h-100 border-0">
-        <div class="panel-body overflow-hidden m-0 p-0 h-100">
-          <ag-grid-vue
-            v-bind="gridBindProps"
-            @grid-ready="onGridReady"
-            @cell-clicked="onCellClicked"
-            :tooltipShowDelay="0"
-          />
-        </div>
-      </div>
+    <div class="panel-body m-0 p-0 h-100 border-0">
+      <ag-grid-vue
+        v-bind="gridBindProps"
+        @grid-ready="onGridReady"
+        @cell-clicked="onCellClicked"
+        :tooltipShowDelay="0"
+      />
     </div>
 
     <div v-if="showModal" class="custom-modal-overlay" @click.self="showModal = false">
@@ -59,9 +55,7 @@
           <button class="btn btn-link text-white p-0" @click="showModal = false"><i class="fa fa-times text-white"></i></button>
         </div>
         <div class="modal-body-content">
-          <div class="json-wrapper">
-            <pre class="json-content">{{ JSON.stringify(selectedJson, null, 2) }}</pre>
-          </div>
+          <pre class="json-content">{{ JSON.stringify(selectedJson, null, 2) }}</pre>
         </div>
       </div>
     </div>
@@ -77,34 +71,30 @@ import PageTitle from '@/components/toolBar/PageTitle.vue'
 
 const manualProjNo = ref('SN2661')
 const regTypeId = ref('PIEP_T_002_T')
-const selectedType = ref('Working') // 기본값
-const containDeleted = ref(false)
-
+const selectedType = ref('Working')
 const localFilterQuery = ref('') 
 const headerFilterQuery = ref('') 
 
 const gridApi = shallowRef()
 const rawDataList = ref([])
 const allColumnsRaw = ref([]) 
-const diffMap = ref(new Map())
+const diffMap = ref(new Map()) // 변경된 값 저장용
 
 const showModal = ref(false)
 const selectedTagNo = ref('')
 const selectedJson = ref(null)
 
-const getKeywords = query => {
-  if (!query.trim()) return []
-  return query.split(/[\s,\n]+/).filter(k => k.trim() !== '').map(k => k.toLowerCase())
-}
+const getKws = q => q.split(/[\s,\n]+/).filter(k => k.trim() !== '').map(k => k.toLowerCase())
 
+// 셀 스타일: 변경된 값 강조 + 필터 하이라이트
 const getCellStyle = p => {
   const styles = {}
   if (diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)) {
     styles.backgroundColor = '#fff9db'; styles.fontWeight = 'bold'; styles.color = '#d94111'
   }
-  const keywords = getKeywords(localFilterQuery.value)
-  if (keywords.length > 0 && p.value) {
-    if (keywords.some(k => String(p.value).toLowerCase().includes(k))) {
+  const kws = getKws(localFilterQuery.value)
+  if (kws.length > 0 && p.value) {
+    if (kws.some(k => String(p.value).toLowerCase().includes(k))) {
       styles.backgroundColor = '#e8f5e9'; styles.border = '1px solid #28a745'
     }
   }
@@ -112,97 +102,76 @@ const getCellStyle = p => {
 }
 
 const onSearch = async () => {
-  if (!manualProjNo.value || !regTypeId.value) return sAlert.Warning('Project No와 Register ID를 입력하세요.')
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
-
   try {
-    const payload = {
-      ProjectNo: manualProjNo.value.trim(),
+    const res = await axiosWrapper.post('/api/Data/GetMergedData', {
+      ProjectNo: manualProjNo.value,
       REG_TYPE_ID: regTypeId.value.trim(),
       Type: selectedType.value === 'All' ? 'MergeData' : selectedType.value,
-      ContainDeleted: containDeleted.value,
-    }
+      ContainDeleted: false
+    })
+    
+    const root = res[regTypeId.value.trim()] || Object.values(res)[0]
+    if (!root) { rawDataList.value = []; return sAlert.Info('데이터 없음') }
 
-    const res = await axiosWrapper.post('/api/Data/GetMergedData', payload)
-    const rootKey = regTypeId.value.trim()
-    const resultData = res[rootKey] || Object.values(res)[0]
-
-    if (!resultData) {
-      rawDataList.value = []
-      return sAlert.Info('데이터가 없습니다.')
-    }
-
-    // Diff 맵핑
+    // 1. DiffData 분석 (틀린 값 맵 구성)
     const newDiffMap = new Map()
-    if (resultData.DiffData) {
-      resultData.DiffData.forEach(diff => {
-        (diff.Property || []).forEach(prop => {
-          if (prop.PUB_VALUE !== prop.WRK_VALUE) {
-            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE, wrk: prop.WRK_VALUE })
-          }
-        })
+    root.DiffData?.forEach(diff => {
+      diff.Property?.forEach(prop => {
+        if (prop.PUB_VALUE !== prop.WRK_VALUE) {
+          newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE, wrk: prop.WRK_VALUE })
+        }
       })
-    }
+    })
     diffMap.value = newDiffMap
 
-    // 🌟 데이터 소스 처리 (All 조건 추가)
-    let sourceData = []
+    // 2. 데이터 소스 구성 (All 포함)
+    let source = []
     if (selectedType.value === 'All') {
-      sourceData = [...(resultData.PubData || []), ...(resultData.WrkData || []), ...(resultData.MergeData || [])]
+      source = [...(root.WrkData || []), ...(root.PubData || []), ...(root.MergeData || [])]
     } else {
-      sourceData = selectedType.value === 'Working' ? (resultData.WrkData || []) :
-                   selectedType.value === 'Publish' ? (resultData.PubData || []) : (resultData.MergeData || [])
+      source = root[selectedType.value === 'Working' ? 'WrkData' : selectedType.value === 'Publish' ? 'PubData' : 'MergeData'] || []
     }
 
     const attrKeys = new Set()
-    const processed = sourceData.map(item => {
+    const processed = source.map(item => {
       const flat = { ...item, _raw: item }
-      if (Array.isArray(item.ATTRIBUTES)) {
-        item.ATTRIBUTES.forEach(attr => {
-          flat[attr.ATT_ID] = attr.VALUE
-          attrKeys.add(attr.ATT_ID)
-        })
-      }
+      item.ATTRIBUTES?.forEach(a => { flat[a.ATT_ID] = a.VALUE; attrKeys.add(a.ATT_ID); })
       return flat
     })
 
-    const fixedFields = ['TAG_NO', 'EP_ID', 'CLS_ID', 'TAG_DESC']
-    const allUniqueKeys = Array.from(new Set([...fixedFields, ...Array.from(attrKeys)]))
-
-    allColumnsRaw.value = allUniqueKeys.map(key => ({
+    // 3. 컬럼 정의 (툴팁 기능 추가)
+    const fixed = ['TAG_NO', 'EP_ID', 'CLS_ID', 'TAG_DESC']
+    allColumnsRaw.value = [...fixed, ...Array.from(attrKeys).sort()].map(key => ({
       headerName: key,
       field: key,
       minWidth: 150,
       pinned: key === 'TAG_NO' ? 'left' : null,
       cellRenderer: (p) => {
-        let val = p.value ?? ''
-        if (p.colDef.field === 'TAG_NO') return `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${val}</span>`
+        if (p.colDef.field === 'TAG_NO') return `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${p.value}</span>`
         const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-        return d ? `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</div>` : val
+        return d ? `<span><i class="fa fa-exclamation-triangle text-warning me-1"></i>${p.value}</span>` : p.value
       },
       cellStyle: getCellStyle,
+      // 🌟 마우스 오버 시 툴팁으로 틀린 값 보여주기
       tooltipValueGetter: p => {
         const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-        return d ? `[차이] Pub: ${d.pub} / Wrk: ${d.wrk}` : null
-      },
+        return d ? `[변경내역] Publish: ${d.pub || '없음'} / Working: ${d.wrk || '없음'}` : null
+      }
     }))
-
     rawDataList.value = processed
-  } catch (e) {
-    sAlert.Error('조회 실패')
-  } finally {
-    if (gridApi.value) gridApi.value.setGridOption('loading', false)
-  }
+  } catch (e) { sAlert.Error('조회 실패') }
+  finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
 }
 
 const filteredColumns = computed(() => {
-  const keywords = getKeywords(headerFilterQuery.value)
-  if (keywords.length === 0) return allColumnsRaw.value
-  return allColumnsRaw.value.filter(col => col.field === 'TAG_NO' || keywords.some(k => col.headerName.toLowerCase().includes(k)))
+  const kws = getKws(headerFilterQuery.value)
+  if (kws.length === 0) return allColumnsRaw.value
+  return allColumnsRaw.value.filter(col => col.field === 'TAG_NO' || kws.some(k => col.headerName.toLowerCase().includes(k)))
 })
 
 const onCellClicked = p => {
-  if (p.colDef.field === 'TAG_NO' && p.value) {
+  if (p.colDef.field === 'TAG_NO') {
     selectedTagNo.value = p.value; selectedJson.value = p.data._raw; showModal.value = true
   }
 }
@@ -211,11 +180,9 @@ const gridBindProps = computed(() => ({
   columnDefs: filteredColumns.value,
   rowData: rawDataList.value,
   style: 'width: 100%; height: 100%',
-  class: 'ag-theme-custom shadow-sm',
-  pagination: true,
-  paginationPageSize: 100,
-  loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, filter: true, resizable: true },
+  class: 'ag-theme-alpine',
+  tooltipShowDelay: 0, // 마우스 올리자마자 툴팁 표시
+  defaultColDef: { sortable: true, filter: true, resizable: true }
 }))
 
 const onGridReady = p => { gridApi.value = p.api }
@@ -223,10 +190,9 @@ const onGridReady = p => { gridApi.value = p.api }
 
 <style scoped>
 .filter-textarea { width: 130px; height: 28px; resize: none; font-size: 11px; line-height: 1.2; padding: 2px 5px; overflow: hidden; }
-::v-deep(.diff-wrapper) { display: flex; align-items: center; }
 .custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
-.modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
 .modal-body-content { flex: 1; background: #0f172a; padding: 20px; overflow: auto; }
 .json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; margin: 0; }
 </style>
