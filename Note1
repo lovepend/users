@@ -1,82 +1,232 @@
-const loadFileByid = async (svgFileId, itemIds) => {
-    if (!svgFileId) {
-      return false
-    }
+<template>
+  <div class="panel panel-expandable m-0 p-0 h-100">
+    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
+      <template #actions>
+        <div class="d-flex align-items-center gap-2 ms-auto me-2">
+          <div class="d-flex align-items-center gap-1">
+            <span class="fw-bold text-dark text-nowrap small">Project</span>
+            <input type="text" class="form-control form-control-sm" style="width: 90px" v-model="manualProjNo" />
+          </div>
+          <div class="d-flex align-items-center gap-1">
+            <span class="fw-bold text-nowrap small">Reg ID</span>
+            <input type="text" class="form-control form-control-sm" style="width: 130px" v-model="regTypeId" />
+          </div>
 
-    if (viewerTabs.value) {
-      // 1. URL 구성 (쿼리 스트링 제외하고 nocache만 유지)
-      let url = `http://sedpwebapi.ship.samsung.co.kr/api/File/Get?nocache=${new Date().getTime()}`
+          <div class="d-flex align-items-center gap-2 border-start ps-2 ms-1" style="font-size: 11px;">
+            <div class="form-check form-check-inline m-0" v-for="opt in ['Publish', 'Working', 'MergeData', 'All']" :key="opt">
+              <input class="form-check-input" type="radio" :id="'radio_' + opt" :value="opt" v-model="selectedType" />
+              <label class="form-check-label fw-bold" :for="'radio_' + opt">{{ opt }}</label>
+            </div>
+          </div>
 
-      const options = {
-        responseType: 'blob',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/svg+xml',
-          'FileToken': 'frontserver@sh',
-          'Cache-Control': 'no-store',
-          // 2. 헤더에 Project no와 ep_id 추가 (route.query에서 가져옴)
-          'ProjectNo': route.query.proj_no || currProjNoRef.value,
-          'ep_id': route.query.ep_id || currEpIdRef.value
-        },
-      }
+          <button class="btn btn-xs btn-primary shadow-sm px-2" @click="onSearch">
+            <i class="fa fa-search"></i> 조회
+          </button>
 
-      // API 호출 시 보낼 바디 데이터
-      const bodyData = {
-        id: svgFileId,
-      }
+          <div class="ms-1 ps-2 border-start d-flex align-items-center gap-1">
+            <span class="fw-bold text-success text-nowrap small">결과</span>
+            <textarea class="form-control form-control-sm border-success filter-textarea" v-model="localFilterQuery" placeholder="내용"></textarea>
+          </div>
+          <div class="ms-1 ps-2 border-start d-flex align-items-center gap-1">
+            <span class="fw-bold text-info text-nowrap small">헤더</span>
+            <textarea class="form-control form-control-sm border-info filter-textarea" v-model="headerFilterQuery" placeholder="헤더명"></textarea>
+          </div>
+        </div>
+        <panel-toolbar />
+      </template>
+    </PageTitle>
 
-      try {
-        // axiosWrapper 대신 직접 주소를 호출하거나 설정된 axios 인스턴스 사용
-        const blobData = await axiosWrapper.post(url, bodyData, options)
+    <div class="panel-body m-0 p-0 h-100">
+      <div class="grid-container w-100 h-100 p-1">
+        <ag-grid-vue
+          v-bind="gridBindProps"
+          class="ag-theme-alpine w-100 h-100"
+          @grid-ready="onGridReady"
+          @cell-clicked="onCellClicked"
+        />
+      </div>
+    </div>
 
-        if (blobData) {
-          const fileId = generateFileId(blobData)
-          let svgBlobUrl = ''
+    <div v-if="showModal" class="custom-modal-overlay" @click.self="showModal = false">
+      <div class="custom-modal-window shadow-lg">
+        <div class="modal-header-dark">
+          <h5 class="m-0"><i class="fa fa-code me-2"></i>Raw Data [{{ selectedTagNo }}]</h5>
+          <button class="btn btn-link text-white p-0" @click="showModal = false"><i class="fa fa-times text-white"></i></button>
+        </div>
+        <div class="modal-body-content">
+          <pre class="json-content">{{ JSON.stringify(selectedJson, null, 2) }}</pre>
+        </div>
+      </div>
+    </div>
+  </div>
+</template> <script setup>
+import { ref, computed, shallowRef } from 'vue'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
+import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-          if (urlCache.has(fileId)) {
-            svgBlobUrl = urlCache.get(fileId)
-          } else {
-            svgBlobUrl = URL.createObjectURL(blobData)
-            urlCache.set(fileId, svgBlobUrl)
-          }
+// AG-Grid 스타일 임포트
+import 'ag-grid-community/styles/ag-grid.css'
+import 'ag-grid-community/styles/ag-theme-alpine.css'
 
-          if (svgFileId && itemIds != null) {
-            let _elementId = itemIds
-            if (arrayTagNoByQueryString.value.length > 0) {
-              _elementId = arrayTagNoByQueryString.value
-            }
+const manualProjNo = ref('SN2661')
+const regTypeId = ref('PIEP_T_002_T')
+const selectedType = ref('Working')
+const localFilterQuery = ref('') 
+const headerFilterQuery = ref('') 
 
-            const messageFor2DViewer = {
-              detail: {
-                action: 'loadAndSearchFile',
-                drawing: svgBlobUrl,
-                idType: 'tag',
-                elementId: _elementId,
-                zoom: fit2DViewer.value,
-                highlight: highlightColor.value,
-                title: 'Drawing Title',
-              },
-              bubbles: true,
-              composed: true,
-            }
-            document.dispatchEvent(new CustomEvent('svg-viewer-command', messageFor2DViewer))
-          } else {
-            document.dispatchEvent(
-              new CustomEvent('svg-viewer-command', {
-                detail: {
-                  action: 'fileOpen',
-                  drawing: svgBlobUrl,
-                },
-                bubbles: true,
-                composed: true,
-              })
-            )
-          }
-          return true
-        }
-      } catch (error) {
-        console.log('error loadFile : ', error)
-        return false
-      }
+const gridApi = shallowRef()
+const rawDataList = ref([])
+const allColumnsRaw = ref([]) 
+const diffMap = ref(new Map()) 
+
+const showModal = ref(false)
+const selectedTagNo = ref('')
+const selectedJson = ref(null)
+
+const getKws = q => q.split(/[\s,\n]+/).filter(k => k.trim() !== '').map(k => k.toLowerCase())
+
+const getCellStyle = p => {
+  const styles = {}
+  if (diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)) {
+    styles.backgroundColor = '#fff9db'; styles.color = '#d94111'; styles.fontWeight = 'bold';
+  }
+  const kws = getKws(localFilterQuery.value)
+  if (kws.length > 0 && p.value) {
+    if (kws.some(k => String(p.value).toLowerCase().includes(k))) {
+      styles.backgroundColor = '#e8f5e9'; styles.border = '1px solid #28a745';
     }
   }
+  return Object.keys(styles).length > 0 ? styles : null
+}
+
+const onSearch = async () => {
+  if (!manualProjNo.value || !regTypeId.value) return sAlert.Warning('필수 값을 입력하세요.')
+  if (gridApi.value) gridApi.value.setGridOption('loading', true)
+
+  try {
+    let requestType = selectedType.value === 'MergeData' ? 'Merged' : selectedType.value
+    if (selectedType.value === 'All') requestType = 'Merged'
+
+    const res = await axiosWrapper.post('/api/Data/GetMergedData', {
+      ProjectNo: manualProjNo.value.trim(),
+      REG_TYPE_ID: regTypeId.value.trim(),
+      Type: requestType,
+      ContainDeleted: false,
+    })
+    
+    const rootKey = regTypeId.value.trim()
+    const resultData = res[rootKey] || Object.values(res)[0]
+    if (!resultData) { rawDataList.value = []; return sAlert.Info('데이터가 없습니다.') }
+
+    // Diff 맵핑
+    const newDiffMap = new Map()
+    resultData.DiffData?.forEach(diff => {
+      diff.Property?.forEach(prop => {
+        if (prop.PUB_VALUE !== prop.WRK_VALUE) {
+          newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE ?? '', wrk: prop.WRK_VALUE ?? '' })
+        }
+      })
+    })
+    diffMap.value = newDiffMap
+
+    // 데이터 소스 매칭 (mergedata 키값 정확히 확인)
+    let sourceData = []
+    if (selectedType.value === 'Working') sourceData = resultData.WrkData || resultData.wrkdata || []
+    else if (selectedType.value === 'Publish') sourceData = resultData.PubData || resultData.pubdata || []
+    else if (selectedType.value === 'MergeData') sourceData = resultData.MergeData || resultData.mergedata || []
+    else if (selectedType.value === 'All') {
+      sourceData = [
+        ...(resultData.PubData || resultData.pubdata || []),
+        ...(resultData.WrkData || resultData.wrkdata || []),
+        ...(resultData.MergeData || resultData.mergedata || [])
+      ]
+    }
+
+    const columnKeys = new Set()
+    const processed = sourceData.map(item => {
+      const flat = { ...item, _raw: item }
+      // 시스템 속성
+      Object.keys(item).forEach(key => {
+        if (key !== 'ATTRIBUTES' && key !== '_raw') {
+          columnKeys.add(key)
+          if (flat[key] === null || flat[key] === undefined) flat[key] = ""
+        }
+      })
+      // 상세 속성
+      if (Array.isArray(item.ATTRIBUTES)) {
+        item.ATTRIBUTES.forEach(attr => {
+          flat[attr.ATT_ID] = (attr.VALUE === null || attr.VALUE === undefined) ? "" : attr.VALUE
+          columnKeys.add(attr.ATT_ID)
+        })
+      }
+      return flat
+    })
+
+    // 컬럼 정의
+    const priorityFields = ['TAG_IDX', 'TAG_NO', 'TAG_DESC', 'STATUS']
+    const otherFields = Array.from(columnKeys).filter(k => !priorityFields.includes(k)).sort()
+    
+    allColumnsRaw.value = [...priorityFields, ...otherFields].map(key => ({
+      headerName: key,
+      field: key,
+      minWidth: 150,
+      pinned: key === 'TAG_NO' ? 'left' : null,
+      cellRenderer: (p) => {
+        const val = p.value ?? ''
+        const hasDiff = diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)
+        return hasDiff ? `<span><i class="fa fa-exclamation-triangle text-warning me-1"></i>${val}</span>` : val
+      },
+      cellStyle: getCellStyle,
+      tooltipValueGetter: p => {
+        const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+        return d ? `[변경감지]\n• Working: ${d.wrk || '(빈 값)'}\n• Publish: ${d.pub || '(빈 값)'}` : null
+      },
+    }))
+
+    rawDataList.value = processed
+  } catch (e) { sAlert.Error('조회 실패') }
+  finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
+}
+
+const filteredColumns = computed(() => {
+  const kws = getKws(headerFilterQuery.value)
+  if (kws.length === 0) return allColumnsRaw.value
+  return allColumnsRaw.value.filter(col => col.field === 'TAG_NO' || kws.some(k => col.headerName.toLowerCase().includes(k)))
+})
+
+const onCellClicked = p => {
+  if (p.colDef.field === 'TAG_NO') {
+    selectedTagNo.value = p.value; selectedJson.value = p.data._raw; showModal.value = true
+  }
+}
+
+const gridBindProps = computed(() => ({
+  columnDefs: filteredColumns.value,
+  rowData: rawDataList.value,
+  class: 'ag-theme-alpine shadow-sm',
+  pagination: true,
+  paginationPageSize: 100,
+  tooltipShowDelay: 0,
+  loadingOverlayComponent: AggridLoadingOverlay,
+  defaultColDef: { sortable: true, filter: true, resizable: true },
+}))
+
+const onGridReady = p => { gridApi.value = p.api }
+</script>
+
+<style scoped>
+.grid-container { background-color: #ffffff; }
+.ag-theme-alpine {
+  --ag-border-color: #d1d5db;
+  --ag-header-background-color: #f3f4f6;
+  border: 1px solid #d1d5db;
+}
+.filter-textarea { width: 140px; height: 28px; resize: none; font-size: 11px; padding: 2px 5px; border-radius: 4px; }
+.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; }
+.modal-body-content { flex: 1; background: #0f172a; padding: 20px; overflow: auto; }
+.json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; margin: 0; }
+</style>
