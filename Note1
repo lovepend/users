@@ -42,8 +42,23 @@
           <ag-grid-vue 
             v-bind="gridBindProps" 
             @grid-ready="onGridReady" 
+            @cell-clicked="onCellClicked"
             :tooltipShowDelay="0"
           />
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showModal" class="custom-modal-overlay" @click.self="showModal = false">
+      <div class="custom-modal-window shadow-lg">
+        <div class="modal-header-dark">
+          <h5 class="m-0"><i class="fa fa-code me-2"></i>Raw Data Preview [{{ selectedTagNo }}]</h5>
+          <button class="btn btn-link text-white p-0" @click="showModal = false"><i class="fa fa-times text-white"></i></button>
+        </div>
+        <div class="modal-body-content">
+          <div class="json-wrapper">
+            <pre class="json-content">{{ JSON.stringify(selectedJson, null, 2) }}</pre>
+          </div>
         </div>
       </div>
     </div>
@@ -57,7 +72,6 @@ import { sAlert } from '@/utils/messages/alert-common'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-// 상위 스토어 연동 생략, 직접 입력값 위주 세팅
 const manualProjNo = ref('SN2661')
 const regTypeId = ref('PIEP_T_002_T')
 const selectedType = ref('Working')
@@ -65,19 +79,31 @@ const containDeleted = ref(false)
 const localFilterQuery = ref('')
 
 const gridApi = shallowRef()
-const rawDataList = ref([]) // 그리드에 뿌려질 가공 데이터
-const diffMap = ref(new Map()) // 차이점 하이라이트용
-const dynamicCols = ref([]) // 동적 컬럼 정의
+const rawDataList = ref([]) 
+const diffMap = ref(new Map()) 
+const dynamicCols = ref([]) 
+
+// 모달 상태
+const showModal = ref(false)
+const selectedTagNo = ref('')
+const selectedJson = ref(null)
 
 /**
- * 🎨 셀 렌더링 및 스타일 정의
+ * 🎨 셀 렌더링 및 스타일 (Diff 처리 및 TAG_NO 링크)
  */
 const diffCellRenderer = (p) => {
+  let val = p.value ?? ''
+  
+  // TAG_NO 컬럼인 경우 링크 스타일 적용
+  if (p.colDef.field === 'TAG_NO') {
+    val = `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${val}</span>`
+  }
+
   const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
   if (diffInfo) {
-    return `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${p.value ?? ''}</div>`
+    return `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</div>`
   }
-  return p.value ?? ''
+  return val
 }
 
 const getCellStyle = (p) => {
@@ -104,8 +130,6 @@ const onSearch = async () => {
     }
 
     const res = await axiosWrapper.post('api/Data/GetMergedData', payload)
-    
-    // API 응답의 루트 키가 regTypeId와 일치하는지 확인 
     const rootKey = regTypeId.value.trim()
     const resultData = res[rootKey]
 
@@ -114,63 +138,54 @@ const onSearch = async () => {
       return sAlert.Info("조회된 데이터가 없습니다.")
     }
 
-    // 1. DiffData 맵핑 (차이점 사전 생성)
+    // 1. DiffData 맵핑
     const newDiffMap = new Map()
     if (resultData.DiffData) {
       resultData.DiffData.forEach(diff => {
         (diff.Property || []).forEach(prop => {
           if (prop.PUB_VALUE !== prop.WRK_VALUE) {
-            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, {
-              pub: prop.PUB_VALUE,
-              wrk: prop.WRK_VALUE
-            })
+            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE, wrk: prop.WRK_VALUE })
           }
         })
       })
     }
     diffMap.value = newDiffMap
 
-    // 2. 선택한 타입에 따른 데이터 추출
+    // 2. 데이터 소스 선택
     let sourceData = []
     if (selectedType.value === 'Working') sourceData = resultData.WrkData || []
     else if (selectedType.value === 'Publish') sourceData = resultData.PubData || []
     else sourceData = resultData.MergeData || []
 
-    // 3. 데이터 평면화 (ATTRIBUTES -> 최상위 필드)
+    // 3. 🌟 ATTRIBUTES 배열 평면화 (ID -> 필드명)
+    const attrKeys = new Set()
     const processed = sourceData.map(item => {
-      const flat = { ...item }
+      const flat = { ...item, _raw: item } // 모달용 원본 보관
       if (Array.isArray(item.ATTRIBUTES)) {
         item.ATTRIBUTES.forEach(attr => {
           flat[attr.ATT_ID] = attr.VALUE
+          attrKeys.add(attr.ATT_ID)
         })
       }
       return flat
     })
 
-    // 4. 컬럼 정의 생성 (고정 + 동적)
+    // 4. 컬럼 정의 (고정 필드 우선 순위)
     const fixedFields = ['TAG_NO', 'EP_ID', 'CLS_ID', 'TAG_DESC']
-    const allKeys = new Set()
-    processed.forEach(row => Object.keys(row).forEach(k => {
-      if (k !== 'ATTRIBUTES' && k !== '_id') allKeys.add(k)
-    }))
+    
+    // 시스템 필드와 추출된 속성 필드를 합쳐서 정렬
+    const allUniqueKeys = Array.from(new Set([...fixedFields, ...Array.from(attrKeys)]))
 
-    dynamicCols.value = Array.from(allKeys).sort((a, b) => {
-      // 고정 필드를 앞으로 배치
-      const aIdx = fixedFields.indexOf(a), bIdx = fixedFields.indexOf(b)
-      if (aIdx > -1 && bIdx > -1) return aIdx - bIdx
-      if (aIdx > -1) return -1
-      if (bIdx > -1) return 1
-      return a.localeCompare(b)
-    }).map(key => ({
+    dynamicCols.value = allUniqueKeys.map(key => ({
       headerName: key,
       field: key,
       minWidth: 150,
+      pinned: key === 'TAG_NO' ? 'left' : null,
       cellRenderer: diffCellRenderer,
       cellStyle: getCellStyle,
-      // 툴팁 설정
       tooltipValueGetter: (p) => {
         const diff = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-        return diff ? `[차이발생]\nPublish: ${diff.pub ?? 'null'}\nWorking: ${diff.wrk ?? 'null'}` : null
+        return diff ? `[차이] Publish: ${diff.pub} / Working: ${diff.wrk}` : null
       }
     }))
 
@@ -184,7 +199,17 @@ const onSearch = async () => {
   }
 }
 
-// 결과 내 필터링 (기존 로직)
+/**
+ * 🖱 셀 클릭 이벤트 (TAG_NO 클릭 시 모달 오픈)
+ */
+const onCellClicked = (p) => {
+  if (p.colDef.field === 'TAG_NO' && p.value) {
+    selectedTagNo.value = p.value
+    selectedJson.value = p.data._raw
+    showModal.value = true
+  }
+}
+
 const filteredData = computed(() => {
   if (!localFilterQuery.value.trim()) return rawDataList.value
   const kw = localFilterQuery.value.toLowerCase()
@@ -210,4 +235,11 @@ const onGridReady = p => { gridApi.value = p.api }
 <style scoped>
 .custom-input-width { width: 150px !important; }
 ::v-deep(.diff-wrapper) { display: flex; align-items: center; }
+
+/* 모달 스타일 */
+.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
+.modal-body-content { flex: 1; background: #0f172a; padding: 20px; overflow: auto; }
+.json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; margin: 0; }
 </style>
