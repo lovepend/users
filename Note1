@@ -1,6 +1,6 @@
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100">
-    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
+    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
       <template #actions>
         <div class="d-flex align-items-center gap-2 ms-auto me-2">
           <div class="d-flex align-items-center gap-1">
@@ -25,11 +25,11 @@
 
           <div class="ms-1 ps-2 border-start d-flex align-items-center gap-1">
             <span class="fw-bold text-success text-nowrap small">결과</span>
-            <textarea class="form-control form-control-sm border-success filter-textarea" v-model="localFilterQuery" placeholder="내용 (엔터/,)"></textarea>
+            <textarea class="form-control form-control-sm border-success filter-textarea" v-model="localFilterQuery" placeholder="내용"></textarea>
           </div>
           <div class="ms-1 ps-2 border-start d-flex align-items-center gap-1">
             <span class="fw-bold text-info text-nowrap small">헤더</span>
-            <textarea class="form-control form-control-sm border-info filter-textarea" v-model="headerFilterQuery" placeholder="헤더명 (엔터/,)"></textarea>
+            <textarea class="form-control form-control-sm border-info filter-textarea" v-model="headerFilterQuery" placeholder="헤더명"></textarea>
           </div>
         </div>
         <panel-toolbar />
@@ -50,7 +50,7 @@
     <div v-if="showModal" class="custom-modal-overlay" @click.self="showModal = false">
       <div class="custom-modal-window shadow-lg">
         <div class="modal-header-dark">
-          <h5 class="m-0"><i class="fa fa-code me-2"></i>Raw Data Preview [{{ selectedTagNo }}]</h5>
+          <h5 class="m-0"><i class="fa fa-code me-2"></i>Raw Data [{{ selectedTagNo }}]</h5>
           <button class="btn btn-link text-white p-0" @click="showModal = false"><i class="fa fa-times text-white"></i></button>
         </div>
         <div class="modal-body-content">
@@ -68,15 +68,13 @@ import { sAlert } from '@/utils/messages/alert-common'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-// AG-Grid 테마 스타일 임포트 (전역에 없다면 여기서 반드시 로드)
+// AG-Grid 스타일 임포트
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-alpine.css'
 
 const manualProjNo = ref('SN2661')
 const regTypeId = ref('PIEP_T_002_T')
 const selectedType = ref('Working')
-const containDeleted = ref(false)
-
 const localFilterQuery = ref('') 
 const headerFilterQuery = ref('') 
 
@@ -91,29 +89,22 @@ const selectedJson = ref(null)
 
 const getKws = q => q.split(/[\s,\n]+/).filter(k => k.trim() !== '').map(k => k.toLowerCase())
 
-// 🎨 셀 스타일 및 하이라이트 로직
 const getCellStyle = p => {
   const styles = {}
-  // 1. [검증] Diff 하이라이트: 워킹과 퍼블리시가 다를 때만
   if (diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)) {
-    styles.backgroundColor = '#fff9db'; 
-    styles.color = '#d94111'; 
-    styles.fontWeight = 'bold';
-    styles.borderBottom = '2px solid #ffc107';
+    styles.backgroundColor = '#fff9db'; styles.color = '#d94111'; styles.fontWeight = 'bold';
   }
-  // 2. 결과 필터 하이라이트
   const kws = getKws(localFilterQuery.value)
   if (kws.length > 0 && p.value) {
     if (kws.some(k => String(p.value).toLowerCase().includes(k))) {
-      styles.backgroundColor = '#e8f5e9'; 
-      styles.border = '1px solid #28a745';
+      styles.backgroundColor = '#e8f5e9'; styles.border = '1px solid #28a745';
     }
   }
   return Object.keys(styles).length > 0 ? styles : null
 }
 
 const onSearch = async () => {
-  if (!manualProjNo.value || !regTypeId.value) return sAlert.Warning('Project No와 Reg ID를 입력하세요.')
+  if (!manualProjNo.value || !regTypeId.value) return sAlert.Warning('필수 값을 입력하세요.')
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
 
   try {
@@ -121,93 +112,91 @@ const onSearch = async () => {
       ProjectNo: manualProjNo.value.trim(),
       REG_TYPE_ID: regTypeId.value.trim(),
       Type: selectedType.value === 'All' ? 'MergeData' : selectedType.value,
-      ContainDeleted: containDeleted.value,
+      ContainDeleted: false,
     })
     
     const rootKey = regTypeId.value.trim()
     const resultData = res[rootKey] || Object.values(res)[0]
+    if (!resultData) { rawDataList.value = []; return sAlert.Info('데이터가 없습니다.') }
 
-    if (!resultData) {
-      rawDataList.value = []
-      return sAlert.Info('데이터가 없습니다.')
-    }
-
-    // 🔍 [검증] Diff 데이터 맵핑 (워킹 vs 퍼블리시 명확히 구분)
+    // 1. Diff 정보 맵핑
     const newDiffMap = new Map()
-    if (resultData.DiffData) {
-      resultData.DiffData.forEach(diff => {
-        (diff.Property || []).forEach(prop => {
-          if (prop.PUB_VALUE !== prop.WRK_VALUE) {
-            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { 
-              pub: prop.PUB_VALUE ?? '', 
-              wrk: prop.WRK_VALUE ?? '' 
-            })
-          }
-        })
+    resultData.DiffData?.forEach(diff => {
+      diff.Property?.forEach(prop => {
+        if (prop.PUB_VALUE !== prop.WRK_VALUE) {
+          newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE ?? '', wrk: prop.WRK_VALUE ?? '' })
+        }
       })
-    }
+    })
     diffMap.value = newDiffMap
 
-    // 🌟 [검증] 데이터 소스 처리: 워킹 조회 시 WrkData 기준
+    // 2. 🌟 데이터 소스 결정 (합치지 않고 선택된 데이터만 사용)
     let sourceData = []
     if (selectedType.value === 'All') {
       sourceData = [...(resultData.PubData || []), ...(resultData.WrkData || []), ...(resultData.MergeData || [])]
     } else {
-      sourceData = selectedType.value === 'Working' ? (resultData.WrkData || []) :
-                   selectedType.value === 'Publish' ? (resultData.PubData || []) : (resultData.MergeData || [])
+      const sourceMap = { 'Working': 'WrkData', 'Publish': 'PubData', 'MergeData': 'MergeData' }
+      sourceData = resultData[sourceMap[selectedType.value]] || []
     }
 
-    const attrKeys = new Set()
+    // 3. 🌟 시스템 어트리뷰트 + 커스텀 어트리뷰트 통합 추출
+    const columnKeys = new Set()
     const processed = sourceData.map(item => {
       const flat = { ...item, _raw: item }
+      
+      // 최상위 시스템 속성들 (TAG_IDX, STATUS 등) 추출
+      Object.keys(item).forEach(key => {
+        if (key !== 'ATTRIBUTES' && key !== '_raw') {
+          columnKeys.add(key)
+          // 값이 없으면 빈 문자열 처리
+          if (flat[key] === null || flat[key] === undefined) flat[key] = ""
+        }
+      })
+
+      // 상세 어트리뷰트 추출
       if (Array.isArray(item.ATTRIBUTES)) {
         item.ATTRIBUTES.forEach(attr => {
-          // 🌟 워킹/퍼블리시 값이 null이거나 빈 문자열이면 화면에 표시 안함
-          const val = attr.VALUE
-          flat[attr.ATT_ID] = (val === null || val === undefined || val === "") ? "" : val
-          attrKeys.add(attr.ATT_ID)
+          flat[attr.ATT_ID] = (attr.VALUE === null || attr.VALUE === undefined) ? "" : attr.VALUE
+          columnKeys.add(attr.ATT_ID)
         })
       }
       return flat
     })
 
-    const fixedFields = ['TAG_NO', 'EP_ID', 'CLS_ID', 'TAG_DESC']
-    allColumnsRaw.value = [...fixedFields, ...Array.from(attrKeys).sort()].map(key => ({
+    // 4. 컬럼 정의 생성 (중요 필드는 앞으로 고정)
+    const priorityFields = ['TAG_IDX', 'TAG_NO', 'TAG_DESC', 'STATUS']
+    const otherFields = Array.from(columnKeys).filter(k => !priorityFields.includes(k)).sort()
+    
+    allColumnsRaw.value = [...priorityFields, ...otherFields].map(key => ({
       headerName: key,
       field: key,
-      minWidth: 160,
+      minWidth: 150,
       pinned: key === 'TAG_NO' ? 'left' : null,
       cellRenderer: (p) => {
-        let val = p.value ?? ''
-        if (p.colDef.field === 'TAG_NO') return `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${val}</span>`
-        const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-        return d ? `<span><i class="fa fa-exclamation-triangle text-warning me-1"></i>${val}</span>` : val
+        const val = p.value ?? ''
+        const hasDiff = diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)
+        return hasDiff ? `<span><i class="fa fa-exclamation-triangle text-warning me-1"></i>${val}</span>` : val
       },
       cellStyle: getCellStyle,
-      // 🌟 [검증] 툴팁 정보 수정: 마우스 올리면 워킹과 퍼블리시 값 각각 표시
       tooltipValueGetter: p => {
         const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-        if (!d) return null
-        return `[데이터 불일치]\n- 현재(Working): ${d.wrk || '(빈 값)'}\n- 배포(Publish): ${d.pub || '(빈 값)'}`
+        return d ? `[변경감지]\n• Working: ${d.wrk || '(빈 값)'}\n• Publish: ${d.pub || '(빈 값)'}` : null
       },
     }))
 
     rawDataList.value = processed
-  } catch (e) {
-    sAlert.Error('조회 실패')
-  } finally {
-    if (gridApi.value) gridApi.value.setGridOption('loading', false)
-  }
+  } catch (e) { sAlert.Error('조회 중 오류 발생') }
+  finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
 }
 
 const filteredColumns = computed(() => {
-  const keywords = getKws(headerFilterQuery.value)
-  if (keywords.length === 0) return allColumnsRaw.value
-  return allColumnsRaw.value.filter(col => col.field === 'TAG_NO' || keywords.some(k => col.headerName.toLowerCase().includes(k)))
+  const kws = getKws(headerFilterQuery.value)
+  if (kws.length === 0) return allColumnsRaw.value
+  return allColumnsRaw.value.filter(col => col.field === 'TAG_NO' || kws.some(k => col.headerName.toLowerCase().includes(k)))
 })
 
 const onCellClicked = p => {
-  if (p.colDef.field === 'TAG_NO' && p.value) {
+  if (p.colDef.field === 'TAG_NO') {
     selectedTagNo.value = p.value; selectedJson.value = p.data._raw; showModal.value = true
   }
 }
@@ -216,7 +205,6 @@ const gridBindProps = computed(() => ({
   columnDefs: filteredColumns.value,
   rowData: rawDataList.value,
   class: 'ag-theme-alpine shadow-sm',
-  animateRows: true,
   pagination: true,
   paginationPageSize: 100,
   tooltipShowDelay: 0,
@@ -228,29 +216,16 @@ const onGridReady = p => { gridApi.value = p.api }
 </script>
 
 <style scoped>
-/* 🌟 그리드 외곽 테두리 및 디자인 보정 */
-.grid-container {
-  background-color: #ffffff;
-}
+.grid-container { background-color: #ffffff; }
 .ag-theme-alpine {
   --ag-border-color: #d1d5db;
   --ag-header-background-color: #f3f4f6;
-  --ag-header-foreground-color: #374151;
-  --ag-row-hover-color: #f9fafb;
-  --ag-selected-row-background-color: #eff6ff;
   border: 1px solid #d1d5db;
 }
-
-/* 필터 입력창 스타일 */
-.filter-textarea { 
-  width: 140px; height: 28px; resize: none; font-size: 11px; line-height: 1.2; padding: 2px 5px; overflow: hidden; 
-  border-radius: 4px;
-}
-
-/* 모달 디자인 */
-.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #1e293b; }
-.modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
+.filter-textarea { width: 140px; height: 28px; resize: none; font-size: 11px; padding: 2px 5px; border-radius: 4px; }
+.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; }
 .modal-body-content { flex: 1; background: #0f172a; padding: 20px; overflow: auto; }
-.json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; margin: 0; white-space: pre-wrap; }
+.json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; margin: 0; }
 </style>
