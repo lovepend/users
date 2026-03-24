@@ -5,7 +5,7 @@
         <div class="d-flex align-items-center gap-2 ms-auto me-2">
           <div class="d-flex align-items-center gap-1">
             <span class="fw-bold text-dark text-nowrap small">Project</span>
-            <input type="text" class="form-control form-control-sm" style="width: 100px" v-model="manualProjNo" />
+            <input type="text" class="form-control form-control-sm" style="width: 90px" v-model="manualProjNo" />
           </div>
           <div class="d-flex align-items-center gap-1">
             <span class="fw-bold text-nowrap small">Reg ID</span>
@@ -25,14 +25,11 @@
 
           <div class="ms-1 ps-2 border-start d-flex align-items-center gap-1">
             <span class="fw-bold text-success text-nowrap small">결과</span>
-            <textarea class="form-control form-control-sm border-success filter-textarea" 
-              v-model="localFilterQuery" placeholder="내용 (엔터/,)"></textarea>
+            <textarea class="form-control form-control-sm border-success filter-textarea" v-model="localFilterQuery" placeholder="내용 (엔터/,)"></textarea>
           </div>
-
           <div class="ms-1 ps-2 border-start d-flex align-items-center gap-1">
             <span class="fw-bold text-info text-nowrap small">헤더</span>
-            <textarea class="form-control form-control-sm border-info filter-textarea" 
-              v-model="headerFilterQuery" placeholder="헤더명 (엔터/,)"></textarea>
+            <textarea class="form-control form-control-sm border-info filter-textarea" v-model="headerFilterQuery" placeholder="헤더명 (엔터/,)"></textarea>
           </div>
         </div>
         <panel-toolbar />
@@ -40,16 +37,13 @@
     </PageTitle>
 
     <div class="panel-body m-0 p-0 h-100">
-      <div class="panel m-0 p-0 h-100 border-0">
-        <div class="panel-body overflow-hidden m-0 p-0 h-100">
-          <ag-grid-vue
-            v-bind="gridBindProps"
-            @grid-ready="onGridReady"
-            @cell-clicked="onCellClicked"
-            class="ag-theme-alpine w-100 h-100"
-            :tooltipShowDelay="0"
-          />
-        </div>
+      <div class="grid-container w-100 h-100 p-1">
+        <ag-grid-vue
+          v-bind="gridBindProps"
+          class="ag-theme-alpine w-100 h-100"
+          @grid-ready="onGridReady"
+          @cell-clicked="onCellClicked"
+        />
       </div>
     </div>
 
@@ -74,6 +68,10 @@ import { sAlert } from '@/utils/messages/alert-common'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 import PageTitle from '@/components/toolBar/PageTitle.vue'
 
+// AG-Grid 테마 스타일 임포트 (전역에 없다면 여기서 반드시 로드)
+import 'ag-grid-community/styles/ag-grid.css'
+import 'ag-grid-community/styles/ag-theme-alpine.css'
+
 const manualProjNo = ref('SN2661')
 const regTypeId = ref('PIEP_T_002_T')
 const selectedType = ref('Working')
@@ -85,33 +83,37 @@ const headerFilterQuery = ref('')
 const gridApi = shallowRef()
 const rawDataList = ref([])
 const allColumnsRaw = ref([]) 
-const diffMap = ref(new Map())
+const diffMap = ref(new Map()) 
 
 const showModal = ref(false)
 const selectedTagNo = ref('')
 const selectedJson = ref(null)
 
-const getKeywords = q => q.split(/[\s,\n]+/).filter(k => k.trim() !== '').map(k => k.toLowerCase())
+const getKws = q => q.split(/[\s,\n]+/).filter(k => k.trim() !== '').map(k => k.toLowerCase())
 
-// 🎨 셀 스타일: 틀린 값 하이라이트 + 검색어 강조
+// 🎨 셀 스타일 및 하이라이트 로직
 const getCellStyle = p => {
   const styles = {}
-  // 1. 차이(Diff) 하이라이트
+  // 1. [검증] Diff 하이라이트: 워킹과 퍼블리시가 다를 때만
   if (diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)) {
-    styles.backgroundColor = '#fff9db'; styles.fontWeight = 'bold'; styles.color = '#d94111'
+    styles.backgroundColor = '#fff9db'; 
+    styles.color = '#d94111'; 
+    styles.fontWeight = 'bold';
+    styles.borderBottom = '2px solid #ffc107';
   }
-  // 2. 내용 필터 하이라이트
-  const kws = getKeywords(localFilterQuery.value)
+  // 2. 결과 필터 하이라이트
+  const kws = getKws(localFilterQuery.value)
   if (kws.length > 0 && p.value) {
     if (kws.some(k => String(p.value).toLowerCase().includes(k))) {
-      styles.backgroundColor = '#e8f5e9'; styles.border = '1px solid #28a745'
+      styles.backgroundColor = '#e8f5e9'; 
+      styles.border = '1px solid #28a745';
     }
   }
   return Object.keys(styles).length > 0 ? styles : null
 }
 
 const onSearch = async () => {
-  if (!manualProjNo.value || !regTypeId.value) return sAlert.Warning('입력값을 확인하세요.')
+  if (!manualProjNo.value || !regTypeId.value) return sAlert.Warning('Project No와 Reg ID를 입력하세요.')
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
 
   try {
@@ -122,34 +124,50 @@ const onSearch = async () => {
       ContainDeleted: containDeleted.value,
     })
     
-    const root = res[regTypeId.value.trim()] || Object.values(res)[0]
-    if (!root) { rawDataList.value = []; return sAlert.Info('데이터가 없습니다.') }
+    const rootKey = regTypeId.value.trim()
+    const resultData = res[rootKey] || Object.values(res)[0]
 
-    // 차이점 분석
-    const dMap = new Map()
-    root.DiffData?.forEach(diff => {
-      diff.Property?.forEach(p => {
-        if (p.PUB_VALUE !== p.WRK_VALUE) dMap.set(`${diff.TAG_IDX}_${p.PROP_ID}`, { pub: p.PUB_VALUE, wrk: p.WRK_VALUE })
+    if (!resultData) {
+      rawDataList.value = []
+      return sAlert.Info('데이터가 없습니다.')
+    }
+
+    // 🔍 [검증] Diff 데이터 맵핑 (워킹 vs 퍼블리시 명확히 구분)
+    const newDiffMap = new Map()
+    if (resultData.DiffData) {
+      resultData.DiffData.forEach(diff => {
+        (diff.Property || []).forEach(prop => {
+          if (prop.PUB_VALUE !== prop.WRK_VALUE) {
+            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { 
+              pub: prop.PUB_VALUE ?? '', 
+              wrk: prop.WRK_VALUE ?? '' 
+            })
+          }
+        })
       })
-    })
-    diffMap.value = dMap
+    }
+    diffMap.value = newDiffMap
 
-    // 🌟 데이터 소스 선택
-    let source = []
+    // 🌟 [검증] 데이터 소스 처리: 워킹 조회 시 WrkData 기준
+    let sourceData = []
     if (selectedType.value === 'All') {
-      source = [...(root.PubData || []), ...(root.WrkData || []), ...(root.MergeData || [])]
+      sourceData = [...(resultData.PubData || []), ...(resultData.WrkData || []), ...(resultData.MergeData || [])]
     } else {
-      source = root[selectedType.value === 'Working' ? 'WrkData' : selectedType.value === 'Publish' ? 'PubData' : 'MergeData'] || []
+      sourceData = selectedType.value === 'Working' ? (resultData.WrkData || []) :
+                   selectedType.value === 'Publish' ? (resultData.PubData || []) : (resultData.MergeData || [])
     }
 
     const attrKeys = new Set()
-    const processed = source.map(item => {
+    const processed = sourceData.map(item => {
       const flat = { ...item, _raw: item }
-      item.ATTRIBUTES?.forEach(attr => {
-        // 🌟 값이 null, undefined, "" 이면 화면에 표시하지 않음(빈 문자열 처리)
-        flat[attr.ATT_ID] = (attr.VALUE === null || attr.VALUE === undefined) ? "" : attr.VALUE;
-        attrKeys.add(attr.ATT_ID)
-      })
+      if (Array.isArray(item.ATTRIBUTES)) {
+        item.ATTRIBUTES.forEach(attr => {
+          // 🌟 워킹/퍼블리시 값이 null이거나 빈 문자열이면 화면에 표시 안함
+          const val = attr.VALUE
+          flat[attr.ATT_ID] = (val === null || val === undefined || val === "") ? "" : val
+          attrKeys.add(attr.ATT_ID)
+        })
+      }
       return flat
     })
 
@@ -157,32 +175,35 @@ const onSearch = async () => {
     allColumnsRaw.value = [...fixedFields, ...Array.from(attrKeys).sort()].map(key => ({
       headerName: key,
       field: key,
-      minWidth: 150,
+      minWidth: 160,
       pinned: key === 'TAG_NO' ? 'left' : null,
       cellRenderer: (p) => {
-        let val = p.value ?? '' // 🌟 여기서도 null 방지
+        let val = p.value ?? ''
         if (p.colDef.field === 'TAG_NO') return `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${val}</span>`
         const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-        // 틀린 값은 아이콘 표시
-        return d ? `<span><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</span>` : val
+        return d ? `<span><i class="fa fa-exclamation-triangle text-warning me-1"></i>${val}</span>` : val
       },
       cellStyle: getCellStyle,
-      // 🌟 마우스 툴팁으로 틀린 값 표시
+      // 🌟 [검증] 툴팁 정보 수정: 마우스 올리면 워킹과 퍼블리시 값 각각 표시
       tooltipValueGetter: p => {
         const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-        return d ? `[차이] Publish: ${d.pub ?? '없음'} / Working: ${d.wrk ?? '없음'}` : null
+        if (!d) return null
+        return `[데이터 불일치]\n- 현재(Working): ${d.wrk || '(빈 값)'}\n- 배포(Publish): ${d.pub || '(빈 값)'}`
       },
     }))
 
     rawDataList.value = processed
-  } catch (e) { sAlert.Error('조회 실패') }
-  finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
+  } catch (e) {
+    sAlert.Error('조회 실패')
+  } finally {
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
+  }
 }
 
 const filteredColumns = computed(() => {
-  const kws = getKeywords(headerFilterQuery.value)
-  if (kws.length === 0) return allColumnsRaw.value
-  return allColumnsRaw.value.filter(col => col.field === 'TAG_NO' || kws.some(k => col.headerName.toLowerCase().includes(k)))
+  const keywords = getKws(headerFilterQuery.value)
+  if (keywords.length === 0) return allColumnsRaw.value
+  return allColumnsRaw.value.filter(col => col.field === 'TAG_NO' || keywords.some(k => col.headerName.toLowerCase().includes(k)))
 })
 
 const onCellClicked = p => {
@@ -194,10 +215,11 @@ const onCellClicked = p => {
 const gridBindProps = computed(() => ({
   columnDefs: filteredColumns.value,
   rowData: rawDataList.value,
-  style: 'width: 100%; height: 100%',
-  // 테마 클래스는 상단 div에 적용했으므로 여기선 스타일만 유지
+  class: 'ag-theme-alpine shadow-sm',
+  animateRows: true,
   pagination: true,
   paginationPageSize: 100,
+  tooltipShowDelay: 0,
   loadingOverlayComponent: AggridLoadingOverlay,
   defaultColDef: { sortable: true, filter: true, resizable: true },
 }))
@@ -206,15 +228,29 @@ const onGridReady = p => { gridApi.value = p.api }
 </script>
 
 <style scoped>
-/* 🌟 그리드 테두리 및 스타일 강제 적용 */
+/* 🌟 그리드 외곽 테두리 및 디자인 보정 */
+.grid-container {
+  background-color: #ffffff;
+}
 .ag-theme-alpine {
-  border: 1px solid #dee2e6;
+  --ag-border-color: #d1d5db;
+  --ag-header-background-color: #f3f4f6;
+  --ag-header-foreground-color: #374151;
+  --ag-row-hover-color: #f9fafb;
+  --ag-selected-row-background-color: #eff6ff;
+  border: 1px solid #d1d5db;
 }
 
-.filter-textarea { width: 130px; height: 28px; resize: none; font-size: 11px; line-height: 1.2; padding: 2px 5px; overflow: hidden; }
+/* 필터 입력창 스타일 */
+.filter-textarea { 
+  width: 140px; height: 28px; resize: none; font-size: 11px; line-height: 1.2; padding: 2px 5px; overflow: hidden; 
+  border-radius: 4px;
+}
+
+/* 모달 디자인 */
 .custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #1e293b; }
 .modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
 .modal-body-content { flex: 1; background: #0f172a; padding: 20px; overflow: auto; }
-.json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; margin: 0; }
+.json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; margin: 0; white-space: pre-wrap; }
 </style>
