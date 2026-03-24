@@ -15,7 +15,227 @@ const dynamicCols = ref([])
 
 // 모달 상태
 const showModal = ref(false)
+const selectedJson = ref(null<template>
+  <div class="panel panel-expandable m-0 p-0 h-100">
+    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
+      <template #actions>
+        <div class="d-flex align-items-center gap-3 ms-auto me-2">
+          <label class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-dark text-nowrap">Project No</span>
+            <input type="text" class="form-control form-control-sm custom-input-width" v-model="manualProjNo" placeholder="예: SN2661" />
+          </label>
+
+          <label class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-nowrap">Register ID</span>
+            <input type="text" class="form-control form-control-sm custom-input-width" v-model="regTypeId" placeholder="예: PIEP_T_002_T" />
+          </label>
+
+          <div class="d-flex align-items-center gap-2 border-start ps-3 ms-2">
+            <span class="fw-bold text-nowrap">조회 대상</span>
+            <div class="form-check form-check-inline mb-0" v-for="opt in ['Publish', 'Working', 'MergeData']" :key="opt">
+              <input class="form-check-input" type="radio" :id="opt" :value="opt" v-model="selectedType" />
+              <label class="form-check-label" :for="opt">{{ opt }}</label>
+            </div>
+          </div>
+
+          <div class="form-check mb-0 border-start ps-3">
+            <input class="form-check-input" type="checkbox" id="delCheck" v-model="containDeleted" />
+            <label class="form-check-label fw-bold" for="delCheck">삭제 포함</label>
+          </div>
+
+          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch"><i class="fa fa-search me-1"></i>조회</button>
+        </div>
+      </template>
+    </PageTitle>
+
+    <div class="panel-body m-0 p-0 h-100">
+      <ag-grid-vue
+        v-bind="gridBindProps"
+        @grid-ready="onGridReady"
+        @cell-clicked="onCellClicked"
+        :tooltipShowDelay="0"
+      />
+    </div>
+
+    <div v-if="showModal" class="custom-modal-overlay" @click.self="showModal = false">
+      <div class="custom-modal-window shadow-lg">
+        <div class="modal-header-dark">
+          <h5 class="m-0"><i class="fa fa-code me-2"></i>Raw Data Preview [{{ selectedTagNo }}]</h5>
+          <button class="btn btn-link text-white p-0" @click="showModal = false"><i class="fa fa-times text-white"></i></button>
+        </div>
+        <div class="modal-body-content">
+          <div class="json-wrapper">
+            <pre class="json-content">{{ JSON.stringify(selectedJson, null, 2) }}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, shallowRef } from 'vue'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
+
+// 검색 조건 필터 상태
+const manualProjNo = ref('SN2661')
+const regTypeId = ref('PIEP_T_002_T')
+const selectedType = ref('Working')
+const containDeleted = ref(false)
+
+const gridApi = shallowRef()
+const rawDataList = ref([])
+const diffMap = ref(new Map())
+const dynamicCols = ref([])
+
+// 모달 상태
+const showModal = ref(false)
+const selectedTagNo = ref('')
 const selectedJson = ref(null)
+
+/**
+ * 🎨 셀 스타일 및 렌더링 로직
+ */
+const commonCellRenderer = (p) => {
+  if (p.colDef.field === 'TAG_NO') {
+    return `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${p.value}</span>`
+  }
+  return p.value
+}
+
+const getCellStyle = (p) => {
+  // DiffData에 해당 필드가 있다면 배경색 강조
+  if (diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)) {
+    return { backgroundColor: '#fff3cd', color: '#d94111', fontWeight: 'bold' }
+  }
+  return null
+}
+
+/**
+ * 🔍 데이터 조회 실행
+ */
+const onSearch = async () => {
+  if (gridApi.value) gridApi.value.setGridOption('loading', true)
+  
+  try {
+    // 1. 모든 필터 조건을 페이로드에 담음
+    const payload = {
+      ProjectNo: manualProjNo.value,
+      REG_TYPE_ID: regTypeId.value,
+      Type: selectedType.value,
+      ContainDeleted: containDeleted.value
+    }
+
+    // 2. API 호출
+    const res = await axiosWrapper.post('api/Data/GetMergedData', payload)
+    
+    // 응답에서 입력한 키워드(Register ID)에 해당하는 데이터 추출
+    const rootKey = regTypeId.value.trim()
+    const resultRoot = res[rootKey] || Object.values(res)[0]
+
+    if (!resultRoot) {
+      rawDataList.value = []
+      return sAlert.Info("데이터가 없습니다.")
+    }
+
+    // 3. DiffData (차이점) 매핑
+    const newDiffMap = new Map()
+    if (resultRoot.DiffData) {
+      resultRoot.DiffData.forEach(diff => {
+        (diff.Property || []).forEach(prop => {
+          if (prop.PUB_VALUE !== prop.WRK_VALUE) {
+            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE, wrk: prop.WRK_VALUE })
+          }
+        })
+      })
+    }
+    diffMap.value = newDiffMap
+
+    // 4. 조회 대상에 따른 데이터셋 선택
+    const sourceData = selectedType.value === 'Working' ? resultRoot.WrkData :
+                       selectedType.value === 'Publish' ? resultRoot.PubData : resultRoot.MergeData
+    
+    if (!sourceData) { rawDataList.value = []; return; }
+
+    // 5. 🌟 어트리뷰트 배열 평면화 (ID -> Header, VALUE -> Cell)
+    const attrKeys = new Set()
+    const processed = sourceData.map(item => {
+      const flat = { ...item, _raw: item } // 모달용 원본 데이터 보관
+      if (item.ATTRIBUTES && Array.isArray(item.ATTRIBUTES)) {
+        item.ATTRIBUTES.forEach(attr => {
+          flat[attr.ATT_ID] = attr.VALUE
+          attrKeys.add(attr.ATT_ID)
+        })
+      }
+      return flat
+    })
+
+    // 6. 시스템 필드와 동적 어트리뷰트 컬럼 결합
+    const systemFields = [
+      { header: 'Tag No', field: 'TAG_NO', pinned: 'left', width: 180 },
+      { header: 'EP ID', field: 'EP_ID', width: 120 },
+      { header: 'Class', field: 'CLS_ID', width: 150 },
+      { header: 'Description', field: 'TAG_DESC', width: 250 }
+    ]
+
+    const sysCols = systemFields.map(f => ({
+      headerName: f.header, field: f.field, pinned: f.pinned, width: f.width,
+      cellRenderer: commonCellRenderer, cellStyle: getCellStyle
+    }))
+
+    const attrCols = Array.from(attrKeys).sort().map(ak => ({
+      headerName: ak, field: ak, width: 140,
+      headerClass: 'bg-light-blue',
+      cellStyle: getCellStyle,
+      tooltipValueGetter: (p) => {
+        const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+        return d ? `[비교] Publish: ${d.pub} / Working: ${d.wrk}` : null
+      }
+    }))
+
+    dynamicCols.value = [...sysCols, ...attrCols]
+    rawDataList.value = processed
+
+  } catch (e) {
+    console.error(e)
+    sAlert.Error("데이터 로딩 실패")
+  } finally {
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
+  }
+}
+
+/**
+ * 🖱 셀 클릭 이벤트 (태그 번호 클릭 시 JSON 모달)
+ */
+const onCellClicked = (p) => {
+  if (p.colDef.field === 'TAG_NO') {
+    selectedTagNo.value = p.value
+    selectedJson.value = p.data._raw // 보관해둔 원본 데이터 표시
+    showModal.value = true
+  }
+}
+
+const gridBindProps = computed(() => ({
+  columnDefs: dynamicCols.value,
+  rowData: rawDataList.value,
+  class: 'ag-theme-alpine',
+  style: 'width: 100%; height: 100%',
+  defaultColDef: { sortable: true, filter: true, resizable: true }
+}))
+
+const onGridReady = p => { gridApi.value = p.api }
+</script>
+
+<style scoped>
+.custom-input-width { width: 150px !important; }
+.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
+.modal-body-content { flex: 1; background: #0f172a; padding: 20px; overflow: auto; }
+.json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5; margin: 0; }
+::v-deep(.bg-light-blue) { background-color: #f0f7ff !important; color: #004085 !important; font-weight: bold; }
+</style>
 
 const onSearch = async () => {
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
