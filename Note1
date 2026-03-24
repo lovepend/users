@@ -3,40 +3,42 @@
     <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
       <template #actions>
         <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <label class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center gap-2">
             <span class="fw-bold text-dark text-nowrap">Project No</span>
-            <input type="text" class="form-control form-control-sm custom-input-width" v-model="manualProjNo" placeholder="예: SN2661" />
-          </label>
+            <input type="text" class="form-control form-control-sm" style="width: 120px" v-model="manualProjNo" />
+          </div>
 
-          <label class="d-flex align-items-center gap-2">
+          <div class="d-flex align-items-center gap-2">
             <span class="fw-bold text-nowrap">Register ID</span>
-            <input type="text" class="form-control form-control-sm custom-input-width" v-model="regTypeId" placeholder="예: PIEP_T_002_T" />
-          </label>
+            <input type="text" class="form-control form-control-sm" style="width: 150px" v-model="regTypeId" />
+          </div>
 
-          <div class="d-flex align-items-center gap-2 border-start ps-3 ms-2">
+          <div class="d-flex align-items-center gap-2 border-start ps-3">
             <span class="fw-bold text-nowrap">조회 대상</span>
             <div class="form-check form-check-inline mb-0" v-for="opt in ['Publish', 'Working', 'MergeData']" :key="opt">
               <input class="form-check-input" type="radio" :id="opt" :value="opt" v-model="selectedType" />
-              <label class="form-check-label" :for="opt">{{ opt }}</label>
+              <label class="form-check-label" :for="opt" style="cursor:pointer">{{ opt }}</label>
             </div>
           </div>
 
           <div class="form-check mb-0 border-start ps-3">
             <input class="form-check-input" type="checkbox" id="delCheck" v-model="containDeleted" />
-            <label class="form-check-label fw-bold" for="delCheck">삭제 포함</label>
+            <label class="form-check-label fw-bold" for="delCheck" style="cursor:pointer">삭제 포함</label>
           </div>
 
-          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch"><i class="fa fa-search me-1"></i>조회</button>
+          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
+            <i class="fa fa-search me-1"></i>조회
+          </button>
         </div>
       </template>
     </PageTitle>
 
-    <div class="panel-body m-0 p-0 h-100">
+    <div class="panel-body m-0 p-0 h-100" style="min-height: 400px;">
       <ag-grid-vue
         v-bind="gridBindProps"
         @grid-ready="onGridReady"
         @cell-clicked="onCellClicked"
-        :tooltipShowDelay="0"
+        style="width: 100%; height: 100%"
       />
     </div>
 
@@ -44,7 +46,9 @@
       <div class="custom-modal-window shadow-lg">
         <div class="modal-header-dark">
           <h5 class="m-0"><i class="fa fa-code me-2"></i>Raw Data Preview [{{ selectedTagNo }}]</h5>
-          <button class="btn btn-link text-white p-0" @click="showModal = false"><i class="fa fa-times text-white"></i></button>
+          <button class="btn btn-link text-white p-0" @click="showModal = false">
+            <i class="fa fa-times text-white"></i>
+          </button>
         </div>
         <div class="modal-body-content">
           <div class="json-wrapper">
@@ -61,7 +65,7 @@ import { ref, computed, shallowRef } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { sAlert } from '@/utils/messages/alert-common'
 
-// 검색 상태값
+// 검색 상태값 (UI 바인딩 필드)
 const manualProjNo = ref('SN2661')
 const regTypeId = ref('PIEP_T_002_T')
 const selectedType = ref('Working')
@@ -78,7 +82,7 @@ const selectedTagNo = ref('')
 const selectedJson = ref(null)
 
 /**
- * 🎨 그리드 스타일 & 렌더러
+ * 🎨 그리드 스타일 & 렌더러 로직
  */
 const getCellStyle = (p) => {
   if (diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)) {
@@ -92,24 +96,25 @@ const onSearch = async () => {
   
   try {
     const payload = {
-      ProjectNo: manualProjNo.value,
-      REG_TYPE_ID: regTypeId.value,
+      ProjectNo: manualProjNo.value.trim(),
+      REG_TYPE_ID: regTypeId.value.trim(),
       Type: selectedType.value,
       ContainDeleted: containDeleted.value
     }
 
-    // 아까 성공했던 경로로 호출
+    // 서버 호출 (상대경로 api/ 확인)
     const res = await axiosWrapper.post('api/Data/GetMergedData', payload)
     
+    // 데이터 추출 로직
     const rootKey = regTypeId.value.trim()
     const resultRoot = res[rootKey] || Object.values(res)[0]
 
     if (!resultRoot) {
       rawDataList.value = []
-      return sAlert.Info("데이터가 없습니다.")
+      return sAlert.Info("조회된 데이터가 없습니다.")
     }
 
-    // Diff 매핑
+    // Diff 매핑 (차이점 분석)
     const newDiffMap = new Map()
     if (resultRoot.DiffData) {
       resultRoot.DiffData.forEach(diff => {
@@ -122,41 +127,41 @@ const onSearch = async () => {
     }
     diffMap.value = newDiffMap
 
-    // 데이터셋 선택
-    const sourceData = selectedType.value === 'Working' ? resultRoot.WrkData :
-                       selectedType.value === 'Publish' ? resultRoot.PubData : resultRoot.MergeData
+    // 표시 데이터 결정
+    const sourceData = selectedType.value === 'Working' ? (resultRoot.WrkData || []) :
+                       selectedType.value === 'Publish' ? (resultRoot.PubData || []) : (resultRoot.MergeData || [])
     
-    if (!sourceData) { rawDataList.value = []; return; }
-
-    // 🌟 Attributes 배열 처리 (Flatten)
+    // 🌟 Attributes 평면화 처리 (배열 안의 값을 컬럼으로 추출)
     const attrKeys = new Set()
     const processed = sourceData.map(item => {
       const flat = { ...item, _raw: item }
-      if (item.ATTRIBUTES && Array.isArray(item.ATTRIBUTES)) {
+      if (Array.isArray(item.ATTRIBUTES)) {
         item.ATTRIBUTES.forEach(attr => {
-          flat[attr.ATT_ID] = attr.VALUE
+          flat[attr.ATT_ID] = attr.VALUE // ID를 헤더로, VALUE를 셀 값으로
           attrKeys.add(attr.ATT_ID)
         })
       }
       return flat
     })
 
-    // 컬럼 생성
+    // 컬럼 정의 (시스템 필드 + 추출된 어트리뷰트)
     const systemFields = [
-      { header: 'Tag No', field: 'TAG_NO', pinned: 'left', width: 180 },
-      { header: 'EP ID', field: 'EP_ID', width: 120 },
-      { header: 'Class', field: 'CLS_ID', width: 150 },
-      { header: 'Description', field: 'TAG_DESC', width: 250 }
+      { headerName: 'Tag No', field: 'TAG_NO', pinned: 'left', width: 180 },
+      { headerName: 'EP ID', field: 'EP_ID', width: 120 },
+      { headerName: 'Class', field: 'CLS_ID', width: 150 },
+      { headerName: 'Description', field: 'TAG_DESC', width: 250 }
     ]
 
     const sysCols = systemFields.map(f => ({
-      headerName: f.header, field: f.field, pinned: f.pinned, width: f.width,
-      cellRenderer: (p) => f.field === 'TAG_NO' ? `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${p.value}</span>` : p.value,
+      ...f,
+      cellRenderer: (p) => f.field === 'TAG_NO' ? `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${p.value}</span>` : (p.value ?? ''),
       cellStyle: getCellStyle
     }))
 
-    const attrCols = Array.from(attrKeys).sort().map(ak => ({
-      headerName: ak, field: ak, width: 140,
+    const attrCols = Array.from(attrKeys).sort().map(key => ({
+      headerName: key,
+      field: key,
+      width: 140,
       headerClass: 'bg-light-blue',
       cellStyle: getCellStyle,
       tooltipValueGetter: (p) => {
@@ -169,14 +174,15 @@ const onSearch = async () => {
     rawDataList.value = processed
 
   } catch (e) {
-    sAlert.Error("조회 실패")
+    console.error("Error Detail:", e)
+    sAlert.Error("데이터를 가져오는 중 오류가 발생했습니다.")
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
 const onCellClicked = (p) => {
-  if (p.colDef.field === 'TAG_NO') {
+  if (p.colDef.field === 'TAG_NO' && p.value) {
     selectedTagNo.value = p.value
     selectedJson.value = p.data._raw
     showModal.value = true
@@ -195,11 +201,14 @@ const onGridReady = p => { gridApi.value = p.api }
 </script>
 
 <style scoped>
-.custom-input-width { width: 150px !important; }
+/* 모달 레이아웃 */
 .custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
 .modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
-.modal-body-content { flex: 1; background: #0f172a; padding: 20px; overflow: auto; }
-.json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; margin: 0; }
+.modal-body-content { flex: 1; background: #0f172a; padding: 20px; overflow: auto; display: flex; flex-direction: column; }
+.json-wrapper { flex: 1; overflow: auto; }
+.json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5; margin: 0; }
+
+/* 컬럼 헤더 스타일 */
 ::v-deep(.bg-light-blue) { background-color: #f0f7ff !important; color: #004085 !important; font-weight: bold; }
 </style>
