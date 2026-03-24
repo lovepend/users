@@ -25,26 +25,23 @@
 
           <div class="ms-1 ps-2 border-start d-flex align-items-center gap-1">
             <span class="fw-bold text-success text-nowrap small">결과</span>
-            <textarea class="form-control form-control-sm border-success filter-textarea" 
-              v-model="localFilterQuery" placeholder="내용 (엔터/,)"></textarea>
+            <textarea class="form-control form-control-sm border-success filter-textarea" v-model="localFilterQuery" placeholder="내용 (엔터/,)"></textarea>
           </div>
-
           <div class="ms-1 ps-2 border-start d-flex align-items-center gap-1">
             <span class="fw-bold text-info text-nowrap small">헤더</span>
-            <textarea class="form-control form-control-sm border-info filter-textarea" 
-              v-model="headerFilterQuery" placeholder="헤더명 (엔터/,)"></textarea>
+            <textarea class="form-control form-control-sm border-info filter-textarea" v-model="headerFilterQuery" placeholder="헤더명 (엔터/,)"></textarea>
           </div>
         </div>
         <panel-toolbar />
       </template>
     </PageTitle>
 
-    <div class="panel-body m-0 p-0 h-100 border-0">
+    <div class="panel-body m-0 p-0 h-100">
       <ag-grid-vue
         v-bind="gridBindProps"
         @grid-ready="onGridReady"
         @cell-clicked="onCellClicked"
-        :tooltipShowDelay="0"
+        class="ag-theme-alpine w-100 h-100"
       />
     </div>
 
@@ -78,7 +75,7 @@ const headerFilterQuery = ref('')
 const gridApi = shallowRef()
 const rawDataList = ref([])
 const allColumnsRaw = ref([]) 
-const diffMap = ref(new Map()) // 변경된 값 저장용
+const diffMap = ref(new Map()) 
 
 const showModal = ref(false)
 const selectedTagNo = ref('')
@@ -86,16 +83,26 @@ const selectedJson = ref(null)
 
 const getKws = q => q.split(/[\s,\n]+/).filter(k => k.trim() !== '').map(k => k.toLowerCase())
 
-// 셀 스타일: 변경된 값 강조 + 필터 하이라이트
+/**
+ * 🎨 셀 스타일: 틀린 값(Diff) 하이라이트 + 결과 필터 강조
+ */
 const getCellStyle = p => {
   const styles = {}
+  
+  // 1. 틀린 값(Diff) 하이라이트: 노란색 배경 + 붉은 글씨
   if (diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)) {
-    styles.backgroundColor = '#fff9db'; styles.fontWeight = 'bold'; styles.color = '#d94111'
+    styles.backgroundColor = '#fff9db'; 
+    styles.color = '#d94111'; 
+    styles.fontWeight = 'bold';
+    styles.border = '1px solid #ffec99';
   }
+
+  // 2. 결과 필터 하이라이트: 연초록색
   const kws = getKws(localFilterQuery.value)
   if (kws.length > 0 && p.value) {
     if (kws.some(k => String(p.value).toLowerCase().includes(k))) {
-      styles.backgroundColor = '#e8f5e9'; styles.border = '1px solid #28a745'
+      styles.backgroundColor = '#e8f5e9'; 
+      styles.border = '1px solid #28a745';
     }
   }
   return Object.keys(styles).length > 0 ? styles : null
@@ -114,18 +121,18 @@ const onSearch = async () => {
     const root = res[regTypeId.value.trim()] || Object.values(res)[0]
     if (!root) { rawDataList.value = []; return sAlert.Info('데이터 없음') }
 
-    // 1. DiffData 분석 (틀린 값 맵 구성)
-    const newDiffMap = new Map()
+    // Diff 맵 생성
+    const dMap = new Map()
     root.DiffData?.forEach(diff => {
       diff.Property?.forEach(prop => {
         if (prop.PUB_VALUE !== prop.WRK_VALUE) {
-          newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE, wrk: prop.WRK_VALUE })
+          dMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE, wrk: prop.WRK_VALUE })
         }
       })
     })
-    diffMap.value = newDiffMap
+    diffMap.value = dMap
 
-    // 2. 데이터 소스 구성 (All 포함)
+    // 🌟 데이터 구성 로직 (Working 선택 시 값이 없으면 안보이게 처리)
     let source = []
     if (selectedType.value === 'All') {
       source = [...(root.WrkData || []), ...(root.PubData || []), ...(root.MergeData || [])]
@@ -136,11 +143,14 @@ const onSearch = async () => {
     const attrKeys = new Set()
     const processed = source.map(item => {
       const flat = { ...item, _raw: item }
-      item.ATTRIBUTES?.forEach(a => { flat[a.ATT_ID] = a.VALUE; attrKeys.add(a.ATT_ID); })
+      item.ATTRIBUTES?.forEach(a => { 
+        // 🌟 요청사항 반영: Working 등 선택된 모드에 데이터가 있을 때만 필드에 넣음
+        flat[a.ATT_ID] = a.VALUE ?? ''; 
+        attrKeys.add(a.ATT_ID); 
+      })
       return flat
     })
 
-    // 3. 컬럼 정의 (툴팁 기능 추가)
     const fixed = ['TAG_NO', 'EP_ID', 'CLS_ID', 'TAG_DESC']
     allColumnsRaw.value = [...fixed, ...Array.from(attrKeys).sort()].map(key => ({
       headerName: key,
@@ -149,14 +159,14 @@ const onSearch = async () => {
       pinned: key === 'TAG_NO' ? 'left' : null,
       cellRenderer: (p) => {
         if (p.colDef.field === 'TAG_NO') return `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${p.value}</span>`
-        const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-        return d ? `<span><i class="fa fa-exclamation-triangle text-warning me-1"></i>${p.value}</span>` : p.value
+        const hasDiff = diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)
+        return hasDiff ? `<span><i class="fa fa-exclamation-triangle text-warning me-1"></i>${p.value ?? ''}</span>` : (p.value ?? '')
       },
       cellStyle: getCellStyle,
-      // 🌟 마우스 오버 시 툴팁으로 틀린 값 보여주기
+      // 🌟 마우스 툴팁: 틀린 값 상세 표시
       tooltipValueGetter: p => {
         const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-        return d ? `[변경내역] Publish: ${d.pub || '없음'} / Working: ${d.wrk || '없음'}` : null
+        return d ? `[변경감지] Publish: ${d.pub || '(없음)'} / Working: ${d.wrk || '(없음)'}` : null
       }
     }))
     rawDataList.value = processed
@@ -180,18 +190,28 @@ const gridBindProps = computed(() => ({
   columnDefs: filteredColumns.value,
   rowData: rawDataList.value,
   style: 'width: 100%; height: 100%',
-  class: 'ag-theme-alpine',
-  tooltipShowDelay: 0, // 마우스 올리자마자 툴팁 표시
-  defaultColDef: { sortable: true, filter: true, resizable: true }
+  // AG-Grid 테마 적용 (기본 테두리와 스타일이 살아남)
+  class: 'ag-theme-alpine shadow-sm border',
+  tooltipShowDelay: 0,
+  enableBrowserTooltips: false,
+  defaultColDef: { sortable: true, filter: true, resizable: true, tooltipComponentParams: { color: '#fff' } }
 }))
 
 const onGridReady = p => { gridApi.value = p.api }
 </script>
 
 <style scoped>
+/* 테두리가 잘 보이도록 그리드 영역 스타일 보강 */
+.ag-theme-alpine {
+  --ag-border-color: #dee2e6;
+  --ag-header-background-color: #f8f9fa;
+}
+
 .filter-textarea { width: 130px; height: 28px; resize: none; font-size: 11px; line-height: 1.2; padding: 2px 5px; overflow: hidden; }
+
+/* 모달 */
 .custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #333; }
 .modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
 .modal-body-content { flex: 1; background: #0f172a; padding: 20px; overflow: auto; }
 .json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; margin: 0; }
