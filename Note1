@@ -1,8 +1,8 @@
 http://sedp.ship.samsung.co.kr/oper/2d-viewer?file_id=68ede8d61219c0885feed8da?proj_no=SN2661&ep_id==PrEP_H
 
-을 호출 받으면 
+을 호출 받으면 즉 다이렉트로 url 접속을 하자고 할때 .
 
-을 2d-viewer를 라우터로 확인하고 하는데 마지막에 ?proj_no=SN2661&ep_id==PrEP_H을 뺀값으로 
+ 2d-viewer를 라우터로 확인하고 하는데 마지막에 ?proj_no=SN2661&ep_id==PrEP_H을 뺀값으로 
 http://sedpwebapi.ship.samsung.co.kr/api/File/Get?nocache=1774330319195
 을 호출하면서 헤더에
 Project no
