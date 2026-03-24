@@ -1,1 +1,210 @@
-index.vue:204  AxiosError {message: 'Network Error', name: 'AxiosError', code: 'ERR_NETWORK', config: {…}, request: XMLHttpRequest, …}code: "ERR_NETWORK"config: {transitional: {…}, adapter: Array(2), transformRequest: Array(1), transformResponse: Array(1), timeout: 0, …}message: "Network Error"name: "AxiosError"request: XMLHttpRequest {onreadystatechange: null, readyState: 4, timeout: 0, withCredentials: false, upload: XMLHttpRequestUpload, …}stack: "AxiosError: Network Error\n    at XMLHttpRequest.handleError (http://localhost:1001/portal-dev/node_modules/.vite/deps/axios.js?v=d1d294df:1450:14)\n    at Axios.request (http://localhost:1001/portal-dev/node_modules/.vite/deps/axios.js?v=d1d294df:1780:41)\n    at async Object.post (http://localhost:1001/portal-dev/src/utils/axios/axios-wrapper.ts:139:24)\n    at async onSearch (http://localhost:1001/portal-dev/src/views/common/tagtest/index.vue?t=1774323170651:59:19)"[[Prototype]]: Error
+<template>
+  <div class="panel panel-expandable m-0 p-0 h-100">
+    <PageTitle icon="fa-search-plus" :title="'Tag 통합 데이터 분석' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
+      <template #actions>
+        <div class="d-flex align-items-center gap-3 ms-auto me-2">
+          <label class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-nowrap">Project No</span>
+            <input type="text" class="form-control form-control-sm" style="width:100px" v-model="manualProjNo" />
+          </label>
+          <label class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-nowrap">Register ID</span>
+            <input type="text" class="form-control form-control-sm" style="width:140px" v-model="regTypeId" />
+          </label>
+
+          <div class="d-flex align-items-center gap-2 border-start ps-3">
+            <div class="form-check form-check-inline mb-0" v-for="opt in ['Publish', 'Working', 'MergeData']" :key="opt">
+              <input class="form-check-input" type="radio" :id="opt" :value="opt" v-model="selectedType" />
+              <label class="form-check-label" :for="opt">{{ opt }}</label>
+            </div>
+          </div>
+
+          <div class="form-check mb-0 border-start ps-3">
+            <input class="form-check-input" type="checkbox" id="delCheck" v-model="containDeleted" />
+            <label class="form-check-label fw-bold" for="delCheck">삭제포함</label>
+          </div>
+
+          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch"><i class="fa fa-search me-1"></i>조회</button>
+        </div>
+      </template>
+    </PageTitle>
+
+    <div class="panel-body m-0 p-0 h-100">
+      <ag-grid-vue
+        v-bind="gridBindProps"
+        @grid-ready="onGridReady"
+        :tooltipShowDelay="0"
+      />
+    </div>
+
+    <div v-if="showModal" class="custom-modal-overlay" @click.self="showModal = false">
+      <div class="custom-modal-window shadow-lg">
+        <div class="modal-header-dark">
+          <h5 class="m-0"><i class="fa fa-code me-2"></i>Raw Data Preview [{{ selectedTagNo }}]</h5>
+          <button class="btn btn-link text-white p-0" @click="showModal = false"><i class="fa fa-times"></i></button>
+        </div>
+        <div class="modal-body-content">
+          <div class="json-wrapper">
+            <pre class="json-content">{{ JSON.stringify(selectedJson, null, 2) }}</pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, shallowRef } from 'vue'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
+
+const manualProjNo = ref('SN2661')
+const regTypeId = ref('PIEP_T_002_T')
+const selectedType = ref('Working')
+const containDeleted = ref(false)
+
+const gridApi = shallowRef()
+const rawDataList = ref([])
+const diffMap = ref(new Map())
+const dynamicCols = ref([])
+
+// 모달 관련 상태
+const showModal = ref(false)
+const selectedTagNo = ref('')
+const selectedJson = ref(null)
+
+/**
+ * 🎨 셀 렌더링 (Diff 및 링크 처리)
+ */
+const commonCellRenderer = (p) => {
+  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+  let val = p.value ?? ''
+  
+  // TAG_NO 클릭 시 모달 오픈을 위해 링크 처리
+  if (p.colDef.field === 'TAG_NO') {
+    val = `<a href="javascript:void(0)" class="fw-bold text-primary text-decoration-underline">${val}</a>`
+  }
+
+  if (diffInfo) {
+    return `<div class="diff-highlight" title="Pub: ${diffInfo.pub} / Wrk: ${diffInfo.wrk}">${val}</div>`
+  }
+  return val
+}
+
+const getCellStyle = (p) => {
+  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+  return diffInfo ? { backgroundColor: '#fff3cd', border: '1px solid #ffda6a' } : null
+}
+
+const onCellClicked = (p) => {
+  if (p.colDef.field === 'TAG_NO') {
+    selectedTagNo.value = p.value
+    // 원본 데이터(평면화 전 상태나 필터링 전 상태)를 찾아서 바인딩
+    selectedJson.value = p.data._raw // 원본을 따로 넣어둘 예정
+    showModal.value = true
+  }
+}
+
+const onSearch = async () => {
+  if (gridApi.value) gridApi.value.setGridOption('loading', true)
+  
+  try {
+    const payload = {
+      ProjectNo: manualProjNo.value,
+      REG_TYPE_ID: regTypeId.value,
+      Type: selectedType.value,
+      ContainDeleted: containDeleted.value
+    }
+
+    // ERR_NETWORK 방지를 위해 절대경로 확인 및 필요시 전체 URL 기입
+    const res = await axiosWrapper.post('/api/Data/GetMergedData', payload)
+    const rootData = res[regTypeId.value]
+
+    if (!rootData) {
+      rawDataList.value = []
+      return sAlert.Info("데이터가 없습니다.")
+    }
+
+    // 1. DiffData 사전 매핑
+    const newDiffMap = new Map()
+    if (rootData.DiffData) {
+      rootData.DiffData.forEach(diff => {
+        (diff.Property || []).forEach(prop => {
+          if (prop.PUB_VALUE !== prop.WRK_VALUE) {
+            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE, wrk: prop.WRK_VALUE })
+          }
+        })
+      })
+    }
+    diffMap.value = newDiffMap
+
+    // 2. 데이터 추출 및 평면화
+    const targetData = selectedType.value === 'Working' ? rootData.WrkData :
+                       selectedType.value === 'Publish' ? rootData.PubData : rootData.MergeData
+    
+    if (!targetData) { rawDataList.value = []; return; }
+
+    const attrKeys = new Set()
+    const processed = targetData.map(item => {
+      const flat = { ...item, _raw: item } // 모달용 원본 데이터 보관
+      ;(item.ATTRIBUTES || []).forEach(a => {
+        flat[a.ATT_ID] = a.VALUE
+        attrKeys.add(a.ATT_ID)
+      })
+      return flat
+    })
+
+    // 3. 컬럼 구성 (시스템 vs 어트리뷰트)
+    const systemFields = ['TAG_NO', 'EP_ID', 'CLS_ID', 'TAG_DESC', 'PROJ_NO', 'CHGE_DTM']
+    
+    const sysCols = systemFields.map(f => ({
+      headerName: f, field: f, minWidth: 140, pinned: f === 'TAG_NO' ? 'left' : null,
+      cellRenderer: commonCellRenderer, cellStyle: getCellStyle
+    }))
+
+    const attrCols = Array.from(attrKeys).sort().map(ak => ({
+      headerName: ak, field: ak, minWidth: 130,
+      headerClass: 'bg-info-subtle', // 어트리뷰트 컬럼 색상 구분
+      cellRenderer: commonCellRenderer, cellStyle: getCellStyle,
+      tooltipValueGetter: (p) => {
+        const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+        return d ? `[변경됨]\n출판: ${d.pub}\n작업: ${d.wrk}` : null
+      }
+    }))
+
+    dynamicCols.value = [...sysCols, ...attrCols]
+    rawDataList.value = processed
+
+  } catch (e) {
+    console.error("Search Error:", e)
+    sAlert.Error("네트워크 오류 또는 서버 응답 실패")
+  } finally {
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
+  }
+}
+
+const gridBindProps = computed(() => ({
+  columnDefs: dynamicCols.value,
+  rowData: rawDataList.value,
+  class: 'ag-theme-alpine',
+  style: 'width: 100%; height: 100%',
+  onCellClicked: onCellClicked,
+  defaultColDef: { sortable: true, filter: true, resizable: true }
+}))
+
+const onGridReady = p => { gridApi.value = p.api }
+</script>
+
+<style scoped>
+/* JSON 모달 스타일 */
+.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.custom-modal-window { background: #fff; width: 800px; height: 70%; border-radius: 4px; display: flex; flex-direction: column; }
+.modal-header-dark { background: #343a40; color: #fff; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center; }
+.modal-body-content { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.json-wrapper { flex: 1; background: #282c34; padding: 15px; overflow: auto; }
+.json-content { color: #abb2bf; font-family: 'Consolas', monospace; font-size: 13px; margin: 0; }
+
+/* 그리드 스타일 */
+::v-deep(.bg-info-subtle) { background-color: #e7f5ff !important; font-weight: bold; }
+::v-deep(.diff-highlight) { width: 100%; height: 100%; }
+</style>
