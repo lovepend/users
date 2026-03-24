@@ -1,52 +1,53 @@
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100">
-    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
+    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
       <template #actions>
-        <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap">Project No</span>
+        <div class="d-flex align-items-center gap-2 ms-auto me-2">
+          <div class="d-flex align-items-center gap-1">
+            <span class="fw-bold text-nowrap">Project</span>
             <input type="text" class="form-control form-control-sm" style="width:100px" v-model="manualProjNo" />
-          </label>
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-nowrap">Register ID</span>
-            <input type="text" class="form-control form-control-sm" style="width:140px" v-model="regTypeId" />
-          </label>
-
-          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch"><i class="fa fa-search me-1"></i>조회</button>
-          
-          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap">결과 필터</span>
-            <textarea class="form-control form-control-sm border-success" 
-              style="width:150px; height:31px; resize:none;" 
-              v-model="localFilterQuery" 
-              placeholder="내용(공백/엔터/, 구분)"></textarea>
           </div>
 
-          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-info text-nowrap">헤더 필터</span>
+          <div class="d-flex align-items-center gap-1">
+            <span class="fw-bold text-nowrap">Reg ID</span>
+            <input type="text" class="form-control form-control-sm" style="width:130px" v-model="regTypeId" />
+          </div>
+
+          <button class="btn btn-xs btn-primary" @click="onSearch"><i class="fa fa-search"></i> 조회</button>
+
+          <div class="ms-2 ps-2 border-start d-flex align-items-center gap-1">
+            <span class="fw-bold text-success text-nowrap">결과필터</span>
+            <textarea class="form-control form-control-sm border-success" 
+              style="width:140px; height:31px; resize:none; font-size:11px;" 
+              v-model="localFilterQuery" 
+              placeholder="내용 (엔터/, 구분)"></textarea>
+          </div>
+
+          <div class="ms-2 ps-2 border-start d-flex align-items-center gap-1">
+            <span class="fw-bold text-info text-nowrap">헤더필터</span>
             <textarea class="form-control form-control-sm border-info" 
-              style="width:150px; height:31px; resize:none;" 
+              style="width:140px; height:31px; resize:none; font-size:11px;" 
               v-model="headerFilterQuery" 
-              placeholder="헤더명(공백/엔터/, 구분)"></textarea>
+              placeholder="헤더명 (엔터/, 구분)"></textarea>
           </div>
         </div>
       </template>
     </PageTitle>
 
     <div class="panel-body m-0 p-0 h-100">
-      <ag-grid-vue 
-        v-bind="gridBindProps" 
-        @grid-ready="onGridReady" 
+      <ag-grid-vue
+        v-bind="gridBindProps"
+        @grid-ready="onGridReady"
         @cell-clicked="onCellClicked"
-        :tooltipShowDelay="0"
+        style="width: 100%; height: 100%"
       />
     </div>
 
     <div v-if="showModal" class="custom-modal-overlay" @click.self="showModal = false">
       <div class="custom-modal-window shadow-lg">
         <div class="modal-header-dark">
-          <h5 class="m-0">Raw Data Preview [{{ selectedTagNo }}]</h5>
-          <button class="btn btn-link text-white p-0" @click="showModal = false"><i class="fa fa-times text-white"></i></button>
+          <h5 class="m-0">Raw Data [{{ selectedTagNo }}]</h5>
+          <button class="btn btn-link text-white p-0" @click="showModal = false"><i class="fa fa-times"></i></button>
         </div>
         <div class="modal-body-content">
           <div class="json-wrapper">
@@ -68,48 +69,36 @@ const regTypeId = ref('PIEP_T_002_T')
 const selectedType = ref('Working')
 const containDeleted = ref(false)
 
-// 필터 쿼리
 const localFilterQuery = ref('')   // 결과 내용 필터
 const headerFilterQuery = ref('')  // 헤더명 필터
 
 const gridApi = shallowRef()
 const rawDataList = ref([]) 
-const allColumns = ref([]) // 전체 컬럼 저장용
+const allColumns = ref([]) 
 const diffMap = ref(new Map()) 
 
 const showModal = ref(false)
 const selectedTagNo = ref('')
 const selectedJson = ref(null)
 
-/**
- * 🛠 공백, 엔터, 쉼표를 구분자로 하여 키워드 배열 생성
- */
-const getKeywords = (query) => {
-  if (!query.trim()) return []
-  return query.split(/[\s,\n]+/).filter(k => k.trim() !== '')
-}
+// 헬퍼: 공백/엔터/콤마 구분자로 키워드 분리
+const parseKeywords = (q) => q.split(/[\s,\n]+/).filter(k => k.trim() !== '').map(k => k.toLowerCase())
 
 /**
- * 🎨 셀 스타일 (Diff + 결과 필터 하이라이트)
+ * 🎨 셀 스타일 (Diff 강조 + 결과 필터 하이라이트)
  */
 const getCellStyle = (p) => {
   const styles = {}
-  
-  // 1. Diff (변경사항) 하이라이트
+  // 1. Diff 강조
   if (diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)) {
-    styles.backgroundColor = '#fff9db'
-    styles.color = '#d94111'
-    styles.fontWeight = 'bold'
+    styles.backgroundColor = '#fff9db'; styles.color = '#d94111'; styles.fontWeight = 'bold';
   }
-
-  // 2. 결과 필터 하이라이트 (내용 검색)
-  const keywords = getKeywords(localFilterQuery.value)
-  if (keywords.length > 0 && p.value) {
-    const valStr = String(p.value).toLowerCase()
-    const isMatched = keywords.some(k => valStr.includes(k.toLowerCase()))
-    if (isMatched) {
-      styles.border = '2px solid #28a745' // 하이라이트 테두리
-      styles.backgroundColor = '#e8f5e9'  // 연한 초록 배경
+  // 2. 결과 필터 하이라이트
+  const kws = parseKeywords(localFilterQuery.value)
+  if (kws.length > 0 && p.value) {
+    const val = String(p.value).toLowerCase()
+    if (kws.some(k => val.includes(k))) {
+      styles.backgroundColor = '#e8f5e9'; styles.border = '1px solid #28a745';
     }
   }
   return Object.keys(styles).length > 0 ? styles : null
@@ -118,73 +107,56 @@ const getCellStyle = (p) => {
 const onSearch = async () => {
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
   try {
-    const payload = {
+    const res = await axiosWrapper.post('/api/Data/GetMergedData', {
       ProjectNo: manualProjNo.value,
       REG_TYPE_ID: regTypeId.value,
       Type: selectedType.value,
       ContainDeleted: containDeleted.value
+    })
+    
+    const root = res[regTypeId.value.trim()] || Object.values(res)[0]
+    if (!root) { rawDataList.value = []; return sAlert.Info("데이터 없음"); }
+
+    // Diff 맵 구성
+    const dMap = new Map()
+    if (root.DiffData) {
+      root.DiffData.forEach(d => d.Property?.forEach(p => {
+        if (p.PUB_VALUE !== p.WRK_VALUE) dMap.set(`${d.TAG_IDX}_${p.PROP_ID}`, { pub: p.PUB_VALUE, wrk: p.WRK_VALUE })
+      }))
     }
+    diffMap.value = dMap
 
-    // 🌟 요청 주소 앞에 / 추가
-    const res = await axiosWrapper.post('/api/Data/GetMergedData', payload)
-    const resultData = res[regTypeId.value.trim()] || Object.values(res)[0]
-
-    if (!resultData) { rawDataList.value = []; return sAlert.Info("데이터 없음"); }
-
-    // Diff 맵 생성
-    const newDiffMap = new Map()
-    if (resultData.DiffData) {
-      resultData.DiffData.forEach(diff => {
-        (diff.Property || []).forEach(prop => {
-          if (prop.PUB_VALUE !== prop.WRK_VALUE) {
-            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE, wrk: prop.WRK_VALUE })
-          }
-        })
-      })
-    }
-    diffMap.value = newDiffMap
-
-    const source = selectedType.value === 'Working' ? resultData.WrkData : resultData.PubData
+    const source = selectedType.value === 'Working' ? root.WrkData : root.PubData
     const attrKeys = new Set()
     const processed = (source || []).map(item => {
       const flat = { ...item, _raw: item }
-      if (item.ATTRIBUTES) {
-        item.ATTRIBUTES.forEach(a => { flat[a.ATT_ID] = a.VALUE; attrKeys.add(a.ATT_ID); })
-      }
+      item.ATTRIBUTES?.forEach(a => { flat[a.ATT_ID] = a.VALUE; attrKeys.add(a.ATT_ID); })
       return flat
     })
 
-    // 전체 컬럼 미리 생성
     const sysFields = ['TAG_NO', 'EP_ID', 'CLS_ID', 'TAG_DESC']
     allColumns.value = [...sysFields, ...Array.from(attrKeys).sort()].map(key => ({
-      headerName: key,
-      field: key,
-      minWidth: 150,
+      headerName: key, field: key, minWidth: 150,
       pinned: key === 'TAG_NO' ? 'left' : null,
       cellStyle: getCellStyle,
-      cellRenderer: (p) => key === 'TAG_NO' ? `<span class="text-primary fw-bold text-decoration-underline">${p.value}</span>` : p.value
+      cellRenderer: (p) => key === 'TAG_NO' ? `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${p.value}</span>` : p.value
     }))
 
     rawDataList.value = processed
   } catch (e) {
-    sAlert.Error("조회 오류")
+    sAlert.Error("조회 실패")
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-/**
- * 📋 헤더 필터링 계산된 컬럼
- */
+// 📋 헤더 필터링 로직
 const filteredColumns = computed(() => {
-  const keywords = getKeywords(headerFilterQuery.value)
-  if (keywords.length === 0) return allColumns.value
-  
-  return allColumns.value.filter(col => {
-    // TAG_NO 같은 고정 컬럼은 항상 유지하려면 아래 조건 추가
-    if (col.field === 'TAG_NO') return true
-    return keywords.some(k => col.headerName.toLowerCase().includes(k.toLowerCase()))
-  })
+  const kws = parseKeywords(headerFilterQuery.value)
+  if (kws.length === 0) return allColumns.value
+  return allColumns.value.filter(col => 
+    col.field === 'TAG_NO' || kws.some(k => col.headerName.toLowerCase().includes(k))
+  )
 })
 
 const onCellClicked = (p) => {
@@ -194,10 +166,9 @@ const onCellClicked = (p) => {
 }
 
 const gridBindProps = computed(() => ({
-  columnDefs: filteredColumns.value, // 필터링된 컬럼 적용
+  columnDefs: filteredColumns.value,
   rowData: rawDataList.value,
   class: 'ag-theme-alpine',
-  style: 'width: 100%; height: 100%',
   defaultColDef: { sortable: true, filter: true, resizable: true }
 }))
 
