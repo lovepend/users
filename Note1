@@ -1,100 +1,27 @@
-<template>
-  <div class="panel panel-expandable m-0 p-0 h-100">
-    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
-      <template #actions>
-        <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap">Project No</span>
-            <input type="text" class="form-control form-control-sm" style="width: 120px" v-model="manualProjNo" />
-          </div>
-
-          <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-nowrap">Register ID</span>
-            <input type="text" class="form-control form-control-sm" style="width: 150px" v-model="regTypeId" />
-          </div>
-
-          <div class="d-flex align-items-center gap-2 border-start ps-3">
-            <span class="fw-bold text-nowrap">조회 대상</span>
-            <div class="form-check form-check-inline mb-0" v-for="opt in ['Publish', 'Working', 'MergeData']" :key="opt">
-              <input class="form-check-input" type="radio" :id="opt" :value="opt" v-model="selectedType" />
-              <label class="form-check-label" :for="opt" style="cursor:pointer">{{ opt }}</label>
-            </div>
-          </div>
-
-          <div class="form-check mb-0 border-start ps-3">
-            <input class="form-check-input" type="checkbox" id="delCheck" v-model="containDeleted" />
-            <label class="form-check-label fw-bold" for="delCheck" style="cursor:pointer">삭제 포함</label>
-          </div>
-
-          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
-            <i class="fa fa-search me-1"></i>조회
-          </button>
-        </div>
-      </template>
-    </PageTitle>
-
-    <div class="panel-body m-0 p-0 h-100" style="min-height: 400px;">
-      <ag-grid-vue
-        v-bind="gridBindProps"
-        @grid-ready="onGridReady"
-        @cell-clicked="onCellClicked"
-        style="width: 100%; height: 100%"
-      />
-    </div>
-
-    <div v-if="showModal" class="custom-modal-overlay" @click.self="showModal = false">
-      <div class="custom-modal-window shadow-lg">
-        <div class="modal-header-dark">
-          <h5 class="m-0"><i class="fa fa-code me-2"></i>Raw Data Preview [{{ selectedTagNo }}]</h5>
-          <button class="btn btn-link text-white p-0" @click="showModal = false">
-            <i class="fa fa-times text-white"></i>
-          </button>
-        </div>
-        <div class="modal-body-content">
-          <div class="json-wrapper">
-            <pre class="json-content">{{ JSON.stringify(selectedJson, null, 2) }}</pre>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup>
 import { ref, computed, shallowRef } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { sAlert } from '@/utils/messages/alert-common'
 
-// 검색 상태값 (UI 바인딩 필드)
 const manualProjNo = ref('SN2661')
 const regTypeId = ref('PIEP_T_002_T')
-const selectedType = ref('Working')
-const containDeleted = ref(false)
+const selectedType = ref('Working') // Radio: Publish, Working, MergeData
+const containDeleted = ref(false)   // Checkbox: true/false
 
 const gridApi = shallowRef()
 const rawDataList = ref([])
 const diffMap = ref(new Map())
 const dynamicCols = ref([])
 
-// 모달 상태값
+// 모달 상태
 const showModal = ref(false)
-const selectedTagNo = ref('')
 const selectedJson = ref(null)
-
-/**
- * 🎨 그리드 스타일 & 렌더러 로직
- */
-const getCellStyle = (p) => {
-  if (diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)) {
-    return { backgroundColor: '#fff3cd', color: '#d94111', fontWeight: 'bold' }
-  }
-  return null
-}
 
 const onSearch = async () => {
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
   
   try {
+    // 1. 페이로드 구성 (알려주신 구조와 동일)
     const payload = {
       ProjectNo: manualProjNo.value.trim(),
       REG_TYPE_ID: regTypeId.value.trim(),
@@ -102,113 +29,115 @@ const onSearch = async () => {
       ContainDeleted: containDeleted.value
     }
 
-    // 서버 호출 (상대경로 api/ 확인)
+    console.log("요청 페이로드:", payload);
+
+    // 2. API 호출 (경로 주의: 프로젝트의 API 기본 경로에 따라 'api/...' 또는 '/api/...' 조정 필요)
+    // 네트워크 에러가 발생한다면 이 주소를 실제 Swagger나 Postman에서 성공한 주소와 대조해야 합니다.
     const res = await axiosWrapper.post('api/Data/GetMergedData', payload)
     
-    // 데이터 추출 로직
-    const rootKey = regTypeId.value.trim()
-    const resultRoot = res[rootKey] || Object.values(res)[0]
+    console.log("서버 전체 응답:", res); // 여기서 데이터가 오는지 F12 콘솔에서 확인 필수!
+
+    // 3. 데이터 루트 찾기 (알려주신 구조: { "PIEP_T_002_T": { ... } })
+    const rootKey = regTypeId.value.trim();
+    let resultRoot = res[rootKey];
+
+    // 만약 키값이 일치하지 않아 못 찾을 경우를 대비해 첫 번째 객체를 가져오는 방어 코드
+    if (!resultRoot && res && typeof res === 'object') {
+      const keys = Object.keys(res);
+      if (keys.length > 0) resultRoot = res[keys[0]];
+    }
 
     if (!resultRoot) {
-      rawDataList.value = []
-      return sAlert.Info("조회된 데이터가 없습니다.")
+      console.error("데이터 구조 분석 실패: rootKey를 찾을 수 없음", rootKey);
+      rawDataList.value = [];
+      return sAlert.Info("데이터 구조 분석에 실패했거나 데이터가 없습니다.");
     }
 
-    // Diff 매핑 (차이점 분석)
+    // 4. DiffData 매핑 로직
     const newDiffMap = new Map()
-    if (resultRoot.DiffData) {
+    if (resultRoot.DiffData && Array.isArray(resultRoot.DiffData)) {
       resultRoot.DiffData.forEach(diff => {
-        (diff.Property || []).forEach(prop => {
-          if (prop.PUB_VALUE !== prop.WRK_VALUE) {
-            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE, wrk: prop.WRK_VALUE })
-          }
-        })
-      })
+        if (diff.Property) {
+          diff.Property.forEach(prop => {
+            if (prop.PUB_VALUE !== prop.WRK_VALUE) {
+              // TAG_IDX와 속성ID를 조합해 고유 키 생성
+              newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, {
+                pub: prop.PUB_VALUE,
+                wrk: prop.WRK_VALUE
+              });
+            }
+          });
+        }
+      });
     }
-    diffMap.value = newDiffMap
+    diffMap.value = newDiffMap;
 
-    // 표시 데이터 결정
-    const sourceData = selectedType.value === 'Working' ? (resultRoot.WrkData || []) :
-                       selectedType.value === 'Publish' ? (resultRoot.PubData || []) : (resultRoot.MergeData || [])
-    
-    // 🌟 Attributes 평면화 처리 (배열 안의 값을 컬럼으로 추출)
-    const attrKeys = new Set()
-    const processed = sourceData.map(item => {
-      const flat = { ...item, _raw: item }
+    // 5. 선택한 Type에 따른 데이터 소스 결정 (대소문자 구분 주의)
+    let source = [];
+    if (selectedType.value === 'Working') source = resultRoot.WrkData || [];
+    else if (selectedType.value === 'Publish') source = resultRoot.PubData || [];
+    else if (selectedType.value === 'MergeData') source = resultRoot.MergeData || [];
+
+    console.log(`${selectedType.value} 데이터 개수:`, source.length);
+
+    // 6. 데이터 평면화 (Attributes 추출)
+    const attrKeys = new Set();
+    const processed = source.map(item => {
+      const flat = { ...item, _raw: item }; // 원본은 모달용으로 보관
       if (Array.isArray(item.ATTRIBUTES)) {
-        item.ATTRIBUTES.forEach(attr => {
-          flat[attr.ATT_ID] = attr.VALUE // ID를 헤더로, VALUE를 셀 값으로
-          attrKeys.add(attr.ATT_ID)
-        })
+        item.ATTRIBUTES.forEach(a => {
+          flat[a.ATT_ID] = a.VALUE;
+          attrKeys.add(a.ATT_ID);
+        });
       }
-      return flat
-    })
+      return flat;
+    });
 
-    // 컬럼 정의 (시스템 필드 + 추출된 어트리뷰트)
-    const systemFields = [
-      { headerName: 'Tag No', field: 'TAG_NO', pinned: 'left', width: 180 },
-      { headerName: 'EP ID', field: 'EP_ID', width: 120 },
-      { headerName: 'Class', field: 'CLS_ID', width: 150 },
-      { headerName: 'Description', field: 'TAG_DESC', width: 250 }
-    ]
-
-    const sysCols = systemFields.map(f => ({
-      ...f,
-      cellRenderer: (p) => f.field === 'TAG_NO' ? `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${p.value}</span>` : (p.value ?? ''),
-      cellStyle: getCellStyle
-    }))
-
-    const attrCols = Array.from(attrKeys).sort().map(key => ({
-      headerName: key,
-      field: key,
-      width: 140,
-      headerClass: 'bg-light-blue',
-      cellStyle: getCellStyle,
-      tooltipValueGetter: (p) => {
-        const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-        return d ? `Pub: ${d.pub} / Wrk: ${d.wrk}` : null
-      }
-    }))
-
-    dynamicCols.value = [...sysCols, ...attrCols]
-    rawDataList.value = processed
+    // 7. 컬럼 동적 생성
+    generateColumns(attrKeys);
+    rawDataList.value = processed;
 
   } catch (e) {
-    console.error("Error Detail:", e)
-    sAlert.Error("데이터를 가져오는 중 오류가 발생했습니다.")
+    console.error("API 호출 에러 상세:", e);
+    // ERR_NETWORK 발생 시 config의 url이 실제 서버 주소와 맞는지 확인하세요.
+    sAlert.Error(`데이터 조회 실패: ${e.message}`);
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-const onCellClicked = (p) => {
-  if (p.colDef.field === 'TAG_NO' && p.value) {
-    selectedTagNo.value = p.value
-    selectedJson.value = p.data._raw
-    showModal.value = true
-  }
+const generateColumns = (attrKeys) => {
+  // 시스템 필수 컬럼
+  const sysFields = [
+    { headerName: 'Tag No', field: 'TAG_NO', pinned: 'left' },
+    { headerName: 'Status', field: 'TAG_NO_PASSED' },
+    { headerName: 'Class ID', field: 'CLS_ID' },
+    { headerName: 'Description', field: 'TAG_DESC' }
+  ];
+
+  const sysCols = sysFields.map(f => ({
+    ...f,
+    width: 150,
+    cellRenderer: (p) => {
+      if (p.colDef.field === 'TAG_NO') return `<span class="text-primary fw-bold text-decoration-underline" style="cursor:pointer">${p.value}</span>`;
+      return p.value;
+    },
+    cellStyle: (p) => diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`) ? { backgroundColor: '#fff3cd' } : null
+  }));
+
+  // 어트리뷰트 컬럼 (배열에서 추출된 키들)
+  const attrCols = Array.from(attrKeys).sort().map(key => ({
+    headerName: key,
+    field: key,
+    width: 130,
+    headerClass: 'bg-light-blue',
+    cellStyle: (p) => diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`) ? { backgroundColor: '#fff3cd' } : null,
+    tooltipValueGetter: (p) => {
+      const diff = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`);
+      return diff ? `[차이] Pub: ${diff.pub} / Wrk: ${diff.wrk}` : null;
+    }
+  }));
+
+  dynamicCols.value = [...sysCols, ...attrCols];
 }
-
-const gridBindProps = computed(() => ({
-  columnDefs: dynamicCols.value,
-  rowData: rawDataList.value,
-  class: 'ag-theme-alpine',
-  style: 'width: 100%; height: 100%',
-  defaultColDef: { sortable: true, filter: true, resizable: true }
-}))
-
-const onGridReady = p => { gridApi.value = p.api }
 </script>
-
-<style scoped>
-/* 모달 레이아웃 */
-.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
-.modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
-.modal-body-content { flex: 1; background: #0f172a; padding: 20px; overflow: auto; display: flex; flex-direction: column; }
-.json-wrapper { flex: 1; overflow: auto; }
-.json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; line-height: 1.5; margin: 0; }
-
-/* 컬럼 헤더 스타일 */
-::v-deep(.bg-light-blue) { background-color: #f0f7ff !important; color: #004085 !important; font-weight: bold; }
-</style>
