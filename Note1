@@ -1,624 +1,203 @@
-일단 api 는 아래와 같아 
-api/Data/GetMergedData
+<template>
+  <div class="panel panel-expandable m-0 p-0 h-100">
+    <PageTitle icon="fa-copy" title="Tag 데이터 비교 분석">
+      <template #actions>
+        <div class="d-flex align-items-center gap-3 ms-auto me-2">
+          <label class="d-flex align-items-center gap-2">
+            <span class="fw-bold">Project No</span>
+            <input type="text" class="form-control form-control-sm" style="width: 100px;" v-model="manualProjNo" />
+          </label>
+          <label class="d-flex align-items-center gap-2">
+            <span class="fw-bold">Register ID</span>
+            <input type="text" class="form-control form-control-sm" style="width: 140px;" v-model="regTypeId" placeholder="예: PIEP_T_002_T" />
+          </label>
 
-그리고 페이로드는 아래와 같
+          <div class="d-flex align-items-center gap-2 border-start ps-3">
+            <span class="fw-bold text-nowrap">조회 대상:</span>
+            <div class="form-check form-check-inline mb-0" v-for="opt in ['Publish', 'Working', 'MergeData']" :key="opt">
+              <input class="form-check-input" type="radio" :id="opt" :value="opt" v-model="selectedType" />
+              <label class="form-check-label" :for="opt">{{ opt }}</label>
+            </div>
+          </div>
 
-{
-  "ProjectNo": "SN2661",
-  "REG_TYPE_ID": "PIEP_T_002_T",
-  "Type": "Publish",
-  "ContainDeleted": false
+          <div class="form-check mb-0 border-start ps-3">
+            <input class="form-check-input" type="checkbox" id="delCheck" v-model="containDeleted" />
+            <label class="form-check-label fw-bold" for="delCheck">삭제 포함</label>
+          </div>
+
+          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch"><i class="fa fa-search me-1"></i>조회</button>
+        </div>
+      </template>
+    </PageTitle>
+
+    <div class="panel-body m-0 p-0 h-100">
+      <ag-grid-vue
+        v-bind="gridBindProps"
+        @grid-ready="onGridReady"
+        :tooltipShowDelay="0" 
+      />
+    </div>
+  </div>
+</template>
+
+<script setup>
+import { ref, computed, shallowRef } from 'vue'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
+
+// 상위 스토어 등에서 값 가져오기 (기존 소스 참조)
+const manualProjNo = ref('SN2661')
+const regTypeId = ref('PIEP_T_002_T')
+const selectedType = ref('Working')
+const containDeleted = ref(false)
+
+const gridApi = shallowRef()
+const rawDataList = ref([])
+const diffMap = ref(new Map()) // Diff 하이라이트용 맵
+const dynamicCols = ref([])
+
+/**
+ * 🎨 셀 렌더러 및 스타일 (Diff 하이라이트 핵심)
+ */
+const diffCellRenderer = (p) => {
+  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+  if (diffInfo) {
+    // 값이 다를 경우 하이라이트 처리
+    return `<div class="diff-highlight" title="Pub: ${diffInfo.pub} / Wrk: ${diffInfo.wrk}">${p.value ?? ''}</div>`
+  }
+  return p.value ?? ''
 }
 
-REG_TYPE_ID는 우리 키워드라고 생각하면되는거야 레지스터 아이디를 호출하는거지
-그리고 Type는 Publish랑 Working MergeData 세개가 있는거 같아 UI에 라디오 버튼으로 표현해주고 백앤드에도 같이 반영해서 전달 하면 될거 같아
-ContainDeleted 또한 true / false 가 있는데 이거도 UI에 표현해주고 같이 페이로드 전달 할때 반영되면 될거 같아
+const getCellStyle = (p) => {
+  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+  if (diffInfo) {
+    return { backgroundColor: '#fff3cd', border: '1px solid #ffda6a', fontWeight: 'bold' }
+  }
+  return null
+}
 
+const onSearch = async () => {
+  if (!manualProjNo.value || !regTypeId.value) return sAlert.Warning("필수 항목을 입력하세요.")
+  
+  if (gridApi.value) gridApi.value.setGridOption('loading', true)
+  
+  try {
+    const payload = {
+      ProjectNo: manualProjNo.value,
+      REG_TYPE_ID: regTypeId.value,
+      Type: selectedType.value,
+      ContainDeleted: containDeleted.value
+    }
 
-그리고 리턴 데이터는 구조가 다음과 같이 오는데 Wrk Data면 Wrk에 값만 읽어서 Ag gird에 표현을 해주고 Mergedata면 Mergedata만 그리드에 
-Publish면 Publish만 표현해주면 될것 같아
-그리고 DiffData 값이 오는데 이건 틀린 값을 보여주는건데 위에 조회한 데이블 테이터에 하이라이트 해주고 해당 셀 위에 마우스가 갔을 때 두값을 툴팁으로 보여주면 될것 같아. 
+    const res = await axiosWrapper.post('api/Data/GetMergedData', payload)
+    const rootData = res[regTypeId.value] // 키워드로 데이터 접근
 
+    if (!rootData) {
+      rawDataList.value = []
+      return
+    }
 
-{
-  "PIEP_T_002_T": {
-    "PubData": null,
-    "WrkData": [
-      {
-        "TAG_NO_PASSED": "Passed",
-        "NEW_YN": false,
-        "DEL_YN": false,
-        "EP_ID": "PiEP_T",
-        "EP_IC": "PiEP_T",
-        "DELETED": false,
-        "DEL_USER": null,
-        "DEL_DTM": null,
-        "PROJ_NO": "SN2661",
-        "TAG_IDX": "673d42cb414bc48fd4fd4c0a",
-        "TAG_NO": "VBF-990001",
-        "TAG_TYPE_ID": "005",
-        "CLS_ID": "MANUAL_VALV_CLS",
-        "TAG_DESC": "VBF-990001",
-        "BF_TAG_NO": "VBF-110006",
-        "PIC_NO": "220604",
-        "DSN_SKL": null,
-        "PRNT_TAG_IDX": null,
-        "ATTRIBUTES": [
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "ASSEMBLY_NAME",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "CLAS_CD",
-            "VALUE": "A41201"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 1,
-            "ATT_ID": "EL9001",
-            "VALUE": "1"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "IM9020",
-            "VALUE": "VBF"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 1,
-            "ATT_ID": "IM9050",
-            "VALUE": "0001"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "IN0045",
-            "VALUE": "CL600"
-          },
-          {
-            "UOM_ID": "LENGTH_06",
-            "VALUE_DBL": 0,
-            "ATT_ID": "IN0149",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 600,
-            "ATT_ID": "IN0499",
-            "VALUE": "600"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 600,
-            "ATT_ID": "IN0500",
-            "VALUE": "600"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "ME5037",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "ME5074",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "ME5084",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "ME5104",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "ME5115",
-            "VALUE": "SHI"
-          },
-          {
-            "UOM_ID": "MASS_02",
-            "VALUE_DBL": 80,
-            "ATT_ID": "ME5142",
-            "VALUE": "80"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "ME5160",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "ME5173",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "ME5228",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "ME5229",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "ME9000",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI0006",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": "LENGTH_06",
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI0007",
-            "VALUE": "NaN"
-          },
-          {
-            "UOM_ID": "LENGTH_06",
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI0017",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5005",
-            "VALUE": "TOP"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5011",
-            "VALUE": "600LB"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5029",
-            "VALUE": "RF"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5049",
-            "VALUE": "RF"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5088",
-            "VALUE": "P86C-007FC"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5098",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5099",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5101",
-            "VALUE": "FLANGE"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5107",
-            "VALUE": "FLANGE"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5110",
-            "VALUE": "6C615"
-          },
-          {
-            "UOM_ID": "LENGTH_06",
-            "VALUE_DBL": 0.1,
-            "ATT_ID": "PI5117",
-            "VALUE": "0.1"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5121",
-            "VALUE": "Butterfly valve"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5125",
-            "VALUE": "Expanding gate"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5135",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5211",
-            "VALUE": "CL600"
-          },
-          {
-            "UOM_ID": "LENGTH_03",
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5224",
-            "VALUE": "24\""
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5226",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PI5227",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PR5306",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PR5601",
-            "VALUE": "600-PG-11007-6C615-N"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "PR5621",
-            "VALUE": "PFLNG3-009-EXE-JSC-1100-PRO-PID-0001"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 99,
-            "ATT_ID": "PR5674",
-            "VALUE": "99"
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "SM_CD",
-            "VALUE": null
-          },
-          {
-            "UOM_ID": null,
-            "VALUE_DBL": 0,
-            "ATT_ID": "SYSTEM_NAME",
-            "VALUE": "691d80685f71026bcbfb2cbc"
+    // 1. DiffData 맵핑 (TAG_IDX + 필드명을 키로 사용)
+    const newDiffMap = new Map()
+    if (rootData.DiffData) {
+      rootData.DiffData.forEach(diff => {
+        diff.Property.forEach(prop => {
+          if (prop.PUB_VALUE !== prop.WRK_VALUE) {
+            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, {
+              pub: prop.PUB_VALUE,
+              wrk: prop.WRK_VALUE
+            })
           }
-        ],
-        "CRTER_NO": "212405",
-        "CRTE_DTM": "2024-12-10T02:47:35Z",
-        "CHGER_NO": "220604",
-        "CHGE_DTM": "2025-11-19T23:02:38.439Z",
-        "_id": "68c2343f2c5e4db04aed71df"
+        })
+      })
+    }
+    diffMap.value = newDiffMap
+
+    // 2. 데이터 선택 (Type에 따라 추출)
+    const targetData = 
+      selectedType.value === 'Working' ? rootData.WrkData :
+      selectedType.value === 'Publish' ? rootData.PubData : rootData.MergeData
+    
+    if (!targetData) {
+      rawDataList.value = []
+      return
+    }
+
+    // 3. 동적 컬럼 구성
+    const allAttIds = new Set()
+    const allKeys = new Set()
+    const fixedKeys = ['ATTRIBUTES', '_id', 'DELETED']
+
+    targetData.forEach(item => {
+      (item.ATTRIBUTES || []).forEach(a => allAttIds.add(a.ATT_ID))
+      Object.keys(item).forEach(k => {
+        if (!fixedKeys.includes(k) && typeof item[k] !== 'object') allKeys.add(k)
+      })
+    })
+
+    // 속성(ATTRIBUTES) 플랫화
+    const processed = targetData.map(item => {
+      const flat = { ...item }
+      ;(item.ATTRIBUTES || []).forEach(a => {
+        flat[a.ATT_ID] = a.VALUE
+      })
+      return flat
+    })
+
+    // 컬럼 정의 생성
+    const colDefs = Array.from(allKeys).map(k => ({
+      headerName: k,
+      field: k,
+      minWidth: 120,
+      cellRenderer: diffCellRenderer,
+      cellStyle: getCellStyle,
+      tooltipValueGetter: (p) => {
+        const diff = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+        return diff ? `Published: ${diff.pub}\nWorking: ${diff.wrk}` : null
       }
-    ],
-    "DiffData": [
-      {
-        "TAG_IDX": "673d42cb414bc48fd4fd4c0a",
-        "EP_ID": "PiEP_T",
-        "Status": "M",
-        "EditType": "",
-        "Property": [
-          {
-            "PROP_ID": "ASSEMBLY_NAME",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "EL9001",
-            "PUB_VALUE": "1",
-            "WRK_VALUE": "1"
-          },
-          {
-            "PROP_ID": "CLAS_CD",
-            "PUB_VALUE": null,
-            "WRK_VALUE": "A41201"
-          },
-          {
-            "PROP_ID": "IM9050",
-            "PUB_VALUE": "0001",
-            "WRK_VALUE": "0001"
-          },
-          {
-            "PROP_ID": "IN0045",
-            "PUB_VALUE": "CL600",
-            "WRK_VALUE": "CL600"
-          },
-          {
-            "PROP_ID": "IM9020",
-            "PUB_VALUE": "VBF",
-            "WRK_VALUE": "VBF"
-          },
-          {
-            "PROP_ID": "IN0149",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "IN0499",
-            "PUB_VALUE": "600",
-            "WRK_VALUE": "600"
-          },
-          {
-            "PROP_ID": "IN0500",
-            "PUB_VALUE": "600",
-            "WRK_VALUE": "600"
-          },
-          {
-            "PROP_ID": "ME5074",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "ME5037",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "ME5084",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "ME5104",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "ME5115",
-            "PUB_VALUE": "SHI",
-            "WRK_VALUE": "SHI"
-          },
-          {
-            "PROP_ID": "ME5142",
-            "PUB_VALUE": "80",
-            "WRK_VALUE": "80"
-          },
-          {
-            "PROP_ID": "ME5160",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "ME5173",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "ME5228",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "ME5229",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "ME9000",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "PI0006",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "PI0007",
-            "PUB_VALUE": "NaN",
-            "WRK_VALUE": "NaN"
-          },
-          {
-            "PROP_ID": "PI5005",
-            "PUB_VALUE": "TOP",
-            "WRK_VALUE": "TOP"
-          },
-          {
-            "PROP_ID": "PI0017",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "PI5029",
-            "PUB_VALUE": "RF",
-            "WRK_VALUE": "RF"
-          },
-          {
-            "PROP_ID": "PI5011",
-            "PUB_VALUE": null,
-            "WRK_VALUE": "600LB"
-          },
-          {
-            "PROP_ID": "PI5049",
-            "PUB_VALUE": "RF",
-            "WRK_VALUE": "RF"
-          },
-          {
-            "PROP_ID": "PI5088",
-            "PUB_VALUE": "P86C-007FC",
-            "WRK_VALUE": "P86C-007FC"
-          },
-          {
-            "PROP_ID": "PI5098",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "PI5099",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "PI5110",
-            "PUB_VALUE": "6C615",
-            "WRK_VALUE": "6C615"
-          },
-          {
-            "PROP_ID": "PI5107",
-            "PUB_VALUE": "FLANGE",
-            "WRK_VALUE": "FLANGE"
-          },
-          {
-            "PROP_ID": "PI5121",
-            "PUB_VALUE": "Butterfly valve",
-            "WRK_VALUE": "Butterfly valve"
-          },
-          {
-            "PROP_ID": "PI5125",
-            "PUB_VALUE": "Expanding gate",
-            "WRK_VALUE": "Expanding gate"
-          },
-          {
-            "PROP_ID": "PI5101",
-            "PUB_VALUE": "FLANGE",
-            "WRK_VALUE": "FLANGE"
-          },
-          {
-            "PROP_ID": "PI5135",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "PI5117",
-            "PUB_VALUE": "0.1",
-            "WRK_VALUE": "0.1"
-          },
-          {
-            "PROP_ID": "PI5224",
-            "PUB_VALUE": null,
-            "WRK_VALUE": "24\""
-          },
-          {
-            "PROP_ID": "PR5306",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "PI5226",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "PI5211",
-            "PUB_VALUE": "CL600",
-            "WRK_VALUE": "CL600"
-          },
-          {
-            "PROP_ID": "PR5601",
-            "PUB_VALUE": "600-PG-11007-6C615-N",
-            "WRK_VALUE": "600-PG-11007-6C615-N"
-          },
-          {
-            "PROP_ID": "PI5227",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "SM_CD",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          },
-          {
-            "PROP_ID": "PR5621",
-            "PUB_VALUE": "PFLNG3-009-EXE-JSC-1100-PRO-PID-0001",
-            "WRK_VALUE": "PFLNG3-009-EXE-JSC-1100-PRO-PID-0001"
-          },
-          {
-            "PROP_ID": "SYSTEM_NAME",
-            "PUB_VALUE": "691d80685f71026bcbfb2cbc",
-            "WRK_VALUE": "691e4a90f127bb1de0faf56f"
-          },
-          {
-            "PROP_ID": "PR5674",
-            "PUB_VALUE": "99",
-            "WRK_VALUE": "99"
-          },
-          {
-            "PROP_ID": "TAG_NO",
-            "PUB_VALUE": "VBF-990001",
-            "WRK_VALUE": "VBF-990001"
-          },
-          {
-            "PROP_ID": "TAG_DESC",
-            "PUB_VALUE": "VBF-990001",
-            "WRK_VALUE": "VBF-990001"
-          },
-          {
-            "PROP_ID": "EP_ID",
-            "PUB_VALUE": "PiEP_T",
-            "WRK_VALUE": "PiEP_T"
-          },
-          {
-            "PROP_ID": "TAG_TYPE_ID",
-            "PUB_VALUE": "005",
-            "WRK_VALUE": "005"
-          },
-          {
-            "PROP_ID": "CLS_ID",
-            "PUB_VALUE": "MANUAL_VALV_CLS",
-            "WRK_VALUE": "MANUAL_VALV_CLS"
-          },
-          {
-            "PROP_ID": "PIC_NO",
-            "PUB_VALUE": "220604",
-            "WRK_VALUE": "220604"
-          },
-          {
-            "PROP_ID": "BF_TAG_NO",
-            "PUB_VALUE": "VBF-110006",
-            "WRK_VALUE": "VBF-110006"
-          },
-          {
-            "PROP_ID": "PRNT_TAG_IDX",
-            "PUB_VALUE": null,
-            "WRK_VALUE": null
-          }
-        ]
+    }))
+
+    const attDefs = Array.from(allAttIds).map(id => ({
+      headerName: id,
+      field: id,
+      minWidth: 130,
+      headerClass: 'bg-light-yellow',
+      cellRenderer: diffCellRenderer,
+      cellStyle: getCellStyle,
+      tooltipValueGetter: (p) => {
+        const diff = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+        return diff ? `Published: ${diff.pub}\nWorking: ${diff.wrk}` : null
       }
-    ],
-    "MergeData": null
+    }))
+
+    dynamicCols.value = [...colDefs, ...attDefs]
+    rawDataList.value = processed
+
+  } catch (e) {
+    sAlert.Error("데이터 로드 중 오류가 발생했습니다.")
+  } finally {
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
+
+const gridBindProps = computed(() => ({
+  columnDefs: dynamicCols.value,
+  rowData: rawDataList.value,
+  style: 'width: 100%; height: 100%',
+  class: 'ag-theme-alpine',
+  defaultColDef: { sortable: true, filter: true, resizable: true, tooltipComponent: null }
+}))
+
+const onGridReady = p => { gridApi.value = p.api }
+</script>
+
+<style scoped>
+::v-deep(.bg-light-yellow) {
+  background-color: #fffbe6 !important;
+  color: #856404 !important;
+}
+::v-deep(.diff-highlight) {
+  width: 100%;
+  height: 100%;
+}
+</style>
