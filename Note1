@@ -1,232 +1,833 @@
-<template>
-  <div class="panel panel-expandable m-0 p-0 h-100">
-    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')">
-      <template #actions>
-        <div class="d-flex align-items-center gap-2 ms-auto me-2">
-          <div class="d-flex align-items-center gap-1">
-            <span class="fw-bold text-dark text-nowrap small">Project</span>
-            <input type="text" class="form-control form-control-sm" style="width: 90px" v-model="manualProjNo" />
-          </div>
-          <div class="d-flex align-items-center gap-1">
-            <span class="fw-bold text-nowrap small">Reg ID</span>
-            <input type="text" class="form-control form-control-sm" style="width: 130px" v-model="regTypeId" />
-          </div>
+http://sedp.ship.samsung.co.kr/oper/2d-viewer?file_id=68ede8d61219c0885feed8da?proj_no=SN2661&ep_id==PrEP_H
 
-          <div class="d-flex align-items-center gap-2 border-start ps-2 ms-1" style="font-size: 11px;">
-            <div class="form-check form-check-inline m-0" v-for="opt in ['Publish', 'Working', 'MergeData', 'All']" :key="opt">
-              <input class="form-check-input" type="radio" :id="'radio_' + opt" :value="opt" v-model="selectedType" />
-              <label class="form-check-label fw-bold" :for="'radio_' + opt">{{ opt }}</label>
-            </div>
-          </div>
+을 호출 받으면 
 
-          <button class="btn btn-xs btn-primary shadow-sm px-2" @click="onSearch">
-            <i class="fa fa-search"></i> 조회
-          </button>
+을 2d-viewer를 라우터로 확인하고 하는데 마지막에 ?proj_no=SN2661&ep_id==PrEP_H을 뺀값으로 
+http://sedpwebapi.ship.samsung.co.kr/api/File/Get?nocache=1774330319195
+을 호출하면서 헤더에
+Project no
+랑 ep_id를 채워주도록 수정해줘
 
-          <div class="ms-1 ps-2 border-start d-flex align-items-center gap-1">
-            <span class="fw-bold text-success text-nowrap small">결과</span>
-            <textarea class="form-control form-control-sm border-success filter-textarea" v-model="localFilterQuery" placeholder="내용"></textarea>
-          </div>
-          <div class="ms-1 ps-2 border-start d-flex align-items-center gap-1">
-            <span class="fw-bold text-info text-nowrap small">헤더</span>
-            <textarea class="form-control form-control-sm border-info filter-textarea" v-model="headerFilterQuery" placeholder="헤더명"></textarea>
-          </div>
-        </div>
-        <panel-toolbar />
-      </template>
-    </PageTitle>
 
-    <div class="panel-body m-0 p-0 h-100">
-      <div class="grid-container w-100 h-100 p-1">
-        <ag-grid-vue
-          v-bind="gridBindProps"
-          class="ag-theme-alpine w-100 h-100"
-          @grid-ready="onGridReady"
-          @cell-clicked="onCellClicked"
-        />
-      </div>
-    </div>
+아래의 코드 참조 
 
-    <div v-if="showModal" class="custom-modal-overlay" @click.self="showModal = false">
-      <div class="custom-modal-window shadow-lg">
-        <div class="modal-header-dark">
-          <h5 class="m-0"><i class="fa fa-code me-2"></i>Raw Data [{{ selectedTagNo }}]</h5>
-          <button class="btn btn-link text-white p-0" @click="showModal = false"><i class="fa fa-times text-white"></i></button>
-        </div>
-        <div class="modal-body-content">
-          <pre class="json-content">{{ JSON.stringify(selectedJson, null, 2) }}</pre>
-        </div>
-      </div>
-    </div>
-  </div>
-</template> <script setup>
-import { ref, computed, shallowRef } from 'vue'
-import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import { sAlert } from '@/utils/messages/alert-common'
-import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-// AG-Grid 스타일 임포트
-import 'ag-grid-community/styles/ag-grid.css'
-import 'ag-grid-community/styles/ag-theme-alpine.css'
+<script setup>
+  import { onMounted, onUnmounted, watch, ref, computed, reactive } from 'vue'
+  import * as _ from 'lodash-es'
 
-const manualProjNo = ref('SN2661')
-const regTypeId = ref('PIEP_T_002_T')
-const selectedType = ref('Working')
-const localFilterQuery = ref('') 
-const headerFilterQuery = ref('') 
+  // Import Tailwind CSS styles
+  import '@/utils/svgviewer/styles/tailwind.css'
 
-const gridApi = shallowRef()
-const rawDataList = ref([])
-const allColumnsRaw = ref([]) 
-const diffMap = ref(new Map()) 
+  // Import Web Components
+  import '@/utils/svgviewer/components/SvgViewer/SvgViewer.js'
+  import '@/utils/svgviewer/components/MiniViewer.js'
+  import '@/utils/svgviewer/components/TabManager.js'
+  import '@/utils/svgviewer/components/Sidebar.js'
+  import '@/utils/svgviewer/api/mockApi.js'
 
-const showModal = ref(false)
-const selectedTagNo = ref('')
-const selectedJson = ref(null)
+  // Helpers
+  import { sAlert, sToast } from '@/utils/messages/alert-common'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import { useRouter, useRoute } from 'vue-router'
+  import axios from 'axios'
 
-const getKws = q => q.split(/[\s,\n]+/).filter(k => k.trim() !== '').map(k => k.toLowerCase())
+  const router = useRouter()
+  const route = useRoute()
 
-const getCellStyle = p => {
-  const styles = {}
-  if (diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)) {
-    styles.backgroundColor = '#fff9db'; styles.color = '#d94111'; styles.fontWeight = 'bold';
-  }
-  const kws = getKws(localFilterQuery.value)
-  if (kws.length > 0 && p.value) {
-    if (kws.some(k => String(p.value).toLowerCase().includes(k))) {
-      styles.backgroundColor = '#e8f5e9'; styles.border = '1px solid #28a745';
+  // 뷰어 선택 옵션
+  const fit2DViewer = ref(true)
+  const saved_fit2DViewer = localStorage.getItem('fit2DViewer')
+
+  const svgFileStatus = ref(false)
+  const viewerTabs = ref(null)
+
+  const svgFileIds = ref([])
+
+  const foundTagNoRef = ref('')
+
+  const highlightColor = ref('#00ff00')
+
+  // 만약 여러 태그를 동시에 zoomfit 한다면
+  const arrayTagNoByQueryString = ref([])
+
+  // URL 캐싱 구현
+  const urlCache = new Map()
+
+  // 2. 값 변경 시 로컬스토리지에 저장
+  watch(fit2DViewer, newVal => {
+    localStorage.setItem('fit2DViewer', newVal.toString())
+
+    if (foundTagNoRef.value && newVal == true) {
+      setSvgViewer(foundTagNoRef.value)
     }
-  }
-  return Object.keys(styles).length > 0 ? styles : null
-}
+  })
 
-const onSearch = async () => {
-  if (!manualProjNo.value || !regTypeId.value) return sAlert.Warning('필수 값을 입력하세요.')
-  if (gridApi.value) gridApi.value.setGridOption('loading', true)
+  ///////////////////////////////////////////////////////////////////////////////
+  //#region import Component, Modal 사용시 필수 설정
+  defineOptions({ name: 'Common2DViewer' })
 
-  try {
-    let requestType = selectedType.value === 'MergeData' ? 'Merged' : selectedType.value
-    if (selectedType.value === 'All') requestType = 'Merged'
+  const emit = defineEmits(['viewerSelectionChagnedEvent'])
 
-    const res = await axiosWrapper.post('/api/Data/GetMergedData', {
-      ProjectNo: manualProjNo.value.trim(),
-      REG_TYPE_ID: regTypeId.value.trim(),
-      Type: requestType,
-      ContainDeleted: false,
-    })
-    
-    const rootKey = regTypeId.value.trim()
-    const resultData = res[rootKey] || Object.values(res)[0]
-    if (!resultData) { rawDataList.value = []; return sAlert.Info('데이터가 없습니다.') }
+  const props = defineProps({
+    proj_no: { type: [String, null], required: false, default: null },
+    ep_id: { type: [String, null], required: false, default: null },
+    reg_type_id: { type: [String, null], required: false, default: null },
+    tag_idx: { type: [String, null], required: false, default: null },
+    compare_data: { type: [Object, null], required: false, default: null },
+    direct_file_id: { type: [String, null], required: false, default: null },
+  })
 
-    // Diff 맵핑
-    const newDiffMap = new Map()
-    resultData.DiffData?.forEach(diff => {
-      diff.Property?.forEach(prop => {
-        if (prop.PUB_VALUE !== prop.WRK_VALUE) {
-          newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE ?? '', wrk: prop.WRK_VALUE ?? '' })
-        }
-      })
-    })
-    diffMap.value = newDiffMap
-
-    // 데이터 소스 매칭 (mergedata 키값 정확히 확인)
-    let sourceData = []
-    if (selectedType.value === 'Working') sourceData = resultData.WrkData || resultData.wrkdata || []
-    else if (selectedType.value === 'Publish') sourceData = resultData.PubData || resultData.pubdata || []
-    else if (selectedType.value === 'MergeData') sourceData = resultData.MergeData || resultData.mergedata || []
-    else if (selectedType.value === 'All') {
-      sourceData = [
-        ...(resultData.PubData || resultData.pubdata || []),
-        ...(resultData.WrkData || resultData.wrkdata || []),
-        ...(resultData.MergeData || resultData.mergedata || [])
-      ]
-    }
-
-    const columnKeys = new Set()
-    const processed = sourceData.map(item => {
-      const flat = { ...item, _raw: item }
-      // 시스템 속성
-      Object.keys(item).forEach(key => {
-        if (key !== 'ATTRIBUTES' && key !== '_raw') {
-          columnKeys.add(key)
-          if (flat[key] === null || flat[key] === undefined) flat[key] = ""
-        }
-      })
-      // 상세 속성
-      if (Array.isArray(item.ATTRIBUTES)) {
-        item.ATTRIBUTES.forEach(attr => {
-          flat[attr.ATT_ID] = (attr.VALUE === null || attr.VALUE === undefined) ? "" : attr.VALUE
-          columnKeys.add(attr.ATT_ID)
-        })
+  const currProjNoRef = computed({
+    get() {
+      if (route.query.proj_no) {
+        return route.query.proj_no
       }
-      return flat
-    })
+      return props?.proj_no
+    },
+  })
 
-    // 컬럼 정의
-    const priorityFields = ['TAG_IDX', 'TAG_NO', 'TAG_DESC', 'STATUS']
-    const otherFields = Array.from(columnKeys).filter(k => !priorityFields.includes(k)).sort()
-    
-    allColumnsRaw.value = [...priorityFields, ...otherFields].map(key => ({
-      headerName: key,
-      field: key,
-      minWidth: 150,
-      pinned: key === 'TAG_NO' ? 'left' : null,
-      cellRenderer: (p) => {
-        const val = p.value ?? ''
-        const hasDiff = diffMap.value.has(`${p.data.TAG_IDX}_${p.colDef.field}`)
-        return hasDiff ? `<span><i class="fa fa-exclamation-triangle text-warning me-1"></i>${val}</span>` : val
-      },
-      cellStyle: getCellStyle,
-      tooltipValueGetter: p => {
-        const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-        return d ? `[변경감지]\n• Working: ${d.wrk || '(빈 값)'}\n• Publish: ${d.pub || '(빈 값)'}` : null
-      },
-    }))
+  const currEpIdRef = computed({
+    get() {
+      if (route.query.ep_id) {
+        return route.query.ep_id
+      }
+      return props?.ep_id
+    },
+  })
 
-    rawDataList.value = processed
-  } catch (e) { sAlert.Error('조회 실패') }
-  finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
-}
+  const currRegTypeIdRef = computed({
+    get() {
+      if (route.query.reg_type_id) {
+        return route.query.reg_type_id
+      } else {
+        return props?.reg_type_id
+      }
+    },
+  })
 
-const filteredColumns = computed(() => {
-  const kws = getKws(headerFilterQuery.value)
-  if (kws.length === 0) return allColumnsRaw.value
-  return allColumnsRaw.value.filter(col => col.field === 'TAG_NO' || kws.some(k => col.headerName.toLowerCase().includes(k)))
-})
+  const currTagIdxRef = computed({
+    get() {
+      return props?.tag_idx
+    },
+  })
 
-const onCellClicked = p => {
-  if (p.colDef.field === 'TAG_NO') {
-    selectedTagNo.value = p.value; selectedJson.value = p.data._raw; showModal.value = true
+  const currCompareDataRef = computed({
+    get() {
+      return props?.compare_data
+    },
+  })
+
+  const currFileDataRef = computed({
+    get() {
+      if (route.query.file_id) {
+        return route.query.file_id
+      } else {
+        return props?.direct_file_id
+      }
+    },
+  })
+
+  // 특정 라우트 경로 체크 (여기서는 aaa.vue를 full page로 보여주는 경로)
+  const isFullPageRoute = computed(() => {
+    // 여기에 full page로 표시할 경로 패턴 입력
+    return route.path === '/2d-viewer'
+  })
+
+  // 라우트에 따라 다른 높이 스타일 적용
+  const containerStyle = computed(() => {
+    return {
+      height: isFullPageRoute.value ? 'calc(100vh - 20px)' : '100%',
+      width: '100%',
+    }
+  })
+
+  watch(currCompareDataRef, async item => {
+    let target = item.find(item => item.ATT_ID == 'TAG_NO')
+    let targetForColor = item.find(item => item.ATT_ID == 'ME0033')
+
+    if (targetForColor?.WRK_VAL) {
+      if (targetForColor?.WRK_VAL == 'OK') {
+        highlightColor.value = '#00ff00'
+      } else {
+        highlightColor.value = '#ff0000'
+      }
+    } else if (targetForColor?.PUB_VAL) {
+      if (targetForColor?.PUB_VAL == 'OK') {
+        highlightColor.value = '#00ff00'
+      } else {
+        highlightColor.value = '#ff0000'
+      }
+    }
+
+    if (target?.WRK_VAL) {
+      setSvgViewer(target?.WRK_VAL)
+    } else if (target?.PUB_VAL) {
+      setSvgViewer(target?.PUB_VAL)
+    } else {
+      svgFileStatus.value = false
+      foundTagNoRef.value = null
+
+      await closeAllTabs()
+    }
+  })
+
+  watch(currFileDataRef, fileId => {
+    loadFileByid(fileId, null)
+  })
+
+  const setSvgViewer = async tag_no => {
+    // Zoom Fit 아 아니면 아무 동작하지 않음
+    if (fit2DViewer.value === false) {
+      return
+    }
+
+    try {
+      await getTagIdxByTagNo(tag_no).then(async response => {
+        if (!response) {
+          return null
+        }
+        let tag_idxs = []
+        for (let index = 0; index < response.length; index++) {
+          const element = response[index]
+          tag_idxs = tag_idxs.concat(await getRelationDataByTagIdx(element))
+        }
+
+        if (tag_idxs.length > 0) {
+          let repoFileIds = []
+
+          // 사용 예시
+          getFileIdByTagIdxs(tag_idxs).then(async svgFileIds => {
+            console.log('파일 인덱스들:', svgFileIds)
+            // 여기서 fileIdxs 사용
+
+            if (svgFileIds.length > 0) {
+              let FilesData = await getPubWrkDataByIds(svgFileIds)
+              repoFileIds = FilesData.filter(file => file.TAG_NO.toLowerCase().includes('.svg'))
+                .map(file => {
+                  const fileRepoAttr = file.ATTRIBUTES.find(attr => attr.ATT_ID === 'FILE_REPO_ID')
+                  return fileRepoAttr ? fileRepoAttr.VALUE : null
+                })
+                .filter(Boolean)
+
+              if (repoFileIds.length > 0) {
+                await closeAllTabs()
+
+                // for...of 루프 사용하면 async/await 제대로 작동함
+                for (const svgFileId of repoFileIds) {
+                  svgFileStatus.value = true
+
+                  // load file and select tag
+                  await loadFileByid(svgFileId, tag_no)
+                }
+              } else {
+                if (!repoFileIds || repoFileIds.length < 1) {
+                  showAlert(`연결된 svg 파일이 없습니다.`)
+
+                  svgFileStatus.value = false
+                  await closeAllTabs()
+                }
+              }
+            } else {
+              if (!repoFileIds || repoFileIds.length < 1) {
+                showAlert(`연결된 svg 파일이 없습니다.`)
+
+                svgFileStatus.value = false
+                await closeAllTabs()
+              }
+            }
+          })
+        } else {
+          showAlert(`연결된 svg 파일이 없습니다.`)
+
+          svgFileStatus.value = false
+          await closeAllTabs()
+        }
+      })
+    } catch (e) {
+      console.log('currCompareDataRef', e)
+      return null
+    }
   }
-}
 
-const gridBindProps = computed(() => ({
-  columnDefs: filteredColumns.value,
-  rowData: rawDataList.value,
-  class: 'ag-theme-alpine shadow-sm',
-  pagination: true,
-  paginationPageSize: 100,
-  tooltipShowDelay: 0,
-  loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, filter: true, resizable: true },
-}))
+  const getFileIdByTagIdxs = tagIdxs => {
+    return new Promise(resolve => {
+      const promises = tagIdxs.map(idx => {
+        const requestBody = {
+          ProjectNo: route.query.proj_no,
+          EP_ID: route.query.ep_id,
+          TAG_IDX: idx,
+        }
 
-const onGridReady = p => { gridApi.value = p.api }
+        return axiosWrapper.post('/api/RelationData/GetByTagIdx', requestBody)
+      })
+
+      Promise.all(promises)
+        .then(results => {
+          let svgFileDataIdxs = []
+
+          results.forEach(relationResult => {
+            if (relationResult) {
+              // WrkRelations 가 없고 PubRelations 만 있는 경우.
+              // if (relationResult.WrkRelations.length > 0) {
+              //   const filteredData = relationResult.WrkRelations?.filter(i => i.REL_ID === 'TAG_TO_FILE')
+              //   if (filteredData && filteredData.length > 0) {
+              //     svgFileDataIdxs = [...svgFileDataIdxs, ...filteredData.map(item => item.RIG_TAG_IDX)]
+              //   }
+              // } else {
+              //   const filteredData = relationResult.PubRelations?.filter(i => i.REL_ID === 'TAG_TO_FILE')
+              //   if (filteredData && filteredData.length > 0) {
+              //     svgFileDataIdxs = [...svgFileDataIdxs, ...filteredData.map(item => item.RIG_TAG_IDX)]
+              //   }
+              // }
+
+              // 1. WrkRelations에서 'TAG_TO_FILE' 관계의 RIG_TAG_IDX 추출
+              // relationResult.WrkRelations가 없거나 비어있는 경우를 대비해 기본값 []를 사용
+              const wrkRelationsTagIdxs = (relationResult.WrkRelations || [])
+                .filter(i => i.REL_ID === 'TAG_TO_FILE')
+                .map(item => item.RIG_TAG_IDX)
+
+              // 2. PubRelations에서 'TAG_TO_FILE' 관계의 RIG_TAG_IDX 추출
+              // relationResult.PubRelations가 없거나 비어있는 경우를 대비해 기본값 []를 사용
+              const pubRelationsTagIdxs = (relationResult.PubRelations || [])
+                .filter(i => i.REL_ID === 'TAG_TO_FILE')
+                .map(item => item.RIG_TAG_IDX)
+
+              // 추출한 두 배열의 내용을 svgFileDataIdxs에 합칩니다.
+              svgFileDataIdxs.push(...wrkRelationsTagIdxs, ...pubRelationsTagIdxs)
+            }
+          })
+
+          // 여기서 중복을 제거합니다!
+          svgFileDataIdxs = [...new Set(svgFileDataIdxs)]
+
+          resolve(svgFileDataIdxs)
+        })
+        .catch(error => {
+          console.error('Error fetching relation data:', error)
+          resolve([])
+        })
+    })
+  }
+
+  const getPubWrkDataByIds = async ids => {
+    let url = `/api/Data/GetPubWrkDataByIDs`
+
+    try {
+      const jsonData = await axiosWrapper.post(url, {
+        ProjectNo: currProjNoRef.value,
+        REG_TYPE_ID: currRegTypeIdRef.value,
+        TAG_IDXs: ids,
+      })
+      if (_.isEmpty(jsonData)) {
+        return null
+      }
+
+      let returnArr = []
+      let arr1 = jsonData.PubData
+      let arr2 = jsonData.WrkData
+      returnArr = arr1.concat(arr2)
+      // console.log("returnArr",returnArr)
+      return returnArr
+    } catch (e) {
+      console.log('getPubWrkDataByIds', e)
+      return null
+    }
+  }
+  const getTagIdxByTagNo = async tagNo => {
+    let url = `/api/Data/getPubWrkDataByTagNo`
+
+    try {
+      const jsonData = await axiosWrapper.post(url, {
+        ProjectNo: currProjNoRef.value,
+        TAG_NO: tagNo,
+        EP_ID: route.query.ep_id,
+      })
+      if (_.isEmpty(jsonData)) {
+        return null
+      }
+      let returnArr = []
+      let arr1 = jsonData.PubData?.map(item => item.TAG_IDX)
+      let arr2 = jsonData.WrkData?.map(item => item.TAG_IDX)
+
+      if (arr1) {
+        if (arr2) {
+          returnArr = arr1.concat(arr2)
+        } else {
+          returnArr = arr1
+        }
+      } else if (arr2) {
+        returnArr = arr2
+      }
+
+      return [...new Set(returnArr)]
+    } catch (e) {
+      console.log('getTagIdxByTagNo', e)
+      return null
+    }
+  }
+
+  const getRelationDataByTagIdx = async tagIdx => {
+    let url = `/api/RelationData/GetByTagIdx`
+
+    try {
+      const jsonData = await axiosWrapper.post(url, {
+        ProjectNo: currProjNoRef.value,
+        EP_ID: currEpIdRef.value,
+        TAG_IDX: tagIdx,
+      })
+      if (_.isEmpty(jsonData)) {
+        return null
+      }
+      let returnArr = []
+      let arr1 = jsonData.PubRelations.map(item => item.LEF_TAG_IDX)
+      let arr2 = jsonData.WrkRelations.map(item => item.LEF_TAG_IDX)
+      returnArr = arr1.concat(arr2)
+      return [...new Set(returnArr)]
+    } catch (e) {
+      console.log('getRelationDataByTagIdx', e)
+      return null
+    }
+  }
+
+  // 대괄호([])로 감싸여 있거나 없이 콤마(,)로 구분된 문자열을 문자열 배열로 변환합니다.
+  function getStringArrayFromQuery(inputString) {
+    // 1. 입력값이 문자열이 아니거나 비어있으면 빈 배열 반환
+    if (typeof inputString !== 'string' || inputString.trim() === '') {
+      return []
+    }
+
+    let processedString = inputString.trim() // 일단 전체 공백 제거
+
+    // 2. 대괄호([])로 감싸여 있는지 확인하고 제거
+    if (processedString.startsWith('[') && processedString.endsWith(']')) {
+      processedString = processedString.substring(1, processedString.length - 1)
+    }
+
+    // 3. 대괄호 제거 후 문자열이 비어있으면 빈 배열 반환 (예: "[]" 같은 경우)
+    if (processedString.trim() === '') {
+      return []
+    }
+    return processedString
+      .split(',')
+      .map(item => item.trim())
+      .filter(item => item !== '') // 빈 문자열은 원치 않을 것 같아서 일단 넣어놨음!
+    // 만약 "A,,B" 같은 경우 ["A","","B"]가 필요하면 .filter(item => item !== '') 이 부분을 빼주세요!
+  }
+
+  onMounted(() => {
+    if (saved_fit2DViewer !== null) {
+      fit2DViewer.value = saved_fit2DViewer === 'true'
+    }
+
+    viewerTabs.value = document.querySelector('tab-manager')
+
+    if (viewerTabs.value) {
+      // Initialize with empty array to show the welcome screen
+      viewerTabs.value.svgFiles = []
+    } else {
+      console.warn('tab-manager element not found')
+    }
+    // 파일 ID를 직접 파라메터로 받았을 떄...
+    if (props?.direct_file_id) {
+      // direct_file_id prop이 전달되었으면 최우선 처리(릴레이션에서 svg파일 선택시)
+      loadFileByid(props.direct_file_id, null)
+    } else if (route.query.file_id) {
+      // URL 쿼리 파라미터에 file_id가 있으면 처리
+      loadFileByid(route.query.file_id, null)
+    } else if (route.query.tag_no) {
+      // TAG_NO를 직접 파라메터로 받았을 떄...
+      arrayTagNoByQueryString.value = getStringArrayFromQuery(route.query.tag_no)
+
+      if (arrayTagNoByQueryString.value.length > 0) {
+        setSvgViewer(arrayTagNoByQueryString.value[0])
+      } else {
+        showAlert('찾고자 하는 TAG 정보를 전달해주세요.')
+      }
+    } // 그리드 또는 스프레드에서 TAG 클릭시 넘어온 TAG 정보로 처리
+    else {
+      if (currCompareDataRef.value && currCompareDataRef.value.length > 0) {
+        let item = currCompareDataRef.value
+        let target = item.find(item => item.ATT_ID == 'TAG_NO')
+
+        if (target?.WRK_VAL) {
+          setSvgViewer(target?.WRK_VAL)
+        } else if (target?.PUB_VAL) {
+          setSvgViewer(target?.PUB_VAL)
+        } else {
+          svgFileStatus.value = false
+        }
+      } else if (currFileDataRef.value) {
+        loadFileByid(currFileDataRef.value, null)
+      }
+    }
+
+    window.addEventListener('message', handleMessage)
+  })
+
+  const handleMessage = event => {
+    // 여기서 type 확인하고
+    if (event.data?.type === 'FROM_PARENT') {
+      setSvgViewer(event.data.payload)
+    } else if (event.data?.type === 'response-message') {
+      // 단순히 파일만 열고, 아이템을 찾는 게 아니라면 바로 리턴
+      if (!fit2DViewer.value) {
+        return
+      }
+
+      console.log(`2D Viewer 로부터 받은 메시지(${event.data?.type})가 있습니다.`, event.data ?? 'event 없음')
+
+      try {
+        // selection 배열 읽어오기
+
+        const selection = event.data?.payload?.payload?.selection
+        const failedSelection = event.data?.payload?.payload?.['failed-selection']
+
+        if (selection && selection.length > 0) {
+          showAlert(`${selection.join(',')} 를 찾았습니다.`)
+        } else if (selection) {
+          // showAlert(`찾고자 하는 TAG를 찾지 못했습니다.`);
+        }
+
+        if (failedSelection && failedSelection.length > 0) {
+          showAlert(`${failedSelection.join(',')} 를 찾는데 실해하였습니다.`)
+        } else {
+          if (event.data?.payload?.status === 'failed') {
+            showAlert(`찾고자 하는 TAG를 찾지 못했습니다.`)
+          }
+        }
+      } catch (error) {
+        console.error('메시지 처리 중 오류 발생:', error)
+      }
+
+      try {
+        // eventName이 return-information-element인지 확인
+        if (event.data?.payload?.eventName === 'return-information-element') {
+          // dataTag 가져오기
+          const dataTag = event.data.payload.select?.objectID?.dataTag
+
+          if (dataTag) {
+            showAlert(`데이터 태그: ${dataTag} 를 찾았습니다.`)
+
+            emit('viewerSelectionChagnedEvent', [dataTag])
+            // 여기서 dataTag로 필요한 작업 수행
+          }
+        }
+      } catch (error) {
+        console.error('메시지 처리 중 오류 발생:', error)
+      }
+    }
+  }
+
+  // 파일 식별자 생성 함수 (간단한 예시)
+  const generateFileId = blob => {
+    // 예: 파일 크기 + 타입으로 간단하게 식별
+    return `${blob.size}-${blob.type}`
+  }
+
+  onUnmounted(async () => {
+    await closeAllTabs()
+
+    // 이벤트 리스너 해제하기
+    window.removeEventListener('message', handleMessage)
+  })
+
+  const closeAllTabs = async () => {
+    // Dispatch a command to zoom to a specific element
+    document.dispatchEvent(
+      new CustomEvent('viewer:closeTab', {
+        payload: {
+          allTab: true,
+        },
+        bubbles: true,
+        composed: true,
+      })
+    )
+
+    console.log('####### send message : close all tabs')
+  }
+
+  const loadFileByid = async (svgFileId, itemIds) => {
+    if (!svgFileId) {
+      return false
+    }
+
+    if (viewerTabs.value) {
+      let url = `/api/File/Get?nocache=${new Date().getTime()}`
+
+      const options = {
+        responseType: 'blob',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/svg+xml',
+          FileToken: 'frontserver@sh',
+          'Cache-Control': 'no-store',
+        },
+      }
+
+      // 개발 test file id 추가 '6892a18ddf4be490f986e1fd'
+      const bodyData = {
+        id: svgFileId,
+      }
+
+      try {
+        const blobData = await axiosWrapper.post(url, bodyData, options)
+
+        if (blobData) {
+          // 파일의 고유 식별자 생성 (예: 해시값이나 내용 기반)
+          const fileId = generateFileId(blobData)
+
+          let svgBlobUrl = ''
+
+          // 캐시에 있으면 기존 URL 반환
+          if (urlCache.has(fileId)) {
+            svgBlobUrl = urlCache.get(fileId)
+          } else {
+            // 없으면 새로 만들고 캐시에 저장
+            svgBlobUrl = URL.createObjectURL(blobData)
+            urlCache.set(fileId, svgBlobUrl)
+          }
+
+          // const svgBlobUrl = URL.createObjectURL(blobData);
+
+          if (svgFileId && itemIds != null) {
+            // drawing 원래 소스 : svgFile, 바이너리 읽기 : svgBlobUrl
+            let _elementId = itemIds
+
+            if (arrayTagNoByQueryString.value.length > 0) {
+              _elementId = arrayTagNoByQueryString.value
+            }
+
+            const messageFor2DViewer = {
+              detail: {
+                action: 'loadAndSearchFile',
+                drawing: svgBlobUrl,
+                idType: 'tag',
+                elementId: _elementId,
+                // elementId: [
+                //   "50-DN-57324-1G740H3-N",
+                //   "150-DN-57323-1G740H3-N"
+                // ],
+                zoom: fit2DViewer.value,
+                highlight: highlightColor.value,
+                title: 'Drawing Title', // Optional: display title for the drawing
+              },
+              bubbles: true,
+              composed: true,
+            }
+
+            document.dispatchEvent(new CustomEvent('svg-viewer-command', messageFor2DViewer))
+
+            console.log('########## sended message : ', messageFor2DViewer)
+          } else {
+            // drawing 원래 소스 : svgFile, 바이너리 읽기 : svgBlobUrl
+            document.dispatchEvent(
+              new CustomEvent('svg-viewer-command', {
+                detail: {
+                  action: 'fileOpen',
+                  drawing: svgBlobUrl,
+                },
+                bubbles: true,
+                composed: true,
+              })
+            )
+          }
+
+          console.log('svgBlobUrl : ', svgBlobUrl)
+
+          return true
+        }
+      } catch (error) {
+        console.log('error loadFile : ', error)
+        return false
+      }
+    }
+  }
+
+  const loadFileCompareByid = async (svgFileId_1, svgFileId_2) => {
+    if (!svgFileId_1 && !svgFileId_2) {
+      return false
+    }
+
+    if (viewerTabs.value) {
+      let url = `/api/File/Get?nocache=${new Date().getTime()}`
+
+      const options = {
+        responseType: 'blob',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/svg+xml',
+          FileToken: 'frontserver@sh',
+          'Cache-Control': 'no-store',
+        },
+      }
+
+      // 개발 test file id 추가 '6892a18ddf4be490f986e1fd'
+      const bodyData_1 = {
+        id: svgFileId_1,
+      }
+
+      const bodyData_2 = {
+        id: svgFileId_2,
+      }
+
+      try {
+        const blobData_1 = await axiosWrapper.post(url, bodyData_1, options)
+        const blobData_2 = await axiosWrapper.post(url, bodyData_2, options)
+
+        if (blobData_1 && blobData_2) {
+          // 파일의 고유 식별자 생성 (예: 해시값이나 내용 기반)
+          const fileId_1 = generateFileId(blobData_1)
+          const fileId_2 = generateFileId(blobData_2)
+
+          let svgBlobUrl_1 = ''
+          let svgBlobUrl_2 = ''
+
+          // 캐시에 있으면 기존 URL 반환
+          if (urlCache.has(fileId_1) || urlCache.has(fileId_2)) {
+            svgBlobUrl_1 = urlCache.get(fileId_1)
+            svgBlobUrl_2 = urlCache.get(fileId_2)
+          } else {
+            // 없으면 새로 만들고 캐시에 저장
+            svgBlobUrl_1 = URL.createObjectURL(blobData_1)
+            urlCache.set(fileId_1, svgBlobUrl_1)
+
+            svgBlobUrl_2 = URL.createObjectURL(blobData_2)
+            urlCache.set(fileId_2, svgBlobUrl_2)
+          }
+
+          if (svgFileId_1 && svgFileId_2) {
+            // drawing 원래 소스 : svgFile, 바이너리 읽기 : svgBlobUrl
+            document.dispatchEvent(
+              new CustomEvent('viewer:compare', {
+                detail: {
+                  version1: svgBlobUrl_1,
+                  version2: svgBlobUrl_2,
+                },
+                bubbles: true,
+                composed: true,
+              })
+            )
+          } else {
+            console.log('required two files.')
+          }
+
+          return true
+        }
+      } catch (error) {
+        console.log('error loadFile : ', error)
+        return false
+      }
+    }
+  }
+
+  // 알럿 관련 상태
+  const alertMessage = ref('')
+  const alertVisible = ref(false)
+
+  // 알럿 표시 함수 (외부에서도 접근 가능하도록 expose)
+  const showAlert = (message, duration = 2000) => {
+    alertMessage.value = message
+    alertVisible.value = true
+
+    setTimeout(() => {
+      alertVisible.value = false
+    }, duration)
+  }
+
+  // 외부에서 접근할 수 있도록 함수 노출
+  defineExpose({ showAlert })
 </script>
 
-<style scoped>
-.grid-container { background-color: #ffffff; }
-.ag-theme-alpine {
-  --ag-border-color: #d1d5db;
-  --ag-header-background-color: #f3f4f6;
-  border: 1px solid #d1d5db;
-}
-.filter-textarea { width: 140px; height: 28px; resize: none; font-size: 11px; padding: 2px 5px; border-radius: 4px; }
-.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.custom-modal-window { background: #fff; width: 900px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
-.modal-header-dark { background: #1e293b; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; }
-.modal-body-content { flex: 1; background: #0f172a; padding: 20px; overflow: auto; }
-.json-content { color: #38bdf8; font-family: 'Consolas', monospace; font-size: 13px; margin: 0; }
+<style>
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  .tab-manager {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .custom-alert {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background-color: rgba(0, 0, 0, 0.75);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 6px;
+    z-index: 9999;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    min-width: 200px;
+    text-align: center;
+  }
+
+  /* 페이드 효과 */
+  .fade-enter-active,
+  .fade-leave-active {
+    transition: opacity 0.3s ease;
+  }
+
+  .fade-enter-from,
+  .fade-leave-to {
+    opacity: 0;
+  }
+
+  .form-check.form-switch .form-check-input {
+    width: 2.25em; /* 스위치 가로 길이 */
+    height: 1.25em; /* 스위치 세로 길이 */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba(0, 0, 0, 0.25)'/%3e%3c/svg%3e"); /* 체크 안 됐을 때 원형 핸들 */
+    background-position: left center;
+    border-radius: 1.25em; /* 타원형 모양 */
+    transition: background-position 0.15s ease-in-out;
+    border: 1px solid rgba(0, 0, 0, 0.25); /* 테두리 */
+  }
+
+  .form-check.form-switch .form-check-input:focus {
+    border-color: #86b7fe; /* 포커스 시 테두리 색 */
+    box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='rgba(0, 0, 0, 0.25)'/%3e%3c/svg%3e");
+  }
+
+  .form-check.form-switch .form-check-input:checked {
+    background-color: #0d6efd; /* 체크 됐을 때 배경색 */
+    border-color: #0d6efd; /* 체크 됐을 때 테두리 색 */
+    background-position: right center; /* 체크 됐을 때 핸들 위치 */
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3e%3ccircle r='3' fill='%23fff'/%3e%3c/svg%3e"); /* 체크 됐을 때 원형 핸들 색상 */
+  }
+
+  /* label 스타일도 같이 확인해줘 */
+  .form-check.form-switch .form-check-label {
+    vertical-align: middle;
+    margin-left: 0.5rem; /* 스위치와 라벨 사이 간격 */
+  }
 </style>
+
+<template>
+  <div class="m-0 p-0" :style="containerStyle" style="overflow: hidden">
+    <div class="row m-0 p-0 bg-light border-bottom" style="height: 22px; width: 100%">
+      <div class="col-12 m-0 p-0 d-flex justify-content-start">
+        <!-- 스위치 추가 -->
+        <div class="form-check form-switch ms-2">
+          <input class="form-check-input mt-1" type="checkbox" v-model="fit2DViewer" id="switch2Dzoom" />
+          <label class="form-check-label text-dark px-0 mx-0" for="switch2Dzoom">Zoom & Fit</label>
+        </div>
+      </div>
+    </div>
+    <tab-manager></tab-manager>
+
+    <!-- 알럿 컴포넌트 -->
+    <Transition name="fade">
+      <div v-if="alertVisible" class="custom-alert">
+        {{ alertMessage }}
+      </div>
+    </Transition>
+  </div>
+</template>
