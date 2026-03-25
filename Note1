@@ -1,21 +1,138 @@
-// 기존 gridBindRef 코드를 찾아 아래 내용을 추가하세요
-const gridBindRef = ref({
-  key: gridKeyRef,
-  columnDefs: gridColDefsRef,
-  rowData: gridDataRef,
-  class: 'ag-theme-custom w-100 h-100',
-  
-  // --- 이 부분을 추가하세요 ---
-  initialState: {
-    sort: {
-      sortModel: [
-        { colId: 'SEQ', sort: 'asc' } // SEQ 컬럼을 오름차순(asc)으로 정렬
-      ],
-    },
-  },
-  // -------------------------
+No	PI 담당자	개발 담당자	플랫폼팀	PPT Sheet.No	대분류	중분류	소분류	Description	완료 유무	Remark
+1	백앤드	최우영		9	Schema	API		Merged Table 조회 API 개발 이후 프론트 반영	진행중	
+2	백앤드	ALL		10	Schema	API		코드 리팩토링 (백엔드 코드 Refactoring 이후 프론트 반영)		
+3	이창국	이진호		11	Custom Page	CATA Manager		"SWP의 Revision 연계
+Vendor 도면 편집 후 CATA 신청 활용"		
+4	이창국	이진호	정성운	12	Custom Page	CSM		"Feeder Typical 활용 Main 및 Aux. Cable 일괄 생성 기능
+Cable Typical Setup 설정이 후, Typical 데이터 일괄 반영 기능 개발  
+"		
+5	이창국	이진호		13	Custom Page	Equip Master		"S3D CATA 바로가기
+버튼벌 ToolTip
+기능 개선 14건
+"		
+7	이창국	이진호		14	Custom Page	EQ Master		잘라 놓은 도면 편집 기능		
+8	이창국	이진호		15	Custom Page	EQ Master		"전장 Seat List PDF 파일 저장
+"		
+9	이창국	이진호		16	Custom Page	EQ Master		Equip Master 개선 요청사항		
+10	이창국	김경부		17	Custom Page	Custom Page [LO Chart]		LO List 취합 부서 Custom Page 화면 개발		제외
+11	이창국	김경부		18	Custom Page	Custom Page [LO Chart]		"LO Chart 메일링 기능
+"		제외
+12	심성도	이진호	이종목	19	Custom Page	Custom Page [MMS]		"표준 문서 자동 생성
+표준선 관리 기능
+High pressure 및 external pressure 두께 자동 계산 기능
+"		제외
+13	이창국	김경부		20	Custom Page	Custom Page [Part List]		"Sub Item 생성
+PLM Information 표현"		제외
+14	이창국	김경부		21	Custom Page	Custom Page [Part List]		Bulk Item 생성		제외
+15	조순제	김경부		22	Custom Page	Custom Page [SPS]		"Edit Pipe Spec Remark 구성
+Valve POS완 Create DOC 기능과 연계 및 Document Manager로의 전송/자동저장
+Fill SM Code 버튼 기능 개선
+최종 스펙 이름 설정 조건 개수 추가"		
+16	조순제	김경부		23	Custom Page	Custom Page [SDS]		Duct Line List 전송 기능		
+17	조순제	김경부		24	Custom Page	Custom Page [SDS]		HVAC Equipment 전송 기능		
+18	이동권	최우영		25	Grid Spread 공통]	Custom Button		"Typical 기능 개발
+Cable Tubing Typical Propagtion
+Custom Button 연결"		
+19	이동권	김경부		26	Document Manager	Document Manager		"Document Mgr 기반 RFQ 기능 개발
+"		
+20	이동권	김경부		27	Document Manager	Document Manager		"Data Set Template Use Sequence 정렬
+"		
+21	이동권	김경부		28	Document Manager	Document Manager		"Doc 생성 수정 권한 설정
+Read Only Document
+"		
+22	이동권	김경부		29	Document Manager	Document Manager		"SWP 연계
+Dolce 연계
+Create File 고도화
+이미지 파일 Viewer
+"		
+23	이동권	김경부		30	Document Manager	Document Manager		"원본 파일 결재 제공 기능
+"		
+24	이동권	김경부		31	Document Manager	Document Manager		"Smart Excel 기능 개선 (Document Mgr 13건)
+"		
+25	이동권	김경부		32	Document Manager	Document Manager		"Doc Pub Revision Numbering 고도화
+"		
+26	이동권	김경부		33	Document Manager	Document Manager		"Document 호선 복사 기능
+"		
+27	이동권	최우영		34	Document Manager	Common		Grid Spread 문서 출력 용지 설정 고도화		
+28	이동권	김경부		35	Document Manager	Document Manager		Revision DataSet 제공 기능		
+29	이동권	김경부		36	Document Manager	Document Manager		IDC 연계 SetUp 기능		
+30	이동권	김경부		37	Document Manager	Document Manager		"Revision간 File Compare 기능 (Grid/Spread/Spread Item 비교)
+"		
+31	이동권	김경부		38	Document Manager	Document Manager		문서 수신 발신 기능 구현		
+32	이동권	최우영		39	Grid Spread 공통	Code List		Code List Description 표기	완료	Join Table의 Desc 은 제외
+33	이동권	최우영		40	Grid Spread 공통	Data Validation 기능 추가		"Validation & Save Publish API 분리
+Error Status 추가
+Message Column 반영
+Publish 시 Data Status 저장 기능"		
+34	이동권	최우영		41	Schema	Spread List  추가		복합레지스터 Spread List 개발	완료	
+35	이창국/조순제	ALL		42	2D/3D	2D/3D		"1D 2D 3D 연계 HotSpot 기능 고도화
+1D 선택 시 Attribute 별로 3D 모델 Coloring
+"		제외
+36	이동권	최우영		43	Grid Spread 공통	Code List		Multi Selection Code List		
+37	이동권	최우영		44	Grid Spread 공통	Objcet Class		"하위 Class 변경 기능
+다른 Class 변경 제한 기능
+Class 변경 Inform"	완료	UI 반영은 확인 필요
+38	이동권	이진호		45	Schema	Relation		"Parent 부재 하위 Child 부재 Tag 속성 표현 기능
+Child 부재 Parent Tag 속성 표현 기능"		
+39	이동권	최우영		46	Schema	EP_IC		EP_IC 전용 Last Win 적용		
+40	이동권	최우영		47	Schema	Common		"EP_IC 확인 후 Tag 삭제
+Tag 완전 삭제"		
+41	이동권	이진호		48	Schema	Relation		Relation Attribute 추가		
+42	이동권	최우영		49	Grid Spread 공통	Common		Join Key Multi 설정 개발		
+43	이동권	박정철		50	Schema	Common		"중복 Tag Report 기능
+Tag Type Validation 기능"	진행중	
+44	이동권	이진호		51	Schema	Relation		"타 EP에서 생성한 Relation 삭제 권한 관리
+Relation Viewer 기능 개선"		
+45	이동권	이진호		52	Schema	Relation		Link Relation 개발		
+46	이동권	최우영		53	Schema	PBS		"PBS 고도화
+Assembly PBS 고도화"	완료	
+47	이동권	박정철		54	Schema	Schema		Schema 개선 항목 33건	 	
+48	이동권	박정철		55	Schema	Tag Numbering		"Non Obj Class Tag 중복생성 방지
+"		
+49	이동권	최우영		56	Schema	Status 고도화		Read Only Property & Row (Data)		
+50	이동권	최우영		57	Schema	Tag Numbering 고도화		PRNT_TAG_IDX 고도화		
+51	이동권	최우영		58	Schema	Tag Numbering 고도화		Paren’t + SubObjectr 조합 Tag 중복 생성 체크		
+52	이동권	최우영		59	Schema	Schema		Temporary Information Att 개발		
+53	이동권	박정철		60	Schema	Schema		PBS Name TagType 설정 기능		
+54	이동권	최우영		61	Schema	Schema		Project Copy 기능		
+55	이동권	최우영		62	Schema	Schema		"Register 없는 Save 기능 개발
+Register 없는 Publish 기능 개발"		
+56	이동권	최우영		63	Schema	일반 Last Win		"서로 다른 양쪽 EP/화면에서 모두 쓰기권한(Write-Write)이 있는 경우
+최신 데이터를 저장하는 기능 개발
+(백엔드 캐시 서비스 적용과 연계하여 개발)"		
+57	이동권	최우영		64	Schema	Schema		Working/Publish 우선 표현 옵션		
+58	이동권	최우영		65	Schema	Schema		조선 시리즈선 개발 / 해양 표준 MMS 프로젝트 개발		
+59	이동권	최우영		66	Schema	Schema		SubItem Save/Publish		
+60	이동권	최우영		67	Schema	Schema		Spread Item Compare (화면 좌우 배치하여 Spread 상에서 Attribute 비교 기능)		
+61	이동권	김경부		68	Spread	Spread List Item 복합		"Spread List Item 복합 (Text Aggregation Rule 개발)
+Grid + Spread List 복합 고도화 및 eVCP 연계 (TBE 항목)
+"		
+62	이동권	김경부		69	Spread	Spread List Item 복합		Spread List Item 복합 – Item 저장 기능 개발		
+63	이동권	김경부		70	Spread	Spread 공통		Multi Spread Item Report (Hyd. Calc)복합 – Item 저장 기능 개발		
+64	이동권	최우영		71	Spread	Spread 공통		"Import 오류 개선
+Import 성능 개선"	완료	
+65	이동권	최우영		72	Spread	Spread 공통		Spread 조회 성능 	완료	V19 적용 후 한번더 체크
+66	이동권	최우영		73	Schema	공통 Control		Custom Command 버튼		
+67	이동권	김경부		74	Document Manager	[공통 Control] Custom Command 개발		Document 결재 종류별 Menu 연결 PI		
+68	조순제	김경부		75	3D	[공통 Control] iWV Select Event 개발		iWV 모델 선택 시 Event 발생 기능		제외
+69	이창국	최우영		76	Schema	[공통 Control] Topology Viewer 개발		Topology Viewer		
+70	김경환	ALL		77	UI	[공통 Control] UI 개선		UI 개선 40건		
+71	이진영	박정철		78	Adapter	ByPass Auto Publish		ByPass Auto Publish		
+72	이진영	박정철		79	Adapter	ByPass Auto PublishRelation 자동 Mapping (ex. Tag To File)		Relation 자동 Mapping (ex. Tag To File)		
+73	이동권	최우영		80	Common	Data 생성 Source		Data 생성 Source		
+74	이진영	박정철		81	Adapter	Multi Broker 개발		Multi Broker 개발	완료	
+75	이진영	박정철		82	Adapter	Broker Action 설정		Broker Action 설정	완료	
 
-  rowSelection: 'multiple',
-  rowDragManaged: true,
-  // ... 이하 생략
-});
+
+위 엑셀 파일의 정보를 아래와 같이 정리해줘. 
+숫자 즉 1. << 여기에 대분류 / 중분류  이런 형식이 되면 될 것 같아 
+그리고 A,B,C 이렇게 된거는 Description 의 정보를 가져와서 처리해주면 될것 같아 
+==================================================================
+1.	Adapter 공통 기능 고도화 
+A.	Adapter로 생성되는 TagTo File Relation 간소화
+B.	Adapter로 저장된 데이터의 출처 기록 기능
+2.	Document Manager 기능 고도화
+A.	Document 생성/수정 권한 설정
+B.	Document Revision Numbering 방식 개선
+C.	Document 결재 시 첨부 파일 선택 기능 개발
+D.	Create Document시 생성되는 PDF의 출력 Size 
