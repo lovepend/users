@@ -1,351 +1,108 @@
-1. Schema / API
-
-A. Merged Table 조회 API 개발 이후 프론트 반영
-
-2. Schema / API
-
-A. 코드 리팩토링 (백엔드 코드 Refactoring 이후 프론트 반영)
-
-3. Custom Page / CATA Manager
-
-A. SWP의 Revision 연계
-
-B. Vendor 도면 편집 후 CATA 신청 활용
-
-4. Custom Page / CSM
-
-A. Feeder Typical 활용 Main 및 Aux. Cable 일괄 생성 기능
-
-B. Cable Typical Setup 설정이 후, Typical 데이터 일괄 반영 기능 개발
-
-5. Custom Page / Equip Master
-
-A. S3D CATA 바로가기
-
-B. 버튼별 ToolTip
-
-C. 기능 개선 14건
-
-7. Custom Page / EQ Master
-
-A. 잘라 놓은 도면 편집 기능
-
-8. Custom Page / EQ Master
-
-A. 전장 Seat List PDF 파일 저장
-
-9. Custom Page / EQ Master
-
-A. Equip Master 개선 요청사항
-
-10. Custom Page / Custom Page [LO Chart]
-
-A. LO List 취합 부서 Custom Page 화면 개발 (제외)
-
-11. Custom Page / Custom Page [LO Chart]
-
-A. LO Chart 메일링 기능 (제외)
-
-12. Custom Page / Custom Page [MMS]
-
-A. 표준 문서 자동 생성
-
-B. 표준선 관리 기능
-
-C. High pressure 및 external pressure 두께 자동 계산 기능 (제외)
-
-13. Custom Page / Custom Page [Part List]
-
-A. Sub Item 생성
-
-B. PLM Information 표현 (제외)
-
-14. Custom Page / Custom Page [Part List]
-
-A. Bulk Item 생성 (제외)
-
-15. Custom Page / Custom Page [SPS]
-
-A. Edit Pipe Spec Remark 구성
-
-B. Valve POS완 Create DOC 기능과 연계 및 Document Manager로의 전송/자동저장
-
-C. Fill SM Code 버튼 기능 개선
-
-D. 최종 스펙 이름 설정 조건 개수 추가
-
-16. Custom Page / Custom Page [SDS]
-
-A. Duct Line List 전송 기능
-
-17. Custom Page / Custom Page [SDS]
-
-A. HVAC Equipment 전송 기능
-
-18. Grid Spread 공통 / Custom Button
-
-A. Typical 기능 개발
-
-B. Cable Tubing Typical Propagation
-
-C. Custom Button 연결
-
-19. Document Manager / Document Manager
-
-A. Document Mgr 기반 RFQ 기능 개발
-
-20. Document Manager / Document Manager
-
-A. Data Set Template Use Sequence 정렬
-
-21. Document Manager / Document Manager
-
-A. Doc 생성 수정 권한 설정
-
-B. Read Only Document
-
-22. Document Manager / Document Manager
-
-A. SWP 연계 및 Dolce 연계
-
-B. Create File 고도화
-
-C. 이미지 파일 Viewer
-
-23. Document Manager / Document Manager
-
-A. 원본 파일 결재 제공 기능
-
-24. Document Manager / Document Manager
-
-A. Smart Excel 기능 개선 (Document Mgr 13건)
-
-25. Document Manager / Document Manager
-
-A. Doc Pub Revision Numbering 고도화
-
-26. Document Manager / Document Manager
-
-A. Document 호선 복사 기능
-
-27. Document Manager / Common
-
-A. Grid Spread 문서 출력 용지 설정 고도화
-
-28. Document Manager / Document Manager
-
-A. Revision DataSet 제공 기능
-
-29. Document Manager / Document Manager
-
-A. IDC 연계 SetUp 기능
-
-30. Document Manager / Document Manager
-
-A. Revision간 File Compare 기능 (Grid/Spread/Spread Item 비교)
-
-31. Document Manager / Document Manager
-
-A. 문서 수신 발신 기능 구현
-
-32. Grid Spread 공통 / Code List
-
-A. Code List Description 표기 (Join Table의 Desc 은 제외)
-
-33. Grid Spread 공통 / Data Validation 기능 추가
-
-A. Validation & Save Publish API 분리
-
-B. Error Status 추가 및 Message Column 반영
-
-C. Publish 시 Data Status 저장 기능
-
-34. Schema / Spread List 추가
-
-A. 복합레지스터 Spread List 개발
-
-35. 2D/3D / 2D/3D
-
-A. 1D 2D 3D 연계 HotSpot 기능 고도화
-
-B. 1D 선택 시 Attribute 별로 3D 모델 Coloring (제외)
-
-36. Grid Spread 공통 / Code List
-
-A. Multi Selection Code List
-
-37. Grid Spread 공통 / Object Class
-
-A. 하위 Class 변경 기능
-
-B. 다른 Class 변경 제한 기능
-
-C. Class 변경 Inform
-
-38. Schema / Relation
-
-A. Parent 부재 하위 Child 부재 Tag 속성 표현 기능
-
-B. Child 부재 Parent Tag 속성 표현 기능
-
-39. Schema / EP_IC
-
-A. EP_IC 전용 Last Win 적용
-
-40. Schema / Common
-
-A. EP_IC 확인 후 Tag 삭제
-
-B. Tag 완전 삭제
-
-41. Schema / Relation
-
-A. Relation Attribute 추가
-
-42. Grid Spread 공통 / Common
-
-A. Join Key Multi 설정 개발
-
-43. Schema / Common
-
-A. 중복 Tag Report 기능
-
-B. Tag Type Validation 기능
-
-44. Schema / Relation
-
-A. 타 EP에서 생성한 Relation 삭제 권한 관리
-
-B. Relation Viewer 기능 개선
-
-45. Schema / Relation
-
-A. Link Relation 개발
-
-46. Schema / PBS
-
-A. PBS 고도화
-
-B. Assembly PBS 고도화
-
-47. Schema / Schema
-
-A. Schema 개선 항목 33건
-
-48. Schema / Tag Numbering
-
-A. Non Obj Class Tag 중복생성 방지
-
-49. Schema / Status 고도화
-
-A. Read Only Property & Row (Data)
-
-50. Schema / Tag Numbering 고도화
-
-A. PRNT_TAG_IDX 고도화
-
-51. Schema / Tag Numbering 고도화
-
-A. Parent + SubObject 조합 Tag 중복 생성 체크
-
-52. Schema / Schema
-
-A. Temporary Information Att 개발
-
-53. Schema / Schema
-
-A. PBS Name TagType 설정 기능
-
-54. Schema / Schema
-
-A. Project Copy 기능
-
-55. Schema / Schema
-
-A. Register 없는 Save 기능 개발
-
-B. Register 없는 Publish 기능 개발
-
-56. Schema / 일반 Last Win
-
-A. Write-Write 권한 시 최신 데이터 저장 기능 개발 (백엔드 캐시 서비스 연계)
-
-57. Schema / Schema
-
-A. Working/Publish 우선 표현 옵션
-
-58. Schema / Schema
-
-A. 조선 시리즈선 개발 / 해양 표준 MMS 프로젝트 개발
-
-59. Schema / Schema
-
-A. SubItem Save/Publish
-
-60. Schema / Schema
-
-A. Spread Item Compare (Attribute 비교 기능)
-
-61. Spread / Spread List Item 복합
-
-A. Text Aggregation Rule 개발
-
-B. Grid + Spread List 복합 고도화 및 eVCP 연계 (TBE 항목)
-
-62. Spread / Spread List Item 복합
-
-A. Spread List Item 복합 – Item 저장 기능 개발
-
-63. Spread / Spread 공통
-
-A. Multi Spread Item Report (Hyd. Calc) 복합 – Item 저장 기능 개발
-
-64. Spread / Spread 공통
-
-A. Import 오류 개선
-
-B. Import 성능 개선
-
-65. Spread / Spread 공통
-
-A. Spread 조회 성능 (V19 적용 후 체크)
-
-66. Schema / 공통 Control
-
-A. Custom Command 버튼
-
-67. Document Manager / [공통 Control] Custom Command 개발
-
-A. Document 결재 종류별 Menu 연결 PI
-
-68. 3D / [공통 Control] iWV Select Event 개발
-
-A. iWV 모델 선택 시 Event 발생 기능 (제외)
-
-69. Schema / [공통 Control] Topology Viewer 개발
-
-A. Topology Viewer
-
-70. UI / [공통 Control] UI 개선
-
-A. UI 개선 40건
-
-71. Adapter / ByPass Auto Publish
-
-A. ByPass Auto Publish
-
-72. Adapter / ByPass Auto Publish / Relation 자동 Mapping
-
-A. Relation 자동 Mapping (ex. Tag To File)
-
-73. Common / Data 생성 Source
-
-A. Data 생성 Source 기록
-
-74. Adapter / Multi Broker 개발
-
-A. Multi Broker 개발
-
-75. Adapter / Broker Action 설정
-
-A. Broker Action 설정
+그룹(대분류&중분류)	Description
+3D	"1D 2D 3D 연계 HotSpot 기능 고도화
+1D 선택 시 Attribute 별로 3D 모델 Coloring"
+3D	iWV 모델 선택 시 Event 발생 기능
+Adapter & Broker	Broker Action 설정
+Adapter & Broker	ByPass Auto Publish
+Adapter & Broker	Relation 자동 Mapping (ex. Tag To File)
+Adapter & Broker	Data 생성 Source
+Adapter & Broker	Multi Broker 개발
+Backend	코드 리팩토링 (백엔드 코드 Refactoring 이후 프론트 반영)
+Backend	Merged Table 조회 API 개발 이후 프론트 반영
+Custom Page [CATA Manager]	"SWP의 Revision 연계
+Vendor 도면 편집 후 CATA 신청 활용"
+Custom Page [CSM]	"Feeder Typical 활용 Main 및 Aux. Cable 일괄 생성 기능
+Cable Typical Setup 설정이 후, Typical 데이터 일괄 반영 기능 개발  "
+Custom Page [EQ Master]	잘라 놓은 도면 편집 기능
+Custom Page [EQ Master]	전장 Seat List PDF 파일 저장
+Custom Page [EQ Master]	Equip Master 개선 요청사항
+Custom Page [EQ Master]	"S3D CATA 바로가기
+버튼벌 ToolTip
+기능 개선 14건"
+Custom Page [LO Chart]	LO List 취합 부서 Custom Page 화면 개발
+Custom Page [LO Chart]	LO Chart 메일링 기능
+Custom Page [MMS]	"표준 문서 자동 생성
+표준선 관리 기능
+High pressure 및 external pressure 두께 자동 계산 기능"
+Custom Page [Part List]	"Sub Item 생성
+PLM Information 표현"
+Custom Page [Part List]	Bulk Item 생성
+Custom Page [SDS]	Duct Line List 전송 기능
+Custom Page [SDS]	HVAC Equipment 전송 기능
+Custom Page [SPS]	"Edit Pipe Spec Remark 구성
+Valve POS완 Create DOC 기능과 연계 및 Document Manager로의 전송/자동저장
+Fill SM Code 버튼 기능 개선
+최종 스펙 이름 설정 조건 개수 추가"
+Document Manager	Document 결재 종류별 Menu 연결 PI
+Document Manager	Grid Spread 문서 출력 용지 설정 고도화
+Document Manager	Document Mgr 기반 RFQ 기능 개발
+Document Manager	Data Set Template Use Sequence 정렬
+Document Manager	"Doc 생성 수정 권한 설정
+Read Only Document"
+Document Manager	"SWP 연계
+Dolce 연계
+Create File 고도화
+이미지 파일 Viewer"
+Document Manager	원본 파일 결재 제공 기능
+Document Manager	Smart Excel 기능 개선 (Document Mgr 13건)
+Document Manager	Doc Pub Revision Numbering 고도화
+Document Manager	Document 호선 복사 기능
+Document Manager	Revision DataSet 제공 기능
+Document Manager	IDC 연계 SetUp 기능
+Document Manager	Revision간 File Compare 기능 (Grid/Spread/Spread Item 비교)
+Document Manager	문서 수신 발신 기능 구현
+Grid Spread 공통	Code List Description 표기
+Grid Spread 공통	Multi Selection Code List
+Grid Spread 공통	Join Key Multi 설정 개발
+Grid Spread 공통	"Validation & Save Publish API 분리
+Error Status 추가
+Message Column 반영
+Publish 시 Data Status 저장 기능"
+Grid Spread 공통	"하위 Class 변경 기능
+다른 Class 변경 제한 기능
+Class 변경 Inform"
+Grid Spread 공통	"Typical 기능 개발
+Cable Tubing Typical Propagtion
+Custom Button 연결"
+Grid Spread 공통	Topology Viewer
+Schema_Common	EP_IC 전용 Last Win 적용
+Schema_Common	"PBS 고도화
+Assembly PBS 고도화"
+Schema_Common	Schema 개선 항목 33건
+Schema_Common	Project Copy 기능
+Schema_Common	"Register 없는 Save 기능 개발
+Register 없는 Publish 기능 개발"
+Schema_Common	Working/Publish 우선 표현 옵션
+Schema_Common	조선 시리즈선 개발 / 해양 표준 MMS 프로젝트 개발
+Schema_Common	SubItem Save/Publish
+Schema_Common	Spread Item Compare (화면 좌우 배치하여 Spread 상에서 Attribute 비교 기능)
+Schema_Common	Temporary Information Att 개발
+Schema_Common	복합레지스터 Spread List 개발
+Schema_Common	Read Only Property & Row (Data)
+Schema_Common	Custom Command 버튼
+Schema_Common	"서로 다른 양쪽 EP/화면에서 모두 쓰기권한(Write-Write)이 있는 경우
+최신 데이터를 저장하는 기능 개발
+(백엔드 캐시 서비스 적용과 연계하여 개발)"
+Schema_Relation	"Parent 부재 하위 Child 부재 Tag 속성 표현 기능
+Child 부재 Parent Tag 속성 표현 기능"
+Schema_Relation	Relation Attribute 추가
+Schema_Relation	"타 EP에서 생성한 Relation 삭제 권한 관리
+Relation Viewer 기능 개선"
+Schema_Relation	Link Relation 개발
+Schema_Tag Numbering 고도화	"EP_IC 확인 후 Tag 삭제
+Tag 완전 삭제"
+Schema_Tag Numbering 고도화	"중복 Tag Report 기능
+Tag Type Validation 기능"
+Schema_Tag Numbering 고도화	PBS Name TagType 설정 기능
+Schema_Tag Numbering 고도화	Non Obj Class Tag 중복생성 방지
+Schema_Tag Numbering 고도화	PRNT_TAG_IDX 고도화
+Schema_Tag Numbering 고도화	Paren’t + SubObjectr 조합 Tag 중복 생성 체크
+SpreadSpread List Item 복합	"Spread List Item 복합 (Text Aggregation Rule 개발)
+Grid + Spread List 복합 고도화 및 eVCP 연계 (TBE 항목)
+"
+SpreadSpread List Item 복합	Spread List Item 복합 – Item 저장 기능 개발
+SpreadSpread 공통	Multi Spread Item Report (Hyd. Calc)복합 – Item 저장 기능 개발
+SpreadSpread 공통	"Import 오류 개선
+Import 성능 개선"
+SpreadSpread 공통	Spread 조회 성능 
+UI	UI 개선 40건
