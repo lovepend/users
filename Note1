@@ -1,117 +1,996 @@
-1. 3D
-A. 1D 2D 3D 연계 HotSpot 기능 고도화 및 Attribute 별 모델 Coloring
+<template>
+  <div class="panel m-0 p-0 h-100">
+    <div class="panel-heading m-0 p-2" style="background-color: var(--bg17)">
+      <h4 class="panel-title" style="color: var(--txt03)">
+        <i class="fa fa-bars me-2"></i>
+        <span>{{ $t('ObjectSetup_vue.object_class_title') }}</span>
+        <span v-if="currentProjNo"> [ {{ currentProjNo }} ]</span>
+      </h4>
+    </div>
 
-B. iWV 모델 선택 시 Event 발생 기능
+    <span v-if="!isSetupAdmin" class="just-view">
+      {{ $t('DataSettingNavBar_vue.justViewPermission') }}
+    </span>
+    <div v-else class="panel-body p-0 m-0">
+      <div class="w-100 h-100">
+        <BasicToolBar v-bind="toolbarBindRef" v-on="toolbarEventsRef" />
+      </div>
+    </div>
+    <div class="panel-body overflow-hidden m-0 p-0 h-100">
+      <ag-grid-vue v-bind="gridBindRef" v-on="gridEvents" />
+    </div>
+  </div>
+</template>
 
-2. Adapter & Broker
-A. Broker Action 설정 및 Multi Broker 개발
+<script setup>
+  // Library - Common
+  import { ref, shallowRef, computed, onMounted, watch } from 'vue'
+  import { useRoute } from 'vue-router'
+  import { storeToRefs } from 'pinia'
 
-B. ByPass Auto Publish 기능
+  // Store
+  import { useAppAuthenticationStore } from '@/stores/app-authentication'
+  import { useAppPermissionStore } from '@/stores/app-permission'
+  import { useAppMenuStore } from '@/stores/app-menu'
 
-C. Relation 자동 Mapping (ex. Tag To File)
+  // Custom Component
+  import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+  import AgDetailStatusBar from '@/components/aggrid/AgDetailStatusBar.vue'
+  import AgCustomFilter from '@/components/aggrid/AgCustomFilter.vue'
+  import AgComboEditor from '@/components/aggrid/AgComboEditor.vue'
 
-D. Data 생성 Source 기록 기능
+  // Helpers
+  import { ApiCommon } from '@/utils/axios/api-common'
+  import { dataUtil as DU } from '@/utils/functions/data-utility'
+  import { sAlert } from '@/utils/messages/alert-common'
+  import global from '@/constants/enums/global'
+  import * as _ from 'lodash-es'
 
-3. Backend
-A. 코드 리팩토링 (백엔드 코드 Refactoring 이후 프론트 반영)
+  // GLOBAL
+  const route = useRoute()
+  const { userInfo } = storeToRefs(useAppAuthenticationStore())
+  const { isProjectAdmin, currentEPRole, isSetupAdmin } = storeToRefs(useAppPermissionStore())
+  const { currentProjNo, currentEpId } = storeToRefs(useAppMenuStore())
 
-B. Merged Table 조회 API 개발 이후 프론트 반영
+  const _Emits = defineEmits(['show-overlay', 'hide-overlay', 'on-sub-refresh', 'on-sub-stop-editing'])
+  const _Props = defineProps({
+    IS_SUB_EDITED: { type: Boolean, required: false, default: false },
+    SUB_DATA_LIST: { type: Array, required: false, default: () => [] },
+    ATT_DICT: { type: Object, required: false, default: () => ({}) },
+    UOM_DICT: { type: Object, required: false, default: () => ({}) },
+    REGISTER_LIST_IN_USE: { type: Array, required: false, default: () => [] },
+    RELATION_LIST_IN_USE: { type: Array, required: false, default: () => [] },
+  })
 
-4. Custom Page [CATA / CSM / EQ Master]
-A. CATA Manager: SWP Revision 연계 및 Vendor 도면 편집 후 CATA 신청 활용
+  const subDataListRef = computed(() => _Props.SUB_DATA_LIST)
+  const isSubEditedRef = computed(() => _Props.IS_SUB_EDITED)
+  const attDictRef = computed(() => _Props.ATT_DICT)
+  const uomDictRef = computed(() => _Props.UOM_DICT)
+  const inUseRegList = computed(() => _Props.REGISTER_LIST_IN_USE)
+  const inUseRelList = computed(() => _Props.RELATION_LIST_IN_USE)
+  watch(isSubEditedRef, item => {
+    if (item) {
+      const grid = gridRef.value
+      const focusData = focusDataRef.value
+      const focusDataId = focusData?._ROW_ID
+      grid?.getRowNode(focusDataId)?.setSelected(true)
+    }
+  })
 
-B. CSM: Feeder Typical 활용 일괄 생성 및 Typical 데이터 일괄 반영 기능
+  const firstFocusIDRef = computed(() => route.query?.cls_id)
+  const onShowOverlay = config => _Emits('show-overlay', config)
+  const onHideOverlay = () => _Emits('hide-overlay')
+  const onShowLoading = () => gridRef.value?.setGridOption('loading', true)
+  const onHideLoading = () => gridRef.value?.setGridOption('loading', false)
 
-C. EQ Master: 잘라 놓은 도면 편집 및 전장 Seat List PDF 저장
+  // TOOLBAR BUTTON
+  const isShowCreateBtn = shallowRef(isSetupAdmin.value)
+  const isShowSaveBtn = shallowRef(isSetupAdmin.value)
+  const isShowDeleteBtn = shallowRef(isSetupAdmin.value)
+  const isDisabledSaveBtn = shallowRef(true)
+  const isDisabledDeleteBtn = shallowRef(true)
+  const isDisabledCreateBtn = shallowRef(true)
+  const isDisabledUpdateIdBtn = shallowRef(true)
+  const isNoSelectedRef = shallowRef(true)
+  const toolbarBindRef = computed(() => ({
+    showCreate: isShowCreateBtn.value,
+    showDelete: isShowDeleteBtn.value,
+    showSave: isShowSaveBtn.value,
+    isDisabledCreateBtn: isDisabledCreateBtn.value,
+    isDisabledDeleteBtn: isDisabledDeleteBtn.value,
+    isDisabledSaveBtn: isDisabledSaveBtn.value,
+    createTooltip: 'After creating data, click the Save button.',
+    deleteTooltip: 'It will be deleted immediately.',
+    newButtons: [
+      {
+        id: 'updateId',
+        text: 'Update ID',
+        color: 'var(--btn07)',
+        align: 'left',
+        icon: 'fa-key',
+        visible: true,
+        disabled: isDisabledUpdateIdBtn.value,
+      },
+      {
+        id: 'toggleGroup',
+        text: 'Toggle Group',
+        color: 'var(--btn06)',
+        align: 'left',
+        icon: gridExpandedRef.value === -1 ? 'fa-chevron-up' : 'fa-chevron-down',
+        visible: true,
+      },
+      {
+        id: 'deselectAll',
+        text: isNoSelectedRef.value ? 'Select All' : 'Deselect All',
+        color: 'var(--btn06)',
+        align: 'left',
+        icon: isNoSelectedRef.value ? 'fa-check-square-o' : 'fa-square-o',
+        visible: true,
+      },
+    ],
+  }))
+  const toolbarEventsRef = computed(() => ({
+    createData: onCreateRows,
+    deleteData: onDeleteRows,
+    saveData: saveData,
+    buttonClick: onClickButton,
+  }))
 
-D. EQ Master: Equip Master 개선 요청사항 및 S3D CATA 바로가기 (ToolTip, 기능 개선 14건 포함)
+  // MODIFIED DATA
+  // KEY ID Update용 { [_ROW_ID]: { _ROW_ID: [_ROW_ID], KEY: '' } } // KEY - Original Key
+  const modKeysRef = shallowRef({})
 
-5. Custom Page [LO / MMS / Part List / SDS / SPS]
-A. LO Chart: LO List 취합 부서 화면 개발 및 메일링 기능
+  // FOCUS DATA
+  const prevIndexRef = shallowRef(-1)
+  const focusDataRef = ref()
+  const focusDataOrgRef = computed(() => {
+    const focusData = focusDataRef.value
+    const rowId = focusData?._ROW_ID
+    if (rowId) {
+      const dataDict = gridDataOrgDictRef.value
+      return dataDict?.[rowId]
+    }
+    return undefined
+  })
 
-B. MMS: 표준 문서/선 관리 및 두께 자동 계산 기능
+  // SUB INFOS
+  const isPreLoadedRef = shallowRef(false) // 필요 정보의 로드 완료 여부
+  const isPreErrorRef = shallowRef(false) // 필요 정보 로드중 에러 여부
+  const prePromiseRef = shallowRef() // 필요 정보 로드 Promise
+  const tagTypeListRef = shallowRef([])
+  const tagTypeDictRef = shallowRef({})
+  const ootbClsDictRef = shallowRef({})
 
-C. Part List: Sub/Bulk Item 생성 및 PLM Information 표현
+  // GRID
+  const gridKeyRef = shallowRef(0) // Grid Refresh용
+  const gridRef = shallowRef()
+  const gridDataRef = shallowRef([])
+  const gridDelDataRef = shallowRef([]) // DELETED == true의 데이터
+  // 데이터 원본 확인용
+  const gridDataOrgRef = shallowRef([])
+  const gridDataOrgDictRef = shallowRef({}) // 데이터 원본 확인용 { _ROW_ID: data, ... }
+  const gridDataRenderedRef = shallowRef(false)
+  const saveClsIdListRef = shallowRef([]) // 저장 후 포커싱 및 선택 용
+  const gridExpandedRef = ref(0)
+  const dateFilterParams = {
+    minValidDate: '2008-01-08',
+    maxValidDate: new Date(new Date().getTime() + 24 * 60 * 60 * 1000),
+    comparator: (filterLocalDateAtMidnight, cellValue) => {
+      const dateStr = cellValue?.substring(0, 10)
+      if (!dateStr) {
+        return -1
+      }
+      const splitted = dateStr.split('-')
+      const date = new Date(Number(splitted[0]), Number(splitted[1]) - 1, Number(splitted[2]))
 
-D. SDS: Duct Line List 및 HVAC Equipment 전송 기능
+      if (filterLocalDateAtMidnight.getTime() === date.getTime()) {
+        return 0
+      } else if (filterLocalDateAtMidnight > date) {
+        return -1
+      } else if (filterLocalDateAtMidnight < date) {
+        return 1
+      }
+      return 0
+    },
+  }
+  // prettier-ignore
+  const gridColDefsRef = ref([
+    {
+      field: 'CLS_ID',
+      headerName: 'Object Class',
+      hide: true,
+      minWidth: 120,
+      flex: 4,
+      // tooltipValueGetter: params => params.valueFormatted || params.value,
+      // rowGroup: true, // Tree
+      editable: false,
+      filter: false,
+    },
+    {
+      field: 'DESC',
+      headerName: 'Description',
+      minWidth: 120,
+      flex: 4,
+      // tooltipValueGetter: params => params.valueFormatted || params.value,
+    },
+    {
+      field: 'PRT_CLS_ID',
+      headerName: 'Parent Class',
+      hide: true,
+      minWidth: 120,
+      flex: 4,
+      // tooltipValueGetter: params => params.valueFormatted || params.value,
+      editable: params => {
+        const dataItem = params.data
+        if (!dataItem || dataItem._IS_ROOT || dataItem?.PROJ_NO !== currentProjNo.value) {
+          return false
+        }
+        return isProjectAdmin.value || currentEPRole.value === 'Manager'
+      },
+      cellRenderer: params => {
+        const displayValue = params.valueFormatted || params.value || '';
+        const editableDef  = params.colDef?.editable;
+        const editable     = (
+          DU.isFunction(editableDef) ? editableDef(params) : editableDef
+        );
+        return makeComboRender({
+          value    : displayValue,
+          editable : editable,
+        });
+      },
+      singleClickEdit: false,
+      cellEditorPopup: true,
+      cellEditorPopupPosition: 'over',
+      cellEditor: 'AgComboEditor', // 'agRichSelectCellEditor'
+      cellEditorParams: (params) => {
+        const grid = params.api
+        const dataItem = params.data
+        const clsId = dataItem?.CLS_ID
+        const values = [];
+        grid.forEachNode(node => {
+          const nDataItem = node.data
+          const nClsId = nDataItem.CLS_ID
+          const nDesc = nDataItem.DESC ?? ''
+          if (nClsId && nClsId !== clsId) {
+            values.push({
+              code: nClsId,
+              label: `(${nClsId}) ${nDesc}`,
+            })
+          }
+        })
+        return {
+          values            : values,
+          searchType        : 'matchAny',
+          highlightMatch    : true,
+          valueListMaxHeight: 200,
+          valueListMaxWidth : 200,
+          // AgComboEditor Parameters
+          placeholder         : 'Select Class', // Default = ''
+          code                : 'code',  // Default = 'code'
+          label               : 'label', // Default = 'label'
+          pushTags            : false,   // Default = false
+          multiple            : false,   // Default = false
+          multipleCheck       : false,   // Default = false
+          treeSelect          : false,   // Default = false
+          closeOnSelect       : false,   // Default = true
+          deselectFromDropdown: false,   // Default = false
+          returnOrigin        : false,   // Default = false
+          applySelected       : true,    // Default = false
+          // getOptionLabel      : (v) => (`${v.label} (${v.code})`),
+        }
+      },
+    },
+    {
+      field: 'TAG_TYPE_ID',
+      headerName: 'Tag Type',
+      minWidth: 90,
+      flex: 2,
+      cellRenderer: params => {
+        const dataItem     = params.data;
+        const displayValue = params.valueFormatted || params.value || '';
+        const editableDef  = params.colDef?.editable;
+        const editable     = (
+          DU.isFunction(editableDef) ? editableDef(params) : editableDef
+        );
+        const queryParam = {};
+        const projNo = dataItem?.PROJ_NO || currentProjNo.value;
+        if (projNo) {
+          queryParam.proj_no = projNo;
+          if (currentEpId.value && projNo === currentProjNo.value) {
+            queryParam.ep_id = currentEpId.value;
+          }
+          if (dataItem?.TAG_TYPE_ID) {
+            queryParam.tag_type_id = dataItem.TAG_TYPE_ID;
+          }
+        }
+        return makeComboRender({
+          value    : displayValue,
+          editable : editable,
+          linkUrl  : '/tagtlnkcode-setup',
+          linkParam: queryParam,
+        });
+      },
+      singleClickEdit: false,
+      cellEditorPopup: true,
+      cellEditorPopupPosition: 'over',
+      cellEditor: 'AgComboEditor', // 'agRichSelectCellEditor'
+      cellEditorParams: (params) => {
+        const values = tagTypeListRef.value
+        return {
+          values            : values,
+          searchType        : 'matchAny',
+          highlightMatch    : true,
+          valueListMaxHeight: 200,
+          valueListMaxWidth : 200,
+          // AgComboEditor Parameters
+          placeholder         : 'Select Tag Type', // Default = ''
+          code                : 'code',  // Default = 'code'
+          label               : 'label', // Default = 'label'
+          pushTags            : false,   // Default = false
+          multiple            : false,   // Default = false
+          multipleCheck       : false,   // Default = false
+          treeSelect          : false,   // Default = false
+          closeOnSelect       : false,   // Default = true
+          deselectFromDropdown: false,   // Default = false
+          returnOrigin        : false,   // Default = false
+          applySelected       : true,    // Default = false
+          // getOptionLabel      : (v) => (`${v.label} (${v.code})`),
+        }
+      },
+    },
+    {
+      field: 'TAG_DESC',
+      headerName: 'Tag Type Description',
+      minWidth: 120,
+      flex: 3,
+      // tooltipValueGetter: params => params.valueFormatted || params.value,
+      editable: false,
+      cellClass: 'agReadOnly',
+      cellRenderer: params => {
+        const dataItem = params.data;
+        const tagInfo = tagTypeDictRef.value?.[dataItem?.TAG_TYPE_ID];
+        return tagInfo?.DESC ?? ''
+      },
+    },
+    {
+      field: 'PROJ_NO',
+      headerName: 'Project',
+      hide: true,
+      editable: false,
+      cellClass: 'agReadOnly',
+      // tooltipValueGetter: params => params.valueFormatted || params.value,
+    },
+    {
+      field: 'CRTER_NO',
+      headerName: 'CRTER NO',
+      hide: true,
+      editable: false,
+      cellClass: 'agReadOnly',
+      // tooltipValueGetter: params => params.valueFormatted || params.value,
+    },
+    {
+      field: 'CRTE_DTM',
+      headerName: 'CRTE DTM',
+      cellDataType: 'date',
+      hide: true,
+      filter: 'agDateColumnFilter',
+      filterParams: dateFilterParams,
+      editable: false,
+      cellClass: 'agReadOnly',
+      tooltipValueGetter: params => params.valueFormatted || params.value,
+      valueFormatter: (params) => { return dateFullFormatter(params) },
+    },
+    {
+      field: 'CHGER_NO',
+      headerName: 'CHGER NO',
+      hide: true,
+      editable: false,
+      cellClass: 'agReadOnly',
+      // tooltipValueGetter: params => params.valueFormatted || params.value,
+    },
+    {
+      field: 'CHGE_DTM',
+      headerName: 'CHGE DTM',
+      cellDataType: 'date',
+      hide: true,
+      filter: 'agDateColumnFilter',
+      filterParams: dateFilterParams,
+      editable: false,
+      cellClass: 'agReadOnly',
+      tooltipValueGetter: params => params.valueFormatted || params.value,
+      valueFormatter: (params) => { return dateFullFormatter(params) },
+    },
+    { field: '_id', headerName: 'id', hide: true, editable: false, cellClass: 'agReadOnly' },
+    { field: 'STATUS', hide: true, editable: false, cellClass: 'agReadOnly' },
+  ])
 
-E. SPS: Pipe Spec Remark 구성, Valve POS/DOC 연계, SM Code 개선, 스펙 이름 설정 조건 추가
+  onMounted(() => {
+    onPreInitialize()
+  })
 
-6. Document Manager
-A. Document 결재 종류별 Menu 연결 PI 및 원본 파일 결재 제공
+  const onPreInitialize = async function () {
+    let preResolve
+    isPreLoadedRef.value = false
+    isPreErrorRef.value = false
+    prePromiseRef.value = new Promise(r => (preResolve = r))
+    const onFinally = function (SUCCESS) {
+      isPreLoadedRef.value = true
+      isPreErrorRef.value = SUCCESS !== true
+      if (preResolve) {
+        preResolve()
+      }
+      onHideOverlay()
+    }
 
-B. Grid Spread 문서 출력 용지 설정 고도화
+    onShowOverlay()
+    const projNo = currentProjNo.value
+    if (!projNo) {
+      sAlert.Warning(`Project를  선택해주세요`)
+      return onFinally(false)
+    }
 
-C. Document Mgr 기반 RFQ 기능 개발 및 호선 복사 기능
+    try {
+      await Promise.all([
+        //
+        getTagTypeList(),
+      ])
+    } catch (error) {
+      const backMsg = String(error.response?.data?.Message || error.message).replace(/\r\n/, '<br>')
+      sAlert.Error(backMsg)
+      return onFinally(false)
+    }
 
-D. Data Set Template Use Sequence 정렬 및 Revision DataSet 제공
+    return onFinally(true)
+  }
 
-E. Doc 생성/수정 권한 설정 및 Read Only Document
+  const onRefresh = function () {
+    gridKeyRef.value += 1
+  }
+  const onInitialize = async function () {
+    const isPreLoaded = isPreLoadedRef.value
+    const isPreError = isPreErrorRef.value
+    const prePromise = prePromiseRef.value
+    if (!isPreLoaded) {
+      if (isPreError) {
+        return
+      }
+      if (prePromise) {
+        await prePromise
+        if (isPreErrorRef.value) {
+          return
+        }
+      }
+    }
 
-F. SWP/Dolce 연계, Create File 고도화 및 이미지 파일 Viewer
+    const onFinally = function () {
+      if (gridDataRenderedRef.value) {
+        setTimeout(() => {
+          setFocusData()
+          gridRef.value?.refreshCells({ force: true, suppressFlash: true })
+        }, 10)
+      }
+      gridDataRenderedRef.value = true
+      if (saveClsIdListRef.value && saveClsIdListRef.value.length) {
+        setSelectClassList()
+      }
+      onHideLoading()
+      onHideOverlay()
+    }
 
-G. Smart Excel 기능 개선 (13건) 및 Revision간 File Compare 기능
+    onShowOverlay()
+    onShowLoading()
 
-H. Doc Pub Revision Numbering 고도화 및 IDC 연계 SetUp
+    prevIndexRef.value = -1
+    focusDataRef.value = null
+    modKeysRef.value = {}
+    gridDataRef.value = []
+    gridDelDataRef.value = []
+    gridDataOrgRef.value = []
+    gridDataOrgDictRef.value = {}
 
-I. 문서 수신 발신 기능 구현
+    if (!currentProjNo.value) {
+      return onFinally()
+    }
 
-7. Grid Spread 공통
-A. Code List Description 표기 및 Multi Selection 기능
+    let response
+    // let ootbResponse
+    try {
+      response = await ApiCommon.postObjectClassGet({ ProjectNo: currentProjNo.value })
+      // ;[response, ootbResponse] = await Promise.all([
+      //   ApiCommon.postObjectClassGet({ ProjectNo: currentProjNo.value }),
+      //   ApiCommon.postObjectClassGet({ ProjectNo: 'OOTB' }),
+      // ])
+    } catch (error) {
+      const backMsg = String(error.response?.data?.Message || error.message).replace(/\r\n/, '<br>')
+      sAlert.Error({
+        title: `Load Object Class List Error`, // Optional
+        html: backMsg,
+      })
+      return
+    }
 
-B. Join Key Multi 설정 개발 및 Topology Viewer
+    // const ootbDict = {}
+    // ;(ootbResponse ?? []).forEach((data, index) => {
+    //   data._ROW_ID = `ROW_${String(index).padStart(6, '0')}`
+    //   data._IS_ROOT = !data.PRT_CLS_ID === true
+    //   data.LNK_ATT = (data.LNK_ATT ?? []).reduce((acc, cur) => {
+    //     cur.CLS_ID = data.CLS_ID // ATT_ID가 속한 CLS_ID 추가
+    //     acc[cur.ATT_ID] = cur
+    //     return acc
+    //   }, {})
+    //   ootbDict[data.CLS_ID] = data
+    // })
+    // // PARENT LNK_ATT 추가
+    // ;(ootbResponse ?? []).forEach(v => {
+    //   let prtClsId = ootbDict[v.CLS_ID].PRT_CLS_ID
+    //   while (prtClsId) {
+    //     Object.keys(ootbDict[prtClsId]?.LNK_ATT ?? {}).forEach(attId => {
+    //       ootbDict[v.CLS_ID].LNK_ATT[attId] = ootbDict[prtClsId].LNK_ATT[attId]
+    //     })
+    //     prtClsId = ootbDict[prtClsId]?.PRT_CLS_ID
+    //   }
+    // })
+    // ootbClsDictRef.value = ootbDict
 
-C. Validation & Save Publish API 분리 (Error Status, Message Column, Data Status 저장)
+    const dataList = []
+    const delDataList = []
+    const orgDataList = []
+    const orgDataDict = {}
+    const subDataDict = {}
+    ;(response ?? []).forEach((data, index) => {
+      data._ROW_ID = `ROW_${String(index).padStart(6, '0')}`
+      data._IS_ROOT = !data.PRT_CLS_ID === true
+      data.LNK_ATT = _.sortBy(data.LNK_ATT ?? [], ['SEQ', 'ATT_ID'])
+      data.LNK_ATT.forEach((v, i) => ((v.SEQ = i + 1), (v.CLS_ID = data.CLS_ID)))
+      subDataDict[data.CLS_ID] = data
+    })
+    // PARENT LNK_ATT 추가
+    ;(response ?? []).forEach(v => {
+      let prtClsId = subDataDict[v.CLS_ID].PRT_CLS_ID
+      const path = [v.CLS_ID]
+      while (prtClsId) {
+        path.unshift(prtClsId)
+        const prtLnkAtt = subDataDict[prtClsId]?.LNK_ATT ?? []
+        subDataDict[v.CLS_ID].LNK_ATT = subDataDict[v.CLS_ID].LNK_ATT.filter(
+          v => !prtLnkAtt.some(pv => pv.ATT_ID === v.ATT_ID)
+        )
+        subDataDict[v.CLS_ID].LNK_ATT.unshift(...prtLnkAtt.map(v => ({ ...v, SEQ: 0 })))
+        prtClsId = subDataDict[prtClsId]?.PRT_CLS_ID
+      }
+      subDataDict[v.CLS_ID].path = path
+      orgDataDict[v._ROW_ID] = subDataDict[v.CLS_ID]
+      const copyData = _.cloneDeep(subDataDict[v.CLS_ID])
+      orgDataList.push(subDataDict[v.CLS_ID])
+      if (!subDataDict[v.CLS_ID].DELETED) {
+        dataList.push(copyData)
+      } else {
+        delDataList.push(copyData)
+      }
+    })
+    gridDataRef.value = _.sortBy(dataList, 'path') // autoGroupColumnDef의 field 미설정시 Group Name은 Sort후 표현
+    gridDelDataRef.value = delDataList
+    gridDataOrgRef.value = orgDataList
+    gridDataOrgDictRef.value = orgDataDict
 
-D. 하위 Class 변경 기능 및 변경 제한/알림 기능
+    await new Promise(r => setTimeout(r, 10)) // data bind 대기용
+    return onFinally()
+  }
 
-E. Typical 기능 개발, Cable Tubing Propagation 및 Custom Button 연결
+  const getTagTypeList = async function () {
+    tagTypeDictRef.value = {}
+    tagTypeListRef.value = []
 
-8. Schema_Common
-A. EP_IC 전용 Last Win 적용 및 서로 다른 EP 간 최신 데이터 저장 기능 (캐시 연계)
+    const response = await ApiCommon.postTagTypeGet({ ProjectNo: currentProjNo.value })
 
-B. PBS 및 Assembly PBS 고도화
+    const basicDict = {}
+    const basicList = []
+    response?.forEach(v => {
+      if (!v.DELETED && v.TYPE_ID) {
+        basicDict[v.TYPE_ID] = {
+          TYPE_ID: v.TYPE_ID,
+          PROJ_NO: v.PROJ_NO,
+          SEQ: v.SEQ,
+          DESC: v.DESC,
+          REMARK: v.REMARK,
+          LNK_CODE: v.LNK_CODE,
+          code: v.TYPE_ID,
+          label: `(${v.TYPE_ID}) ${v.DESC ?? ''}`,
+        }
+        basicList.push(basicDict[v.TYPE_ID])
+      }
+    })
+    tagTypeDictRef.value = basicDict
+    tagTypeListRef.value = basicList
+  }
 
-C. Schema 개선 항목(33건) 및 복합레지스터 Spread List 개발
+  const onCreateRows = function () {
+    if (!currentProjNo.value) {
+      sAlert.Warning(`Project를  선택해주세요`)
+      return
+    }
 
-D. Project Copy 기능 및 Register 없는 Save/Publish 기능
+    insertRows(1)
+  }
 
-E. Working/Publish 우선 표현 옵션 및 SubItem Save/Publish
+  const onCreateMultiRows = function (rowCount) {
+    if (!currentProjNo.value) {
+      sAlert.Warning(`Project를  선택해주세요`)
+      return
+    }
 
-F. 조선 시리즈선 / 해양 표준 MMS 프로젝트 개발
+    insertRows(rowCount)
+  }
 
-G. Spread Item Compare (화면 좌우 배치 Attribute 비교)
+  const insertRows = async function (rowCount) {
+    rowCount = 1 // Class Insert 1 고정
 
-H. Temporary Information Att 개발 및 Read Only Property & Row
+    const onFinally = function (MESSAGE) {
+      if (MESSAGE) {
+        sAlert.Warning(MESSAGE)
+      }
+      onHideLoading()
+    }
+    const grid = gridRef.value
+    grid.stopEditing()
+    onShowLoading()
 
-I. Custom Command 버튼 개발
+    if (!grid.getDisplayedRowCount()) {
+      return onFinally('No Root Object Class!')
+    }
 
-9. Schema_Relation
-A. Parent/Child 부재 시 Tag 속성 표현 기능
+    const selectedRows = grid.getSelectedRows() ?? []
+    const selectedSize = selectedRows.length
+    const prtClsInfo = selectedRows[0]
+    const prtClsId = prtClsInfo?.CLS_ID
+    if (!selectedSize) {
+      return onFinally('No Object Class are selected!')
+    } else if (selectedSize > 1) {
+      return onFinally('Please select only one Parent class row.')
+    } else if (!prtClsId) {
+      return onFinally('Invalid Parent class')
+    } else if (prtClsInfo?.STATUS === 'A') {
+      return onFinally(`The selected item cannot be changed because it is Unsaved Class.`)
+    }
 
-B. Relation Attribute 추가
+    const { value: newClsId } = await sAlert.Confirm({
+      title: 'Enter New Object Class ID',
+      input: 'text',
+      showCancelButton: true,
+      inputAutoTrim: true,
+      inputAttributes: {
+        oninput: 'this.value = this.value.toUpperCase()',
+      },
+      inputValidator: value => {
+        if (!value) {
+          return 'You need to write new Class ID.'
+        }
+        const idCheck = /^[A-Z][A-Z0-9_]*$/g
+        if (!idCheck.test(value)) {
+          return 'Only uppercase letters, numbers, and underscores can be entered.'
+        }
+        if (gridDataRef.value.some(v => v.CLS_ID === value)) {
+          return 'This Class ID already exists.'
+        }
+      },
+    })
 
-C. 타 EP 생성 Relation 삭제 권한 관리 및 Viewer 기능 개선
+    if (!newClsId) {
+      return onFinally()
+    }
 
-D. Link Relation 개발
+    const path = [...prtClsInfo.path, newClsId]
 
-10. Schema_Tag Numbering 고도화
-A. EP_IC 확인 후 Tag 삭제 및 완전 삭제 기능
+    const addRows = []
+    for (let i = 0; i < rowCount; i++) {
+      const newId = `NEW_ROW_${Math.random().toString(36).substring(2, 12)}`
+      addRows.push({
+        STATUS: 'A',
+        PROJ_NO: currentProjNo.value,
+        CLS_ID: newClsId,
+        PRT_CLS_ID: prtClsId,
+        DESC: newClsId,
+        path: path,
+        _ROW_ID: newId,
+      })
+    }
+    if (addRows.length) {
+      gridDataRef.value.push(...addRows)
+      const result = grid.applyTransaction({ add: addRows })
+      grid.refreshCells({ force: true, suppressFlash: true })
+      grid.deselectAll()
+      grid.setNodesSelected({
+        nodes: result.add,
+        newValue: true,
+      })
+      result.add.forEach(node => {
+        grid.setRowNodeExpanded(node, true, true, true)
+        grid.ensureNodeVisible(node, 'middle')
+      })
+    }
+    return onFinally()
+  }
 
-B. 중복 Tag Report 및 Tag Type Validation 기능
+  const onDeleteRows = async function () {
+    const grid = gridRef.value
+    const selectedRows = grid?.getSelectedRows()
+    if (!selectedRows || !selectedRows.length) {
+      sAlert.Warning(`Please select the data you want to delete.`)
+      return
+    }
 
-C. PBS Name TagType 설정 및 Non Obj Class Tag 중복생성 방지
+    const onFinally = function (MESSAGE) {
+      if (MESSAGE) {
+        sAlert.Warning(MESSAGE)
+      }
+      onHideLoading()
+      onHideOverlay()
+      // onInitialize()
+      onRefresh()
+    }
 
-D. PRNT_TAG_IDX 고도화 및 Parent + SubObject 조합 중복 체크
+    onShowOverlay()
+    onShowLoading()
 
-11. Spread (복합 및 공통)
-A. List Item 복합: Text Aggregation Rule 개발 및 eVCP 연계 (TBE 항목)
+    const failValids = []
+    const clsIdList = []
+    for (let i = 0; i < selectedRows.length; i++) {
+      const clsInfo = selectedRows[i]
+      const clsId = clsInfo?.CLS_ID ?? ''
+      clsIdList.push(clsId)
+      // OOTB 체크
+      if (clsInfo.OOTB_EXISTS_YN === true && currentProjNo.value !== 'OOTB') {
+        const msg = `OOTB Class cannot be changed`
+        failValids.push(`[ CLS_ID : ${clsId}, Reason: ${msg} ]`)
+        continue
+      }
+      // 하위 레지스터가 존재하는지 체크
+      if (gridDataRef.value.some(v => v.PRT_CLS_ID === clsId)) {
+        const msg = `A Class With sub-items cannot be changed`
+        failValids.push(`[ CLS_ID : ${clsId}, Reason: ${msg} ]`)
+        continue
+      }
+    }
+    if (failValids.length) {
+      return onFinally(`Failed to delete ${failCount} item.\n${failValids.join('\n')}`)
+    }
 
-B. List Item 복합: Item 저장 기능 개발
+    // Assign Register 체크
+    try {
+      const response = await ApiCommon.postRegisterGetByClassIDs({
+        ProjectNo: currentProjNo.value,
+        ClassIDs: clsIdList,
+        ContainDeleted: false,
+      })
+      if (response && response.length) {
+        clsIdList.forEach(clsId => {
+          const regList = response.filter(v => v.MAP_CLS_ID?.includes(clsId))
+          if (regList && regList.length) {
+            const regIds = regList.map(v => v.TYPE_ID).join(',')
+            const msg = `Class assigned to Register cannot be modified [ ${regIds} ]`
+            failValids.push(`[ CLS_ID : ${clsId}, Reason: ${msg} ]`)
+          }
+        })
+      }
+    } catch (error) {
+      //
+    }
+    if (failValids.length) {
+      return onFinally(`Failed to delete ${failCount} item.\n${failValids.join('\n')}`)
+    }
 
-C. 공통: Multi Spread Item Report (Hyd. Calc) 복합 저장 기능
+    // Assign Relation 체크
+    try {
+      const response = await ApiCommon.postRelationGetByClassID({
+        ProjectNo: projNo,
+        ClassIDs: clsIdList,
+        ContainDeleted: false,
+      })
+      if (response && response.length) {
+        clsIdList.forEach(clsId => {
+          const relList = response.filter(v => v.LEFT_CLS_IDS?.includes(clsId) || v.RIGHT_CLS_ID === clsId)
+          if (relList && relList.length) {
+            const relIds = relList.map(v => v.REL_ID).join(',')
+            const msg = `Class assigned to Relation cannot be modified [ ${relIds} ]`
+            failValids.push(`[ CLS_ID : ${clsId}, Reason: ${msg} ]`)
+          }
+        })
+      }
+    } catch (error) {
+      //
+    }
+    if (failValids.length) {
+      return onFinally(`Failed to delete ${failCount} item.\n${failValids.join('\n')}`)
+    }
 
-D. 공통: Import 오류/성능 개선 및 Spread 조회 성능 최적화
+    const confirmResult = await sAlert.Confirm('It will be deleted immediately. Are you sure you want to delete?')
+    if (!confirmResult?.isConfirmed) {
+      return onFinally()
+    }
 
-12. UI
-A. UI 개선 40건 반영
+    const passList = []
+    const failList = []
+    const promises_all = []
+    const promises_race = []
+    for (let i = 0; i < selectedRows.length; i++) {
+      const dataItem = selectedRows[i]
+      const { CLS_ID, STATUS, _ROW_ID: rowId } = dataItem
+      let delKeyId = dataItem?.CLS_ID
+
+      if (promises_race.length >= 20) {
+        await Promise.race(promises_race)
+      }
+      if (STATUS !== 'A') {
+        let orgKeyInfo = modKeysRef.value[rowId]
+        if (orgKeyInfo) {
+          if (orgKeyInfo.KEY !== CLS_ID) {
+            delKeyId = orgKeyInfo.KEY
+          } else {
+            delete modKeysRef.value[rowId]
+            orgKeyInfo = null
+          }
+        }
+
+        const promise = ApiCommon.postObjectClassDelete({
+          ProjectNo: currentProjNo.value,
+          CLS_ID: delKeyId,
+        })
+          .then(() => {
+            passList.push(dataItem)
+            delete modKeysRef.value[orgKeyInfo?._ROW_ID]
+          })
+          .catch(error => failList.push({ item: dataItem, error: error }))
+          .finally(() => promises_race.splice(promises_race.indexOf(promise), 1))
+        promises_race.push(promise)
+        promises_all.push(promise)
+      } else {
+        passList.push(dataItem)
+      }
+    }
+    await Promise.all(promises_all)
+
+    let message = ''
+    const passCount = passList.length
+    const failCount = failList.length
+    if (passCount) {
+      message += `Successfully deleted ${passCount} Object Class List.`
+      grid.applyTransaction({ remove: passList })
+      grid.refreshCells()
+
+      gridDataRef.value = gridDataRef.value.filter(({ _ROW_ID }) => {
+        return !passList.some(v => v._ROW_ID === _ROW_ID)
+      })
+      gridDataOrgRef.value = gridDataOrgRef.value.filter(({ _ROW_ID }) => {
+        return !passList.some(v => v._ROW_ID === _ROW_ID)
+      })
+    }
+    if (failCount) {
+      if (!message) {
+        message += `Failed deleted Object Class List.`
+      }
+      message += `\nfailed to delete ${failCount} item.`
+      for (let i = 0; i < failCount; i++) {
+        const { item, error } = failList[i]
+        const backMsg = String(error.response?.data?.Message || error.message).replace(/\r\n/, '<br>')
+        message += `\n    [ CLS_ID : ${item.CLS_ID || ''}, Reason: ${backMsg} ]`
+      }
+    }
+    if (!passCount && failCount) {
+      sAlert.Error(message)
+    } else {
+      sAlert.Success(message)
+    }
+    return onFinally()
+  }
+
+  const checkValidation = function (dataList) {
+    const focusData = focusDataRef.value
+    const isSubEdited = isSubEditedRef.value
+    const subDataList = subDataListRef.value
+
+    const dupIdCheck = {}
+    const failMsgList = []
+    dataList?.forEach(dataItem => {
+      const clsId = dataItem.CLS_ID
+      const prtClsId = dataItem.PRT_CLS_ID
+      const desc = dataItem.DESC
+      const path = dataItem.path
+      const isRoot = dataItem._IS_ROOT
+      const projNo = dataItem.PROJ_NO
+      const rowId = dataItem._ROW_ID
+
+      if (clsId) {
+        dupIdCheck[clsId] = !dupIdCheck[clsId]
+      }
+
+      if (!clsId) {
+        failMsgList.push(`'Class ID' is Required.`)
+      } else if (!dupIdCheck[clsId]) {
+        failMsgList.push(`[${clsId}] 'Class ID' is Duplicated.`)
+      } else if (!projNo) {
+        failMsgList.push(`[${clsId}] 'Project' is Required.`)
+      } else if (!desc) {
+        failMsgList.push(`[${clsId}] 'Description' is Required.`)
+      } else if (!isRoot) {
+        if (!prtClsId) {
+          failMsgList.push(`[${clsId}] 'Parent Class' is Required.`)
+        } else if (clsId === prtClsId) {
+          failMsgList.push(`[${clsId}] The values of 'Class ID' and 'Parent Class' cannot be the same.`)
+        }
+
+        let validClass = false
+        for (let i = 0; i < gridDataRef.value?.length; i++) {
+          if (gridDataRef.value[i].CLS_ID === prtClsId) {
+            validClass = true
+            break
+          }
+        }
+        if (!validClass) {
+          failMsgList.push(`[${clsId}] 'Parent Class' is invalid Class Id. [${prtClsId}]`)
+        }
+
+        // 현재 선택된 항목의 LNK_ATT 중복 확인 [ ATT_ID ]
+        if (focusData?._id === rowId && isSubEdited) {
+          let isDupBreak = false
+          const dupValsCheck = {}
+          for (let i = 0; i < subDataList?.length; i++) {
+            const dataVal = String(subDataList[i].ATT_ID).trim().toUpperCase()
+            if (dataVal) {
+              dupValsCheck[dataVal] = !dupValsCheck[dataVal]
+            }
+            if (!dataVal) {
+              isDupBreak = true
+              failMsgList.push(`[${clsId}] 'Attribute' in Link Attributes section is Required.`)
+              break
+            }
+            if (!dupValsCheck[dataVal]) {
+              isDupBreak = true
+              failMsgList.push(`[${clsId}] 'Attribute' ('${dataVal}') in Link Attributes section is Duplicated.`)
+              break
+            }
+          }
+          if (subDataList?.length && !isDupBreak) {
+            // IS_SEQ Validation
+            // failMsgList.push(`[${clsId}] in Tag Attributes section, 'Sequence' must have one of the lists checked.`)
+          }
+        }
+      }
+    })
+
+    if (failMsgList.length) {
+      sAlert.Warning(_.uniqBy(failMsgList).join('<br/>'))
+      return false
+    }
+    return true
+  }
+
+  const saveData = async function () {
+    onShowOverlay()
+    const grid = gridRef.value
+    grid.stopEditing()
+    await new Promise(r => setTimeout(r, 10))
+
+    const onFinally = function (SUCCESS) {
+      if (SUCCESS === true) {
+        onInitialize()
+        // onRefresh()
+      }
+      onHideOverlay()
+    }
+
+    const selectedRows = grid.getSelectedRows()
+    if (!selectedRows || !selectedRows.length) {
+      sAlert.Warning(`Please select the data you want to save.`)
+      return onFinally(false)
+    } else if (!checkValidation(selectedRows)) {
+      return onFinally(false)
+    }
+
+    const saveDict = selectedRows.reduce((acc, cur) => {
+      acc[cur.CLS_ID] = true
+      return acc
+    }, {})
+
+    const focusData = focusDataRef.value
+    const isSubEdited = isSubEditedRef.value
+    const subDataList = subDataListRef.value ?? []
