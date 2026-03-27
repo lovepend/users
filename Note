@@ -4,33 +4,30 @@
       class="panel-heading d-flex align-items-center justify-content-between"
       style="background: #2d353c; color: #fff; padding: 10px 15px"
     >
-      <h4 class="panel-title m-0">Tag 분석 및 속성 비교 (Auto-Detect Mode)</h4>
+      <h4 class="panel-title m-0">Tag 분석 및 비교 (통합 데이터 모드)</h4>
       <div class="d-flex align-items-center gap-2">
-        <input
-          v-model="manualProjNo"
-          class="form-control form-control-sm"
-          style="width: 120px"
-          placeholder="프로젝트"
-        />
-        <input
-          v-model="regTypeId"
-          class="form-control form-control-sm"
-          style="width: 150px"
-          placeholder="REG_TYPE_ID"
-        />
-        <button class="btn btn-xs btn-primary" @click="onSearch">조회</button>
+        <div class="input-group input-group-sm" style="width: 150px">
+          <span class="input-group-text bg-secondary text-white border-secondary">Proj</span>
+          <input v-model="manualProjNo" class="form-control" placeholder="Project No" />
+        </div>
+        <div class="input-group input-group-sm" style="width: 180px">
+          <span class="input-group-text bg-secondary text-white border-secondary">RegType</span>
+          <input v-model="regTypeId" class="form-control" placeholder="Register Type" />
+        </div>
+        <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
+          <i class="fa fa-search me-1"></i>조회
+        </button>
       </div>
     </div>
 
-    <div class="panel-body flex-grow-1 p-0" style="position: relative">
+    <div class="panel-body flex-grow-1 p-0" style="position: relative; overflow: hidden">
       <div
         v-if="rowData.length === 0"
         class="position-absolute w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-light"
         style="z-index: 10"
       >
-        <i class="fa fa-exclamation-triangle fa-3x text-warning mb-3"></i>
-        <p class="text-dark fw-bold">데이터 구조를 분석 중이거나 응답이 비어있습니다.</p>
-        <p class="text-muted small">F12 콘솔창의 '원본 Response 전체' 로그를 확인해 주세요.</p>
+        <i class="fa fa-database fa-3x text-gray-300 mb-3"></i>
+        <p class="text-dark fw-bold">조회 버튼을 클릭하여 데이터를 분석해 주세요.</p>
       </div>
 
       <ag-grid-vue
@@ -40,158 +37,181 @@
         :rowData="rowData"
         :defaultColDef="defaultColDef"
         @grid-ready="onGridReady"
+        :headerHeight="40"
+        :rowHeight="32"
       />
     </div>
   </div>
 </template>
 
 <script setup>
-  import { ref, shallowRef } from 'vue'
-  import { AgGridVue } from 'ag-grid-vue3'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sAlert } from '@/utils/messages/alert-common'
+import { ref, shallowRef } from 'vue'
+import { AgGridVue } from 'ag-grid-vue3'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
 
-  // --- State ---
-  const manualProjNo = ref('TE1002')
-  const regTypeId = ref('101TEST')
-  const containDeleted = ref(true)
+// --- State ---
+const manualProjNo = ref('TE1002')
+const regTypeId = ref('101TEST')
+const containDeleted = ref(true)
 
-  const gridApi = shallowRef(null)
-  const columnDefs = ref([])
-  const rowData = ref([])
-  const diffMap = ref(new Map())
+const gridApi = shallowRef(null)
+const columnDefs = ref([])
+const rowData = ref([])
+const diffMap = ref(new Map())
 
-  const defaultColDef = {
-    sortable: true,
-    filter: true,
-    resizable: true,
-    minWidth: 130,
-  }
+const defaultColDef = {
+  sortable: true,
+  filter: true,
+  resizable: true,
+  minWidth: 130,
+  floatingFilter: true, // 필터 기능 가시성 향상
+}
 
-  const onGridReady = params => {
-    gridApi.value = params.api
-  }
+const onGridReady = params => {
+  gridApi.value = params.api
+}
 
-  /**
-   * 🕵️‍♂️ 데이터 구조 자동 탐색 함수 (Recursive Search)
-   * 객체를 뒤져서 'PubData'가 들어있는 부모 객체를 찾습니다.
-   */
-  const findTargetObject = obj => {
-    if (!obj || typeof obj !== 'object') return null
-    if (obj.PubData && Array.isArray(obj.PubData)) return obj
+/**
+ * 🕵️‍♂️ 데이터 구조 자동 탐색 함수 (가장 잘 작동했던 로직)
+ */
+const findTargetObject = obj => {
+  if (!obj || typeof obj !== 'object') return null
+  if (obj.PubData && Array.isArray(obj.PubData)) return obj
 
-    for (const key in obj) {
-      if (Object.prototype.hasOwnProperty.call(obj, key)) {
-        const found = findTargetObject(obj[key])
-        if (found) return found
-      }
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const found = findTargetObject(obj[key])
+      if (found) return found
     }
-    return null
   }
+  return null
+}
 
-  // --- Logic ---
-  const onSearch = async () => {
-    try {
-      if (gridApi.value) gridApi.value.showLoadingOverlay()
+// --- Logic ---
+const onSearch = async () => {
+  try {
+    if (gridApi.value) gridApi.value.showLoadingOverlay()
 
-      const payload = {
-        ProjectNo: manualProjNo.value.trim(),
-        REG_TYPE_ID: regTypeId.value.trim(),
-        ContainDeleted: containDeleted.value,
+    const payload = {
+      ProjectNo: manualProjNo.value.trim(),
+      REG_TYPE_ID: regTypeId.value.trim(),
+      ContainDeleted: containDeleted.value,
+    }
+
+    // 1. API 호출
+    const response = await axiosWrapper.post('/api/Data/GetPubWrkData', payload)
+    console.log('📡 [원본] Response:', response)
+
+    // 2. 타겟 데이터 자동 추출
+    const targetData = findTargetObject(response)
+
+    if (!targetData) {
+      sAlert.Error('데이터를 찾을 수 없습니다.')
+      if (gridApi.value) gridApi.value.hideOverlay()
+      return
+    }
+
+    const pubSource = targetData.PubData || []
+    const wrkSource = targetData.WrkData || []
+    const diffSource = targetData.DiffData || []
+
+    // 3. Status 및 차이점 매핑
+    const statusMap = {}
+    const newDiffMap = new Map()
+
+    diffSource.forEach(d => {
+      statusMap[d.TAG_IDX] = d.Status
+      if (d.Property) {
+        d.Property.forEach(p => {
+          if (p.PUB_VALUE !== p.WRK_VALUE) {
+            newDiffMap.set(`${d.TAG_IDX}_${p.PROP_ID}`, true)
+          }
+        })
       }
+    })
+    diffMap.value = newDiffMap
 
-      // 1. API 호출
-      const response = await axiosWrapper.post('/api/Data/GetPubWrkData', payload)
-      console.log('📡 [1] 원본 Response 전체:', response)
-
-      // 2. 자동 탐색으로 PubData/WrkData가 포함된 객체 추출
-      const targetData = findTargetObject(response)
-      console.log('🎯 [2] 자동 추출된 타겟 객체:', targetData)
-
-      if (!targetData) {
-        console.error('❌ 실패: 데이터 구조에서 PubData를 찾을 수 없습니다.')
-        sAlert.Error('데이터 구조 분석 실패 (콘솔 로그 확인)')
-        if (gridApi.value) gridApi.value.hideOverlay()
-        return
-      }
-
-      const pubSource = targetData.PubData || []
-      const wrkSource = targetData.WrkData || []
-      const diffSource = targetData.DiffData || []
-
-      // 3. Status 및 차이점 매핑 생성
-      const statusMap = {}
-      const newDiffMap = new Map()
-
-      diffSource.forEach(d => {
-        statusMap[d.TAG_IDX] = d.Status
-        if (d.Property) {
-          d.Property.forEach(p => {
-            if (p.PUB_VALUE !== p.WRK_VALUE) {
-              newDiffMap.set(`${d.TAG_IDX}_${p.PROP_ID}`, true)
-            }
+    // 4. 평면화 가공 (Attributes 전개 및 출처 명시)
+    const flatten = (list, sourceName) => {
+      return list.map(item => {
+        const row = {
+          ...item,
+          SOURCE_TYPE: sourceName, // [출처] 컬럼용 데이터
+          DIFF_STATUS: statusMap[item.TAG_IDX] || '', // [상태] 컬럼용 데이터
+        }
+        if (item.ATTRIBUTES && Array.isArray(item.ATTRIBUTES)) {
+          item.ATTRIBUTES.forEach(attr => {
+            row[attr.ATT_ID] = attr.VALUE ?? ''
           })
         }
+        return row
       })
-      diffMap.value = newDiffMap
+    }
 
-      // 4. 평면화 가공 (Attributes 전개)
-      const flatten = (list, type) => {
-        return list.map(item => {
-          const row = {
-            ...item,
-            EditType: type,
-            Status: statusMap[item.TAG_IDX] || '',
-          }
-          if (item.ATTRIBUTES && Array.isArray(item.ATTRIBUTES)) {
-            item.ATTRIBUTES.forEach(attr => {
-              row[attr.ATT_ID] = attr.VALUE
-            })
-          }
-          return row
-        })
-      }
+    const merged = [...flatten(pubSource, 'PUBLISH'), ...flatten(wrkSource, 'WORKING')]
 
-      const merged = [...flatten(pubSource, 'Publish'), ...flatten(wrkSource, 'Working')]
+    // 5. 정렬 (TAG_IDX 기준)
+    merged.sort((a, b) => {
+      if (a.TAG_IDX === b.TAG_IDX) return a.SOURCE_TYPE === 'PUBLISH' ? -1 : 1
+      return String(a.TAG_IDX).localeCompare(String(b.TAG_IDX))
+    });
 
-      // 5. 정렬 및 컬럼 생성
-      merged.sort((a, b) => {
-        if (a.TAG_IDX === b.TAG_IDX) return a.EditType === 'Publish' ? -1 : 1
-        return String(a.TAG_IDX).localeCompare(String(b.TAG_IDX))
+    // 6. 컬럼 생성 (헤더 이름에 출처 명시)
+    const fixedFields = ['SOURCE_TYPE', 'DIFF_STATUS', 'TAG_NO', 'TAG_IDX', 'CLS_ID', 'DELETED']
+    const allKeys = new Set(fixedFields)
+    merged.forEach(row =>
+      Object.keys(row).forEach(k => {
+        if (k !== 'ATTRIBUTES' && k !== '_id') allKeys.add(k)
       })
+    )
 
-      const fixed = ['EditType', 'Status', 'TAG_NO', 'TAG_IDX', 'CLS_ID', 'DELETED']
-      const allKeys = new Set(fixed)
-      merged.forEach(row =>
-        Object.keys(row).forEach(k => {
-          if (k !== 'ATTRIBUTES' && k !== '_id') allKeys.add(k)
-        })
-      )
+    const newCols = Array.from(allKeys).map(key => {
+      let headerName = key
+      // 헤더 명칭 커스텀
+      if (key === 'SOURCE_TYPE') headerName = '[Source] 데이터 출처'
+      if (key === 'DIFF_STATUS') headerName = '[Diff] 상태'
 
-      const newCols = Array.from(allKeys).map(key => ({
+      return {
         field: key,
-        headerName: key,
-        pinned: fixed.includes(key) ? 'left' : null,
+        headerName: headerName,
+        pinned: fixedFields.includes(key) ? 'left' : null,
         cellStyle: p => {
+          // 출처에 따른 배경색 지정
+          if (key === 'SOURCE_TYPE') {
+            return p.value === 'PUBLISH'
+              ? { backgroundColor: '#e8f0fe', color: '#1a73e8', fontWeight: 'bold', textAlign: 'center' }
+              : { backgroundColor: '#e6f4ea', color: '#1e8e3e', fontWeight: 'bold', textAlign: 'center' };
+          }
+          // 차이점이 있는 셀 강조
           if (diffMap.value.has(`${p.data.TAG_IDX}_${key}`)) {
             return { backgroundColor: '#fff9db', color: '#d94111', fontWeight: 'bold' }
           }
           return null
         },
-      }))
-
-      // 6. 결과 반영
-      columnDefs.value = newCols
-      rowData.value = merged
-
-      if (gridApi.value) {
-        gridApi.value.hideOverlay()
-        gridApi.value.setGridOption('columnDefs', newCols)
-        gridApi.value.setGridOption('rowData', merged)
       }
-    } catch (err) {
-      console.error('💥 실행 에러:', err)
-      sAlert.Error('조회 중 기술적 오류 발생')
+    })
+
+    // 7. 결과 강제 주입
+    columnDefs.value = newCols
+    rowData.value = merged
+
+    if (gridApi.value) {
+      gridApi.value.hideOverlay()
+      gridApi.value.setGridOption('columnDefs', newCols)
+      gridApi.value.setGridOption('rowData', merged)
     }
+  } catch (err) {
+    console.error('💥 실행 에러:', err)
+    sAlert.Error('조회 처리 중 오류가 발생했습니다.')
   }
+}
 </script>
+
+<style scoped>
+/* AG-Grid 스타일 보정 */
+.ag-theme-alpine {
+  --ag-header-background-color: #f8f9fa;
+  --ag-odd-row-background-color: #fafafa;
+}
+</style>
