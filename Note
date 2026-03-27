@@ -1,23 +1,3 @@
-아래의 코드에서 우리 수정하자. 
-merge api 사용해서 호출했는데 일단 구조를 바꾸고 싶다
-
-아래 api 호출해서 데이터를 리턴 받아서 뿌려줄꺼야
-/api/Data/GetPubWrkData
-
-페이로드는 아래의 구조이고 우리 UI에 "프로젝트"랑 "REG_TYPE_ID" "ContainDeleted" 입력란이 필요할거 같아 
-{
-    "ContainDeleted": true,
-    "ProjectNo": "TE1002",
-    "REG_TYPE_ID": "101TEST"
-}
-
-그리고 리턴 받는 구조는 아래와 같은데 데이터 조회되는 테이블에 PubData 와 WrkData를 각각 보여주고 DiffData도  추가해서 모든 TAG_IDX를 키값으로 보여주면 될것 같아 
-그리고 헤더는 모든 정보를 다 보여주고 즉 PubData 와 WrkData, DiffData의 합집합인거지  ATTRIBUTES의 배열 구조도 같은 레벨로 생각해서 보여줬으면해
-
-왼쪽에 핀 고정은 EditType, Status,  TAG_NO, TAG_IDX, CLS_ID, DELETED,  고정으로 보여줘 
-
-
-아래의 코드에 반영해줘 
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100">
     <PageTitle
@@ -27,35 +7,24 @@ merge api 사용해서 호출했는데 일단 구조를 바꾸고 싶다
       <template #actions>
         <div class="d-flex align-items-center gap-3 ms-auto me-2">
           <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap">Project No</span>
+            <span class="fw-bold text-dark text-nowrap">프로젝트</span>
             <input
               type="text"
               class="form-control form-control-sm custom-input-width"
               v-model="manualProjNo"
-              placeholder="예: SN2661"
+              placeholder="예: TE1002"
             />
           </label>
+          
           <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-nowrap">Register ID</span>
+            <span class="fw-bold text-nowrap">REG_TYPE_ID</span>
             <input
               type="text"
               class="form-control form-control-sm custom-input-width"
               v-model="regTypeId"
-              placeholder="예: PIEP_T_002_T"
+              placeholder="예: 101TEST"
             />
           </label>
-
-          <div class="d-flex align-items-center gap-2 border-start ps-3 ms-2">
-            <span class="fw-bold text-nowrap">조회 대상</span>
-            <div
-              class="form-check form-check-inline mb-0"
-              v-for="opt in ['Publish', 'Working', 'MergeData']"
-              :key="opt"
-            >
-              <input class="form-check-input" type="radio" :id="opt" :value="opt" v-model="selectedType" />
-              <label class="form-check-label" :for="opt">{{ opt }}</label>
-            </div>
-          </div>
 
           <div class="form-check mb-0 border-start ps-3">
             <input class="form-check-input" type="checkbox" id="delCheck" v-model="containDeleted" />
@@ -97,11 +66,10 @@ merge api 사용해서 호출했는데 일단 구조를 바꾸고 싶다
   import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
   import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-  // 상위 스토어 연동 생략, 직접 입력값 위주 세팅
-  const manualProjNo = ref('SN2661')
-  const regTypeId = ref('PIEP_T_002_T')
-  const selectedType = ref('Working')
-  const containDeleted = ref(false)
+  // 입력값 초기 세팅 (요구사항 기반)
+  const manualProjNo = ref('TE1002')
+  const regTypeId = ref('101TEST')
+  const containDeleted = ref(true)
   const localFilterQuery = ref('')
 
   const gridApi = shallowRef()
@@ -125,101 +93,124 @@ merge api 사용해서 호출했는데 일단 구조를 바꾸고 싶다
     if (diffInfo) {
       return { backgroundColor: '#fff9db', fontWeight: 'bold', color: '#d94111' }
     }
+    // 데이터 소스 구분을 위해 배경색 약간 다르게 처리 (옵션)
+    if (p.data.EditType === 'Publish') return { backgroundColor: '#fafafa' }
     return null
   }
 
   const onSearch = async () => {
     if (!manualProjNo.value || !regTypeId.value) {
-      return sAlert.Warning('Project No와 Register ID를 입력하세요.')
+      return sAlert.Warning('프로젝트 번호와 REG_TYPE_ID를 입력하세요.')
     }
 
     if (gridApi.value) gridApi.value.setGridOption('loading', true)
 
     try {
+      // 새로운 페이로드 구조 적용
       const payload = {
-        ProjectNo: manualProjNo.value.trim(),
-        REG_TYPE_ID: regTypeId.value.trim(),
-        Type: selectedType.value,
         ContainDeleted: containDeleted.value,
+        ProjectNo: manualProjNo.value.trim(),
+        REG_TYPE_ID: regTypeId.value.trim()
       }
 
-      const res = await axiosWrapper.post('/api/Data/GetMergedData', payload)
+      // API 호출
+      const res = await axiosWrapper.post('/api/Data/GetPubWrkData', payload)
+      const resultData = res.data || res
 
-      // API 응답의 루트 키가 regTypeId와 일치하는지 확인
-      const rootKey = regTypeId.value.trim()
-      const resultData = res[rootKey]
-
-      if (!resultData) {
+      if (!resultData || (!resultData.PubData && !resultData.WrkData)) {
         rawDataList.value = []
         return sAlert.Info('조회된 데이터가 없습니다.')
       }
 
-      // 1. DiffData 맵핑 (차이점 사전 생성)
+      const pubList = resultData.PubData || []
+      const wrkList = resultData.WrkData || []
+      const diffList = resultData.DiffData || []
+
+      // 1. DiffData 맵핑 (차이점 하이라이트용 사전 생성)
       const newDiffMap = new Map()
-      if (resultData.DiffData) {
-        resultData.DiffData.forEach(diff => {
-          ;(diff.Property || []).forEach(prop => {
-            if (prop.PUB_VALUE !== prop.WRK_VALUE) {
-              newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, {
-                pub: prop.PUB_VALUE,
-                wrk: prop.WRK_VALUE,
-              })
-            }
-          })
+      diffList.forEach(diff => {
+        ;(diff.Property || []).forEach(prop => {
+          if (prop.PUB_VALUE !== prop.WRK_VALUE) {
+            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, {
+              pub: prop.PUB_VALUE,
+              wrk: prop.WRK_VALUE,
+            })
+          }
         })
-      }
+      })
       diffMap.value = newDiffMap
 
-      // 2. 선택한 타입에 따른 데이터 추출
-      let sourceData = []
-      if (selectedType.value === 'Working') sourceData = resultData.WrkData || []
-      else if (selectedType.value === 'Publish') sourceData = resultData.PubData || []
-      else sourceData = resultData.MergeData || []
+      // 2. ATTRIBUTES 평면화 및 EditType(식별값) 추가 함수
+      const flattenData = (dataArray, defaultEditType) => {
+        return dataArray.map(item => {
+          const flat = { ...item, EditType: item.EditType || defaultEditType }
+          if (Array.isArray(item.ATTRIBUTES)) {
+            item.ATTRIBUTES.forEach(attr => {
+              flat[attr.ATT_ID] = attr.VALUE
+            })
+            delete flat.ATTRIBUTES
+          }
+          return flat
+        })
+      }
 
-      // 3. 데이터 평면화 (ATTRIBUTES -> 최상위 필드)
-      const processed = sourceData.map(item => {
-        const flat = { ...item }
-        if (Array.isArray(item.ATTRIBUTES)) {
-          item.ATTRIBUTES.forEach(attr => {
-            flat[attr.ATT_ID] = attr.VALUE
-          })
+      const processedPub = flattenData(pubList, 'Publish')
+      const processedWrk = flattenData(wrkList, 'Working')
+
+      // 3. PubData와 WrkData 병합 및 TAG_IDX 기준 정렬 (동일한 TAG를 모아서 보기 위함)
+      let mergedData = [...processedPub, ...processedWrk]
+      mergedData.sort((a, b) => {
+        if (a.TAG_IDX === b.TAG_IDX) {
+          // Publish가 먼저 오고 Working이 나중에 오도록 정렬
+          return a.EditType.localeCompare(b.EditType) 
         }
-        return flat
+        return String(a.TAG_IDX).localeCompare(String(b.TAG_IDX))
       })
 
-      // 4. 컬럼 정의 생성 (고정 + 동적)
-      const fixedFields = ['TAG_NO', 'EP_ID', 'CLS_ID', 'TAG_DESC']
+      // 4. 컬럼 정의 생성 (합집합 처리 및 좌측 핀 고정 적용)
+      const fixedFields = ['EditType', 'Status', 'TAG_NO', 'TAG_IDX', 'CLS_ID', 'DELETED']
       const allKeys = new Set()
-      processed.forEach(row =>
+
+      // 데이터의 모든 Key 추출
+      mergedData.forEach(row => {
         Object.keys(row).forEach(k => {
-          if (k !== 'ATTRIBUTES' && k !== '_id') allKeys.add(k)
+          if (k !== '_id') allKeys.add(k)
         })
-      )
+      })
+      
+      // 혹시 DiffData에만 존재하는 속성값도 있다면 포함
+      diffList.forEach(diff => {
+        ;(diff.Property || []).forEach(prop => allKeys.add(prop.PROP_ID))
+      })
 
       dynamicCols.value = Array.from(allKeys)
         .sort((a, b) => {
-          // 고정 필드를 앞으로 배치
-          const aIdx = fixedFields.indexOf(a),
-            bIdx = fixedFields.indexOf(b)
+          // 고정 필드를 지정한 순서대로 최우선 배치
+          const aIdx = fixedFields.indexOf(a)
+          const bIdx = fixedFields.indexOf(b)
           if (aIdx > -1 && bIdx > -1) return aIdx - bIdx
           if (aIdx > -1) return -1
           if (bIdx > -1) return 1
           return a.localeCompare(b)
         })
-        .map(key => ({
-          headerName: key,
-          field: key,
-          minWidth: 150,
-          cellRenderer: diffCellRenderer,
-          cellStyle: getCellStyle,
-          // 툴팁 설정
-          tooltipValueGetter: p => {
-            const diff = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-            return diff ? `[차이발생]\nPublish: ${diff.pub ?? 'null'}\nWorking: ${diff.wrk ?? 'null'}` : null
-          },
-        }))
+        .map(key => {
+          const isPinned = fixedFields.includes(key)
+          return {
+            headerName: key,
+            field: key,
+            minWidth: 120,
+            pinned: isPinned ? 'left' : null, // 요구하신 좌측 핀 고정
+            cellRenderer: diffCellRenderer,
+            cellStyle: getCellStyle,
+            // 툴팁 설정
+            tooltipValueGetter: p => {
+              const diff = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+              return diff ? `[차이발생]\nPublish: ${diff.pub ?? 'null'}\nWorking: ${diff.wrk ?? 'null'}` : null
+            },
+          }
+        })
 
-      rawDataList.value = processed
+      rawDataList.value = mergedData
     } catch (e) {
       console.error(e)
       sAlert.Error('데이터를 가져오는 중 오류가 발생했습니다.')
@@ -228,7 +219,7 @@ merge api 사용해서 호출했는데 일단 구조를 바꾸고 싶다
     }
   }
 
-  // 결과 내 필터링 (기존 로직)
+  // 결과 내 필터링 로직
   const filteredData = computed(() => {
     if (!localFilterQuery.value.trim()) return rawDataList.value
     const kw = localFilterQuery.value.toLowerCase()
