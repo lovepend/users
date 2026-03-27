@@ -1,3 +1,23 @@
+아래의 코드에서 우리 수정하자. 
+merge api 사용해서 호출했는데 일단 구조를 바꾸고 싶다
+
+아래 api 호출해서 데이터를 리턴 받아서 뿌려줄꺼야
+/api/Data/GetPubWrkData
+
+페이로드는 아래의 구조이고 우리 UI에 "프로젝트"랑 "REG_TYPE_ID" "ContainDeleted" 입력란이 필요할거 같아 
+{
+    "ContainDeleted": true,
+    "ProjectNo": "TE1002",
+    "REG_TYPE_ID": "101TEST"
+}
+
+그리고 리턴 받는 구조는 아래와 같은데 데이터 조회되는 테이블에 PubData 와 WrkData를 각각 보여주고 DiffData도  추가해서 모든 TAG_IDX를 키값으로 보여주면 될것 같아 
+그리고 헤더는 모든 정보를 다 보여주고 즉 PubData 와 WrkData, DiffData의 합집합인거지  ATTRIBUTES의 배열 구조도 같은 레벨로 생각해서 보여줬으면해
+
+왼쪽에 핀 고정은 EditType, Status,  TAG_NO, TAG_IDX, CLS_ID, DELETED,  고정으로 보여줘 
+
+
+아래의 코드에 반영해줘 
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100">
     <PageTitle
