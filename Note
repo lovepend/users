@@ -1,274 +1,401 @@
-<template>
-  <div class="panel panel-expandable m-0 p-0 h-100">
-    <PageTitle
-      icon="fa-search-plus"
-      :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')"
-    >
-      <template #actions>
-        <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap">프로젝트</span>
-            <input
-              type="text"
-              class="form-control form-control-sm custom-input-width"
-              v-model="manualProjNo"
-              placeholder="예: TE1002"
-            />
-          </label>
-          
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-nowrap">REG_TYPE_ID</span>
-            <input
-              type="text"
-              class="form-control form-control-sm custom-input-width"
-              v-model="regTypeId"
-              placeholder="예: 101TEST"
-            />
-          </label>
-
-          <div class="form-check mb-0 border-start ps-3">
-            <input class="form-check-input" type="checkbox" id="delCheck" v-model="containDeleted" />
-            <label class="form-check-label fw-bold" for="delCheck">삭제 포함</label>
-          </div>
-
-          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
-            <i class="fa fa-search me-1"></i>조회
-          </button>
-
-          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap">결과 필터</span>
-            <input
-              type="text"
-              class="form-control form-control-sm border-success custom-input-width"
-              v-model="localFilterQuery"
-              placeholder="결과 내 검색"
-            />
-          </div>
-        </div>
-        <panel-toolbar />
-      </template>
-    </PageTitle>
-
-    <div class="panel-body m-0 p-0 h-100">
-      <div class="panel m-0 p-0 h-100">
-        <div class="panel-body overflow-hidden m-0 p-0 h-100">
-          <ag-grid-vue v-bind="gridBindProps" @grid-ready="onGridReady" :tooltipShowDelay="0" />
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup>
-import { ref, computed, shallowRef } from 'vue'
-import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import { sAlert } from '@/utils/messages/alert-common'
-import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-import PageTitle from '@/components/toolBar/PageTitle.vue'
-
-/**
- * 🛠 상태 관리
- */
-const manualProjNo = ref('TE1002')
-const regTypeId = ref('101TEST')
-const containDeleted = ref(true)
-const localFilterQuery = ref('')
-
-const gridApi = shallowRef()
-const rawDataList = ref([]) // 병합된 전체 데이터
-const diffMap = ref(new Map()) // 차이점 비교용 맵 (Key: TAG_IDX_FIELD)
-const dynamicCols = ref([]) // 동적 생성된 컬럼 정의
-
-/**
- * 🎨 그리드 셀 렌더링 & 스타일링
- */
-const diffCellRenderer = (p) => {
-  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-  if (diffInfo) {
-    return `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${p.value ?? ''}</div>`
-  }
-  return p.value ?? ''
-}
-
-const getCellStyle = (p) => {
-  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-  if (diffInfo) {
-    return { backgroundColor: '#fff9db', fontWeight: 'bold', color: '#d94111' }
-  }
-  return null
-}
-
-/**
- * 🔍 데이터 조회 및 가공 (핵심 로직)
- */
-const onSearch = async () => {
-  if (!manualProjNo.value || !regTypeId.value) {
-    return sAlert.Warning('프로젝트 번호와 REG_TYPE_ID를 입력하세요.')
-  }
-
-  if (gridApi.value) gridApi.value.setGridOption('loading', true)
-
-  try {
-    const payload = {
-      ContainDeleted: containDeleted.value,
-      ProjectNo: manualProjNo.value.trim(),
-      REG_TYPE_ID: regTypeId.value.trim(),
-    }
-
-    // API 호출 (GetPubWrkData)
-    const res = await axiosWrapper.post('/api/Data/GetPubWrkData', payload)
-    const resultData = res.data || res
-
-    // 1. 멀티 응답(배열) 대응을 위한 리스트 초기화
-    let pubList = []
-    let wrkList = []
-    let diffList = []
-
-    // 배열 형태(멀티 건)로 들어올 경우 순회하며 취합
-    if (Array.isArray(resultData)) {
-      resultData.forEach((item) => {
-        if (item.PubData) pubList.push(...item.PubData)
-        if (item.WrkData) wrkList.push(...item.WrkData)
-        if (item.DiffData) diffList.push(...item.DiffData)
-      })
-    } else if (resultData) {
-      // 단일 객체일 경우
-      pubList = resultData.PubData || []
-      wrkList = resultData.WrkData || []
-      diffList = resultData.DiffData || []
-    }
-
-    if (pubList.length === 0 && wrkList.length === 0) {
-      rawDataList.value = []
-      return sAlert.Info('조회된 데이터가 없습니다.')
-    }
-
-    // 2. DiffData 맵 구축 (하이라이트 및 툴팁용)
-    const newDiffMap = new Map()
-    diffList.forEach((diff) => {
-      ;(diff.Property || []).forEach((prop) => {
-        if (prop.PUB_VALUE !== prop.WRK_VALUE) {
-          // TAG_IDX와 PROP_ID(필드명) 조합을 키로 사용
-          newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, {
-            pub: prop.PUB_VALUE,
-            wrk: prop.WRK_VALUE,
-          })
-        }
-      })
-    })
-    diffMap.value = newDiffMap
-
-    // 3. 데이터 평면화 (ATTRIBUTES -> Root 레벨)
-    const flatten = (dataArray, editType) => {
-      return dataArray.map((item) => {
-        const row = { ...item, EditType: item.EditType || editType }
-        if (Array.isArray(item.ATTRIBUTES)) {
-          item.ATTRIBUTES.forEach((attr) => {
-            row[attr.ATT_ID] = attr.VALUE
-          })
-        }
-        delete row.ATTRIBUTES // 원본 배열 제거
-        return row
-      })
-    }
-
-    const processedPub = flatten(pubList, 'Publish')
-    const processedWrk = flatten(wrkList, 'Working')
-
-    // 4. 합집합 데이터 생성 및 정렬
-    const merged = [...processedPub, ...processedWrk]
-    merged.sort((a, b) => {
-      if (a.TAG_IDX === b.TAG_IDX) {
-        return a.EditType.localeCompare(b.EditType) // Pub 먼저, Wrk 나중
-      }
-      return String(a.TAG_IDX).localeCompare(String(b.TAG_IDX))
-    })
-
-    // 5. 동적 헤더(컬럼) 정의 및 핀 고정
-    const pinnedFields = ['EditType', 'Status', 'TAG_NO', 'TAG_IDX', 'CLS_ID', 'DELETED']
-    const allHeaderKeys = new Set()
-
-    merged.forEach((row) => {
-      Object.keys(row).forEach((k) => {
-        if (k !== '_id') allHeaderKeys.add(k)
-      })
-    })
-
-    dynamicCols.value = Array.from(allHeaderKeys)
-      .sort((a, b) => {
-        const aIdx = pinnedFields.indexOf(a)
-        const bIdx = pinnedFields.indexOf(b)
-        if (aIdx > -1 && bIdx > -1) return aIdx - bIdx
-        if (aIdx > -1) return -1
-        if (bIdx > -1) return 1
-        return a.localeCompare(b)
-      })
-      .map((key) => ({
-        headerName: key,
-        field: key,
-        minWidth: 130,
-        pinned: pinnedFields.includes(key) ? 'left' : null,
-        cellRenderer: diffCellRenderer,
-        cellStyle: getCellStyle,
-        tooltipValueGetter: (p) => {
-          const d = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-          return d ? `[비교]\nPublish: ${d.pub ?? ''}\nWorking: ${d.wrk ?? ''}` : null
+{
+  "PubData": [
+    {
+      "EP_ID": "TeEP",
+      "EP_IC": "TeEP",
+      "DELETED": false,
+      "DEL_USER": null,
+      "DEL_DTM": null,
+      "PROJ_NO": "TE1002",
+      "TAG_IDX": "69c4c7d5b246d57b6b8153ed",
+      "TAG_NO": "Cteate_TEST_001",
+      "TAG_TYPE_ID": "",
+      "CLS_ID": "TEST102_CLS",
+      "TAG_DESC": null,
+      "BF_TAG_NO": "",
+      "PIC_NO": "52593271",
+      "DSN_SKL": null,
+      "PRNT_TAG_IDX": null,
+      "ATTRIBUTES": [
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "ASSEMBLY_NAME",
+          "VALUE": null
         },
-      }))
-
-    rawDataList.value = merged
-  } catch (e) {
-    console.error('Search Error:', e)
-    sAlert.Error('데이터 조회 중 오류가 발생했습니다.')
-  } finally {
-    if (gridApi.value) gridApi.value.setGridOption('loading', false)
-  }
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "SYSTEM_NAME",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": "METRIC_CENTIMETER",
+          "VALUE_DBL": 0,
+          "ATT_ID": "TEST006",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 2,
+          "ATT_ID": "TEST007",
+          "VALUE": "2"
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "TEST008",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "TEST009",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "TEST010",
+          "VALUE": null
+        }
+      ],
+      "CRTER_NO": "52593271",
+      "CRTE_DTM": "2026-03-26T05:44:57.858Z",
+      "CHGER_NO": "211925",
+      "CHGE_DTM": "2026-03-26T07:50:16.843Z",
+      "_id": "69c4c7d9b246d57b6b8153f0"
+    },
+    {
+      "EP_ID": "TeEP",
+      "EP_IC": "TeEP",
+      "DELETED": false,
+      "DEL_USER": null,
+      "DEL_DTM": null,
+      "PROJ_NO": "TE1002",
+      "TAG_IDX": "69c5ceb8dc3607e03e286e69",
+      "TAG_NO": "Cteate_TEST_002",
+      "TAG_TYPE_ID": "",
+      "CLS_ID": "TEST102_CLS",
+      "TAG_DESC": null,
+      "BF_TAG_NO": "",
+      "PIC_NO": "52593271",
+      "DSN_SKL": null,
+      "PRNT_TAG_IDX": null,
+      "ATTRIBUTES": [],
+      "CRTER_NO": "52593271",
+      "CRTE_DTM": "2026-03-27T00:26:38.137Z",
+      "CHGER_NO": "52593271",
+      "CHGE_DTM": "2026-03-27T00:26:38.137Z",
+      "_id": "69c5cebedc3607e03e286e6c"
+    }
+  ],
+  "WrkData": [
+    {
+      "TAG_NO_PASSED": null,
+      "NEW_YN": false,
+      "DEL_YN": false,
+      "EP_ID": "TeEP",
+      "EP_IC": "TeEP",
+      "DELETED": false,
+      "DEL_USER": null,
+      "DEL_DTM": null,
+      "PROJ_NO": "TE1002",
+      "TAG_IDX": "69c4c7d5b246d57b6b8153ed",
+      "TAG_NO": "Cteate_TEST_001",
+      "TAG_TYPE_ID": "",
+      "CLS_ID": "TEST102_CLS",
+      "TAG_DESC": null,
+      "BF_TAG_NO": "",
+      "PIC_NO": "52593271",
+      "DSN_SKL": null,
+      "PRNT_TAG_IDX": null,
+      "ATTRIBUTES": [
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "ASSEMBLY_NAME",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "SYSTEM_NAME",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": "METRIC_CENTIMETER",
+          "VALUE_DBL": 0,
+          "ATT_ID": "TEST006",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 2,
+          "ATT_ID": "TEST007",
+          "VALUE": "2"
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "TEST008",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "TEST009",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "TEST010",
+          "VALUE": null
+        }
+      ],
+      "CRTER_NO": "52593271",
+      "CRTE_DTM": "2026-03-26T05:44:53.231Z",
+      "CHGER_NO": "211925",
+      "CHGE_DTM": "2026-03-26T07:50:16.868Z",
+      "_id": "69c4c7d5b246d57b6b8153ee"
+    },
+    {
+      "TAG_NO_PASSED": null,
+      "NEW_YN": false,
+      "DEL_YN": false,
+      "EP_ID": "TeEP",
+      "EP_IC": "TeEP",
+      "DELETED": false,
+      "DEL_USER": null,
+      "DEL_DTM": null,
+      "PROJ_NO": "TE1002",
+      "TAG_IDX": "69c5ceb8dc3607e03e286e69",
+      "TAG_NO": "Cteate_TEST_002",
+      "TAG_TYPE_ID": "",
+      "CLS_ID": "TEST102_CLS",
+      "TAG_DESC": null,
+      "BF_TAG_NO": "",
+      "PIC_NO": "52593271",
+      "DSN_SKL": null,
+      "PRNT_TAG_IDX": null,
+      "ATTRIBUTES": [
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "TEST010",
+          "VALUE": "false"
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "TEST009",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "TEST008",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 2,
+          "ATT_ID": "TEST007",
+          "VALUE": "2"
+        },
+        {
+          "UOM_ID": "METRIC_CENTIMETER",
+          "VALUE_DBL": 0,
+          "ATT_ID": "TEST006",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "SYSTEM_NAME",
+          "VALUE": null
+        },
+        {
+          "UOM_ID": null,
+          "VALUE_DBL": 0,
+          "ATT_ID": "ASSEMBLY_NAME",
+          "VALUE": null
+        }
+      ],
+      "CRTER_NO": "52593271",
+      "CRTE_DTM": "2026-03-27T00:26:32.883Z",
+      "CHGER_NO": "52593271",
+      "CHGE_DTM": "2026-03-27T00:26:38.158Z",
+      "_id": "69c5ceb8dc3607e03e286e6a"
+    }
+  ],
+  "DiffData": [
+    {
+      "TAG_IDX": "69c5ceb8dc3607e03e286e69",
+      "EP_ID": "TeEP",
+      "Status": "M",
+      "EditType": "",
+      "Property": [
+        {
+          "PROP_ID": "TEST010",
+          "PUB_VALUE": null,
+          "WRK_VALUE": "false"
+        },
+        {
+          "PROP_ID": "TEST008",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "TEST007",
+          "PUB_VALUE": null,
+          "WRK_VALUE": "2"
+        },
+        {
+          "PROP_ID": "TEST006",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "SYSTEM_NAME",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "ASSEMBLY_NAME",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "TEST009",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "TAG_NO",
+          "PUB_VALUE": "Cteate_TEST_002",
+          "WRK_VALUE": "Cteate_TEST_002"
+        },
+        {
+          "PROP_ID": "TAG_DESC",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "EP_ID",
+          "PUB_VALUE": "TeEP",
+          "WRK_VALUE": "TeEP"
+        },
+        {
+          "PROP_ID": "TAG_TYPE_ID",
+          "PUB_VALUE": "",
+          "WRK_VALUE": ""
+        },
+        {
+          "PROP_ID": "CLS_ID",
+          "PUB_VALUE": "TEST102_CLS",
+          "WRK_VALUE": "TEST102_CLS"
+        },
+        {
+          "PROP_ID": "PIC_NO",
+          "PUB_VALUE": "52593271",
+          "WRK_VALUE": "52593271"
+        },
+        {
+          "PROP_ID": "BF_TAG_NO",
+          "PUB_VALUE": "",
+          "WRK_VALUE": ""
+        },
+        {
+          "PROP_ID": "PRNT_TAG_IDX",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        }
+      ]
+    },
+    {
+      "TAG_IDX": "69c4c7d5b246d57b6b8153ed",
+      "EP_ID": "TeEP",
+      "Status": "",
+      "EditType": "",
+      "Property": [
+        {
+          "PROP_ID": "ASSEMBLY_NAME",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "SYSTEM_NAME",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "TEST006",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "TEST007",
+          "PUB_VALUE": "2",
+          "WRK_VALUE": "2"
+        },
+        {
+          "PROP_ID": "TEST008",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "TEST009",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "TEST010",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "TAG_NO",
+          "PUB_VALUE": "Cteate_TEST_001",
+          "WRK_VALUE": "Cteate_TEST_001"
+        },
+        {
+          "PROP_ID": "TAG_DESC",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        },
+        {
+          "PROP_ID": "EP_ID",
+          "PUB_VALUE": "TeEP",
+          "WRK_VALUE": "TeEP"
+        },
+        {
+          "PROP_ID": "TAG_TYPE_ID",
+          "PUB_VALUE": "",
+          "WRK_VALUE": ""
+        },
+        {
+          "PROP_ID": "CLS_ID",
+          "PUB_VALUE": "TEST102_CLS",
+          "WRK_VALUE": "TEST102_CLS"
+        },
+        {
+          "PROP_ID": "PIC_NO",
+          "PUB_VALUE": "52593271",
+          "WRK_VALUE": "52593271"
+        },
+        {
+          "PROP_ID": "BF_TAG_NO",
+          "PUB_VALUE": "",
+          "WRK_VALUE": ""
+        },
+        {
+          "PROP_ID": "PRNT_TAG_IDX",
+          "PUB_VALUE": null,
+          "WRK_VALUE": null
+        }
+      ]
+    }
+  ]
 }
-
-/**
- * 📊 필터링 및 그리드 바인딩
- */
-const filteredData = computed(() => {
-  if (!localFilterQuery.value.trim()) return rawDataList.value
-  const kw = localFilterQuery.value.toLowerCase()
-  return rawDataList.value.filter((row) =>
-    Object.values(row).some((v) => String(v).toLowerCase().includes(kw))
-  )
-})
-
-const gridBindProps = computed(() => ({
-  columnDefs: dynamicCols.value,
-  rowData: filteredData.value,
-  style: 'width: 100%; height: 100%',
-  class: 'ag-theme-custom shadow-sm',
-  pagination: true,
-  paginationPageSize: 100,
-  loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, filter: true, resizable: true },
-  rowHeight: 32,
-}))
-
-const onGridReady = (p) => {
-  gridApi.value = p.api
-}
-</script>
-
-<style scoped>
-.custom-input-width {
-  width: 150px !important;
-}
-
-/* 차이점 발생 시 아이콘 정렬 */
-::v-deep(.diff-wrapper) {
-  display: flex;
-  align-items: center;
-  height: 100%;
-}
-
-/* AG-Grid 핀 고정 영역 스타일링 (선택 사항) */
-::v-deep(.ag-pinned-left-header),
-::v-deep(.ag-pinned-left-cols-container) {
-  border-right: 2px solid #ddd !important;
-  background-color: #f8f9fa;
-}
-</style>
