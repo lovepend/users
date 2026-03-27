@@ -1,40 +1,28 @@
 <template>
-  <div class="panel panel-inverse" style="height: 100vh; display: flex; flex-direction: column;">
-    <div class="panel-heading d-flex align-items-center justify-content-between" style="background: #2d353c; color: #fff; padding: 10px 15px;">
-      <h4 class="panel-title m-0">Tag 분석 및 속성 비교 (Auto-Detect Mode)</h4>
-      <div class="d-flex align-items-center gap-2">
-        <input v-model="manualProjNo" class="form-control form-control-sm" style="width:120px" placeholder="프로젝트" />
-        <input v-model="regTypeId" class="form-control form-control-sm" style="width:150px" placeholder="REG_TYPE_ID" />
-        <button class="btn btn-xs btn-primary" @click="onSearch">조회</button>
-      </div>
-    </div>
-
-    <div class="panel-body flex-grow-1 p-0" style="position: relative;">
-      <div v-if="rowData.length === 0" class="position-absolute w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-light" st<template>
   <div class="panel panel-expandable m-0 p-0 h-100" style="display: flex; flex-direction: column;">
-    <PageTitle icon="fa-search-plus" :title="'Tag 분석 및 비교'">
+    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 및 비교'">
       <template #actions>
         <div class="d-flex align-items-center gap-2 ms-auto">
+          <div class="input-group input-group-sm" style="width: 160px;">
+            <span class="input-group-text bg-light">Proj</span>
+            <input v-model="manualProjNo" class="form-control" placeholder="TE1002" />
+          </div>
           <div class="input-group input-group-sm" style="width: 180px;">
-            <span class="input-group-text">Proj</span>
-            <input v-model="manualProjNo" class="form-control" placeholder="Project No" />
+            <span class="input-group-text bg-light">RegType</span>
+            <input v-model="regTypeId" class="form-control" placeholder="101TEST" />
           </div>
-          <div class="input-group input-group-sm" style="width: 200px;">
-            <span class="input-group-text">RegType</span>
-            <input v-model="regTypeId" class="form-control" placeholder="Reg Type ID" />
-          </div>
-          <div class="form-check form-check-inline m-0 ms-2">
+          <div class="form-check form-check-inline m-0 ms-1">
             <input class="form-check-input" type="checkbox" v-model="containDeleted" id="chkDel" />
-            <label class="form-check-label" for="chkDel">삭제포함</label>
+            <label class="form-check-label small" for="chkDel">삭제포함</label>
           </div>
-          <button class="btn btn-xs btn-primary" @click="onSearch">
+          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
             <i class="fa fa-search me-1"></i>조회
           </button>
         </div>
       </template>
     </PageTitle>
 
-    <div class="panel-body m-0 p-0 flex-grow-1" style="height: calc(100vh - 160px); min-height: 400px;">
+    <div class="panel-body m-0 p-0 flex-grow-1" style="height: calc(100vh - 180px); min-height: 400px; overflow: hidden;">
       <ag-grid-vue
         style="width: 100%; height: 100%;"
         class="ag-theme-alpine"
@@ -42,9 +30,9 @@
         :rowData="rowData"
         :defaultColDef="defaultColDef"
         @grid-ready="onGridReady"
-        :rowSelection="'multiple'"
-        :suppressRowClickSelection="true"
         :animateRows="true"
+        :headerHeight="40"
+        :rowHeight="32"
       />
     </div>
   </div>
@@ -70,23 +58,22 @@ const defaultColDef = {
   sortable: true,
   filter: true,
   resizable: true,
-  minWidth: 120,
-  floatingFilter: true // 필터링 가시성 확보
+  minWidth: 130,
+  floatingFilter: true
 };
 
 const onGridReady = (params) => {
   gridApi.value = params.api;
-  gridApi.value.sizeColumnsToFit();
 };
 
 /**
- * 🕵️‍♂️ 데이터 구조 자동 탐색 (PubData가 포함된 객체를 찾음)
+ * 🕵️‍♂️ 데이터 자동 탐색 (응답 객체 내에서 PubData가 있는 지점을 찾음)
  */
-const findTargetObject = (obj) => {
+const findTarget = (obj) => {
   if (!obj || typeof obj !== 'object') return null;
   if (obj.PubData && Array.isArray(obj.PubData)) return obj;
   for (const key in obj) {
-    const found = findTargetObject(obj[key]);
+    const found = findTarget(obj[key]);
     if (found) return found;
   }
   return null;
@@ -103,17 +90,16 @@ const onSearch = async () => {
       ContainDeleted: containDeleted.value
     });
 
-    const targetData = findTargetObject(res);
-
-    if (!targetData) {
+    const target = findTarget(res);
+    if (!target) {
       sAlert.Error('데이터 구조 분석 실패');
       if (gridApi.value) gridApi.value.hideOverlay();
       return;
     }
 
-    const { PubData = [], WrkData = [], DiffData = [] } = targetData;
+    const { PubData = [], WrkData = [], DiffData = [] } = target;
 
-    // 1. 차이점 및 상태 매핑
+    // 1. 상태 및 차이점 매핑 (DiffData 기준)
     const statusMap = {};
     const newDiffMap = new Map();
     DiffData.forEach(d => {
@@ -128,52 +114,51 @@ const onSearch = async () => {
     });
     diffMap.value = newDiffMap;
 
-    // 2. 평면화 가공
-    const flatten = (list, type) => list.map(item => {
+    // 2. 평면화 가공 (Source 정보 추가)
+    const process = (list, type) => list.map(item => {
       const row = { 
         ...item, 
-        _Source: type, // 소스 출처 (Publish/Working)
-        Status: statusMap[item.TAG_IDX] || '' 
+        _SOURCE: type, // 출처 필드
+        _STATUS: statusMap[item.TAG_IDX] || '' // 상태 필드
       };
       if (item.ATTRIBUTES) {
-        item.ATTRIBUTES.forEach(attr => { row[attr.ATT_ID] = attr.VALUE; });
+        item.ATTRIBUTES.forEach(a => { row[a.ATT_ID] = a.VALUE; });
       }
       return row;
     });
 
-    const merged = [...flatten(PubData, 'Publish'), ...flatten(WrkData, 'Working')];
+    const merged = [...process(PubData, 'PUBLISH'), ...process(WrkData, 'WORKING')];
 
-    // 3. 정렬 (TAG_IDX 기준 쌍으로 배치)
+    // 3. 정렬 (같은 TAG_IDX끼리 묶기)
     merged.sort((a, b) => {
-      if (a.TAG_IDX === b.TAG_IDX) return a._Source === 'Publish' ? -1 : 1;
+      if (a.TAG_IDX === b.TAG_IDX) return a._SOURCE === 'PUBLISH' ? -1 : 1;
       return String(a.TAG_IDX).localeCompare(String(b.TAG_IDX));
     });
 
-    // 4. 컬럼 정의 (출처 표시 포함)
-    const fixedFields = ['_Source', 'Status', 'TAG_NO', 'TAG_IDX'];
-    const allKeys = new Set(fixedFields);
-    merged.forEach(row => Object.keys(row).forEach(k => {
-      if (!['_id', 'ATTRIBUTES'].includes(k)) allKeys.add(k);
+    // 4. 컬럼 정의 생성
+    const pinnedFields = ['_SOURCE', '_STATUS', 'TAG_NO', 'TAG_IDX'];
+    const keys = new Set(pinnedFields);
+    merged.forEach(r => Object.keys(r).forEach(k => {
+      if (!['_id', 'ATTRIBUTES'].includes(k)) keys.add(k);
     }));
 
-    const newCols = Array.from(allKeys).map(key => {
-      // 헤더 명칭 결정 (출처 정보 추가)
-      let headerName = key;
-      if (key === '_Source') headerName = '[Source] 출처';
-      else if (key === 'Status') headerName = '[Diff] 상태';
-      
+    const newCols = Array.from(keys).map(key => {
+      let hName = key;
+      if (key === '_SOURCE') hName = '데이터 출처';
+      if (key === '_STATUS') hName = '상태(Diff)';
+
       return {
         field: key,
-        headerName: headerName,
-        pinned: fixedFields.includes(key) ? 'left' : null,
+        headerName: hName,
+        pinned: pinnedFields.includes(key) ? 'left' : null,
         cellStyle: (p) => {
-          // 출처별 행 색상 구분
-          if (p.colDef.field === '_Source') {
-            return p.value === 'Publish' 
-              ? { backgroundColor: '#e3f2fd', fontWeight: 'bold' } 
-              : { backgroundColor: '#f1f8e9', fontWeight: 'bold' };
+          // 출처 컬럼 스타일
+          if (key === '_SOURCE') {
+            return p.value === 'PUBLISH' 
+              ? { backgroundColor: '#e8f0fe', fontWeight: 'bold', color: '#1a73e8' } 
+              : { backgroundColor: '#e6f4ea', fontWeight: 'bold', color: '#1e8e3e' };
           }
-          // 차이점이 있는 셀 강조
+          // 차이점 강조 스타일
           if (diffMap.value.has(`${p.data.TAG_IDX}_${key}`)) {
             return { backgroundColor: '#fff9db', color: '#d94111', fontWeight: 'bold' };
           }
@@ -182,6 +167,7 @@ const onSearch = async () => {
       };
     });
 
+    // 5. 그리드 데이터 주입
     columnDefs.value = newCols;
     rowData.value = merged;
 
@@ -190,7 +176,6 @@ const onSearch = async () => {
       gridApi.value.setGridOption('columnDefs', newCols);
       gridApi.value.setGridOption('rowData', merged);
     }
-
   } catch (err) {
     console.error(err);
     sAlert.Error('조회 실패');
@@ -199,185 +184,15 @@ const onSearch = async () => {
 </script>
 
 <style scoped>
-/* AG-Grid 테마가 깨지지 않도록 높이와 스타일 강제 지정 */
+/* AG-Grid 테마 깨짐 방지 */
 .ag-theme-alpine {
-  height: 100% !important;
-  width: 100% !important;
-  --ag-header-background-color: #f8f9fa;
-  --ag-header-foreground-color: #333;
-  --ag-border-color: #ddd;
+  --ag-header-background-color: #f1f3f4;
+  --ag-border-color: #dee2e6;
 }
 
-/* 패널 내부 스크롤 방지 및 높이 고정 */
+/* 상단 영역 고정 및 그리드 스크롤 확보 */
 .panel-body {
-  overflow: hidden;
   display: flex;
   flex-direction: column;
 }
-</style>yle="z-index: 10;">
-        <i class="fa fa-exclamation-triangle fa-3x text-warning mb-3"></i>
-        <p class="text-dark fw-bold">데이터 구조를 분석 중이거나 응답이 비어있습니다.</p>
-        <p class="text-muted small">F12 콘솔창의 '원본 Response 전체' 로그를 확인해 주세요.</p>
-      </div>
-      
-      <ag-grid-vue
-        style="width: 100%; height: 100%;"
-        class="ag-theme-alpine"
-        :columnDefs="columnDefs"
-        :rowData="rowData"
-        :defaultColDef="defaultColDef"
-        @grid-ready="onGridReady"
-      />
-    </div>
-  </div>
-</template>
-
-<script setup>
-import { ref, shallowRef } from 'vue';
-import { AgGridVue } from 'ag-grid-vue3';
-import { axiosWrapper } from '@/utils/axios/axios-wrapper';
-import { sAlert } from '@/utils/messages/alert-common';
-
-// --- State ---
-const manualProjNo = ref('TE1002');
-const regTypeId = ref('101TEST');
-const containDeleted = ref(true);
-
-const gridApi = shallowRef(null);
-const columnDefs = ref([]);
-const rowData = ref([]);
-const diffMap = ref(new Map());
-
-const defaultColDef = {
-  sortable: true,
-  filter: true,
-  resizable: true,
-  minWidth: 130
-};
-
-const onGridReady = (params) => {
-  gridApi.value = params.api;
-};
-
-/**
- * 🕵️‍♂️ 데이터 구조 자동 탐색 함수 (Recursive Search)
- * 객체를 뒤져서 'PubData'가 들어있는 부모 객체를 찾습니다.
- */
-const findTargetObject = (obj) => {
-  if (!obj || typeof obj !== 'object') return null;
-  if (obj.PubData && Array.isArray(obj.PubData)) return obj;
-
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      const found = findTargetObject(obj[key]);
-      if (found) return found;
-    }
-  }
-  return null;
-};
-
-// --- Logic ---
-const onSearch = async () => {
-  try {
-    if (gridApi.value) gridApi.value.showLoadingOverlay();
-
-    const payload = {
-      ProjectNo: manualProjNo.value.trim(),
-      REG_TYPE_ID: regTypeId.value.trim(),
-      ContainDeleted: containDeleted.value
-    };
-
-    // 1. API 호출
-    const response = await axiosWrapper.post('/api/Data/GetPubWrkData', payload);
-    console.log('📡 [1] 원본 Response 전체:', response);
-
-    // 2. 자동 탐색으로 PubData/WrkData가 포함된 객체 추출
-    const targetData = findTargetObject(response);
-    console.log('🎯 [2] 자동 추출된 타겟 객체:', targetData);
-
-    if (!targetData) {
-      console.error('❌ 실패: 데이터 구조에서 PubData를 찾을 수 없습니다.');
-      sAlert.Error('데이터 구조 분석 실패 (콘솔 로그 확인)');
-      if (gridApi.value) gridApi.value.hideOverlay();
-      return;
-    }
-
-    const pubSource = targetData.PubData || [];
-    const wrkSource = targetData.WrkData || [];
-    const diffSource = targetData.DiffData || [];
-
-    // 3. Status 및 차이점 매핑 생성
-    const statusMap = {};
-    const newDiffMap = new Map();
-    
-    diffSource.forEach(d => {
-      statusMap[d.TAG_IDX] = d.Status;
-      if (d.Property) {
-        d.Property.forEach(p => {
-          if (p.PUB_VALUE !== p.WRK_VALUE) {
-            newDiffMap.set(`${d.TAG_IDX}_${p.PROP_ID}`, true);
-          }
-        });
-      }
-    });
-    diffMap.value = newDiffMap;
-
-    // 4. 평면화 가공 (Attributes 전개)
-    const flatten = (list, type) => {
-      return list.map(item => {
-        const row = { 
-          ...item, 
-          EditType: type, 
-          Status: statusMap[item.TAG_IDX] || '' 
-        };
-        if (item.ATTRIBUTES && Array.isArray(item.ATTRIBUTES)) {
-          item.ATTRIBUTES.forEach(attr => {
-            row[attr.ATT_ID] = attr.VALUE;
-          });
-        }
-        return row;
-      });
-    };
-
-    const merged = [...flatten(pubSource, 'Publish'), ...flatten(wrkSource, 'Working')];
-
-    // 5. 정렬 및 컬럼 생성
-    merged.sort((a, b) => {
-      if (a.TAG_IDX === b.TAG_IDX) return a.EditType === 'Publish' ? -1 : 1;
-      return String(a.TAG_IDX).localeCompare(String(b.TAG_IDX));
-    });
-
-    const fixed = ['EditType', 'Status', 'TAG_NO', 'TAG_IDX', 'CLS_ID', 'DELETED'];
-    const allKeys = new Set(fixed);
-    merged.forEach(row => Object.keys(row).forEach(k => {
-      if (k !== 'ATTRIBUTES' && k !== '_id') allKeys.add(k);
-    }));
-
-    const newCols = Array.from(allKeys).map(key => ({
-      field: key,
-      headerName: key,
-      pinned: fixed.includes(key) ? 'left' : null,
-      cellStyle: (p) => {
-        if (diffMap.value.has(`${p.data.TAG_IDX}_${key}`)) {
-          return { backgroundColor: '#fff9db', color: '#d94111', fontWeight: 'bold' };
-        }
-        return null;
-      }
-    }));
-
-    // 6. 결과 반영
-    columnDefs.value = newCols;
-    rowData.value = merged;
-
-    if (gridApi.value) {
-      gridApi.value.hideOverlay();
-      gridApi.value.setGridOption('columnDefs', newCols);
-      gridApi.value.setGridOption('rowData', merged);
-    }
-
-  } catch (err) {
-    console.error('💥 실행 에러:', err);
-    sAlert.Error('조회 중 기술적 오류 발생');
-  }
-};
-</script>
+</style>
