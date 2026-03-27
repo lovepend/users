@@ -1,19 +1,16 @@
 <template>
-  <div class="panel panel-expandable m-0 p-0 h-100" style="display: flex; flex-direction: column;">
-    <PageTitle icon="fa-search-plus" :title="'Tag 통합 분석 및 비교'">
+  <div class="panel panel-expandable m-0 p-0" style="display: flex; flex-direction: column; height: 100vh; overflow: hidden;">
+    
+    <PageTitle icon="fa-search-plus" title="Tag 분석 및 속성 비교">
       <template #actions>
-        <div class="d-flex align-items-center gap-2 ms-auto">
-          <div class="input-group input-group-sm" style="width: 160px;">
-            <span class="input-group-text bg-light">Proj</span>
-            <input v-model="manualProjNo" class="form-control" placeholder="TE1002" />
+        <div class="d-flex align-items-center gap-2 ms-auto" style="padding-right: 15px;">
+          <div class="input-group input-group-sm" style="width: 150px;">
+            <span class="input-group-text">Proj</span>
+            <input v-model="manualProjNo" class="form-control" />
           </div>
           <div class="input-group input-group-sm" style="width: 180px;">
-            <span class="input-group-text bg-light">RegType</span>
-            <input v-model="regTypeId" class="form-control" placeholder="101TEST" />
-          </div>
-          <div class="form-check form-check-inline m-0 ms-1">
-            <input class="form-check-input" type="checkbox" v-model="containDeleted" id="chkDel" />
-            <label class="form-check-label small" for="chkDel">삭제포함</label>
+            <span class="input-group-text">RegType</span>
+            <input v-model="regTypeId" class="form-control" />
           </div>
           <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
             <i class="fa fa-search me-1"></i>조회
@@ -22,7 +19,7 @@
       </template>
     </PageTitle>
 
-    <div class="panel-body m-0 p-0 flex-grow-1" style="height: calc(100vh - 180px); min-height: 400px; overflow: hidden;">
+    <div class="panel-body flex-grow-1 p-0 m-0" style="position: relative; border-top: 1px solid #ddd;">
       <ag-grid-vue
         style="width: 100%; height: 100%;"
         class="ag-theme-alpine"
@@ -31,8 +28,8 @@
         :defaultColDef="defaultColDef"
         @grid-ready="onGridReady"
         :animateRows="true"
-        :headerHeight="40"
         :rowHeight="32"
+        :headerHeight="40"
       />
     </div>
   </div>
@@ -44,7 +41,10 @@ import { AgGridVue } from 'ag-grid-vue3';
 import { axiosWrapper } from '@/utils/axios/axios-wrapper';
 import { sAlert } from '@/utils/messages/alert-common';
 
-// --- State ---
+// --- AG-Grid 테마 CSS가 누락되었다면 여기서 임포트 확인 필요 ---
+// import 'ag-grid-community/styles/ag-grid.css';
+// import 'ag-grid-community/styles/ag-theme-alpine.css';
+
 const manualProjNo = ref('TE1002');
 const regTypeId = ref('101TEST');
 const containDeleted = ref(true);
@@ -59,7 +59,6 @@ const defaultColDef = {
   filter: true,
   resizable: true,
   minWidth: 130,
-  floatingFilter: true
 };
 
 const onGridReady = (params) => {
@@ -67,107 +66,98 @@ const onGridReady = (params) => {
 };
 
 /**
- * 🕵️‍♂️ 데이터 자동 탐색 (응답 객체 내에서 PubData가 있는 지점을 찾음)
+ * 🕵️‍♂️ 데이터 추출 핵심 로직 (어떤 계층이든 PubData를 찾아냄)
  */
-const findTarget = (obj) => {
-  if (!obj || typeof obj !== 'object') return null;
-  if (obj.PubData && Array.isArray(obj.PubData)) return obj;
-  for (const key in obj) {
-    const found = findTarget(obj[key]);
-    if (found) return found;
-  }
+const getTarget = (obj) => {
+  if (!obj) return null;
+  if (obj.PubData) return obj;
+  if (obj.data && obj.data.PubData) return obj.data;
+  if (obj.data && obj.data.data && obj.data.data.PubData) return obj.data.data;
   return null;
 };
 
-// --- Logic ---
 const onSearch = async () => {
   try {
     if (gridApi.value) gridApi.value.showLoadingOverlay();
 
-    const res = await axiosWrapper.post('/api/Data/GetPubWrkData', {
+    const response = await axiosWrapper.post('/api/Data/GetPubWrkData', {
       ProjectNo: manualProjNo.value.trim(),
       REG_TYPE_ID: regTypeId.value.trim(),
       ContainDeleted: containDeleted.value
     });
 
-    const target = findTarget(res);
+    const target = getTarget(response);
+    
     if (!target) {
-      sAlert.Error('데이터 구조 분석 실패');
+      console.error('Data Structure Mismatch:', response);
+      sAlert.Error('데이터 구조를 분석할 수 없습니다. 콘솔을 확인하세요.');
       if (gridApi.value) gridApi.value.hideOverlay();
       return;
     }
 
     const { PubData = [], WrkData = [], DiffData = [] } = target;
 
-    // 1. 상태 및 차이점 매핑 (DiffData 기준)
+    // 1. 차이점(Diff) 맵 생성
     const statusMap = {};
     const newDiffMap = new Map();
     DiffData.forEach(d => {
       statusMap[d.TAG_IDX] = d.Status;
       if (d.Property) {
         d.Property.forEach(p => {
-          if (p.PUB_VALUE !== p.WRK_VALUE) {
-            newDiffMap.set(`${d.TAG_IDX}_${p.PROP_ID}`, true);
-          }
+          if (p.PUB_VALUE !== p.WRK_VALUE) newDiffMap.set(`${d.TAG_IDX}_${p.PROP_ID}`, true);
         });
       }
     });
     diffMap.value = newDiffMap;
 
-    // 2. 평면화 가공 (Source 정보 추가)
-    const process = (list, type) => list.map(item => {
+    // 2. 데이터 평면화 (소스 정보 포함)
+    const flatData = (list, sourceName) => list.map(item => {
       const row = { 
         ...item, 
-        _SOURCE: type, // 출처 필드
-        _STATUS: statusMap[item.TAG_IDX] || '' // 상태 필드
+        SOURCE_TYPE: sourceName, // [출처] Publish / Working
+        DIFF_STATUS: statusMap[item.TAG_IDX] || '' 
       };
       if (item.ATTRIBUTES) {
-        item.ATTRIBUTES.forEach(a => { row[a.ATT_ID] = a.VALUE; });
+        item.ATTRIBUTES.forEach(attr => { row[attr.ATT_ID] = attr.VALUE; });
       }
       return row;
     });
 
-    const merged = [...process(PubData, 'PUBLISH'), ...process(WrkData, 'WORKING')];
+    const merged = [...flatData(PubData, 'PUBLISH'), ...flatData(WrkData, 'WORKING')];
 
-    // 3. 정렬 (같은 TAG_IDX끼리 묶기)
+    // 3. TAG_IDX 기준 정렬 (쌍으로 배치)
     merged.sort((a, b) => {
-      if (a.TAG_IDX === b.TAG_IDX) return a._SOURCE === 'PUBLISH' ? -1 : 1;
+      if (a.TAG_IDX === b.TAG_IDX) return a.SOURCE_TYPE === 'PUBLISH' ? -1 : 1;
       return String(a.TAG_IDX).localeCompare(String(b.TAG_IDX));
     });
 
-    // 4. 컬럼 정의 생성
-    const pinnedFields = ['_SOURCE', '_STATUS', 'TAG_NO', 'TAG_IDX'];
-    const keys = new Set(pinnedFields);
+    // 4. 컬럼 정의 (출처 헤더 강조)
+    const fixedCols = ['SOURCE_TYPE', 'DIFF_STATUS', 'TAG_NO', 'TAG_IDX'];
+    const allKeys = new Set(fixedCols);
     merged.forEach(r => Object.keys(r).forEach(k => {
-      if (!['_id', 'ATTRIBUTES'].includes(k)) keys.add(k);
+      if (k !== 'ATTRIBUTES' && k !== '_id') allKeys.add(k);
     }));
 
-    const newCols = Array.from(keys).map(key => {
-      let hName = key;
-      if (key === '_SOURCE') hName = '데이터 출처';
-      if (key === '_STATUS') hName = '상태(Diff)';
-
-      return {
-        field: key,
-        headerName: hName,
-        pinned: pinnedFields.includes(key) ? 'left' : null,
-        cellStyle: (p) => {
-          // 출처 컬럼 스타일
-          if (key === '_SOURCE') {
-            return p.value === 'PUBLISH' 
-              ? { backgroundColor: '#e8f0fe', fontWeight: 'bold', color: '#1a73e8' } 
-              : { backgroundColor: '#e6f4ea', fontWeight: 'bold', color: '#1e8e3e' };
-          }
-          // 차이점 강조 스타일
-          if (diffMap.value.has(`${p.data.TAG_IDX}_${key}`)) {
-            return { backgroundColor: '#fff9db', color: '#d94111', fontWeight: 'bold' };
-          }
-          return null;
+    const newCols = Array.from(allKeys).map(key => ({
+      field: key,
+      headerName: key === 'SOURCE_TYPE' ? '출처(Source)' : (key === 'DIFF_STATUS' ? '상태(Status)' : key),
+      pinned: fixedCols.includes(key) ? 'left' : null,
+      cellStyle: (p) => {
+        // 출처 컬럼 색상 구분
+        if (key === 'SOURCE_TYPE') {
+          return p.value === 'PUBLISH' 
+            ? { backgroundColor: '#e3f2fd', fontWeight: 'bold', color: '#1976d2', textAlign: 'center' } 
+            : { backgroundColor: '#f1f8e9', fontWeight: 'bold', color: '#388e3c', textAlign: 'center' };
         }
-      };
-    });
+        // 차이가 있는 셀 강조
+        if (diffMap.value.has(`${p.data.TAG_IDX}_${key}`)) {
+          return { backgroundColor: '#fff9db', color: '#d32f2f', fontWeight: 'bold' };
+        }
+        return null;
+      }
+    }));
 
-    // 5. 그리드 데이터 주입
+    // 5. 그리드 반영 (강제 주입)
     columnDefs.value = newCols;
     rowData.value = merged;
 
@@ -176,23 +166,23 @@ const onSearch = async () => {
       gridApi.value.setGridOption('columnDefs', newCols);
       gridApi.value.setGridOption('rowData', merged);
     }
+
   } catch (err) {
-    console.error(err);
-    sAlert.Error('조회 실패');
+    console.error('Search Error:', err);
+    sAlert.Error('데이터 조회 중 오류가 발생했습니다.');
   }
 };
 </script>
 
 <style scoped>
-/* AG-Grid 테마 깨짐 방지 */
+/* AG-Grid가 깨지지 않도록 강제 높이 설정 */
 .ag-theme-alpine {
-  --ag-header-background-color: #f1f3f4;
-  --ag-border-color: #dee2e6;
+  height: 100% !important;
+  width: 100% !important;
 }
 
-/* 상단 영역 고정 및 그리드 스크롤 확보 */
-.panel-body {
-  display: flex;
-  flex-direction: column;
+/* PageTitle 내부 레이아웃 보정 */
+:deep(.panel-heading) {
+  padding: 5px 15px !important;
 }
 </style>
