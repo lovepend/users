@@ -1,7 +1,27 @@
-    {
-      field: 'VALUE',
-      headerName: 'Value',
-      minWidth: 120,
-      flex: 4,
-      // tooltipValueGetter: params => params.valueFormatted || params.value,
-    },
+{
+  field: 'VALUE',
+  headerName: 'Value',
+  minWidth: 120,
+  flex: 4,
+  editable: true, // 편집 가능하도록 설정
+  // valueParser를 사용하여 입력된 값에서 콤마(,)를 모두 제거합니다.
+  valueParser: params => {
+    if (params.newValue && typeof params.newValue === 'string') {
+      // 모든 콤마(,)를 찾아 빈 문자열('')로 대체합니다.
+      return params.newValue.replace(/,/g, '');
+    }
+    return params.newValue;
+  },
+  // 사용자가 콤마를 입력하려고 시도했는지 확인하고 싶을 때 (선택 사항)
+  valueSetter: params => {
+    const containsComma = typeof params.newValue === 'string' && params.newValue.includes(',');
+    if (containsComma) {
+      console.warn("Value cannot contain commas.");
+      // 콤마가 제거된 값만 저장하거나, 아예 저장을 막으려면 여기서 로직 추가 가능
+      params.data.VALUE = params.newValue.replace(/,/g, '');
+    } else {
+      params.data.VALUE = params.newValue;
+    }
+    return true;
+  }
+}
