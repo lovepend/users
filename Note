@@ -6,100 +6,208 @@
   editable: true,
   cellDataType: 'object',
   valueParser: params => {
-    const { newValue, data } = params;
-    if (!newValue) return null;
+    const { newValue, data } = params
+    if (!newValue) return null
     
-    // OPER이 EQ일 때는 공백을 자르지 않고 분리만 수행
-    if (data.OPER === 'EQ') {
-      return newValue.split(',');
+    // OPER이 EQ일 때는 공백을 제거하지 않고 분리만 수행
+    const isEq = data.OPER === 'EQ'
+    if (typeof newValue === 'string') {
+      return isEq ? newValue.split(',') : newValue.split(',').map(item => item.trim())
     }
-    return newValue.split(',').map(item => item.trim());
+    return newValue
   },
   valueFormatter: params => {
-    const isPbsField = params.data.ATT_ID === 'ASSEMBLY_NAME' || params.data.ATT_ID === 'SYSTEM_NAME';
-    const isEq = params.data.OPER === 'EQ'; // EQ 여부 확인
+    const isPbsField = params.data.ATT_ID === 'ASSEMBLY_NAME' || params.data.ATT_ID === 'SYSTEM_NAME'
+    const isEq = params.data.OPER === 'EQ'
 
     if (isPbsField) {
       if (!params.value || (typeof params.value === 'string' && params.value.trim() === '')) {
-        return '';
+        return ''
       }
 
-      let tagIdxsToConvert = [];
+      let tagIdxsToConvert = []
       if (typeof params.value === 'string') {
-        // EQ인 경우 trim() 제외
-        tagIdxsToConvert = params.value.split(',').map(item => isEq ? item : item.trim());
+        // EQ인 경우 trim() 제외하고 분리
+        tagIdxsToConvert = isEq ? params.value.split(',') : params.value.split(',').map(item => item.trim())
       } else if (Array.isArray(params.value)) {
-        tagIdxsToConvert = params.value.map(item => isEq ? String(item) : String(item).trim());
+        tagIdxsToConvert = params.value.map(item => isEq ? String(item) : String(item).trim())
       } else {
-        const val = String(params.value);
-        tagIdxsToConvert = [isEq ? val : val.trim()];
+        tagIdxsToConvert = [isEq ? String(params.value) : String(params.value).trim()]
       }
 
       const transformedCodes = tagIdxsToConvert
-        .map(tagIdx => getCodeByTagIdx(tagIdx))
-        .filter(code => code !== undefined && code !== null);
+        .map(tagIdx => {
+          const code = getCodeByTagIdx(tagIdx)
+          return code
+        })
+        .filter(code => code !== undefined && code !== null)
 
-      return transformedCodes.join(isEq ? ',' : ', '); // EQ일 때는 콤마 뒤 공백 없이 결합 가능
+      // EQ일 때는 콤마 뒤에 강제 공백(', ')을 넣지 않고 원본 구분자(콤마)만 사용하거나 선택값 그대로 유지
+      return isEq ? transformedCodes.join(',') : transformedCodes.join(', ')
     }
 
-    return Array.isArray(params.value) ? params.value.join(isEq ? ',' : ', ') : params.value;
+    return Array.isArray(params.value) 
+      ? params.value.join(isEq ? ',' : ', ') 
+      : params.value
   },
-  
-  // ... 중간 cellEditorSelector 생략 ...
-
-  valueSetter: params => {
-    const val_type = LinkedAttrListRef.value.find(elem => elem.ATT_ID == params.data.ATT_ID)?.VAL_TYPE;
+  cellEditorSelector: params => {
+    const val_type = LinkedAttrListRef.value.find(elem => elem.ATT_ID == params.data.ATT_ID)?.VAL_TYPE
     if (val_type === 'BOOL') {
-      params.data.VALUE = params.newValue;
-      return true;
+      return undefined
     }
 
-    const { newValue, data } = params;
-    const isPbsField = data.ATT_ID === 'ASSEMBLY_NAME' || data.ATT_ID === 'SYSTEM_NAME';
-    const isEq = data.OPER === 'EQ'; // EQ 조건 변수
-    let valueToStore = newValue;
+    const clIdExists = !!params.data.CL_ID
+    const operatorIsIN = params.data.OPER === 'IN'
+    const isEpField = params.data.ATT_ID === 'EP_IC' || params.data.ATT_ID === 'EP_ID'
+    const isPbsField = params.data.ATT_ID === 'ASSEMBLY_NAME' || params.data.ATT_ID === 'SYSTEM_NAME'
+
+    let editorSourceData = []
+    if (isPbsField) {
+      if (params.data.ATT_ID === 'ASSEMBLY_NAME') {
+        editorSourceData = Object.values(assemblyPbsComboData.value).map(item => item.display)
+      } else if (params.data.ATT_ID === 'SYSTEM_NAME') {
+        editorSourceData = Object.values(systemPbsComboData.value).map(item => item.display)
+      }
+    } else if (isEpField) {
+      editorSourceData = epOfProjectCombo.value
+    } else if (clIdExists) {
+      editorSourceData = getValueFromCode(params.data.CL_ID)
+    } else {
+      editorSourceData = []
+    }
+
+    if ((isEpField || clIdExists || isPbsField) && operatorIsIN) {
+      let pvMapListData = []
+      if (isPbsField) {
+        pvMapListData = Object.values(
+          params.data.ATT_ID === 'ASSEMBLY_NAME' ? assemblyPbsComboData.value : systemPbsComboData.value
+        ).map(item => item.display)
+      } else if (isEpField) {
+        pvMapListData = epOfProjectCombo.value
+      } else if (clIdExists) {
+        pvMapListData = getValueFromCode(params.data.CL_ID)
+      }
+
+      let initialPvMapValue = null
+      if (params.value) {
+        const isEq = params.data.OPER === 'EQ'
+        const tagIdxs = String(params.value).split(',')
+        const finalTagIdxs = isEq ? tagIdxs : tagIdxs.map(s => s.trim())
+        
+        const codes = finalTagIdxs
+          .map(tagIdx => getCodeByTagIdx(tagIdx))
+          .filter(c => c !== undefined && c !== null)
+        
+        initialPvMapValue = isEq ? codes.join(',') : codes.join(', ')
+      }
+
+      return {
+        component: 'PvMapAttEditor',
+        params: {
+          listData: pvMapListData,
+          isMultiple: true,
+          isPushNew: true,
+          placeholder: 'Select VALUE',
+          value: initialPvMapValue,
+        },
+      }
+    } else if (isEpField || clIdExists || isPbsField) {
+      return {
+        component: 'agRichSelectCellEditor',
+        params: {
+          values: editorSourceData,
+          valueListGap: 5,
+          allowTyping: true,
+          filterList: true,
+          highlightMatch: true,
+          valueListMaxHeight: 220,
+          formatValue: value => {
+            if (isPbsField) {
+              return getCodeByTagIdx(value) || value
+            }
+            return value
+          },
+        },
+      }
+    } else {
+      return {
+        component: 'agTextCellEditor',
+      }
+    }
+  },
+  valueSetter: params => {
+    const val_type = LinkedAttrListRef.value.find(elem => elem.ATT_ID == params.data.ATT_ID)?.VAL_TYPE
+    if (val_type === 'BOOL') {
+      params.data.VALUE = params.newValue
+      return true
+    }
+
+    const { newValue, data } = params
+    const isPbsField = data.ATT_ID === 'ASSEMBLY_NAME' || data.ATT_ID === 'SYSTEM_NAME'
+    const isEq = data.OPER === 'EQ'
+    let valueToStore = newValue
 
     if (isPbsField) {
-      let codesToConvert = [];
+      let codesToConvert = []
 
       if (typeof newValue === 'string' && newValue !== '') {
-        // EQ일 때는 trim()을 하지 않음
-        codesToConvert = newValue.split(',').map(item => isEq ? item : item.trim());
+        // EQ일 때는 trim() 없이 분리만 수행
+        codesToConvert = isEq ? newValue.split(',') : newValue.split(',').map(item => item.trim())
       } else if (Array.isArray(newValue)) {
-        codesToConvert = newValue.map(item => isEq ? String(item) : String(item).trim());
-      } else if (newValue === null || newValue === undefined) {
-        codesToConvert = [];
+        codesToConvert = newValue.map(item => isEq ? String(item) : String(item).trim())
+      } else {
+        codesToConvert = []
       }
 
       if (codesToConvert.length > 0) {
-        const targetComboData = data.ATT_ID === 'ASSEMBLY_NAME' ? assemblyPbsComboData.value : systemPbsComboData.value;
+        const targetComboData = data.ATT_ID === 'ASSEMBLY_NAME' ? assemblyPbsComboData.value : systemPbsComboData.value
 
         const tagIdxArray = codesToConvert.map(code => {
-          // 비교 시에도 EQ일 때는 공백이 포함된 상태로 찾음
-          const found = Object.values(targetComboData).find(item => item.display === code);
-          return found ? found.value : code;
-        });
+          // 데이터 매핑 시에도 공백 포함된 원본 값으로 매칭 시도
+          const found = Object.values(targetComboData).find(item => item.display === code)
+          return found ? found.value : code
+        })
 
-        valueToStore = tagIdxArray.join(',');
+        valueToStore = tagIdxArray.join(',')
       } else {
-        valueToStore = '';
+        valueToStore = ''
       }
     }
 
-    // 최종 저장 단계에서 공백 제거 로직 수정
+    // 최종 저장 문자열 처리
     if (typeof valueToStore === 'string' && valueToStore !== '') {
-      const parts = valueToStore.split(',');
-      if (isEq) {
-        // EQ일 때는 빈 값만 필터링하고 공백(trim)은 유지
-        valueToStore = parts.filter(s => s.length > 0).join(',');
-      } else {
-        // EQ가 아닐 때는 기존처럼 공백 제거
-        valueToStore = parts.map(s => s.trim()).filter(s => s.length > 0).join(',');
+      const tokens = valueToStore.split(',')
+      // EQ일 때는 각 요소의 trim()을 수행하지 않음
+      valueToStore = isEq 
+        ? tokens.join(',') 
+        : tokens.map(s => s.trim()).filter(s => s.length > 0).join(',')
+    }
+
+    data.VALUE = valueToStore
+    return true
+  },
+  cellRenderer: params => {
+    const isEpField = params.data.ATT_ID === 'EP_IC' || params.data.ATT_ID === 'EP_ID'
+    const isPbsField = params.data.ATT_ID === 'ASSEMBLY_NAME' || params.data.ATT_ID === 'SYSTEM_NAME'
+    const isCodeListField = params.data.CL_ID
+
+    if (isPbsField || isEpField || isCodeListField) {
+      const tempParams = {
+        ...params,
+        value: params.valueFormatted,
+      }
+      return makeComboRender(tempParams)
+    } else {
+      return params.value ? `<div>${params.value}</div>` : undefined
+    }
+  },
+  cellRendererSelector: params => {
+    const val_type = LinkedAttrListRef.value.find(elem => elem.ATT_ID == params.data.ATT_ID)?.VAL_TYPE
+    if (val_type === 'BOOL') {
+      return {
+        component: 'agCheckboxCellRenderer',
       }
     }
-    
-    data.VALUE = valueToStore;
-    return true;
   },
-  // ... 하단 생략 ...
+  singleClickEdit: true,
 }
