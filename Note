@@ -1,217 +1,229 @@
-<template>
-  <div class="panel panel-inverse" style="height: 100vh; display: flex; flex-direction: column">
-    <div
-      class="panel-heading d-flex align-items-center justify-content-between"
-      style="background: #2d353c; color: #fff; padding: 10px 15px"
-    >
-      <h4 class="panel-title m-0">Tag 분석 및 비교 (통합 데이터 모드)</h4>
-      <div class="d-flex align-items-center gap-2">
-        <div class="input-group input-group-sm" style="width: 150px">
-          <span class="input-group-text bg-secondary text-white border-secondary">Proj</span>
-          <input v-model="manualProjNo" class="form-control" placeholder="Project No" />
-        </div>
-        <div class="input-group input-group-sm" style="width: 180px">
-          <span class="input-group-text bg-secondary text-white border-secondary">RegType</span>
-          <input v-model="regTypeId" class="form-control" placeholder="Register Type" />
-        </div>
-        <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
-          <i class="fa fa-search me-1"></i>조회
-        </button>
-      </div>
-    </div>
+    {
+      field: 'VALUE',
+      headerName: 'VALUE',
+      minWidth: 160,
+      flex: 2,
+      editable: true,
+      cellDataType: 'object',
+      valueParser: params => {
+        const { newValue } = params
+        return newValue ? newValue.split(',') : null
+      },
+      valueFormatter: params => {
+        const isPbsField = params.data.ATT_ID === 'ASSEMBLY_NAME' || params.data.ATT_ID === 'SYSTEM_NAME'
 
-    <div class="panel-body flex-grow-1 p-0" style="position: relative; overflow: hidden">
-      <div
-        v-if="rowData.length === 0"
-        class="position-absolute w-100 h-100 d-flex flex-column align-items-center justify-content-center bg-light"
-        style="z-index: 10"
-      >
-        <i class="fa fa-database fa-3x text-gray-300 mb-3"></i>
-        <p class="text-dark fw-bold">조회 버튼을 클릭하여 데이터를 분석해 주세요.</p>
-      </div>
-
-      <ag-grid-vue
-        style="width: 100%; height: 100%"
-        class="ag-theme-alpine"
-        :columnDefs="columnDefs"
-        :rowData="rowData"
-        :defaultColDef="defaultColDef"
-        @grid-ready="onGridReady"
-        :headerHeight="40"
-        :rowHeight="32"
-      />
-    </div>
-  </div>
-</template>
-
-<script setup>
-import { ref, shallowRef } from 'vue'
-import { AgGridVue } from 'ag-grid-vue3'
-import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import { sAlert } from '@/utils/messages/alert-common'
-
-// --- State ---
-const manualProjNo = ref('TE1002')
-const regTypeId = ref('101TEST')
-const containDeleted = ref(true)
-
-const gridApi = shallowRef(null)
-const columnDefs = ref([])
-const rowData = ref([])
-const diffMap = ref(new Map())
-
-const defaultColDef = {
-  sortable: true,
-  filter: true,
-  resizable: true,
-  minWidth: 130,
-  floatingFilter: true, // 필터 기능 가시성 향상
-}
-
-const onGridReady = params => {
-  gridApi.value = params.api
-}
-
-/**
- * 🕵️‍♂️ 데이터 구조 자동 탐색 함수 (가장 잘 작동했던 로직)
- */
-const findTargetObject = obj => {
-  if (!obj || typeof obj !== 'object') return null
-  if (obj.PubData && Array.isArray(obj.PubData)) return obj
-
-  for (const key in obj) {
-    if (Object.prototype.hasOwnProperty.call(obj, key)) {
-      const found = findTargetObject(obj[key])
-      if (found) return found
-    }
-  }
-  return null
-}
-
-// --- Logic ---
-const onSearch = async () => {
-  try {
-    if (gridApi.value) gridApi.value.showLoadingOverlay()
-
-    const payload = {
-      ProjectNo: manualProjNo.value.trim(),
-      REG_TYPE_ID: regTypeId.value.trim(),
-      ContainDeleted: containDeleted.value,
-    }
-
-    // 1. API 호출
-    const response = await axiosWrapper.post('/api/Data/GetPubWrkData', payload)
-    console.log('📡 [원본] Response:', response)
-
-    // 2. 타겟 데이터 자동 추출
-    const targetData = findTargetObject(response)
-
-    if (!targetData) {
-      sAlert.Error('데이터를 찾을 수 없습니다.')
-      if (gridApi.value) gridApi.value.hideOverlay()
-      return
-    }
-
-    const pubSource = targetData.PubData || []
-    const wrkSource = targetData.WrkData || []
-    const diffSource = targetData.DiffData || []
-
-    // 3. Status 및 차이점 매핑
-    const statusMap = {}
-    const newDiffMap = new Map()
-
-    diffSource.forEach(d => {
-      statusMap[d.TAG_IDX] = d.Status
-      if (d.Property) {
-        d.Property.forEach(p => {
-          if (p.PUB_VALUE !== p.WRK_VALUE) {
-            newDiffMap.set(`${d.TAG_IDX}_${p.PROP_ID}`, true)
+        if (isPbsField) {
+          if (!params.value || (typeof params.value === 'string' && params.value.trim() === '')) {
+            return ''
           }
-        })
-      }
-    })
-    diffMap.value = newDiffMap
 
-    // 4. 평면화 가공 (Attributes 전개 및 출처 명시)
-    const flatten = (list, sourceName) => {
-      return list.map(item => {
-        const row = {
-          ...item,
-          SOURCE_TYPE: sourceName, // [출처] 컬럼용 데이터
-          DIFF_STATUS: statusMap[item.TAG_IDX] || '', // [상태] 컬럼용 데이터
+          let tagIdxsToConvert = []
+          if (typeof params.value === 'string') {
+            tagIdxsToConvert = params.value.split(',').map(item => item.trim())
+          } else if (Array.isArray(params.value)) {
+            tagIdxsToConvert = params.value.map(item => String(item).trim())
+          } else {
+            tagIdxsToConvert = [String(params.value).trim()]
+          }
+
+          const transformedCodes = tagIdxsToConvert
+            .map(tagIdx => {
+              const code = getCodeByTagIdx(tagIdx)
+              return code
+            })
+            .filter(code => code !== undefined && code !== null)
+
+          const finalDisplayValue = transformedCodes.join(', ')
+          return finalDisplayValue
         }
-        if (item.ATTRIBUTES && Array.isArray(item.ATTRIBUTES)) {
-          item.ATTRIBUTES.forEach(attr => {
-            row[attr.ATT_ID] = attr.VALUE ?? ''
-          })
+
+        return Array.isArray(params.value) ? params.value.join(', ') : params.value
+      },
+      cellEditorSelector: params => {
+        const val_type = LinkedAttrListRef.value.find(elem => elem.ATT_ID == params.data.ATT_ID)?.VAL_TYPE
+        // 'BOOL' 타입은 여기에서 에디터 반환 X(렌더러가 직접 처리)
+        if (val_type === 'BOOL') {
+          return undefined
         }
-        return row
-      })
-    }
 
-    const merged = [...flatten(pubSource, 'PUBLISH'), ...flatten(wrkSource, 'WORKING')]
+        const clIdExists = !!params.data.CL_ID
+        const operatorIsIN = params.data.OPER === 'IN'
+        const isEpField = params.data.ATT_ID === 'EP_IC' || params.data.ATT_ID === 'EP_ID'
+        const isPbsField = params.data.ATT_ID === 'ASSEMBLY_NAME' || params.data.ATT_ID === 'SYSTEM_NAME'
 
-    // 5. 정렬 (TAG_IDX 기준)
-    merged.sort((a, b) => {
-      if (a.TAG_IDX === b.TAG_IDX) return a.SOURCE_TYPE === 'PUBLISH' ? -1 : 1
-      return String(a.TAG_IDX).localeCompare(String(b.TAG_IDX))
-    });
-
-    // 6. 컬럼 생성 (헤더 이름에 출처 명시)
-    const fixedFields = ['SOURCE_TYPE', 'DIFF_STATUS', 'TAG_NO', 'TAG_IDX', 'CLS_ID', 'DELETED']
-    const allKeys = new Set(fixedFields)
-    merged.forEach(row =>
-      Object.keys(row).forEach(k => {
-        if (k !== 'ATTRIBUTES' && k !== '_id') allKeys.add(k)
-      })
-    )
-
-    const newCols = Array.from(allKeys).map(key => {
-      let headerName = key
-      // 헤더 명칭 커스텀
-      if (key === 'SOURCE_TYPE') headerName = '[Source] 데이터 출처'
-      if (key === 'DIFF_STATUS') headerName = '[Diff] 상태'
-
-      return {
-        field: key,
-        headerName: headerName,
-        pinned: fixedFields.includes(key) ? 'left' : null,
-        cellStyle: p => {
-          // 출처에 따른 배경색 지정
-          if (key === 'SOURCE_TYPE') {
-            return p.value === 'PUBLISH'
-              ? { backgroundColor: '#e8f0fe', color: '#1a73e8', fontWeight: 'bold', textAlign: 'center' }
-              : { backgroundColor: '#e6f4ea', color: '#1e8e3e', fontWeight: 'bold', textAlign: 'center' };
+        let editorSourceData = []
+        if (isPbsField) {
+          if (params.data.ATT_ID === 'ASSEMBLY_NAME') {
+            editorSourceData = Object.values(assemblyPbsComboData.value).map(item => item.display) // CODE 값을 에디터에 표시
+          } else if (params.data.ATT_ID === 'SYSTEM_NAME') {
+            editorSourceData = Object.values(systemPbsComboData.value).map(item => item.display) // CODE 값을 에디터에 표시
           }
-          // 차이점이 있는 셀 강조
-          if (diffMap.value.has(`${p.data.TAG_IDX}_${key}`)) {
-            return { backgroundColor: '#fff9db', color: '#d94111', fontWeight: 'bold' }
+        } else if (isEpField) {
+          // EP_IC 또는 EP_ID이면 epOfProjectCombo.value 사용
+          editorSourceData = epOfProjectCombo.value
+        } else if (clIdExists) {
+          // 그 외 CL_ID가 존재하면 기존의 getValueFromCode 사용
+          editorSourceData = getValueFromCode(params.data.CL_ID)
+        } else {
+          // CL_ID도 없고 EP 필드도 아니면 에디터 소스 데이터 X
+          editorSourceData = []
+        }
+
+        // 에디터 컴포넌트 결정
+        if ((isEpField || clIdExists || isPbsField) && operatorIsIN) {
+          // PBS 필드 조건 추가
+          // PvMapAttEditor (CODE, CODE_NM, EP_ID를 그대로 listData에 전달)
+          let pvMapListData = []
+          if (isPbsField) {
+            pvMapListData = Object.values(
+              params.data.ATT_ID === 'ASSEMBLY_NAME' ? assemblyPbsComboData.value : systemPbsComboData.value
+            ).map(item => item.display) // CODE 값을 PvMapAttEditor에 전달
+          } else if (isEpField) {
+            pvMapListData = epOfProjectCombo.value // EP_ID 자체를 전달
+          } else if (clIdExists) {
+            pvMapListData = getValueFromCode(params.data.CL_ID)
           }
-          return null
-        },
-      }
-    })
 
-    // 7. 결과 강제 주입
-    columnDefs.value = newCols
-    rowData.value = merged
+          // PvMapAttEditor로 전달될 초기 값 (initialValue)을 TAG_IDX가 아닌 CODE 값으로 변환.
+          let initialPvMapValue = null
+          if (params.value) {
+            // params.value에는 TAG_IDX(들)이 콤마로 구분된 문자열로 들어 있음
+            const tagIdxs = String(params.value)
+              .split(',')
+              .map(s => s.trim())
+            const codes = tagIdxs.map(tagIdx => getCodeByTagIdx(tagIdx)).filter(c => c !== undefined && c !== null)
+            initialPvMapValue = codes.join(', ') // CODE 값을 콤마로 구분된 문자열로 PvMapAttEditor에 전달
+          }
 
-    if (gridApi.value) {
-      gridApi.value.hideOverlay()
-      gridApi.value.setGridOption('columnDefs', newCols)
-      gridApi.value.setGridOption('rowData', merged)
-    }
-  } catch (err) {
-    console.error('💥 실행 에러:', err)
-    sAlert.Error('조회 처리 중 오류가 발생했습니다.')
-  }
-}
-</script>
+          return {
+            component: 'PvMapAttEditor',
+            params: {
+              listData: pvMapListData, // 실제 표시할 CODE/EP_ID/CODE_NM 값들을 전달
+              isMultiple: true,
+              isPushNew: true,
+              placeholder: 'Select VALUE',
+              value: initialPvMapValue,
+            },
+          }
+        } else if (isEpField || clIdExists || isPbsField) {
+          // PBS 필드 조건 추가 (IN이 아닌 경우)
+          // agRichSelectCellEditor (formatValue 추가)
+          return {
+            component: 'agRichSelectCellEditor',
+            params: {
+              values: editorSourceData, // 이 배열에는 CODE/EP_ID/CODE_NM 값들이 들어있음 (표시값)
+              valueListGap: 5,
+              allowTyping: true,
+              filterList: true,
+              highlightMatch: true,
+              valueListMaxHeight: 220,
+              // agRichSelectCellEditor에 'formatValue'를 추가하여 실제 셀 값(TAG_IDX/EP_ID/CODE_ID)을 CODE/EP_ID/CODE_NM으로 변환하여 에디터 필드에 표시
+              formatValue: value => {
+                // value는 셀의 실제 저장된 값 (TAG_IDX, EP_ID, CODE_ID)
+                if (isPbsField) {
+                  return getCodeByTagIdx(value) || value
+                }
+                return value
+              },
+            },
+          }
+        } else {
+          // 모든 조건에 해당하지 않을 경우 agTextCellEditor
+          return {
+            component: 'agTextCellEditor',
+          }
+        }
+      },
+      valueSetter: params => {
+        const val_type = LinkedAttrListRef.value.find(elem => elem.ATT_ID == params.data.ATT_ID)?.VAL_TYPE
+        if (val_type === 'BOOL') {
+          params.data.VALUE = params.newValue
+          return true
+        }
 
-<style scoped>
-/* AG-Grid 스타일 보정 */
-.ag-theme-alpine {
-  --ag-header-background-color: #f8f9fa;
-  --ag-odd-row-background-color: #fafafa;
-}
-</style>
+        const { newValue, data } = params
+        const isPbsField = data.ATT_ID === 'ASSEMBLY_NAME' || data.ATT_ID === 'SYSTEM_NAME'
+        // console.log('valueSetter newValue', newValue)
+        let valueToStore = newValue // isPbsField가 아닐 경우, newValue를 그대로 저장
+
+        if (isPbsField) {
+          let codesToConvert = []
+
+          // newValue가 문자열이고 내용이 있는 경우, 콤마로 분리하여 CODE 배열 생성
+          if (typeof newValue === 'string' && newValue.trim() !== '') {
+            codesToConvert = newValue.split(',').map(item => item.trim())
+          } else if (Array.isArray(newValue)) {
+            // CODE 배열로 넘어오는 경우
+            codesToConvert = newValue.map(item => String(item).trim())
+          } else if (newValue === null || newValue === undefined) {
+            // 값이 없는 경우
+            codesToConvert = []
+          }
+
+          if (codesToConvert.length > 0) {
+            const targetComboData =
+              data.ATT_ID === 'ASSEMBLY_NAME' ? assemblyPbsComboData.value : systemPbsComboData.value
+
+            // 각 CODE를 TAG_IDX로 변환
+            const tagIdxArray = codesToConvert.map(code => {
+              const found = Object.values(targetComboData).find(item => item.display === code)
+              return found ? found.value : code // 찾으면 TAG_IDX, 못 찾으면 원본 CODE
+            })
+
+            // 변환된 TAG_IDX 배열을 콤마로 구분된 문자열로 합쳐서 저장
+            valueToStore = tagIdxArray.join(',')
+          } else {
+            // 선택된 값이 없거나 비어있는 경우, 빈 문자열로 저장하여 null이나 undefined 방지
+            valueToStore = ''
+          }
+        }
+        // isPbsField가 아닌 경우는 valueToStore가 초기값 newValue를 그대로 유지
+
+        if (typeof valueToStore === 'string') {
+          valueToStore = valueToStore
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => s.length > 0) // 빈 토큰 제거
+            .join(',')
+        }
+        data.VALUE = valueToStore // 최종 변환된 값 또는 원본 newValue를 data.VALUE에 저장
+        return true // 변경 적용
+      },
+      cellRenderer: params => {
+        // valueFormatter가 이미 적절하게 값을 포맷팅했으므로, makeComboRender가 params.valueFormatted를 사용하도록 임시 변수를 전달.
+        const isEpField = params.data.ATT_ID === 'EP_IC' || params.data.ATT_ID === 'EP_ID'
+        const isPbsField = params.data.ATT_ID === 'ASSEMBLY_NAME' || params.data.ATT_ID === 'SYSTEM_NAME'
+        const isCodeListField = params.data.CL_ID
+
+        // PbsField인 경우, valueFormatter가 이미 CODE 문자열로 만들어주었으므로,
+        // makeComboRender가 params.value 대신 params.valueFormatted를 사용
+        if (isPbsField || isEpField || isCodeListField) {
+          // makeComboRender는 params.value를 직접 사용하므로, valueFormatted를 전달하기 위한 꼼수
+          const tempParams = {
+            ...params,
+            value: params.valueFormatted, // makeComboRender가alueFormatted참조
+          }
+          return makeComboRender(tempParams)
+        } else {
+          // PBS, EP, CL_ID가 없는 경우, 기본 값 렌더링
+          return params.value ? `<div>${params.value}</div>` : undefined
+        }
+      },
+      cellRendererSelector: params => {
+        const val_type = LinkedAttrListRef.value.find(elem => elem.ATT_ID == params.data.ATT_ID)?.VAL_TYPE
+
+        // VAL_TYPE이 'BOOL'인 경우 agCheckboxCellRenderer 적용
+        if (val_type === 'BOOL') {
+          return {
+            component: 'agCheckboxCellRenderer',
+            // agCheckboxCellRenderer는 별도의 params 없이 boolean 값을 직접 렌더링하고 토글
+          }
+        }
+      },
+      // cellRenderer: params => {
+      //   return params.data.CL_ID ? makeComboRender(params) : params.value ? `<div>${params.value}</div>` : undefined
+      // },
+      singleClickEdit: true, // 단일 클릭으로 편집 가능
+      // cellEditorPopup: true, // 팝업으로 편집기 표시
+      // cellEditorPopupPosition: 'over' // 팝업 위치 설정
+    },
