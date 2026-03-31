@@ -1,312 +1,169 @@
-<template>
-  <div class="panel panel-expandable m-0 p-0 h-100">
-    <PageTitle
-      icon="fa-search-plus"
-      :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')"
-    >
-      <template #actions>
-        <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap">Project No</span>
-            <input
-              type="text"
-              class="form-control form-control-sm custom-input-width"
-              v-model="manualProjNo"
-              @change="onProjectChange"
-              placeholder="예: TE1002"
-            />
-          </label>
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-nowrap">조회 키워드</span>
-            <textarea
-              class="form-control form-control-sm custom-input-width"
-              style="height: 31px; resize: none"
-              v-model="searchKeywordRef"
-              placeholder="Tag No (공백/엔터 구분)"
-            ></textarea>
-          </label>
-          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
-            <i class="fa fa-search me-1"></i>조회
-          </button>
+아래와 같이 에러 발생
+142|  </template>
+  143|
+  144|  <script setup>
+     |   ^
+  145|    import { ref, computed, shallowRef, watch, onMounted } from 'vue'
+  146|    import { useRouter, useRoute } from 'vue-router'
 
-          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap"><i class="fa-search"></i> 결과 필터</span>
-            <input
-              type="text"
-              class="form-control form-control-sm border-success custom-input-width"
-              v-model="localFilterQuery"
-              placeholder="결과 내 검색"
-            />
-          </div>
-          <div class="ms-1 d-flex align-items-center gap-2">
-            <span class="fw-bold text-primary text-nowrap"><i class="fa-columns"></i> 컬럼 필터</span>
-            <textarea
-              class="form-control form-control-sm border-primary custom-input-width"
-              style="height: 31px; resize: none"
-              v-model="columnFilterQuery"
-              placeholder="표시할 컬럼명"
-            ></textarea>
-          </div>
-        </div>
-        <panel-toolbar />
-      </template>
-    </PageTitle>
 
-    <div class="panel-body m-0 p-0 h-100">
-      <div class="panel m-0 p-0 h-100">
-        <div class="panel-heading p-0 m-0">
-          <div class="w-100 h-100">
-            <BasicToolBar
-              :showCreate="false"
-              :showMultiCreate="false"
-              :showSave="false"
-              :showDelete="true"
-              :isDisabledDeleteBtn="isDisabledDeleteBtn"
-              @delete="onDelete"
-            />
-          </div>
-        </div>
-        <div class="panel-body overflow-hidden m-0 p-0 h-100">
-          <ag-grid-vue
-            v-bind="gridBindProps"
-            @grid-ready="onGridReady"
-            @selection-changed="onSelectionChanged"
-            @cell-clicked="onCellClicked"
-            rowSelection="multiple"
-            :suppressRowClickSelection="true"
-          />
-        </div>
-      </div>
-    </div>
+그리고 라인수가 많이 줄어든거 보니 맨처음 입력한 코드에서 너 기능을 많이 빠져먹은거 같아 확인해줘 
 
-    <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
-      <div class="custom-modal-window shadow-lg">
-        <div class="modal-header-dark">
-          <div class="d-flex align-items-center gap-2">
-            <span
-              class="badge shadow-sm"
-              :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }"
-              >{{ selectedRow?.Source }}</span
-            >
-            <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
-          </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-xs btn-outline-light" @click="isJsonMode = !isJsonMode">
-              {{ isJsonMode ? 'Table View' : 'JSON View' }}
-            </button>
-            <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
-          </div>
-        </div>
-        <div class="modal-body-content">
-          <div v-if="isJsonMode" class="json-wrapper">
-            <pre class="json-content"><code>{{ JSON.stringify(selectedRow, null, 2) }}</code></pre>
-          </div>
-          <div v-else class="modal-grid-container ag-theme-alpine">
-            <ag-grid-vue v-bind="modalGridBindProps" class="w-100 h-100" />
-          </div>
-        </div>
-      </div>
-    </div>
+추가적으로 리턴되는 값들을 아래와 같이 정리 해줄꼐
 
-    <div v-if="showClassModal" class="custom-modal-overlay" @click.self="closeClassModal">
-      <div class="custom-modal-window shadow-lg" style="width: 850px; height: 65%">
-        <div class="modal-header-dark" style="background: #334155">
-          <div class="d-flex align-items-center gap-2">
-            <i class="fa fa-info-circle text-info"></i>
-            <span class="fw-bold text-white">Class Info: {{ clickedClassId }}</span>
-          </div>
-          <div class="d-flex gap-2">
-            <button @click="closeClassModal" class="btn btn-xs btn-danger">✕</button>
-          </div>
-        </div>
-        <div class="modal-body-content p-3">
-          <div class="alert alert-info py-2 mb-3 border-0 shadow-sm" style="background-color: #f0f7ff">
-            <i class="fa fa-external-link me-2"></i><b>Register No</b>를 클릭하면 해당 설정 페이지가
-            <span class="badge bg-primary">새 탭</span>으로 열립니다.
-          </div>
-          <div class="modal-grid-container ag-theme-alpine shadow-sm">
-            <ag-grid-vue
-              style="width: 100%; height: 100%"
-              :columnDefs="classModalColDefs"
-              :rowData="classModalData"
-              :defaultColDef="{ resizable: true, sortable: true, filter: true }"
-              @cell-clicked="onClassGridCellClicked"
-              :headerHeight="40"
-              :rowHeight="38"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup>
-  import { ref, computed, shallowRef, watch, onMounted } from 'vue'
-  import { useRouter, useRoute } from 'vue-router'
-  import { storeToRefs } from 'pinia'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sortBy } from 'lodash-es'
-  import { useAppMenuStore } from '@/stores/app-menu'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-  import { sAlert } from '@/utils/messages/alert-common'
-  import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
-  import PageTitle from '@/components/toolBar/PageTitle.vue'
-
-  const router = useRouter()
-  const route = useRoute()
-  const appMenu = useAppMenuStore()
-  const { currentProjNo, currentEpId } = storeToRefs(appMenu)
-
-  const gridApi = shallowRef()
-  const manualProjNo = ref('')
-  const searchKeywordRef = ref('')
-
-  /**
-   * 🛠️ 공통 헬퍼: 백엔드 응답에서 배열 데이터를 안전하게 추출
-   * 응답이 순수 배열이 아니더라도(예: { Data: [...] } 구조) 내부 배열을 찾아냅니다.
-   */
-  const extractArrayData = (res) => {
-    if (!res) return []
-    if (Array.isArray(res)) return res
-    
-    // 자주 사용되는 백엔드 응답 패턴들 대응
-    const possibleKeys = ['Data', 'data', 'Items', 'items', 'Result', 'result', 'list', 'List']
-    for (const key of possibleKeys) {
-      if (res[key] && Array.isArray(res[key])) {
-        return res[key]
-      }
-    }
-    return [res] // 모두 아니면 단일 객체로 취급하여 배열에 담아 반환
-  }
-
-  const syncParamsToUrl = () => {
-    const pNo = manualProjNo.value || currentProjNo.value
-    const eId = currentEpId.value
-
-    if (pNo) {
-      router.replace({
-        query: { ...route.query, proj_no: pNo, ep_id: eId },
-      })
-    }
-  }
-
-  onMounted(() => {
-    const targetProjNo = route.query.proj_no || currentProjNo.value
-    if (targetProjNo) {
-      manualProjNo.value = targetProjNo
-    }
-    syncParamsToUrl()
-  })
-
-  const onProjectChange = () => {
-    syncParamsToUrl()
-  }
-
-  watch(currentProjNo, newVal => {
-    if (newVal) {
-      manualProjNo.value = newVal
-      syncParamsToUrl()
-    }
-  })
-
-  const localFilterQuery = ref('')
-  const columnFilterQuery = ref('')
-  const rawDataList = ref([])
-  const dynamicAttCols = ref([])
-  const dynamicRemainingCols = ref([])
-  const isDisabledDeleteBtn = ref(true)
-
-  const showModal = ref(false)
-  const selectedRow = ref(null)
-  const isJsonMode = ref(false)
-  const showClassModal = ref(false)
-  const classModalData = ref([])
-  const clickedClassId = ref('')
-
-  const classModalColDefs = [
+/api/Data/SearchPublishData는 아래와 같아 우리는 삭제 된거까지 다 보여줘야해. 즉 배열로 N개 리턴이 온다는거지 
+대신 왼쪽에 핀 고정에 DELETED칼럼 정보 고정 추가 했으면해 
+[
     {
-      headerName: 'Register No (Link)',
-      field: 'TYPE_ID',
-      flex: 1,
-      cellStyle: { fontWeight: 'bold', color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer' },
+        "EP_ID": "TeEP",
+        "EP_IC": "TeEP",
+        "DELETED": true,
+        "DEL_USER": "52593271",
+        "DEL_DTM": "2026-03-31T00:41:17.647Z",
+        "PROJ_NO": "TE1002",
+        "TAG_IDX": "682bc953d235c727377a2633",
+        "TAG_NO": "TEST101_005",
+        "TAG_TYPE_ID": "",
+        "CLS_ID": "TEST101_CLS",
+        "TAG_DESC": "TEST101_005_DESC",
+        "BF_TAG_NO": "",
+        "PIC_NO": "52593271",
+        "DSN_SKL": null,
+        "PRNT_TAG_IDX": null,
+        "ATTRIBUTES": [
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "ASSEMBLY_NAME",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "SYSTEM_NAME",
+                "VALUE": "682d76d4f300a55454507979"
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST001",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST002",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST003",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST004",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST005",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST006",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST007",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST008",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST009",
+                "VALUE": null
+            },
+            {
+                "UOM_ID": null,
+                "VALUE_DBL": 0,
+                "ATT_ID": "TEST010",
+                "VALUE": "true"
+            }
+        ],
+        "CRTER_NO": "52593271",
+        "CRTE_DTM": "2025-05-20T00:14:11Z",
+        "CHGER_NO": "52593271",
+        "CHGE_DTM": "2026-03-31T00:41:17.647Z",
+        "_id": "682bd5b5d235c727377a27b7"
     },
-    { headerName: 'Description', field: 'DESC', flex: 1.5 },
-    { headerName: 'EP ID', field: 'EP_ID', width: 120 },
-    { headerName: 'Project No', field: 'PROJ_NO', width: 120 },
-  ]
-
-  const onClassGridCellClicked = p => {
-    if (p.column.getColId() === 'TYPE_ID' && p.value) {
-      const targetProjNo = manualProjNo.value || currentProjNo.value
-      const targetEpId = p.data.EP_ID || currentEpId.value
-
-      const routeData = router.resolve({
-        path: '/register-mapping-setup',
-        query: {
-          reg_type_id: p.data.TYPE_ID,
-          proj_no: targetProjNo,
-          ep_id: targetEpId,
-        },
-      })
-      window.open(routeData.href, '_blank')
+    {
+        "EP_ID": "TeEP",
+        "EP_IC": "TeEP",
+        "DELETED": false,
+        "DEL_USER": null,
+        "DEL_DTM": null,
+        "PROJ_NO": "TE1002",
+        "TAG_IDX": "689d31924c35487828ec43ee",
+        "TAG_NO": "TEST101_005",
+        "TAG_TYPE_ID": null,
+        "CLS_ID": "DOC_TO_TAG_CLAS",
+        "TAG_DESC": null,
+        "BF_TAG_NO": null,
+        "PIC_NO": "52593270",
+        "DSN_SKL": null,
+        "PRNT_TAG_IDX": "689d31814c35487828ec43eb",
+        "ATTRIBUTES": [],
+        "CRTER_NO": "52593270",
+        "CRTE_DTM": "2025-08-14T00:45:12.51Z",
+        "CHGER_NO": "52593270",
+        "CHGE_DTM": null,
+        "_id": "689d31924c35487828ec43fd"
     }
-  }
+]
 
-  const highlightRenderer = p => {
-    const val = p.value === null || p.value === undefined ? '' : String(p.value)
-    if (!val || !localFilterQuery.value.trim()) return val
-    const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
-    let text = val
-    kws.forEach(kw => {
-      const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      text = text.replace(new RegExp(`(${escapedKw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
-    })
-    return text
-  }
 
-  const onSearch = () => {
-    syncParamsToUrl()
-    getData()
-  }
 
-  const getData = async () => {
-    const pNo = manualProjNo.value?.trim() || currentProjNo.value
-    if (!pNo) return sAlert.Warning(`Project No를 입력하세요.`)
-    if (gridApi.value) gridApi.value.setGridOption('loading', true)
-    try {
-      const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
-      let combined = []
-      for (const key of searchKeys) {
-        const payload = { ProjectNo: pNo, Keyword: key }
-        const [p, w] = await Promise.allSettled([
-          axiosWrapper.post('/api/Data/SearchPublishData', payload),
-          axiosWrapper.post('/api/Data/SearchWorkingData', payload),
-        ])
-        
-        // 🛠️ 수정됨: extractArrayData를 사용하여 배열을 안전하게 추출합니다.
-        if (p.status === 'fulfilled' && p.value) {
-          const data = extractArrayData(p.value)
-          combined.push(...data.map(i => ({ ...i, Source: 'Published' })))
-        }
-        if (w.status === 'fulfilled' && w.value) {
-          const data = extractArrayData(w.value)
-          combined.push(...data.map(i => ({ ...i, Source: 'Working' })))
-        }
-      }
-      
-      const allAttIds = new Set()
-      const allKeys = new Set()
-      const fixedKeys = ['Source', 'TAG_IDX', 'TAG_NO', 'EP_ID', 'CLS_ID', 'ATTRIBUTES', 'DELETED', '_id']
-      
-      combined.forEach(item => {
-        ;(item.ATTRIBUTES || []).forEach(a => {
-          if (a?.ATT_ID) allAttIds.add(a.ATT_ID)
-        })
-        Object.keys(item).forEach(k => {
-          if (!fixedKeys.includes(k) && typeof item[k] !== 'object') allKeys.add(k)
-        })
-      })
-      
-      const processedData = combined
-        .filter(i => i && !i.
+그리고 워킹은 아래꺼인데 이것도 배열로 N개 접수 될수 있어
+/api/Data/SearchWorkingData
+[
+    {
+        "TAG_NO_PASSED": null,
+        "NEW_YN": false,
+        "DEL_YN": false,
+        "EP_ID": "TeEP",
+        "EP_IC": "TeEP",
+        "DELETED": false,
+        "DEL_USER": null,
+        "DEL_DTM": null,
+        "PROJ_NO": "TE1002",
+        "TAG_IDX": "689d31924c35487828ec43ee",
+        "TAG_NO": "TEST101_005",
+        "TAG_TYPE_ID": null,
+        "CLS_ID": "DOC_TO_TAG_CLAS",
+        "TAG_DESC": null,
+        "BF_TAG_NO": null,
+        "PIC_NO": "52593270",
+        "DSN_SKL": null,
+        "PRNT_TAG_IDX": "689d31814c35487828ec43eb",
+        "ATTRIBUTES": [],
+        "CRTER_NO": "52593270",
+        "CRTE_DTM": "2025-08-14T00:45:06.522Z",
+        "CHGER_NO": null,
+        "CHGE_DTM": "2025-10-24T02:35:12.045Z",
+        "_id": "689d31924c35487828ec43fd"
+    }
+]
