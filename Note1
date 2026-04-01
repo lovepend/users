@@ -1,996 +1,193 @@
-<template>
-  <div class="panel m-0 p-0 h-100">
-    <div class="panel-heading m-0 p-2" style="background-color: var(--bg17)">
-      <h4 class="panel-title" style="color: var(--txt03)">
-        <i class="fa fa-bars me-2"></i>
-        <span>{{ $t('ObjectSetup_vue.object_class_title') }}</span>
-        <span v-if="currentProjNo"> [ {{ currentProjNo }} ]</span>
-      </h4>
-    </div>
+<script>
+  import { shallowRef } from 'vue'
+  import { ApiCommon } from '@/utils/axios/api-common'
+  import vSelect from 'vue-select'
+  import { useEmployees } from '@/stores/app-employees'
+  const { setEmployeeInfo } = useEmployees()
 
-    <span v-if="!isSetupAdmin" class="just-view">
-      {{ $t('DataSettingNavBar_vue.justViewPermission') }}
-    </span>
-    <div v-else class="panel-body p-0 m-0">
-      <div class="w-100 h-100">
-        <BasicToolBar v-bind="toolbarBindRef" v-on="toolbarEventsRef" />
-      </div>
+  export default {
+    name: 'AgUserEditor',
+    components: { vSelect },
+    props: {
+      // AG-Grid Custom Editor Params - ICellEditorParams
+      // 기본 Parameters와 cellEditorParams의 추가 Parameters
+      params: { type: Object, default: () => ({}) },
+    },
+    setup(props) {
+      return {
+        containerRef: shallowRef(null),
+        vSelectRef: shallowRef(null),
+        vModelRef: shallowRef(null),
+        vOptionsRef: shallowRef([]),
+        vValue: shallowRef(null),
+      }
+    },
+    mounted() {
+      this.vModelRef = this.params?.editorSelected
+      this.vOptionsRef = this.params?.editorOptions ?? []
+      this.vValue = this.getInitialValue()
+      setTimeout(() => {
+        this.vSelectRef?.searchEl.focus()
+      }, 1)
+    },
+    methods: {
+      // AG-Grid Custom Editor Functions - ICellEditor
+      // getValue - 필수
+      // refresh
+      // afterGuiAttached
+      // getPopupPosition
+      // isCancelBeforeStart
+      // isCancelAfterEnd
+      // focusIn
+      // focusOut
+      // getValidationElement
+      // getValidationErrors
+      getValue() {
+        return this.vValue
+      },
+      getInitialValue() {
+        return this.params?.value
+      },
+      ///////////////////////////////////////////
+      // This Component Using Functions
+      onClosePopup() {
+        try {
+          if (this.params) {
+            this.params.stopEditing()
+          }
+        } catch {
+          let dummyVar
+        }
+      },
+      setValue(USER_ID) {
+        const newValue = String(USER_ID ?? '')
+        this.vValue = newValue === '' ? null : newValue
+      },
+      getSelectedValue() {
+        return this.vModelRef?.code
+      },
+      onKeydown(event) {
+        if (event.key === 'ESC') {
+          event.preventDefault()
+          const userId = this.getInitialValue()
+          this.setValue(userId)
+          this.onClosePopup()
+        } else if (event.key === 'Enter') {
+          event.preventDefault()
+          event.stopPropagation()
+          const userId = this.getSelectedValue()
+          if (userId) {
+            this.setValue(userId)
+            this.onClosePopup()
+          }
+        }
+      },
+      // vSelect Events
+      async onSearch(search, loading) {
+        try {
+          loading(true)
+          const userName = String(search ?? '').replaceAll(' ', '')
+          if (userName.length < 2) {
+            throw new Error(``)
+          }
+          const response = (await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: userName })) ?? []
+          const options = response
+            .filter(item => item.EMP_NO) // EMP_NO가 있는 항목만 필터링
+            .map(item => ({
+              ...item,
+              code: item.EMP_NO,
+              label: `${item.EMP_NM ?? ''}(${item.DEPT_NAME ?? ''})`,
+            }))
+            .sort((n, p) => {
+              if (n.EMP_NM > p.EMP_NM) {
+                return 1
+              } else if (n.EMP_NM < p.EMP_NM) {
+                return -1
+              }
+              return 0
+            })
+          for (let i = options?.length; i--; ) {
+            setEmployeeInfo(options)
+          }
+          this.vOptionsRef = options
+          return true
+        } catch (error) {
+          // console.error('API 호출 중 오류 발생:', error);
+          return false
+        } finally {
+          loading(false)
+        }
+      },
+      onSelected(item) {
+        this.setValue(item?.code)
+        setTimeout(() => this.containerRef?.focus(), 1)
+        // this.onClosePopup();
+      },
+      dropdownShouldOpen: function (vselect) {
+        return !vselect.loading && vselect.open
+      },
+    },
+  }
+</script>
+
+<template>
+  <div ref="containerRef" class="p-1 bg-white ag-user-editor-container" tabindex="0" @keydown="onKeydown">
+    <div class="d-flex flex-row my-1 justify-content-between">
+      <span class="badge bg-info">ESC - 취소</span>
+      <span class="badge bg-dark" style="cursor: pointer" @click="onClosePopup">X</span>
     </div>
-    <div class="panel-body overflow-hidden m-0 p-0 h-100">
-      <ag-grid-vue v-bind="gridBindRef" v-on="gridEvents" />
-    </div>
+    <vSelect
+      ref="vSelectRef"
+      v-model="vModelRef"
+      :options="vOptionsRef"
+      :taggable="false"
+      :filterable="false"
+      :placeholder="'Name to search for. ex)홍길동 / ㅎㄱㄷ'"
+      :dropdown-should-open="dropdownShouldOpen"
+      @option:selected="onSelected"
+      @search="onSearch"
+      class="w-100 ag-user-editor-select"
+    />
   </div>
 </template>
 
-<script setup>
-  // Library - Common
-  import { ref, shallowRef, computed, onMounted, watch } from 'vue'
-  import { useRoute } from 'vue-router'
-  import { storeToRefs } from 'pinia'
-
-  // Store
-  import { useAppAuthenticationStore } from '@/stores/app-authentication'
-  import { useAppPermissionStore } from '@/stores/app-permission'
-  import { useAppMenuStore } from '@/stores/app-menu'
-
-  // Custom Component
-  import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-  import AgDetailStatusBar from '@/components/aggrid/AgDetailStatusBar.vue'
-  import AgCustomFilter from '@/components/aggrid/AgCustomFilter.vue'
-  import AgComboEditor from '@/components/aggrid/AgComboEditor.vue'
-
-  // Helpers
-  import { ApiCommon } from '@/utils/axios/api-common'
-  import { dataUtil as DU } from '@/utils/functions/data-utility'
-  import { sAlert } from '@/utils/messages/alert-common'
-  import global from '@/constants/enums/global'
-  import * as _ from 'lodash-es'
-
-  // GLOBAL
-  const route = useRoute()
-  const { userInfo } = storeToRefs(useAppAuthenticationStore())
-  const { isProjectAdmin, currentEPRole, isSetupAdmin } = storeToRefs(useAppPermissionStore())
-  const { currentProjNo, currentEpId } = storeToRefs(useAppMenuStore())
-
-  const _Emits = defineEmits(['show-overlay', 'hide-overlay', 'on-sub-refresh', 'on-sub-stop-editing'])
-  const _Props = defineProps({
-    IS_SUB_EDITED: { type: Boolean, required: false, default: false },
-    SUB_DATA_LIST: { type: Array, required: false, default: () => [] },
-    ATT_DICT: { type: Object, required: false, default: () => ({}) },
-    UOM_DICT: { type: Object, required: false, default: () => ({}) },
-    REGISTER_LIST_IN_USE: { type: Array, required: false, default: () => [] },
-    RELATION_LIST_IN_USE: { type: Array, required: false, default: () => [] },
-  })
-
-  const subDataListRef = computed(() => _Props.SUB_DATA_LIST)
-  const isSubEditedRef = computed(() => _Props.IS_SUB_EDITED)
-  const attDictRef = computed(() => _Props.ATT_DICT)
-  const uomDictRef = computed(() => _Props.UOM_DICT)
-  const inUseRegList = computed(() => _Props.REGISTER_LIST_IN_USE)
-  const inUseRelList = computed(() => _Props.RELATION_LIST_IN_USE)
-  watch(isSubEditedRef, item => {
-    if (item) {
-      const grid = gridRef.value
-      const focusData = focusDataRef.value
-      const focusDataId = focusData?._ROW_ID
-      grid?.getRowNode(focusDataId)?.setSelected(true)
-    }
-  })
-
-  const firstFocusIDRef = computed(() => route.query?.cls_id)
-  const onShowOverlay = config => _Emits('show-overlay', config)
-  const onHideOverlay = () => _Emits('hide-overlay')
-  const onShowLoading = () => gridRef.value?.setGridOption('loading', true)
-  const onHideLoading = () => gridRef.value?.setGridOption('loading', false)
-
-  // TOOLBAR BUTTON
-  const isShowCreateBtn = shallowRef(isSetupAdmin.value)
-  const isShowSaveBtn = shallowRef(isSetupAdmin.value)
-  const isShowDeleteBtn = shallowRef(isSetupAdmin.value)
-  const isDisabledSaveBtn = shallowRef(true)
-  const isDisabledDeleteBtn = shallowRef(true)
-  const isDisabledCreateBtn = shallowRef(true)
-  const isDisabledUpdateIdBtn = shallowRef(true)
-  const isNoSelectedRef = shallowRef(true)
-  const toolbarBindRef = computed(() => ({
-    showCreate: isShowCreateBtn.value,
-    showDelete: isShowDeleteBtn.value,
-    showSave: isShowSaveBtn.value,
-    isDisabledCreateBtn: isDisabledCreateBtn.value,
-    isDisabledDeleteBtn: isDisabledDeleteBtn.value,
-    isDisabledSaveBtn: isDisabledSaveBtn.value,
-    createTooltip: 'After creating data, click the Save button.',
-    deleteTooltip: 'It will be deleted immediately.',
-    newButtons: [
-      {
-        id: 'updateId',
-        text: 'Update ID',
-        color: 'var(--btn07)',
-        align: 'left',
-        icon: 'fa-key',
-        visible: true,
-        disabled: isDisabledUpdateIdBtn.value,
-      },
-      {
-        id: 'toggleGroup',
-        text: 'Toggle Group',
-        color: 'var(--btn06)',
-        align: 'left',
-        icon: gridExpandedRef.value === -1 ? 'fa-chevron-up' : 'fa-chevron-down',
-        visible: true,
-      },
-      {
-        id: 'deselectAll',
-        text: isNoSelectedRef.value ? 'Select All' : 'Deselect All',
-        color: 'var(--btn06)',
-        align: 'left',
-        icon: isNoSelectedRef.value ? 'fa-check-square-o' : 'fa-square-o',
-        visible: true,
-      },
-    ],
-  }))
-  const toolbarEventsRef = computed(() => ({
-    createData: onCreateRows,
-    deleteData: onDeleteRows,
-    saveData: saveData,
-    buttonClick: onClickButton,
-  }))
-
-  // MODIFIED DATA
-  // KEY ID Update용 { [_ROW_ID]: { _ROW_ID: [_ROW_ID], KEY: '' } } // KEY - Original Key
-  const modKeysRef = shallowRef({})
-
-  // FOCUS DATA
-  const prevIndexRef = shallowRef(-1)
-  const focusDataRef = ref()
-  const focusDataOrgRef = computed(() => {
-    const focusData = focusDataRef.value
-    const rowId = focusData?._ROW_ID
-    if (rowId) {
-      const dataDict = gridDataOrgDictRef.value
-      return dataDict?.[rowId]
-    }
-    return undefined
-  })
-
-  // SUB INFOS
-  const isPreLoadedRef = shallowRef(false) // 필요 정보의 로드 완료 여부
-  const isPreErrorRef = shallowRef(false) // 필요 정보 로드중 에러 여부
-  const prePromiseRef = shallowRef() // 필요 정보 로드 Promise
-  const tagTypeListRef = shallowRef([])
-  const tagTypeDictRef = shallowRef({})
-  const ootbClsDictRef = shallowRef({})
-
-  // GRID
-  const gridKeyRef = shallowRef(0) // Grid Refresh용
-  const gridRef = shallowRef()
-  const gridDataRef = shallowRef([])
-  const gridDelDataRef = shallowRef([]) // DELETED == true의 데이터
-  // 데이터 원본 확인용
-  const gridDataOrgRef = shallowRef([])
-  const gridDataOrgDictRef = shallowRef({}) // 데이터 원본 확인용 { _ROW_ID: data, ... }
-  const gridDataRenderedRef = shallowRef(false)
-  const saveClsIdListRef = shallowRef([]) // 저장 후 포커싱 및 선택 용
-  const gridExpandedRef = ref(0)
-  const dateFilterParams = {
-    minValidDate: '2008-01-08',
-    maxValidDate: new Date(new Date().getTime() + 24 * 60 * 60 * 1000),
-    comparator: (filterLocalDateAtMidnight, cellValue) => {
-      const dateStr = cellValue?.substring(0, 10)
-      if (!dateStr) {
-        return -1
-      }
-      const splitted = dateStr.split('-')
-      const date = new Date(Number(splitted[0]), Number(splitted[1]) - 1, Number(splitted[2]))
-
-      if (filterLocalDateAtMidnight.getTime() === date.getTime()) {
-        return 0
-      } else if (filterLocalDateAtMidnight > date) {
-        return -1
-      } else if (filterLocalDateAtMidnight < date) {
-        return 1
-      }
-      return 0
-    },
+<style scoped lang="scss">
+  .ag-user-editor-container {
+    border: 1px solid #a8beed;
+    min-width: 300px;
+    width: auto;
+    height: auto;
+    outline: none;
   }
-  // prettier-ignore
-  const gridColDefsRef = ref([
-    {
-      field: 'CLS_ID',
-      headerName: 'Object Class',
-      hide: true,
-      minWidth: 120,
-      flex: 4,
-      // tooltipValueGetter: params => params.valueFormatted || params.value,
-      // rowGroup: true, // Tree
-      editable: false,
-      filter: false,
-    },
-    {
-      field: 'DESC',
-      headerName: 'Description',
-      minWidth: 120,
-      flex: 4,
-      // tooltipValueGetter: params => params.valueFormatted || params.value,
-    },
-    {
-      field: 'PRT_CLS_ID',
-      headerName: 'Parent Class',
-      hide: true,
-      minWidth: 120,
-      flex: 4,
-      // tooltipValueGetter: params => params.valueFormatted || params.value,
-      editable: params => {
-        const dataItem = params.data
-        if (!dataItem || dataItem._IS_ROOT || dataItem?.PROJ_NO !== currentProjNo.value) {
-          return false
+  :deep().ag-user-editor-select {
+    > .vs__dropdown-toggle {
+      > .vs__selected-options {
+        flex-wrap: wrap !important;
+        > .vs__selected {
+          margin-bottom: 2px !important;
         }
-        return isProjectAdmin.value || currentEPRole.value === 'Manager'
-      },
-      cellRenderer: params => {
-        const displayValue = params.valueFormatted || params.value || '';
-        const editableDef  = params.colDef?.editable;
-        const editable     = (
-          DU.isFunction(editableDef) ? editableDef(params) : editableDef
-        );
-        return makeComboRender({
-          value    : displayValue,
-          editable : editable,
-        });
-      },
-      singleClickEdit: false,
-      cellEditorPopup: true,
-      cellEditorPopupPosition: 'over',
-      cellEditor: 'AgComboEditor', // 'agRichSelectCellEditor'
-      cellEditorParams: (params) => {
-        const grid = params.api
-        const dataItem = params.data
-        const clsId = dataItem?.CLS_ID
-        const values = [];
-        grid.forEachNode(node => {
-          const nDataItem = node.data
-          const nClsId = nDataItem.CLS_ID
-          const nDesc = nDataItem.DESC ?? ''
-          if (nClsId && nClsId !== clsId) {
-            values.push({
-              code: nClsId,
-              label: `(${nClsId}) ${nDesc}`,
-            })
-          }
-        })
-        return {
-          values            : values,
-          searchType        : 'matchAny',
-          highlightMatch    : true,
-          valueListMaxHeight: 200,
-          valueListMaxWidth : 200,
-          // AgComboEditor Parameters
-          placeholder         : 'Select Class', // Default = ''
-          code                : 'code',  // Default = 'code'
-          label               : 'label', // Default = 'label'
-          pushTags            : false,   // Default = false
-          multiple            : false,   // Default = false
-          multipleCheck       : false,   // Default = false
-          treeSelect          : false,   // Default = false
-          closeOnSelect       : false,   // Default = true
-          deselectFromDropdown: false,   // Default = false
-          returnOrigin        : false,   // Default = false
-          applySelected       : true,    // Default = false
-          // getOptionLabel      : (v) => (`${v.label} (${v.code})`),
+        > .vs__search {
+          color: lightgray;
         }
-      },
-    },
-    {
-      field: 'TAG_TYPE_ID',
-      headerName: 'Tag Type',
-      minWidth: 90,
-      flex: 2,
-      cellRenderer: params => {
-        const dataItem     = params.data;
-        const displayValue = params.valueFormatted || params.value || '';
-        const editableDef  = params.colDef?.editable;
-        const editable     = (
-          DU.isFunction(editableDef) ? editableDef(params) : editableDef
-        );
-        const queryParam = {};
-        const projNo = dataItem?.PROJ_NO || currentProjNo.value;
-        if (projNo) {
-          queryParam.proj_no = projNo;
-          if (currentEpId.value && projNo === currentProjNo.value) {
-            queryParam.ep_id = currentEpId.value;
-          }
-          if (dataItem?.TAG_TYPE_ID) {
-            queryParam.tag_type_id = dataItem.TAG_TYPE_ID;
-          }
-        }
-        return makeComboRender({
-          value    : displayValue,
-          editable : editable,
-          linkUrl  : '/tagtlnkcode-setup',
-          linkParam: queryParam,
-        });
-      },
-      singleClickEdit: false,
-      cellEditorPopup: true,
-      cellEditorPopupPosition: 'over',
-      cellEditor: 'AgComboEditor', // 'agRichSelectCellEditor'
-      cellEditorParams: (params) => {
-        const values = tagTypeListRef.value
-        return {
-          values            : values,
-          searchType        : 'matchAny',
-          highlightMatch    : true,
-          valueListMaxHeight: 200,
-          valueListMaxWidth : 200,
-          // AgComboEditor Parameters
-          placeholder         : 'Select Tag Type', // Default = ''
-          code                : 'code',  // Default = 'code'
-          label               : 'label', // Default = 'label'
-          pushTags            : false,   // Default = false
-          multiple            : false,   // Default = false
-          multipleCheck       : false,   // Default = false
-          treeSelect          : false,   // Default = false
-          closeOnSelect       : false,   // Default = true
-          deselectFromDropdown: false,   // Default = false
-          returnOrigin        : false,   // Default = false
-          applySelected       : true,    // Default = false
-          // getOptionLabel      : (v) => (`${v.label} (${v.code})`),
-        }
-      },
-    },
-    {
-      field: 'TAG_DESC',
-      headerName: 'Tag Type Description',
-      minWidth: 120,
-      flex: 3,
-      // tooltipValueGetter: params => params.valueFormatted || params.value,
-      editable: false,
-      cellClass: 'agReadOnly',
-      cellRenderer: params => {
-        const dataItem = params.data;
-        const tagInfo = tagTypeDictRef.value?.[dataItem?.TAG_TYPE_ID];
-        return tagInfo?.DESC ?? ''
-      },
-    },
-    {
-      field: 'PROJ_NO',
-      headerName: 'Project',
-      hide: true,
-      editable: false,
-      cellClass: 'agReadOnly',
-      // tooltipValueGetter: params => params.valueFormatted || params.value,
-    },
-    {
-      field: 'CRTER_NO',
-      headerName: 'CRTER NO',
-      hide: true,
-      editable: false,
-      cellClass: 'agReadOnly',
-      // tooltipValueGetter: params => params.valueFormatted || params.value,
-    },
-    {
-      field: 'CRTE_DTM',
-      headerName: 'CRTE DTM',
-      cellDataType: 'date',
-      hide: true,
-      filter: 'agDateColumnFilter',
-      filterParams: dateFilterParams,
-      editable: false,
-      cellClass: 'agReadOnly',
-      tooltipValueGetter: params => params.valueFormatted || params.value,
-      valueFormatter: (params) => { return dateFullFormatter(params) },
-    },
-    {
-      field: 'CHGER_NO',
-      headerName: 'CHGER NO',
-      hide: true,
-      editable: false,
-      cellClass: 'agReadOnly',
-      // tooltipValueGetter: params => params.valueFormatted || params.value,
-    },
-    {
-      field: 'CHGE_DTM',
-      headerName: 'CHGE DTM',
-      cellDataType: 'date',
-      hide: true,
-      filter: 'agDateColumnFilter',
-      filterParams: dateFilterParams,
-      editable: false,
-      cellClass: 'agReadOnly',
-      tooltipValueGetter: params => params.valueFormatted || params.value,
-      valueFormatter: (params) => { return dateFullFormatter(params) },
-    },
-    { field: '_id', headerName: 'id', hide: true, editable: false, cellClass: 'agReadOnly' },
-    { field: 'STATUS', hide: true, editable: false, cellClass: 'agReadOnly' },
-  ])
-
-  onMounted(() => {
-    onPreInitialize()
-  })
-
-  const onPreInitialize = async function () {
-    let preResolve
-    isPreLoadedRef.value = false
-    isPreErrorRef.value = false
-    prePromiseRef.value = new Promise(r => (preResolve = r))
-    const onFinally = function (SUCCESS) {
-      isPreLoadedRef.value = true
-      isPreErrorRef.value = SUCCESS !== true
-      if (preResolve) {
-        preResolve()
       }
-      onHideOverlay()
     }
-
-    onShowOverlay()
-    const projNo = currentProjNo.value
-    if (!projNo) {
-      sAlert.Warning(`Project를  선택해주세요`)
-      return onFinally(false)
+    &.vs--searching {
+      .vs__search {
+        color: #000000 !important;
+      }
     }
-
-    try {
-      await Promise.all([
-        //
-        getTagTypeList(),
-      ])
-    } catch (error) {
-      const backMsg = String(error.response?.data?.Message || error.message).replace(/\r\n/, '<br>')
-      sAlert.Error(backMsg)
-      return onFinally(false)
+    > .vs__dropdown-menu {
+      padding: 0.5rem !important;
+      border-radius: 5px;
+      border: 1px solid rgb(168, 190, 237);
+      background-color: #fff;
+      max-height: 200px;
+      box-sizing: border-box;
+      overflow-x: hidden;
+      > .vs__dropdown-option--selected {
+        background: #d9e5ff;
+        color: #000000;
+      }
     }
-
-    return onFinally(true)
   }
-
-  const onRefresh = function () {
-    gridKeyRef.value += 1
-  }
-  const onInitialize = async function () {
-    const isPreLoaded = isPreLoadedRef.value
-    const isPreError = isPreErrorRef.value
-    const prePromise = prePromiseRef.value
-    if (!isPreLoaded) {
-      if (isPreError) {
-        return
-      }
-      if (prePromise) {
-        await prePromise
-        if (isPreErrorRef.value) {
-          return
-        }
-      }
-    }
-
-    const onFinally = function () {
-      if (gridDataRenderedRef.value) {
-        setTimeout(() => {
-          setFocusData()
-          gridRef.value?.refreshCells({ force: true, suppressFlash: true })
-        }, 10)
-      }
-      gridDataRenderedRef.value = true
-      if (saveClsIdListRef.value && saveClsIdListRef.value.length) {
-        setSelectClassList()
-      }
-      onHideLoading()
-      onHideOverlay()
-    }
-
-    onShowOverlay()
-    onShowLoading()
-
-    prevIndexRef.value = -1
-    focusDataRef.value = null
-    modKeysRef.value = {}
-    gridDataRef.value = []
-    gridDelDataRef.value = []
-    gridDataOrgRef.value = []
-    gridDataOrgDictRef.value = {}
-
-    if (!currentProjNo.value) {
-      return onFinally()
-    }
-
-    let response
-    // let ootbResponse
-    try {
-      response = await ApiCommon.postObjectClassGet({ ProjectNo: currentProjNo.value })
-      // ;[response, ootbResponse] = await Promise.all([
-      //   ApiCommon.postObjectClassGet({ ProjectNo: currentProjNo.value }),
-      //   ApiCommon.postObjectClassGet({ ProjectNo: 'OOTB' }),
-      // ])
-    } catch (error) {
-      const backMsg = String(error.response?.data?.Message || error.message).replace(/\r\n/, '<br>')
-      sAlert.Error({
-        title: `Load Object Class List Error`, // Optional
-        html: backMsg,
-      })
-      return
-    }
-
-    // const ootbDict = {}
-    // ;(ootbResponse ?? []).forEach((data, index) => {
-    //   data._ROW_ID = `ROW_${String(index).padStart(6, '0')}`
-    //   data._IS_ROOT = !data.PRT_CLS_ID === true
-    //   data.LNK_ATT = (data.LNK_ATT ?? []).reduce((acc, cur) => {
-    //     cur.CLS_ID = data.CLS_ID // ATT_ID가 속한 CLS_ID 추가
-    //     acc[cur.ATT_ID] = cur
-    //     return acc
-    //   }, {})
-    //   ootbDict[data.CLS_ID] = data
-    // })
-    // // PARENT LNK_ATT 추가
-    // ;(ootbResponse ?? []).forEach(v => {
-    //   let prtClsId = ootbDict[v.CLS_ID].PRT_CLS_ID
-    //   while (prtClsId) {
-    //     Object.keys(ootbDict[prtClsId]?.LNK_ATT ?? {}).forEach(attId => {
-    //       ootbDict[v.CLS_ID].LNK_ATT[attId] = ootbDict[prtClsId].LNK_ATT[attId]
-    //     })
-    //     prtClsId = ootbDict[prtClsId]?.PRT_CLS_ID
-    //   }
-    // })
-    // ootbClsDictRef.value = ootbDict
-
-    const dataList = []
-    const delDataList = []
-    const orgDataList = []
-    const orgDataDict = {}
-    const subDataDict = {}
-    ;(response ?? []).forEach((data, index) => {
-      data._ROW_ID = `ROW_${String(index).padStart(6, '0')}`
-      data._IS_ROOT = !data.PRT_CLS_ID === true
-      data.LNK_ATT = _.sortBy(data.LNK_ATT ?? [], ['SEQ', 'ATT_ID'])
-      data.LNK_ATT.forEach((v, i) => ((v.SEQ = i + 1), (v.CLS_ID = data.CLS_ID)))
-      subDataDict[data.CLS_ID] = data
-    })
-    // PARENT LNK_ATT 추가
-    ;(response ?? []).forEach(v => {
-      let prtClsId = subDataDict[v.CLS_ID].PRT_CLS_ID
-      const path = [v.CLS_ID]
-      while (prtClsId) {
-        path.unshift(prtClsId)
-        const prtLnkAtt = subDataDict[prtClsId]?.LNK_ATT ?? []
-        subDataDict[v.CLS_ID].LNK_ATT = subDataDict[v.CLS_ID].LNK_ATT.filter(
-          v => !prtLnkAtt.some(pv => pv.ATT_ID === v.ATT_ID)
-        )
-        subDataDict[v.CLS_ID].LNK_ATT.unshift(...prtLnkAtt.map(v => ({ ...v, SEQ: 0 })))
-        prtClsId = subDataDict[prtClsId]?.PRT_CLS_ID
-      }
-      subDataDict[v.CLS_ID].path = path
-      orgDataDict[v._ROW_ID] = subDataDict[v.CLS_ID]
-      const copyData = _.cloneDeep(subDataDict[v.CLS_ID])
-      orgDataList.push(subDataDict[v.CLS_ID])
-      if (!subDataDict[v.CLS_ID].DELETED) {
-        dataList.push(copyData)
-      } else {
-        delDataList.push(copyData)
-      }
-    })
-    gridDataRef.value = _.sortBy(dataList, 'path') // autoGroupColumnDef의 field 미설정시 Group Name은 Sort후 표현
-    gridDelDataRef.value = delDataList
-    gridDataOrgRef.value = orgDataList
-    gridDataOrgDictRef.value = orgDataDict
-
-    await new Promise(r => setTimeout(r, 10)) // data bind 대기용
-    return onFinally()
-  }
-
-  const getTagTypeList = async function () {
-    tagTypeDictRef.value = {}
-    tagTypeListRef.value = []
-
-    const response = await ApiCommon.postTagTypeGet({ ProjectNo: currentProjNo.value })
-
-    const basicDict = {}
-    const basicList = []
-    response?.forEach(v => {
-      if (!v.DELETED && v.TYPE_ID) {
-        basicDict[v.TYPE_ID] = {
-          TYPE_ID: v.TYPE_ID,
-          PROJ_NO: v.PROJ_NO,
-          SEQ: v.SEQ,
-          DESC: v.DESC,
-          REMARK: v.REMARK,
-          LNK_CODE: v.LNK_CODE,
-          code: v.TYPE_ID,
-          label: `(${v.TYPE_ID}) ${v.DESC ?? ''}`,
-        }
-        basicList.push(basicDict[v.TYPE_ID])
-      }
-    })
-    tagTypeDictRef.value = basicDict
-    tagTypeListRef.value = basicList
-  }
-
-  const onCreateRows = function () {
-    if (!currentProjNo.value) {
-      sAlert.Warning(`Project를  선택해주세요`)
-      return
-    }
-
-    insertRows(1)
-  }
-
-  const onCreateMultiRows = function (rowCount) {
-    if (!currentProjNo.value) {
-      sAlert.Warning(`Project를  선택해주세요`)
-      return
-    }
-
-    insertRows(rowCount)
-  }
-
-  const insertRows = async function (rowCount) {
-    rowCount = 1 // Class Insert 1 고정
-
-    const onFinally = function (MESSAGE) {
-      if (MESSAGE) {
-        sAlert.Warning(MESSAGE)
-      }
-      onHideLoading()
-    }
-    const grid = gridRef.value
-    grid.stopEditing()
-    onShowLoading()
-
-    if (!grid.getDisplayedRowCount()) {
-      return onFinally('No Root Object Class!')
-    }
-
-    const selectedRows = grid.getSelectedRows() ?? []
-    const selectedSize = selectedRows.length
-    const prtClsInfo = selectedRows[0]
-    const prtClsId = prtClsInfo?.CLS_ID
-    if (!selectedSize) {
-      return onFinally('No Object Class are selected!')
-    } else if (selectedSize > 1) {
-      return onFinally('Please select only one Parent class row.')
-    } else if (!prtClsId) {
-      return onFinally('Invalid Parent class')
-    } else if (prtClsInfo?.STATUS === 'A') {
-      return onFinally(`The selected item cannot be changed because it is Unsaved Class.`)
-    }
-
-    const { value: newClsId } = await sAlert.Confirm({
-      title: 'Enter New Object Class ID',
-      input: 'text',
-      showCancelButton: true,
-      inputAutoTrim: true,
-      inputAttributes: {
-        oninput: 'this.value = this.value.toUpperCase()',
-      },
-      inputValidator: value => {
-        if (!value) {
-          return 'You need to write new Class ID.'
-        }
-        const idCheck = /^[A-Z][A-Z0-9_]*$/g
-        if (!idCheck.test(value)) {
-          return 'Only uppercase letters, numbers, and underscores can be entered.'
-        }
-        if (gridDataRef.value.some(v => v.CLS_ID === value)) {
-          return 'This Class ID already exists.'
-        }
-      },
-    })
-
-    if (!newClsId) {
-      return onFinally()
-    }
-
-    const path = [...prtClsInfo.path, newClsId]
-
-    const addRows = []
-    for (let i = 0; i < rowCount; i++) {
-      const newId = `NEW_ROW_${Math.random().toString(36).substring(2, 12)}`
-      addRows.push({
-        STATUS: 'A',
-        PROJ_NO: currentProjNo.value,
-        CLS_ID: newClsId,
-        PRT_CLS_ID: prtClsId,
-        DESC: newClsId,
-        path: path,
-        _ROW_ID: newId,
-      })
-    }
-    if (addRows.length) {
-      gridDataRef.value.push(...addRows)
-      const result = grid.applyTransaction({ add: addRows })
-      grid.refreshCells({ force: true, suppressFlash: true })
-      grid.deselectAll()
-      grid.setNodesSelected({
-        nodes: result.add,
-        newValue: true,
-      })
-      result.add.forEach(node => {
-        grid.setRowNodeExpanded(node, true, true, true)
-        grid.ensureNodeVisible(node, 'middle')
-      })
-    }
-    return onFinally()
-  }
-
-  const onDeleteRows = async function () {
-    const grid = gridRef.value
-    const selectedRows = grid?.getSelectedRows()
-    if (!selectedRows || !selectedRows.length) {
-      sAlert.Warning(`Please select the data you want to delete.`)
-      return
-    }
-
-    const onFinally = function (MESSAGE) {
-      if (MESSAGE) {
-        sAlert.Warning(MESSAGE)
-      }
-      onHideLoading()
-      onHideOverlay()
-      // onInitialize()
-      onRefresh()
-    }
-
-    onShowOverlay()
-    onShowLoading()
-
-    const failValids = []
-    const clsIdList = []
-    for (let i = 0; i < selectedRows.length; i++) {
-      const clsInfo = selectedRows[i]
-      const clsId = clsInfo?.CLS_ID ?? ''
-      clsIdList.push(clsId)
-      // OOTB 체크
-      if (clsInfo.OOTB_EXISTS_YN === true && currentProjNo.value !== 'OOTB') {
-        const msg = `OOTB Class cannot be changed`
-        failValids.push(`[ CLS_ID : ${clsId}, Reason: ${msg} ]`)
-        continue
-      }
-      // 하위 레지스터가 존재하는지 체크
-      if (gridDataRef.value.some(v => v.PRT_CLS_ID === clsId)) {
-        const msg = `A Class With sub-items cannot be changed`
-        failValids.push(`[ CLS_ID : ${clsId}, Reason: ${msg} ]`)
-        continue
-      }
-    }
-    if (failValids.length) {
-      return onFinally(`Failed to delete ${failCount} item.\n${failValids.join('\n')}`)
-    }
-
-    // Assign Register 체크
-    try {
-      const response = await ApiCommon.postRegisterGetByClassIDs({
-        ProjectNo: currentProjNo.value,
-        ClassIDs: clsIdList,
-        ContainDeleted: false,
-      })
-      if (response && response.length) {
-        clsIdList.forEach(clsId => {
-          const regList = response.filter(v => v.MAP_CLS_ID?.includes(clsId))
-          if (regList && regList.length) {
-            const regIds = regList.map(v => v.TYPE_ID).join(',')
-            const msg = `Class assigned to Register cannot be modified [ ${regIds} ]`
-            failValids.push(`[ CLS_ID : ${clsId}, Reason: ${msg} ]`)
-          }
-        })
-      }
-    } catch (error) {
-      //
-    }
-    if (failValids.length) {
-      return onFinally(`Failed to delete ${failCount} item.\n${failValids.join('\n')}`)
-    }
-
-    // Assign Relation 체크
-    try {
-      const response = await ApiCommon.postRelationGetByClassID({
-        ProjectNo: projNo,
-        ClassIDs: clsIdList,
-        ContainDeleted: false,
-      })
-      if (response && response.length) {
-        clsIdList.forEach(clsId => {
-          const relList = response.filter(v => v.LEFT_CLS_IDS?.includes(clsId) || v.RIGHT_CLS_ID === clsId)
-          if (relList && relList.length) {
-            const relIds = relList.map(v => v.REL_ID).join(',')
-            const msg = `Class assigned to Relation cannot be modified [ ${relIds} ]`
-            failValids.push(`[ CLS_ID : ${clsId}, Reason: ${msg} ]`)
-          }
-        })
-      }
-    } catch (error) {
-      //
-    }
-    if (failValids.length) {
-      return onFinally(`Failed to delete ${failCount} item.\n${failValids.join('\n')}`)
-    }
-
-    const confirmResult = await sAlert.Confirm('It will be deleted immediately. Are you sure you want to delete?')
-    if (!confirmResult?.isConfirmed) {
-      return onFinally()
-    }
-
-    const passList = []
-    const failList = []
-    const promises_all = []
-    const promises_race = []
-    for (let i = 0; i < selectedRows.length; i++) {
-      const dataItem = selectedRows[i]
-      const { CLS_ID, STATUS, _ROW_ID: rowId } = dataItem
-      let delKeyId = dataItem?.CLS_ID
-
-      if (promises_race.length >= 20) {
-        await Promise.race(promises_race)
-      }
-      if (STATUS !== 'A') {
-        let orgKeyInfo = modKeysRef.value[rowId]
-        if (orgKeyInfo) {
-          if (orgKeyInfo.KEY !== CLS_ID) {
-            delKeyId = orgKeyInfo.KEY
-          } else {
-            delete modKeysRef.value[rowId]
-            orgKeyInfo = null
-          }
-        }
-
-        const promise = ApiCommon.postObjectClassDelete({
-          ProjectNo: currentProjNo.value,
-          CLS_ID: delKeyId,
-        })
-          .then(() => {
-            passList.push(dataItem)
-            delete modKeysRef.value[orgKeyInfo?._ROW_ID]
-          })
-          .catch(error => failList.push({ item: dataItem, error: error }))
-          .finally(() => promises_race.splice(promises_race.indexOf(promise), 1))
-        promises_race.push(promise)
-        promises_all.push(promise)
-      } else {
-        passList.push(dataItem)
-      }
-    }
-    await Promise.all(promises_all)
-
-    let message = ''
-    const passCount = passList.length
-    const failCount = failList.length
-    if (passCount) {
-      message += `Successfully deleted ${passCount} Object Class List.`
-      grid.applyTransaction({ remove: passList })
-      grid.refreshCells()
-
-      gridDataRef.value = gridDataRef.value.filter(({ _ROW_ID }) => {
-        return !passList.some(v => v._ROW_ID === _ROW_ID)
-      })
-      gridDataOrgRef.value = gridDataOrgRef.value.filter(({ _ROW_ID }) => {
-        return !passList.some(v => v._ROW_ID === _ROW_ID)
-      })
-    }
-    if (failCount) {
-      if (!message) {
-        message += `Failed deleted Object Class List.`
-      }
-      message += `\nfailed to delete ${failCount} item.`
-      for (let i = 0; i < failCount; i++) {
-        const { item, error } = failList[i]
-        const backMsg = String(error.response?.data?.Message || error.message).replace(/\r\n/, '<br>')
-        message += `\n    [ CLS_ID : ${item.CLS_ID || ''}, Reason: ${backMsg} ]`
-      }
-    }
-    if (!passCount && failCount) {
-      sAlert.Error(message)
-    } else {
-      sAlert.Success(message)
-    }
-    return onFinally()
-  }
-
-  const checkValidation = function (dataList) {
-    const focusData = focusDataRef.value
-    const isSubEdited = isSubEditedRef.value
-    const subDataList = subDataListRef.value
-
-    const dupIdCheck = {}
-    const failMsgList = []
-    dataList?.forEach(dataItem => {
-      const clsId = dataItem.CLS_ID
-      const prtClsId = dataItem.PRT_CLS_ID
-      const desc = dataItem.DESC
-      const path = dataItem.path
-      const isRoot = dataItem._IS_ROOT
-      const projNo = dataItem.PROJ_NO
-      const rowId = dataItem._ROW_ID
-
-      if (clsId) {
-        dupIdCheck[clsId] = !dupIdCheck[clsId]
-      }
-
-      if (!clsId) {
-        failMsgList.push(`'Class ID' is Required.`)
-      } else if (!dupIdCheck[clsId]) {
-        failMsgList.push(`[${clsId}] 'Class ID' is Duplicated.`)
-      } else if (!projNo) {
-        failMsgList.push(`[${clsId}] 'Project' is Required.`)
-      } else if (!desc) {
-        failMsgList.push(`[${clsId}] 'Description' is Required.`)
-      } else if (!isRoot) {
-        if (!prtClsId) {
-          failMsgList.push(`[${clsId}] 'Parent Class' is Required.`)
-        } else if (clsId === prtClsId) {
-          failMsgList.push(`[${clsId}] The values of 'Class ID' and 'Parent Class' cannot be the same.`)
-        }
-
-        let validClass = false
-        for (let i = 0; i < gridDataRef.value?.length; i++) {
-          if (gridDataRef.value[i].CLS_ID === prtClsId) {
-            validClass = true
-            break
-          }
-        }
-        if (!validClass) {
-          failMsgList.push(`[${clsId}] 'Parent Class' is invalid Class Id. [${prtClsId}]`)
-        }
-
-        // 현재 선택된 항목의 LNK_ATT 중복 확인 [ ATT_ID ]
-        if (focusData?._id === rowId && isSubEdited) {
-          let isDupBreak = false
-          const dupValsCheck = {}
-          for (let i = 0; i < subDataList?.length; i++) {
-            const dataVal = String(subDataList[i].ATT_ID).trim().toUpperCase()
-            if (dataVal) {
-              dupValsCheck[dataVal] = !dupValsCheck[dataVal]
-            }
-            if (!dataVal) {
-              isDupBreak = true
-              failMsgList.push(`[${clsId}] 'Attribute' in Link Attributes section is Required.`)
-              break
-            }
-            if (!dupValsCheck[dataVal]) {
-              isDupBreak = true
-              failMsgList.push(`[${clsId}] 'Attribute' ('${dataVal}') in Link Attributes section is Duplicated.`)
-              break
-            }
-          }
-          if (subDataList?.length && !isDupBreak) {
-            // IS_SEQ Validation
-            // failMsgList.push(`[${clsId}] in Tag Attributes section, 'Sequence' must have one of the lists checked.`)
-          }
-        }
-      }
-    })
-
-    if (failMsgList.length) {
-      sAlert.Warning(_.uniqBy(failMsgList).join('<br/>'))
-      return false
-    }
-    return true
-  }
-
-  const saveData = async function () {
-    onShowOverlay()
-    const grid = gridRef.value
-    grid.stopEditing()
-    await new Promise(r => setTimeout(r, 10))
-
-    const onFinally = function (SUCCESS) {
-      if (SUCCESS === true) {
-        onInitialize()
-        // onRefresh()
-      }
-      onHideOverlay()
-    }
-
-    const selectedRows = grid.getSelectedRows()
-    if (!selectedRows || !selectedRows.length) {
-      sAlert.Warning(`Please select the data you want to save.`)
-      return onFinally(false)
-    } else if (!checkValidation(selectedRows)) {
-      return onFinally(false)
-    }
-
-    const saveDict = selectedRows.reduce((acc, cur) => {
-      acc[cur.CLS_ID] = true
-      return acc
-    }, {})
-
-    const focusData = focusDataRef.value
-    const isSubEdited = isSubEditedRef.value
-    const subDataList = subDataListRef.value ?? []
+</style>
