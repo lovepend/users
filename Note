@@ -113,10 +113,9 @@
   const selectedType = ref('Working')
   const containDeleted = ref(false)
   
-  const localFilterQuery = ref('') // 결과 내 검색어
-  const headerFilterQuery = ref('') // 헤더 다중 필터 검색어
+  const localFilterQuery = ref('') 
+  const headerFilterQuery = ref('') 
 
-  // 팝업 제어용 상태
   const showJsonModal = ref(false)
   const selectedJsonData = ref('')
 
@@ -126,19 +125,17 @@
   const dynamicCols = ref([])
 
   /**
-   * 🎨 셀 렌더링 및 스타일 정의 (하이라이트 추가)
+   * 🎨 셀 렌더링 및 스타일 정의 
    */
   const diffCellRenderer = p => {
     let val = String(p.value ?? '')
     const kw = localFilterQuery.value.trim().toLowerCase()
 
-    // 1. 결과 내 검색 하이라이트
     if (kw && val.toLowerCase().includes(kw)) {
       const regex = new RegExp(`(${kw})`, 'gi')
       val = val.replace(regex, '<span class="bg-warning text-dark fw-bold">$1</span>')
     }
 
-    // 2. Diff 하이라이트
     const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
     if (diffInfo) {
       return `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</div>`
@@ -149,7 +146,6 @@
   const getCellStyle = p => {
     let style = {}
 
-    // TAG_NO 컬럼은 클릭 가능한 링크처럼 스타일링
     if (p.colDef.field === 'TAG_NO') {
       style.cursor = 'pointer'
       style.color = '#0d6efd'
@@ -166,7 +162,6 @@
     return Object.keys(style).length > 0 ? style : null
   }
 
-  // 검색어 입력 시, 그리드 화면 강제 리프레시 (하이라이트 반영용)
   watch(localFilterQuery, () => {
     if (gridApi.value) {
       gridApi.value.refreshCells({ force: true })
@@ -215,7 +210,7 @@
       let sourceData = []
       if (selectedType.value === 'Working') sourceData = resultData.WrkData || []
       else if (selectedType.value === 'Publish') sourceData = resultData.PubData || []
-      else sourceData = resultData.MergeData || [] // 이전에 수정하신 부분
+      else sourceData = resultData.MergeData || [] 
 
       const processed = sourceData.map(item => {
         const flat = { ...item }
@@ -227,7 +222,6 @@
         return flat
       })
 
-      // 고정할 필드에 TAG_IDX 추가
       const fixedFields = ['TAG_NO', 'TAG_IDX', 'CLS_ID', 'EP_ID', 'TAG_DESC']
       const allKeys = new Set()
       processed.forEach(row =>
@@ -248,7 +242,6 @@
           headerName: key,
           field: key,
           minWidth: 150,
-          // 3. 지정된 컬럼 좌측 Pin 고정
           pinned: ['TAG_NO', 'TAG_IDX', 'CLS_ID'].includes(key) ? 'left' : null,
           cellRenderer: diffCellRenderer,
           cellStyle: getCellStyle,
@@ -267,24 +260,31 @@
     }
   }
 
-  // 2. 헤더 다중 필터 적용 처리
+  // 🔥 변경된 부분: 헤더 다중 필터 적용 (고정 컬럼은 무조건 포함)
   const filteredColumns = computed(() => {
     if (!headerFilterQuery.value.trim()) return dynamicCols.value
     
-    // 콤마, 공백, 줄바꿈(/n)을 기준으로 배열 분리 후 빈 값 제거
     const keywords = headerFilterQuery.value
       .split(/[,\s\n]+/)
       .filter(k => k.trim())
       .map(k => k.toLowerCase())
 
+    // 항상 노출할 고정 컬럼 목록
+    const alwaysVisibleFields = ['tag_no', 'tag_idx', 'cls_id']
+
     return dynamicCols.value.filter(col => {
       const fieldName = col.field.toLowerCase()
-      // 하나라도 일치하는 키워드가 있으면 컬럼 노출
+      
+      // 1. 고정 컬럼이면 무조건 true 반환하여 숨김 방지
+      if (alwaysVisibleFields.includes(fieldName)) {
+        return true
+      }
+      
+      // 2. 그 외의 컬럼은 검색어에 하나라도 포함되는지 검사
       return keywords.some(kw => fieldName.includes(kw))
     })
   })
 
-  // 1. 결과 내 행 필터링 (로우 필터)
   const filteredData = computed(() => {
     if (!localFilterQuery.value.trim()) return rawDataList.value
     const kw = localFilterQuery.value.toLowerCase()
@@ -292,7 +292,7 @@
   })
 
   const gridBindProps = computed(() => ({
-    columnDefs: filteredColumns.value, // 기존 dynamicCols 대신 필터링된 배열 주입
+    columnDefs: filteredColumns.value, 
     rowData: filteredData.value,
     style: 'width: 100%; height: 100%',
     class: 'ag-theme-custom shadow-sm',
@@ -306,7 +306,6 @@
     gridApi.value = p.api
   }
 
-  // 4. 셀 클릭 이벤트 (TAG_NO 클릭 시 JSON 팝업)
   const onCellClicked = p => {
     if (p.colDef.field === 'TAG_NO' && p.data) {
       selectedJsonData.value = JSON.stringify(p.data, null, 2)
