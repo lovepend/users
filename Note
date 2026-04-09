@@ -1,4 +1,13 @@
-아래의 코드에서 Working 이랑 Publish Data는 화면에 잘 반영이 되는데 Merged로 호출한 Data는 화면에 "No Row to Show"라고 리턴이 되는데 아래의 코드에서 확인 좀 해줄래?
+ㅇㅋ 해당 내용은 아래와 같이 해결했어
+
+1. 추가적으로 결과 필터 이거 작동안하는거 같은데 확인 해줘 만약 검색값을 입력했을때 아래 그리드 테이블에 하이라이트 해줘야 해 
+
+2. 결과 필터 옆에 그리드 헤더 필터 하나 똑같이 만들어서 적용해줄래? 1. 헤더 필터는 멀티로 되었으면 좋겠어 , / 공백 / 줄바꿈(/n) 으로 멀티로 값을 넣었을때 일치하는 항목만 칼럼 헤더에 나오는거지.
+
+3. 그리고 왼쪽에 그리드 Pin Column 기능을 사용할 헤더 Name 는 TAG_NO / TAG_IDX / CLS_ID 이 3개 고정해줘
+
+4. 그리고 TAG NO 를 눌렀을때 Json으로 리턴 받은 데이터를 팝업으로 표현까지 해주면 좋겠어 
+
 
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100">
@@ -152,6 +161,7 @@
       let sourceData = []
       if (selectedType.value === 'Working') sourceData = resultData.WrkData || []
       else if (selectedType.value === 'Publish') sourceData = resultData.PubData || []
+      // else if (selectedType.value === 'Merged') sourceData = resultData.MergeData || []
       else sourceData = resultData.MergeData || []
 
       // 3. 데이터 평면화 (ATTRIBUTES -> 최상위 필드)
