@@ -1,14 +1,3 @@
-ㅇㅋ 해당 내용은 아래와 같이 해결했어
-
-1. 추가적으로 결과 필터 이거 작동안하는거 같은데 확인 해줘 만약 검색값을 입력했을때 아래 그리드 테이블에 하이라이트 해줘야 해 
-
-2. 결과 필터 옆에 그리드 헤더 필터 하나 똑같이 만들어서 적용해줄래? 1. 헤더 필터는 멀티로 되었으면 좋겠어 , / 공백 / 줄바꿈(/n) 으로 멀티로 값을 넣었을때 일치하는 항목만 칼럼 헤더에 나오는거지.
-
-3. 그리고 왼쪽에 그리드 Pin Column 기능을 사용할 헤더 Name 는 TAG_NO / TAG_IDX / CLS_ID 이 3개 고정해줘
-
-4. 그리고 TAG NO 를 눌렀을때 Json으로 리턴 받은 데이터를 팝업으로 표현까지 해주면 좋겠어 
-
-
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100">
     <PageTitle
@@ -54,12 +43,22 @@
           </button>
 
           <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
+            <span class="fw-bold text-info text-nowrap">헤더 필터</span>
+            <input
+              type="text"
+              class="form-control form-control-sm border-info custom-input-width"
+              v-model="headerFilterQuery"
+              placeholder="공백, 콤마 분리"
+            />
+          </div>
+
+          <div class="ms-2 border-start ps-3 d-flex align-items-center gap-2">
             <span class="fw-bold text-success text-nowrap">결과 필터</span>
             <input
               type="text"
               class="form-control form-control-sm border-success custom-input-width"
               v-model="localFilterQuery"
-              placeholder="결과 내 검색"
+              placeholder="결과 내 검색 (하이라이트)"
             />
           </div>
         </div>
@@ -67,10 +66,35 @@
       </template>
     </PageTitle>
 
+    <div v-if="showJsonModal" class="modal-backdrop fade show" style="z-index: 1040;"></div>
+    <div v-if="showJsonModal" class="modal fade show d-block" tabindex="-1" style="z-index: 1050;">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" style="max-width: 800px;">
+        <div class="modal-content shadow-lg">
+          <div class="modal-header bg-light p-3">
+            <h5 class="modal-title fw-bold text-dark">
+              <i class="fa fa-code me-2"></i>Row Data (JSON)
+            </h5>
+            <button type="button" class="btn-close" @click="showJsonModal = false"></button>
+          </div>
+          <div class="modal-body bg-dark text-white p-3 overflow-auto" style="max-height: 60vh;">
+            <pre class="m-0" style="white-space: pre-wrap; font-size: 0.9em;"><code>{{ selectedJsonData }}</code></pre>
+          </div>
+          <div class="modal-footer bg-light p-2">
+            <button type="button" class="btn btn-sm btn-secondary" @click="showJsonModal = false">닫기</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <div class="panel-body m-0 p-0 h-100">
       <div class="panel m-0 p-0 h-100">
         <div class="panel-body overflow-hidden m-0 p-0 h-100">
-          <ag-grid-vue v-bind="gridBindProps" @grid-ready="onGridReady" :tooltipShowDelay="0" />
+          <ag-grid-vue
+            v-bind="gridBindProps"
+            @grid-ready="onGridReady"
+            @cell-clicked="onCellClicked"
+            :tooltipShowDelay="0"
+          />
         </div>
       </div>
     </div>
@@ -78,42 +102,76 @@
 </template>
 
 <script setup>
-  import { ref, computed, shallowRef } from 'vue'
+  import { ref, computed, shallowRef, watch } from 'vue'
   import { axiosWrapper } from '@/utils/axios/axios-wrapper'
   import { sAlert } from '@/utils/messages/alert-common'
   import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
   import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-  // 상위 스토어 연동 생략, 직접 입력값 위주 세팅
   const manualProjNo = ref('SN2661')
   const regTypeId = ref('PIEP_T_002_T')
   const selectedType = ref('Working')
   const containDeleted = ref(false)
-  const localFilterQuery = ref('')
+  
+  const localFilterQuery = ref('') // 결과 내 검색어
+  const headerFilterQuery = ref('') // 헤더 다중 필터 검색어
+
+  // 팝업 제어용 상태
+  const showJsonModal = ref(false)
+  const selectedJsonData = ref('')
 
   const gridApi = shallowRef()
-  const rawDataList = ref([]) // 그리드에 뿌려질 가공 데이터
-  const diffMap = ref(new Map()) // 차이점 하이라이트용
-  const dynamicCols = ref([]) // 동적 컬럼 정의
+  const rawDataList = ref([])
+  const diffMap = ref(new Map())
+  const dynamicCols = ref([])
 
   /**
-   * 🎨 셀 렌더링 및 스타일 정의
+   * 🎨 셀 렌더링 및 스타일 정의 (하이라이트 추가)
    */
   const diffCellRenderer = p => {
+    let val = String(p.value ?? '')
+    const kw = localFilterQuery.value.trim().toLowerCase()
+
+    // 1. 결과 내 검색 하이라이트
+    if (kw && val.toLowerCase().includes(kw)) {
+      const regex = new RegExp(`(${kw})`, 'gi')
+      val = val.replace(regex, '<span class="bg-warning text-dark fw-bold">$1</span>')
+    }
+
+    // 2. Diff 하이라이트
     const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
     if (diffInfo) {
-      return `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${p.value ?? ''}</div>`
+      return `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</div>`
     }
-    return p.value ?? ''
+    return val
   }
 
   const getCellStyle = p => {
+    let style = {}
+
+    // TAG_NO 컬럼은 클릭 가능한 링크처럼 스타일링
+    if (p.colDef.field === 'TAG_NO') {
+      style.cursor = 'pointer'
+      style.color = '#0d6efd'
+      style.textDecoration = 'underline'
+      style.fontWeight = 'bold'
+    }
+
     const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
     if (diffInfo) {
-      return { backgroundColor: '#fff9db', fontWeight: 'bold', color: '#d94111' }
+      style.backgroundColor = '#fff9db'
+      style.fontWeight = 'bold'
+      style.color = '#d94111'
     }
-    return null
+    return Object.keys(style).length > 0 ? style : null
   }
+
+  // 검색어 입력 시, 그리드 화면 강제 리프레시 (하이라이트 반영용)
+  watch(localFilterQuery, () => {
+    if (gridApi.value) {
+      gridApi.value.refreshCells({ force: true })
+    }
+  })
 
   const onSearch = async () => {
     if (!manualProjNo.value || !regTypeId.value) {
@@ -131,8 +189,6 @@
       }
 
       const res = await axiosWrapper.post('/api/Data/GetMergedData', payload)
-
-      // API 응답의 루트 키가 regTypeId와 일치하는지 확인
       const rootKey = regTypeId.value.trim()
       const resultData = res[rootKey]
 
@@ -141,7 +197,6 @@
         return sAlert.Info('조회된 데이터가 없습니다.')
       }
 
-      // 1. DiffData 맵핑 (차이점 사전 생성)
       const newDiffMap = new Map()
       if (resultData.DiffData) {
         resultData.DiffData.forEach(diff => {
@@ -157,14 +212,11 @@
       }
       diffMap.value = newDiffMap
 
-      // 2. 선택한 타입에 따른 데이터 추출
       let sourceData = []
       if (selectedType.value === 'Working') sourceData = resultData.WrkData || []
       else if (selectedType.value === 'Publish') sourceData = resultData.PubData || []
-      // else if (selectedType.value === 'Merged') sourceData = resultData.MergeData || []
-      else sourceData = resultData.MergeData || []
+      else sourceData = resultData.MergeData || [] // 이전에 수정하신 부분
 
-      // 3. 데이터 평면화 (ATTRIBUTES -> 최상위 필드)
       const processed = sourceData.map(item => {
         const flat = { ...item }
         if (Array.isArray(item.ATTRIBUTES)) {
@@ -175,8 +227,8 @@
         return flat
       })
 
-      // 4. 컬럼 정의 생성 (고정 + 동적)
-      const fixedFields = ['TAG_NO', 'EP_ID', 'CLS_ID', 'TAG_DESC']
+      // 고정할 필드에 TAG_IDX 추가
+      const fixedFields = ['TAG_NO', 'TAG_IDX', 'CLS_ID', 'EP_ID', 'TAG_DESC']
       const allKeys = new Set()
       processed.forEach(row =>
         Object.keys(row).forEach(k => {
@@ -186,9 +238,7 @@
 
       dynamicCols.value = Array.from(allKeys)
         .sort((a, b) => {
-          // 고정 필드를 앞으로 배치
-          const aIdx = fixedFields.indexOf(a),
-            bIdx = fixedFields.indexOf(b)
+          const aIdx = fixedFields.indexOf(a), bIdx = fixedFields.indexOf(b)
           if (aIdx > -1 && bIdx > -1) return aIdx - bIdx
           if (aIdx > -1) return -1
           if (bIdx > -1) return 1
@@ -198,9 +248,10 @@
           headerName: key,
           field: key,
           minWidth: 150,
+          // 3. 지정된 컬럼 좌측 Pin 고정
+          pinned: ['TAG_NO', 'TAG_IDX', 'CLS_ID'].includes(key) ? 'left' : null,
           cellRenderer: diffCellRenderer,
           cellStyle: getCellStyle,
-          // 툴팁 설정
           tooltipValueGetter: p => {
             const diff = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
             return diff ? `[차이발생]\nPublish: ${diff.pub ?? 'null'}\nWorking: ${diff.wrk ?? 'null'}` : null
@@ -216,7 +267,24 @@
     }
   }
 
-  // 결과 내 필터링 (기존 로직)
+  // 2. 헤더 다중 필터 적용 처리
+  const filteredColumns = computed(() => {
+    if (!headerFilterQuery.value.trim()) return dynamicCols.value
+    
+    // 콤마, 공백, 줄바꿈(/n)을 기준으로 배열 분리 후 빈 값 제거
+    const keywords = headerFilterQuery.value
+      .split(/[,\s\n]+/)
+      .filter(k => k.trim())
+      .map(k => k.toLowerCase())
+
+    return dynamicCols.value.filter(col => {
+      const fieldName = col.field.toLowerCase()
+      // 하나라도 일치하는 키워드가 있으면 컬럼 노출
+      return keywords.some(kw => fieldName.includes(kw))
+    })
+  })
+
+  // 1. 결과 내 행 필터링 (로우 필터)
   const filteredData = computed(() => {
     if (!localFilterQuery.value.trim()) return rawDataList.value
     const kw = localFilterQuery.value.toLowerCase()
@@ -224,7 +292,7 @@
   })
 
   const gridBindProps = computed(() => ({
-    columnDefs: dynamicCols.value,
+    columnDefs: filteredColumns.value, // 기존 dynamicCols 대신 필터링된 배열 주입
     rowData: filteredData.value,
     style: 'width: 100%; height: 100%',
     class: 'ag-theme-custom shadow-sm',
@@ -236,6 +304,14 @@
 
   const onGridReady = p => {
     gridApi.value = p.api
+  }
+
+  // 4. 셀 클릭 이벤트 (TAG_NO 클릭 시 JSON 팝업)
+  const onCellClicked = p => {
+    if (p.colDef.field === 'TAG_NO' && p.data) {
+      selectedJsonData.value = JSON.stringify(p.data, null, 2)
+      showJsonModal.value = true
+    }
   }
 </script>
 
