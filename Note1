@@ -1,205 +1,618 @@
-<script>
-  import { shallowRef } from 'vue'
-  import { ApiCommon } from '@/utils/axios/api-common'
-  import vSelect from 'vue-select'
-  import { useEmployees } from '@/stores/app-employees'
-  const { setEmployeeInfo } = useEmployees()
-
-  export default {
-    name: 'AgUserEditor',
-    components: { vSelect },
-    props: {
-      // AG-Grid Custom Editor Params - ICellEditorParams
-      // 기본 Parameters와 cellEditorParams의 추가 Parameters
-      params: { type: Object, default: () => ({}) },
-    },
-    setup(props) {
-      return {
-        containerRef: shallowRef(null),
-        vSelectRef: shallowRef(null),
-        vModelRef: shallowRef(null),
-        vOptionsRef: shallowRef([]),
-        vValue: shallowRef(null),
-        // API 호출 지연을 위한 타이머 변수 추가
-        searchTimer: null,
-      }
-    },
-    mounted() {
-      this.vModelRef = this.params?.editorSelected
-      this.vOptionsRef = this.params?.editorOptions ?? []
-      this.vValue = this.getInitialValue()
-      setTimeout(() => {
-        this.vSelectRef?.searchEl.focus()
-      }, 1)
-    },
-    // 컴포넌트 파괴 시 실행 중인 타이머가 있다면 제거 (메모리 누수 방지)
-    beforeUnmount() {
-      if (this.searchTimer) clearTimeout(this.searchTimer)
-    },
-    methods: {
-      // AG-Grid Custom Editor Functions - ICellEditor
-      // getValue - 필수
-      // refresh
-      // afterGuiAttached
-      // getPopupPosition
-      // isCancelBeforeStart
-      // isCancelAfterEnd
-      // focusIn
-      // focusOut
-      // getValidationElement
-      // getValidationErrors
-      getValue() {
-        return this.vValue
-      },
-      getInitialValue() {
-        return this.params?.value
-      },
-      ///////////////////////////////////////////
-      // This Component Using Functions
-      onClosePopup() {
-        try {
-          if (this.params) {
-            this.params.stopEditing()
-          }
-        } catch {
-          let dummyVar
-        }
-      },
-      setValue(USER_ID) {
-        const newValue = String(USER_ID ?? '')
-        this.vValue = newValue === '' ? null : newValue
-      },
-      getSelectedValue() {
-        return this.vModelRef?.code
-      },
-      onKeydown(event) {
-        if (event.key === 'ESC' || event.key === 'Escape') {
-          event.preventDefault()
-          const userId = this.getInitialValue()
-          this.setValue(userId)
-          this.onClosePopup()
-        } else if (event.key === 'Enter') {
-          event.preventDefault()
-          event.stopPropagation()
-          const userId = this.getSelectedValue()
-          if (userId) {
-            this.setValue(userId)
-            this.onClosePopup()
-          }
-        }
-      },
-      // vSelect Events
-      onSearch(search, loading) {
-        // 이전에 예약된 타이머가 있다면 취소 (타이핑 중에는 계속 취소됨)
-        if (this.searchTimer) clearTimeout(this.searchTimer)
-
-        const userName = String(search ?? '').replaceAll(' ', '')
-        if (userName.length < 2) {
-          this.vOptionsRef = []
-          return false
-        }
-
-        // 0.3초(300ms) 후에 API 호출을 실행하도록 예약
-        this.searchTimer = setTimeout(async () => {
-          try {
-            loading(true)
-            const response = (await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: userName })) ?? []
-            const options = response
-              .filter(item => item.EMP_NO) // EMP_NO가 있는 항목만 필터링
-              .map(item => ({
-                ...item,
-                code: item.EMP_NO,
-                label: `${item.EMP_NM ?? ''}(${item.DEPT_NAME ?? ''})`,
-              }))
-              .sort((n, p) => {
-                if (n.EMP_NM > p.EMP_NM) {
-                  return 1
-                } else if (n.EMP_NM < p.EMP_NM) {
-                  return -1
-                }
-                return 0
-              })
-            for (let i = options?.length; i--; ) {
-              setEmployeeInfo(options)
+{
+    "PIEP_T_002_T": {
+        "PubData": null,
+        "WrkData": null,
+        "DiffData": [
+            {
+                "TAG_IDX": "673d42cb414bc48fd4fd4c0d",
+                "EP_ID": "PiEP_T",
+                "Status": "",
+                "EditType": "",
+                "Property": [
+                    {
+                        "PROP_ID": "TAG_TYPE_ID",
+                        "PUB_VALUE": "005",
+                        "WRK_VALUE": ""
+                    },
+                    {
+                        "PROP_ID": "PI5224",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "2\""
+                    },
+                    {
+                        "PROP_ID": "PI5011",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "600LB"
+                    },
+                    {
+                        "PROP_ID": "CLAS_CD",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "A41201"
+                    }
+                ]
+            },
+            {
+                "TAG_IDX": "673d42cb414bc48fd4fd4c0f",
+                "EP_ID": "PiEP_T",
+                "Status": "",
+                "EditType": "",
+                "Property": [
+                    {
+                        "PROP_ID": "PI5224",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "1 1/2\""
+                    },
+                    {
+                        "PROP_ID": "PI5011",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "600LB"
+                    },
+                    {
+                        "PROP_ID": "CLAS_CD",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "A41201"
+                    },
+                    {
+                        "PROP_ID": "TAG_TYPE_ID",
+                        "PUB_VALUE": "005",
+                        "WRK_VALUE": ""
+                    }
+                ]
             }
-            this.vOptionsRef = options
-          } catch (error) {
-            // console.error('API 호출 중 오류 발생:', error);
-          } finally {
-            loading(false)
-          }
-        }, 300) // 0.3초 대기 시간
-      },
-      onSelected(item) {
-        this.setValue(item?.code)
-        setTimeout(() => this.containerRef?.focus(), 1)
-        // this.onClosePopup();
-      },
-      dropdownShouldOpen: function (vselect) {
-        return !vselect.loading && vselect.open
-      },
-    },
-  }
-</script>
-
-<template>
-  <div ref="containerRef" class="p-1 bg-white ag-user-editor-container" tabindex="0" @keydown="onKeydown">
-    <div class="d-flex flex-row my-1 justify-content-between">
-      <span class="badge bg-info">ESC - 취소</span>
-      <span class="badge bg-dark" style="cursor: pointer" @click="onClosePopup">X</span>
-    </div>
-    <vSelect
-      ref="vSelectRef"
-      v-model="vModelRef"
-      :options="vOptionsRef"
-      :taggable="false"
-      :filterable="false"
-      :placeholder="'Name to search for. ex)홍길동 / ㅎㄱㄷ'"
-      :dropdown-should-open="dropdownShouldOpen"
-      @option:selected="onSelected"
-      @search="onSearch"
-      class="w-100 ag-user-editor-select"
-    />
-  </div>
-</template>
-
-<style scoped lang="scss">
-  .ag-user-editor-container {
-    border: 1px solid #a8beed;
-    min-width: 300px;
-    width: auto;
-    height: auto;
-    outline: none;
-  }
-  :deep().ag-user-editor-select {
-    > .vs__dropdown-toggle {
-      > .vs__selected-options {
-        flex-wrap: wrap !important;
-        > .vs__selected {
-          margin-bottom: 2px !important;
-        }
-        > .vs__search {
-          color: lightgray;
-        }
-      }
+        ],
+        "MergeData": [
+            {
+                "EP_ID": "PiEP_T",
+                "EP_IC": "PiEP_T",
+                "DELETED": false,
+                "DEL_USER": null,
+                "DEL_DTM": null,
+                "PROJ_NO": "SN2661",
+                "TAG_IDX": "673d42cb414bc48fd4fd4c0d",
+                "TAG_NO": "VG-110012",
+                "TAG_TYPE_ID": "",
+                "CLS_ID": "MANUAL_VALV_CLS",
+                "TAG_DESC": "VG-110012",
+                "BF_TAG_NO": "VG-1112",
+                "PIC_NO": "220604",
+                "DSN_SKL": null,
+                "PRNT_TAG_IDX": null,
+                "ATTRIBUTES": [
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ASSEMBLY_NAME",
+                        "VALUE": "6848ceffb92ec47d6fe56625"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "CLAS_CD",
+                        "VALUE": "A41201"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 5,
+                        "ATT_ID": "EL9001",
+                        "VALUE": "5"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "IM9020",
+                        "VALUE": "VG"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 12,
+                        "ATT_ID": "IM9050",
+                        "VALUE": "0012"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "IN0045",
+                        "VALUE": "CL600"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "IN0149",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 50,
+                        "ATT_ID": "IN0499",
+                        "VALUE": "50"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 600,
+                        "ATT_ID": "IN0500",
+                        "VALUE": "600"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ME5104",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ME5115",
+                        "VALUE": "SHI"
+                    },
+                    {
+                        "UOM_ID": "MASS_02",
+                        "VALUE_DBL": 150,
+                        "ATT_ID": "ME5142",
+                        "VALUE": "150"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ME5160",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ME5173",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ME5228",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ME9000",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI0006",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": "LENGTH_06",
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI0007",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": "LENGTH_06",
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI0017",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5005",
+                        "VALUE": "TOP"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5011",
+                        "VALUE": "600LB"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5029",
+                        "VALUE": "RF"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5049",
+                        "VALUE": "RF"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5088",
+                        "VALUE": "P81C-00N5F"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5098",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5099",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5101",
+                        "VALUE": "FLANGE"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5107",
+                        "VALUE": "FLANGE"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5110",
+                        "VALUE": "6C615"
+                    },
+                    {
+                        "UOM_ID": "LENGTH_06",
+                        "VALUE_DBL": 100,
+                        "ATT_ID": "PI5117",
+                        "VALUE": "100"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5121",
+                        "VALUE": "Gate valve"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5125",
+                        "VALUE": "Expanding gate"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5135",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5211",
+                        "VALUE": "CL600"
+                    },
+                    {
+                        "UOM_ID": "LENGTH_03",
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5224",
+                        "VALUE": "2\""
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5226",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5227",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PR5601",
+                        "VALUE": "600-PG-11007-6C615-N"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PR5621",
+                        "VALUE": "PFLNG3-009-EXE-JSC-1100-PRO-PID-0001"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 11,
+                        "ATT_ID": "PR5674",
+                        "VALUE": "11"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "SM_CD",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "SYSTEM_NAME",
+                        "VALUE": "691d80685f71026bcbfb2cbc"
+                    }
+                ],
+                "CRTER_NO": "212405",
+                "CRTE_DTM": "2024-12-10T02:47:35Z",
+                "CHGER_NO": "220604",
+                "CHGE_DTM": "2025-08-12T01:09:07.499Z",
+                "_id": null
+            },
+            {
+                "EP_ID": "PiEP_T",
+                "EP_IC": "PiEP_T",
+                "DELETED": false,
+                "DEL_USER": null,
+                "DEL_DTM": null,
+                "PROJ_NO": "SN2661",
+                "TAG_IDX": "673d42cb414bc48fd4fd4c0f",
+                "TAG_NO": "VG-110011",
+                "TAG_TYPE_ID": "",
+                "CLS_ID": "MANUAL_VALV_CLS",
+                "TAG_DESC": "VG-110011",
+                "BF_TAG_NO": "VG-1111",
+                "PIC_NO": "220604",
+                "DSN_SKL": null,
+                "PRNT_TAG_IDX": null,
+                "ATTRIBUTES": [
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ASSEMBLY_NAME",
+                        "VALUE": "6848cedeb92ec47d6fe5661f"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "CLAS_CD",
+                        "VALUE": "A41201"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 6,
+                        "ATT_ID": "EL9001",
+                        "VALUE": "6"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "IM9020",
+                        "VALUE": "VG"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 11,
+                        "ATT_ID": "IM9050",
+                        "VALUE": "0011"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "IN0045",
+                        "VALUE": "CL600"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "IN0149",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 40,
+                        "ATT_ID": "IN0499",
+                        "VALUE": "40"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 600,
+                        "ATT_ID": "IN0500",
+                        "VALUE": "600"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ME5104",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ME5115",
+                        "VALUE": "SHI"
+                    },
+                    {
+                        "UOM_ID": "MASS_02",
+                        "VALUE_DBL": 10,
+                        "ATT_ID": "ME5142",
+                        "VALUE": "10"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ME5160",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ME5173",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ME5228",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ME9000",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI0006",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": "LENGTH_06",
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI0007",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": "LENGTH_06",
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI0017",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5005",
+                        "VALUE": "TOP"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5011",
+                        "VALUE": "600LB"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5029",
+                        "VALUE": "RF"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5049",
+                        "VALUE": "RF"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5088",
+                        "VALUE": "P81C-00N5F"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5098",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5099",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5101",
+                        "VALUE": "FLANGE"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5107",
+                        "VALUE": "FLANGE"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5110",
+                        "VALUE": "6C615"
+                    },
+                    {
+                        "UOM_ID": "LENGTH_06",
+                        "VALUE_DBL": 100,
+                        "ATT_ID": "PI5117",
+                        "VALUE": "100"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5121",
+                        "VALUE": "Gate valve"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5125",
+                        "VALUE": "Expanding gate"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5135",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5211",
+                        "VALUE": "CL600"
+                    },
+                    {
+                        "UOM_ID": "LENGTH_03",
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5224",
+                        "VALUE": "1 1/2\""
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5226",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PI5227",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PR5601",
+                        "VALUE": "600-PG-11007-6C615-N"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PR5621",
+                        "VALUE": "PFLNG3-009-EXE-JSC-1100-PRO-PID-0001"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 11,
+                        "ATT_ID": "PR5674",
+                        "VALUE": "11"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "SM_CD",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "SYSTEM_NAME",
+                        "VALUE": "691d80685f71026bcbfb2cbc"
+                    }
+                ],
+                "CRTER_NO": "212405",
+                "CRTE_DTM": "2024-12-10T02:47:35Z",
+                "CHGER_NO": "220604",
+                "CHGE_DTM": "2025-08-12T01:09:07.499Z",
+                "_id": null
+            }
+        ]
     }
-    &.vs--searching {
-      .vs__search {
-        color: #000000 !important;
-      }
-    }
-    > .vs__dropdown-menu {
-      padding: 0.5rem !important;
-      border-radius: 5px;
-      border: 1px solid rgb(168, 190, 237);
-      background-color: #fff;
-      max-height: 200px;
-      box-sizing: border-box;
-      overflow-x: hidden;
-      > .vs__dropdown-option--selected {
-        background: #d9e5ff;
-        color: #000000;
-      }
-    }
-  }
-</style>
+}
