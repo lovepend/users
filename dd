@@ -66,7 +66,7 @@
               class="form-control form-control-sm border-primary custom-textarea-filter"
               v-model="attributeFilter"
               rows="1"
-              placeholder="ID 입력 (자동 필터링)"
+              placeholder="ID 입력 (공백/콤마/엔터 구분)"
             ></textarea>
           </div>
         </div>
@@ -92,6 +92,10 @@ import { sAlert } from '@/utils/messages/alert-common'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 import PageTitle from '@/components/toolBar/PageTitle.vue'
 
+// 💡 Enterprise 라이선스 등록이 필요한 경우 아래와 같이 처리합니다 (보통 main.js에서 처리)
+// import { LicenseManager } from '@ag-grid-enterprise/core';
+// LicenseManager.setLicenseKey("라이선스 키");
+
 const route = useRoute()
 
 // --- State ---
@@ -107,12 +111,11 @@ const dynamicCols = ref([])
 const urlEpId = computed(() => route.query.ep_id || '')
 const urlProjNo = computed(() => route.query.project_no || '')
 
-// 💡 멀티 필터 입력 시 자동 갱신
+// 멀티 필터 입력 시 즉시 반영
 watch(attributeFilter, () => {
   if (gridApi.value) gridApi.value.onFilterChanged()
 })
 
-// 프로젝트 리스트 필터링 및 선택 로직
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   if (!kw) return projectList.value
@@ -200,24 +203,26 @@ const gridOptions = computed(() => ({
   style: 'width: 100%; height: 100%',
   class: 'ag-theme-custom',
   loadingOverlayComponent: AggridLoadingOverlay,
-  
-  // 💡 [영역 선택 관련 보완]
-  rowSelection: 'multiple', // 행 다중 선택 허용
-  enableCellTextSelection: true, // 셀 내부 텍스트 드래그 허용 (Enterprise 아닐 때 유용)
-  ensureDomOrder: true, // DOM 순서 보장 (복사 시 유리)
-  suppressCopyRowsToClipboard: false, // 클립보드 복사 허용
+
+  // 💡 [Enterprise 핵심 설정]
+  enableRangeSelection: true,       // 마우스 드래그로 셀 영역 선택 활성화 (유료버전 핵심)
+  enableCellTextSelection: false,   // 영역 선택 기능 사용 시 false 권장 (텍스트 선택과 충돌 방지)
+  suppressRowClickSelection: true,  // 클릭 시 로우 선택 방지 (영역 선택을 원활하게 함)
+  copyHeadersToClipboard: true,      // 복사 시 헤더도 같이 복사하려면 true
 
   defaultColDef: { 
     sortable: true, 
     resizable: true,
     filter: 'agTextColumnFilter',
-    floatingFilter: true,
+    floatingFilter: true, // 미니 필터 항상 노출
     filterParams: {
       buttons: ['reset', 'apply'],
       closeOnApply: true,
       debounceMs: 200,
     }
   },
+  
+  // 외부 멀티 필터 로직
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: (node) => {
     const inputIds = attributeFilter.value.split(/[\s,\n]+/).filter(id => id.trim() !== '').map(id => id.toLowerCase())
@@ -235,9 +240,4 @@ const onGridReady = (p) => { gridApi.value = p.api }
 .custom-textarea-filter { width: 280px !important; font-size: 0.8rem; resize: none; padding: 4px 8px; border-radius: 4px; }
 .fs-7 { font-size: 0.85rem; }
 .dropdown-menu input { border-radius: 4px; }
-
-/* 💡 그리드 내 텍스트 선택이 잘 보이도록 커서 설정 */
-:deep(.ag-cell) {
-  cursor: text;
-}
 </style>
