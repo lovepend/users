@@ -25,11 +25,11 @@
                     class="form-control form-control-sm mb-1 custom-scrollbar"
                     rows="2"
                     v-model="manualProjectInput"
-                    placeholder="예: TEST1001, TEST1002&#10;(공백, 콤마, 줄바꿈 구분)"
+                    placeholder="TEST1001, TEST1002...&#10;(공백, 콤마, 줄바꿈 구분)"
                     style="resize: none; font-size: 0.85rem;"
                   ></textarea>
                   <div class="d-flex justify-content-between align-items-center text-muted" style="font-size: 0.75rem;">
-                    <span>입력 시 자동 체크됩니다.</span>
+                    <span>입력 시 하단 체크박스 자동 연동</span>
                     <button class="btn btn-link btn-sm p-0 text-decoration-none" @click="clearProjects">초기화</button>
                   </div>
                 </li>
@@ -92,93 +92,76 @@ import { sAlert } from '@/utils/messages/alert-common'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-// --- State ---
-// 현재 접속한 EP_ID (실제 프로젝트 환경에 맞게 Store나 Session에서 가져오도록 매핑하세요)
-const currentEpId = ref('YOUR_CURRENT_EP_ID') 
-
-const projectList = ref([]) // 전체 프로젝트 리스트
-const selectedProjects = ref([]) // 체크된 PROJ_NO 배열
-const manualProjectInput = ref('') // 텍스트 입력창 상태
-const attributeFilter = ref('')
+/**
+ * --- 상태 관리 ---
+ */
+const currentEpId = ref('USER_EP_ID') // 세션 등에서 가져온 EP_ID로 매핑 필요
+const projectList = ref([])           // API에서 불러온 전체 프로젝트
+const selectedProjects = ref([])      // 체크된 프로젝트 번호들
+const manualProjectInput = ref('')    // 텍스트 영역 입력값
+const attributeFilter = ref('')       // 그리드 내부 필터
 
 const gridApi = shallowRef()
 const gridRowData = ref([])
 const dynamicCols = ref([])
 
 /**
- * 🔄 양방향 연동 로직 (텍스트 입력 <-> 체크박스)
+ * --- UX 연동 로직 (입력창 <-> 체크박스) ---
  */
-// 1. 텍스트 입력 시 -> 체크박스 자동 선택
+// 1. 텍스트 입력 시 체크박스 자동 동기화
 watch(manualProjectInput, (newVal) => {
-  // 공백, 콤마, 줄바꿈으로 문자열 분리 및 빈 값 제거
-  const inputArr = newVal.split(/[,\s\n]+/).map(s => s.trim()).filter(Boolean)
-  const validSet = new Set()
+  const inputArr = newVal.split(/[,\s\n]+/).map(s => s.trim().toUpperCase()).filter(Boolean)
+  const validSelection = []
   
   inputArr.forEach(inputProj => {
-    // 대소문자 구분 없이 리스트에 존재하는 프로젝트인지 확인
-    const matched = projectList.value.find(p => p.PROJ_NO.toUpperCase() === inputProj.toUpperCase())
-    if (matched) validSet.add(matched.PROJ_NO)
+    const matched = projectList.value.find(p => p.PROJ_NO.toUpperCase() === inputProj)
+    if (matched) validSelection.push(matched.PROJ_NO)
   })
-
-  // 선택된 프로젝트 배열 업데이트
-  selectedProjects.value = Array.from(validSet)
+  selectedProjects.value = [...new Set(validSelection)]
 })
 
-// 2. 체크박스 클릭 시 -> 텍스트 입력창 업데이트
+// 2. 체크박스 클릭 시 텍스트 영역 동기화 (값이 다를 때만)
 watch(selectedProjects, (newVal) => {
-  const currentInputSet = new Set(manualProjectInput.value.split(/[,\s\n]+/).map(s => s.trim().toUpperCase()).filter(Boolean))
-  const selectedSet = new Set(newVal.map(v => v.toUpperCase()))
+  const currentInputArr = manualProjectInput.value.split(/[,\s\n]+/).map(s => s.trim().toUpperCase()).filter(Boolean)
+  const selectedArr = newVal.map(v => v.toUpperCase())
 
-  // 사용자가 타이핑 중일 때 텍스트가 강제 초기화되며 커서가 튀는 현상을 막기 위해,
-  // 실제 항목 구성이 다를 때(체크박스를 마우스로 직접 클릭했을 때)만 텍스트를 갱신합니다.
-  const isSame = currentInputSet.size === selectedSet.size && [...currentInputSet].every(x => selectedSet.has(x))
-  
-  if (!isSame) {
+  if (JSON.stringify(currentInputArr.sort()) !== JSON.stringify(selectedArr.sort())) {
     manualProjectInput.value = newVal.join(', ')
   }
 })
 
-// 선택 초기화 함수
 const clearProjects = () => {
   manualProjectInput.value = ''
   selectedProjects.value = []
 }
 
 /**
- * 🚀 초기 데이터 로드 (Project List)
+ * --- API 호출 및 데이터 처리 ---
  */
 onMounted(async () => {
   try {
     const res = await axiosWrapper.get('/api/Project/Get')
     projectList.value = res.filter(p => p.USE_YN) || []
   } catch (error) {
-    console.error('Project List Load Error:', error)
-    sAlert.Error('프로젝트 목록을 불러오지 못했습니다.')
+    console.error('Project Load Error:', error)
   }
 })
 
-/**
- * 🔍 데이터 조회 버튼 클릭
- */
 const onSearch = async () => {
-  if (selectedProjects.value.length === 0) {
-    return sAlert.Warning('최소 하나 이상의 프로젝트를 선택하세요.')
-  }
-  
+  if (selectedProjects.value.length === 0) return
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
 
   try {
-    // 💡 변경점: EP_ID와 PROJ_NO를 함께 Payload로 전송
+    // 💡 요청사항 반영: Body에는 PROJ_NO, Header에는 EP_ID & PROJ_NO
     const fetchPromises = selectedProjects.value.map(projNo => 
-      axiosWrapper.post('/api/Attributes/Get', { 
-        EP_ID: currentEpId.value, 
-        PROJ_NO: projNo 
-      }).catch(() => [])
+      axiosWrapper.post(
+        '/api/Attributes/Get', 
+        { PROJ_NO: projNo }, // Body
+        { headers: { 'EP_ID': currentEpId.value, 'PROJ_NO': projNo } } // Headers
+      ).catch(() => [])
     )
     
     const results = await Promise.all(fetchPromises)
-    
-    // Pivot 데이터 구조화
     const attrMap = new Map()
 
     results.forEach((projectData, index) => {
@@ -199,7 +182,6 @@ const onSearch = async () => {
       })
     })
 
-    // Condition(Pass/Diff) 계산
     const processedData = Array.from(attrMap.values()).map(row => {
       const existCount = selectedProjects.value.filter(p => row[p] === true).length
       row.CONDITION = (existCount === selectedProjects.value.length) ? 'Pass' : 'Diff'
@@ -210,26 +192,21 @@ const onSearch = async () => {
     gridRowData.value = processedData
     
   } catch (e) {
-    console.error('Attribute Load Error:', e)
-    sAlert.Error('속성 데이터를 가져오는 중 오류가 발생했습니다.')
+    sAlert.Error('데이터 조회 중 오류가 발생했습니다.')
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
 /**
- * 🎨 셀 렌더링 - 존재 여부에 따른 표시
+ * --- 그리드 설정 ---
  */
 const existCellRenderer = (params) => {
-  if (params.value === true) {
-    return `<span class="text-primary fw-bold"><i class="fa fa-circle text-success fs-8 me-1"></i> O</span>`
-  }
-  return `<span class="text-muted">-</span>`
+  return params.value === true 
+    ? `<span class="text-primary fw-bold"><i class="fa fa-check-circle text-success me-1"></i> O</span>` 
+    : `<span class="text-muted">-</span>`
 }
 
-/**
- * 📊 컬럼 정의 (Computed)
- */
 const columnDefs = computed(() => {
   const cols = [
     {
@@ -245,21 +222,17 @@ const columnDefs = computed(() => {
       })
     },
     { headerName: 'Attribute ID', field: 'ATT_ID', width: 150, pinned: 'left', filter: 'agTextColumnFilter' },
-    { headerName: 'Description', field: 'DESC', width: 200, pinned: 'left', filter: 'agTextColumnFilter', tooltipField: 'DESC' },
-    { headerName: 'Type', field: 'VAL_TYPE', width: 120, pinned: 'left' },
+    { headerName: 'Description', field: 'DESC', width: 200, pinned: 'left', filter: 'agTextColumnFilter' },
+    { headerName: 'Type', field: 'VAL_TYPE', width: 100, pinned: 'left' },
   ]
 
-  // 동적 프로젝트 컬럼 추가
   dynamicCols.value.forEach(proj => {
     cols.push({
       headerName: proj,
       field: proj,
       minWidth: 120,
       cellRenderer: existCellRenderer,
-      cellStyle: p => ({
-        textAlign: 'center',
-        backgroundColor: p.value === false ? '#fff1f0' : 'transparent'
-      })
+      cellStyle: p => ({ textAlign: 'center', backgroundColor: p.value === false ? '#fff1f0' : 'transparent' })
     })
   })
 
@@ -272,43 +245,20 @@ const gridOptions = computed(() => ({
   style: 'width: 100%; height: 100%',
   class: 'ag-theme-custom',
   loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { 
-    sortable: true, 
-    resizable: true,
-  },
+  defaultColDef: { sortable: true, resizable: true },
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: (node) => {
     const kw = attributeFilter.value.toLowerCase()
-    const attId = String(node.data.ATT_ID || '').toLowerCase()
-    const desc = String(node.data.DESC || '').toLowerCase()
-    return attId.includes(kw) || desc.includes(kw)
+    return String(node.data.ATT_ID).toLowerCase().includes(kw) || String(node.data.DESC).toLowerCase().includes(kw)
   }
 }))
 
-const onGridReady = p => {
-  gridApi.value = p.api
-}
+const onGridReady = p => gridApi.value = p.api
 </script>
 
 <style scoped>
-.custom-input-width {
-  width: 250px !important;
-}
+.custom-input-width { width: 250px !important; }
 .fs-7 { font-size: 0.85rem; }
-.fs-8 { font-size: 0.75rem; }
-
-/* 커스텀 스크롤바 디자인 (옵션) */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: #f1f1f1; 
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #ccc; 
-  border-radius: 4px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #999; 
-}
+.custom-scrollbar::-webkit-scrollbar { width: 6px; }
+.custom-scrollbar::-webkit-scrollbar-thumb { background: #ccc; border-radius: 4px; }
 </style>
