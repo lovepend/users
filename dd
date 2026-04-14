@@ -56,7 +56,7 @@
             </div>
           </div>
         </SplitterPanel>
-      </+Splitter>
+      </Splitter>
     </div>
   </div>
 </template>
@@ -76,26 +76,28 @@
   import { useAppAuthenticationStore } from '@/stores/app-authentication'
   import { useAppMenuStore } from '@/stores/app-menu'
 
+  // Library - AG Grid
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+  import AgDetailStatusBar from '@/components/aggrid/AgDetailStatusBar.vue'
+  import AgCustomFilter from '@/components/aggrid/AgCustomFilter.vue'
+
   // Helpers
   import { sAlert, sToast } from '@/utils/messages/alert-common'
   import * as _ from 'lodash-es'
   import { axiosWrapper } from '@/utils/axios/axios-wrapper'
   import axios from 'axios'
 
-  // Custom Components
+  // Custom Component
   import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
   import PageTitle from '@/components/toolBar/PageTitle.vue'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-  import AgDetailStatusBar from '@/components/aggrid/AgDetailStatusBar.vue'
-  import AgCustomFilter from '@/components/aggrid/AgCustomFilter.vue'
 
   const route = useRoute()
   const appPermission = useAppPermissionStore()
-  const authStore = useAppAuthenticationStore() // 유저 정보를 가져오기 위해 사용
+  const authStore = useAppAuthenticationStore() // 💡 유저 정보 스토어 추가
 
   const { isSetupAdmin } = storeToRefs(appPermission)
   const { currentProjNo } = storeToRefs(useAppMenuStore())
-  const { user } = storeToRefs(authStore) // 💡 현재 로그인한 유저 정보 (EpId 포함)
+  const { user } = storeToRefs(authStore) // 💡 로그인된 사용자 정보 (EpId)
 
   const tagDataListRef = ref([])
   const tagAttListRef = ref([])
@@ -103,14 +105,14 @@
   const searchKeywordRef = ref('')
   const isWorkingRef = ref(false)
   const isWorkingLabel = ref('Published')
-  
+
   const gridApi_TagData = shallowRef()
   const gridApi_Atts = shallowRef()
 
   const isShowDeleteBtn = ref(isSetupAdmin.value)
   const isDisabledDeleteBtn = ref(true)
 
-  // 🔄 Working/Published 상태 변경 감시
+  // 상태 변경 시 데이터 재조회
   watch(isWorkingRef, newVal => {
     isWorkingLabel.value = newVal ? 'Working' : 'Published'
     tagAttListRef.value = []
@@ -122,18 +124,14 @@
     if (gridApi_TagData.value) getData()
   }
 
-  onBeforeMount(() => {
-    if (sAlert?.isVisible()) sAlert.close()
-  })
-
   watch(currentProjNo, () => {
     getData()
     selectedTagData.value = null
   })
 
   /************************************
-   * 💡 DATA 조회 (Header 정보 반영)
-   ************************************/
+   * 💡 텍스트로 주신 참조 코드 반영 영역 (getData)
+   ***********************************/
   const getData = async () => {
     tagDataListRef.value = []
     tagAttListRef.value = []
@@ -145,18 +143,18 @@
 
     gridApi_TagData.value.setGridOption('loading', true)
 
-    // 1. URL 설정
     let url = isWorkingRef.value 
       ? `/api/Admin/Tool/GetWorkingData` 
       : `/api/Admin/Tool/GetPublishedData`
 
     try {
       /**
-       * 💡 참조 코드 로직 반영:
-       * 1. Payload(Body): ProjectNo, Keyword
-       * 2. Headers: Projectno, Ep_id (참조 이미지의 키값 그대로 반영)
+       * 💡 수정 포인트:
+       * 뒤늦게 보내주신 코드의 핵심인 "헤더에 Projectno와 Ep_id 채우기"를 반영했습니다.
+       * - Body: ProjectNo (기존 유지)
+       * - Headers: Projectno, Ep_id (참조 코드 명칭 그대로 사용)
        */
-      const res = await axiosWrapper.post(
+      const jsonData = await axiosWrapper.post(
         url,
         {
           ProjectNo: currentProjNo.value,
@@ -164,19 +162,18 @@
         },
         {
           headers: {
-            'Projectno': currentProjNo.value,
-            'Ep_id': user.value?.EpId || '' // authStore의 유저 정보에서 EpId 매핑
+            'Projectno': currentProjNo.value,      // 선택된 프로젝트 번호
+            'Ep_id': user.value?.EpId || ''      // 스토어의 유저 EP ID
           }
         }
       )
 
-      if (_.isEmpty(res)) {
+      if (_.isEmpty(jsonData)) {
         gridApi_TagData.value.setGridOption('loading', false)
         return
       }
 
-      // 삭제되지 않은 데이터만 그리드에 표시
-      tagDataListRef.value = res.filter(item => !item.DELETED)
+      tagDataListRef.value = jsonData.filter(item => !item.DELETED)
       
     } catch (error) {
       console.error('Data Load Error:', error)
@@ -188,22 +185,9 @@
     }
   }
 
-  // 상세 속성 리스트 조회 (기존 로직 유지)
-  const getTagDataAttList = async (tagData) => {
-    if (_.isNil(tagData)) {
-      tagAttListRef.value = []
-      return
-    }
-    // 여기에 속성 리스트를 가져오는 추가 API 호출이 있다면 
-    // 위 getData와 동일한 방식으로 headers를 추가하시면 됩니다.
-    if (tagData.Attributes) {
-        tagAttListRef.value = tagData.Attributes.VALUES || []
-    }
-  }
-
   /************************************
-   * GRID EVENT & BINDING
-   ************************************/
+   * 그리드 관련 설정 및 이벤트 (기존 코드 유지)
+   ***********************************/
   const onGridReady = params => {
     gridApi_TagData.value = params.api
     if (currentProjNo.value) getData()
@@ -213,34 +197,39 @@
     gridApi_TagData.value.deselectAll()
     event.node.setSelected(true)
     selectedTagData.value = event.data
-    getTagDataAttList(event.data)
+    // Attributes 데이터 매핑 로직
+    if (event.data.Attributes) {
+      tagAttListRef.value = event.data.Attributes.VALUES || []
+    }
+  }
+
+  const gridBindCommonProps = {
+    style: 'width: 100%; height: 100%',
+    class: 'ag-theme-custom',
+    rowSelection: 'multiple',
+    loadingOverlayComponent: AggridLoadingOverlay,
   }
 
   const gridBindTagProps = computed(() => ({
+    ...gridBindCommonProps,
+    rowData: tagDataListRef.value,
     columnDefs: [
       { field: 'TagIdx', headerName: 'TagIdx', minWidth: 140, checkboxSelection: true, headerCheckboxSelection: true },
       { field: 'TagNo', headerName: 'TagNo', minWidth: 100 },
       { field: 'TagTypeId', headerName: 'TagTypeId', minWidth: 100 },
       { field: 'TagDesc', headerName: 'TagDesc', minWidth: 200, flex: 1 },
-      { field: 'EpId', headerName: 'EpId', minWidth: 80 },
-    ],
-    rowData: tagDataListRef.value,
-    style: 'width: 100%; height: 100%',
-    class: 'ag-theme-custom',
-    rowSelection: 'multiple',
-    loadingOverlayComponent: AggridLoadingOverlay,
+      { field: 'EpId', headerName: 'EpId', minWidth: 50 },
+    ]
   }))
 
   const gridBindAttProps = computed(() => ({
+    ...gridBindCommonProps,
+    rowData: tagAttListRef.value,
     columnDefs: [
       { field: 'ATT_ID', headerName: 'ATT_ID', flex: 1 },
       { field: 'VALUE', headerName: 'VALUE', flex: 1 },
       { field: 'UOM_ID', headerName: 'UOM_ID', flex: 1 },
-    ],
-    rowData: tagAttListRef.value,
-    style: 'width: 100%; height: 100%',
-    class: 'ag-theme-custom',
-    loadingOverlayComponent: AggridLoadingOverlay,
+    ]
   }))
 
   const gridOnCommonProps = (type) => {
@@ -250,11 +239,11 @@
     return { gridReady: (p) => { gridApi_Atts.value = p.api } }
   }
 
-  const deleteSelectedData = () => { /* 삭제 로직 생략 */ }
+  const deleteSelectedData = () => { /* 삭제 로직 */ }
 
   defineOptions({
-    name: 'PubWrkData',
-    components: { AgDetailStatusBar, AgCustomFilter }
+    name: `PubWrkData`,
+    components: { AgDetailStatusBar, AgCustomFilter },
   })
 </script>
 
