@@ -174,8 +174,9 @@ const onSearch = async () => {
 const existCellRenderer = params => params.value === true ? `<span class="text-success"><i class="fa fa-circle" style="font-size: 8px;"></i></span>` : `<span class="text-muted">-</span>`
 
 const columnDefs = computed(() => {
+  // 💡 [수정] 즉시 필터링 반영을 위해 buttons에서 'apply'를 제거
   const setFilterParams = {
-    buttons: ['reset', 'apply'],
+    buttons: ['reset'], // 'apply' 버튼 제거 -> 체크 시 즉시 반영
     refreshValuesOnIncrementalUpdate: true,
   }
 
@@ -210,20 +211,19 @@ const gridOptions = computed(() => ({
   class: 'ag-theme-custom',
   loadingOverlayComponent: AggridLoadingOverlay,
   
-  // Enterprise 설정
   enableRangeSelection: true,
   suppressRowClickSelection: true,
 
-  // 💡 [추가] 상태바 설정 (하단 수량 표시)
+  // 💡 [수정] 상태바 수량 표기를 우측으로 이동
   statusBar: {
     statusPanels: [
       { 
         statusPanel: 'agTotalAndFilteredRowCountComponent', 
-        align: 'left' // 왼쪽에 총 개수 및 필터된 개수 표시
+        align: 'right' // 좌측에서 우측으로 변경
       },
       { 
         statusPanel: 'agSelectedRowCountComponent', 
-        align: 'right' // 오른쪽에 선택된 셀/행 개수 표시
+        align: 'right' 
       }
     ]
   },
@@ -250,11 +250,11 @@ const onGridReady = (p) => { gridApi.value = p.api }
 .custom-project-dropdown { width: 300px !important; max-width: 300px; overflow: hidden; }
 .custom-textarea-filter { width: 280px !important; font-size: 0.8rem; resize: none; padding: 4px 8px; border-radius: 4px; }
 
-/* 💡 상태바 스타일 살짝 조정 (필요시) */
 :deep(.ag-status-bar) {
   font-weight: bold;
   font-size: 13px;
   background-color: #f8f9fa;
   border-top: 1px solid #dde2eb;
+  padding-right: 20px; /* 우측 여백 살짝 추가 */
 }
 </style>
