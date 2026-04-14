@@ -174,10 +174,14 @@ const onSearch = async () => {
 const existCellRenderer = params => params.value === true ? `<span class="text-success"><i class="fa fa-circle" style="font-size: 8px;"></i></span>` : `<span class="text-muted">-</span>`
 
 const columnDefs = computed(() => {
-  // 💡 [수정] 즉시 필터링 반영을 위해 buttons에서 'apply'를 제거
+  // 💡 [핵심] 미니 필터를 입력 가능(활성 상태)하게 만드는 설정
   const setFilterParams = {
-    buttons: ['reset'], // 'apply' 버튼 제거 -> 체크 시 즉시 반영
+    buttons: ['reset'],
     refreshValuesOnIncrementalUpdate: true,
+  }
+
+  const floatingFilterParams = {
+    suppressFilterButton: false, // 역삼각형 아이콘 유지
   }
 
   const cols = [
@@ -186,9 +190,23 @@ const columnDefs = computed(() => {
       filter: 'agSetFilter', filterParams: setFilterParams,
       cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' }) 
     },
-    { headerName: 'Attribute ID', field: 'ATT_ID', width: 150, pinned: 'left', filter: 'agSetFilter', filterParams: setFilterParams },
-    { headerName: 'Description', field: 'DESC', width: 200, pinned: 'left', tooltipField: 'DESC', filter: 'agSetFilter', filterParams: setFilterParams },
-    { headerName: 'Type', field: 'VAL_TYPE', width: 120, pinned: 'left', filter: 'agSetFilter', filterParams: setFilterParams },
+    { 
+      headerName: 'Attribute ID', field: 'ATT_ID', width: 150, pinned: 'left', 
+      filter: 'agSetFilter', 
+      filterParams: setFilterParams,
+      // 💡 텍스트 입력으로 리스트 필터링 가능하게 설정
+      floatingFilterComponentParams: { suppressFilterButton: false }
+    },
+    { 
+      headerName: 'Description', field: 'DESC', width: 200, pinned: 'left', tooltipField: 'DESC', 
+      filter: 'agSetFilter', 
+      filterParams: setFilterParams,
+      floatingFilterComponentParams: { suppressFilterButton: false }
+    },
+    { 
+      headerName: 'Type', field: 'VAL_TYPE', width: 120, pinned: 'left', 
+      filter: 'agSetFilter', filterParams: setFilterParams 
+    },
   ]
   dynamicCols.value.forEach(proj => {
     cols.push({ 
@@ -214,24 +232,17 @@ const gridOptions = computed(() => ({
   enableRangeSelection: true,
   suppressRowClickSelection: true,
 
-  // 💡 [수정] 상태바 수량 표기를 우측으로 이동
   statusBar: {
     statusPanels: [
-      { 
-        statusPanel: 'agTotalAndFilteredRowCountComponent', 
-        align: 'right' // 좌측에서 우측으로 변경
-      },
-      { 
-        statusPanel: 'agSelectedRowCountComponent', 
-        align: 'right' 
-      }
+      { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'right' },
+      { statusPanel: 'agSelectedRowCountComponent', align: 'right' }
     ]
   },
 
   defaultColDef: { 
     sortable: true, 
     resizable: true,
-    floatingFilter: true,
+    floatingFilter: true, // 미니 필터 노출 활성화
   },
   
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
@@ -250,11 +261,11 @@ const onGridReady = (p) => { gridApi.value = p.api }
 .custom-project-dropdown { width: 300px !important; max-width: 300px; overflow: hidden; }
 .custom-textarea-filter { width: 280px !important; font-size: 0.8rem; resize: none; padding: 4px 8px; border-radius: 4px; }
 
-:deep(.ag-status-bar) {
-  font-weight: bold;
-  font-size: 13px;
-  background-color: #f8f9fa;
-  border-top: 1px solid #dde2eb;
-  padding-right: 20px; /* 우측 여백 살짝 추가 */
+/* 💡 미니 필터 입력창이 비활성처럼 보이지 않도록 스타일 강조 */
+:deep(.ag-floating-filter-input) {
+  background-color: #fff !important;
+}
+:deep(.ag-floating-filter-body input) {
+  cursor: text !important;
 }
 </style>
