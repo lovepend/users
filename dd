@@ -1,278 +1,227 @@
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100">
     <PageTitle
-      icon="fa-sliders"
-      :title="'프로젝트별 속성 비교 분석' + (selectedProjects.length ? ` [선택됨: ${selectedProjects.length}건]` : '')"
+      icon="fa-square-check"
+      :title="'Tag List 및 Attributes 정보' + (currentProjNo ? ` [ ${currentProjNo} ]` : '')"
     >
       <template #actions>
-        <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap">Projects</span>
-            <div class="dropdown">
-              <button
-                class="btn btn-sm btn-outline-secondary dropdown-toggle custom-input-width text-start d-flex justify-content-between align-items-center bg-white"
-                type="button"
-                data-bs-toggle="dropdown"
-                data-bs-auto-close="outside"
-              >
-                <span>{{
-                  selectedProjects.length > 0 ? `${selectedProjects.length}개 선택됨` : '프로젝트를 선택/입력하세요'
-                }}</span>
-              </button>
-
-              <ul class="dropdown-menu p-0 shadow-sm" style="width: 280px">
-                <li class="p-2 border-bottom bg-light">
-                  <textarea
-                    class="form-control form-control-sm mb-1 custom-scrollbar"
-                    rows="2"
-                    v-model="manualProjectInput"
-                    placeholder="TEST1001, TEST1002...&#10;(공백, 콤마, 줄바꿈 구분)"
-                    style="resize: none; font-size: 0.85rem"
-                  ></textarea>
-                  <div class="d-flex justify-content-between align-items-center text-muted" style="font-size: 0.75rem">
-                    <span>입력 시 하단 체크박스 자동 연동</span>
-                    <button class="btn btn-link btn-sm p-0 text-decoration-none" @click="clearProjects">초기화</button>
-                  </div>
-                </li>
-
-                <div style="max-height: 250px; overflow-y: auto" class="p-2 custom-scrollbar">
-                  <li v-if="projectList.length === 0" class="text-muted text-center py-2 fs-7">데이터가 없습니다.</li>
-                  <li v-for="proj in projectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1 rounded">
-                    <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
-                      <input
-                        class="form-check-input me-2 mt-0"
-                        type="checkbox"
-                        :value="proj.PROJ_NO"
-                        v-model="selectedProjects"
-                      />
-                      <span class="text-truncate"
-                        >{{ proj.PROJ_NO }} <small class="text-muted">({{ proj.DESC }})</small></span
-                      >
-                    </label>
-                  </li>
-                </div>
-              </ul>
-            </div>
-          </div>
-
-          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0">
-            <i class="fa fa-search me-1"></i>비교 조회
-          </button>
-
-          <div class="ms-2 border-start ps-3 d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap">속성 필터</span>
+        <div class="d-flex align-items-center gap-2 me-2">
+          <label class="d-flex align-items-center gap-2">
+            <span class="fw-500">Keyword</span>
             <input
               type="text"
-              class="form-control form-control-sm border-success custom-input-width"
-              v-model="attributeFilter"
-              placeholder="ATT_ID 또는 DESC 검색"
+              placeholder="Input Keyword"
+              class="form-control form-control-sm p-1"
+              style="min-height: 1rem"
+              v-model="searchKeywordRef"
             />
-          </div>
+          </label>
+          <button class="btn btn-xs btn-primary" @click="onSearch">Search</button>
+        </div>
+        <div class="form-check form-switch m-0">
+          <label class="form-check-label text-dark user-select-none cursor-pointer">
+            <input class="form-check-input" type="checkbox" v-model="isWorkingRef" />
+            {{ isWorkingLabel }}
+          </label>
         </div>
         <panel-toolbar />
       </template>
     </PageTitle>
-
     <div class="panel-body m-0 p-0 h-100">
-      <div class="panel m-0 p-0 h-100">
-        <div class="panel-body overflow-hidden m-0 p-0 h-100">
-          <ag-grid-vue v-bind="gridOptions" @grid-ready="onGridReady" />
-        </div>
-      </div>
+      <Splitter class="h-100">
+        <SplitterPanel :size="55" :minSize="10">
+          <div class="panel m-0 p-0 h-100">
+            <div class="panel-heading p-0 m-0">
+              <div class="w-100 h-100">
+                <BasicToolBar
+                  @delete-data="deleteSelectedData"
+                  :showCreate="false"
+                  :showMultiCreate="false"
+                  :showDelete="isShowDeleteBtn"
+                  :isDisabledDeleteBtn="isDisabledDeleteBtn"
+                  :showSave="false"
+                  :isDisabledSaveBtn="false"
+                />
+              </div>
+            </div>
+            <div class="panel-body overflow-hidden m-0 p-0 h-100">
+              <ag-grid-vue v-bind="gridBindTagProps" v-on="gridOnCommonProps('Tag')" />
+            </div>
+          </div>
+        </SplitterPanel>
+        <SplitterPanel :size="45">
+          <div class="panel m-0 p-0 h-100">
+            <div class="panel-body overflow-hidden m-0 p-0 h-100">
+              <ag-grid-vue v-bind="gridBindAttProps" v-on="gridOnCommonProps('Att')" />
+            </div>
+          </div>
+        </SplitterPanel>
+      </Splitter>
     </div>
   </div>
 </template>
 
 <script setup>
-  import { ref, computed, shallowRef, onMounted, watch } from 'vue'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sAlert } from '@/utils/messages/alert-common'
+  // Library - Common
+  import { ref, watch, shallowRef, onBeforeMount, computed } from 'vue'
+  import { useRoute } from 'vue-router'
+  import { storeToRefs } from 'pinia'
+
+  // Library - Layout
+  import Splitter from 'primevue/splitter'
+  import SplitterPanel from 'primevue/splitterpanel'
+
+  // Store
+  import { useAppPermissionStore } from '@/stores/app-permission'
+  import { useAppAuthenticationStore } from '@/stores/app-authentication'
+  import { useAppMenuStore } from '@/stores/app-menu'
+
+  // Library - AG Grid
   import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+  import AgDetailStatusBar from '@/components/aggrid/AgDetailStatusBar.vue'
+  import AgCustomFilter from '@/components/aggrid/AgCustomFilter.vue'
+
+  // Helpers
+  import { sAlert, sToast } from '@/utils/messages/alert-common'
+  import * as _ from 'lodash-es'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import axios from 'axios'
+
+  // Custom Component
+  import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
   import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-  /**
-   * --- 상태 관리 ---
-   */
-  const currentEpId = ref('USER_EP_ID') // 세션 등에서 가져온 EP_ID로 매핑 필요
-  const projectList = ref([]) // API에서 불러온 전체 프로젝트
-  const selectedProjects = ref([]) // 체크된 프로젝트 번호들
-  const manualProjectInput = ref('') // 텍스트 영역 입력값
-  const attributeFilter = ref('') // 그리드 내부 필터
+  const route = useRoute()
+  const appPermission = useAppPermissionStore()
+  const authStore = useAppAuthenticationStore() // 💡 사용자 정보 스토어 추가
 
-  const gridApi = shallowRef()
-  const gridRowData = ref([])
-  const dynamicCols = ref([])
+  const { isSetupAdmin } = storeToRefs(appPermission)
+  const { currentProjNo } = storeToRefs(useAppMenuStore())
+  const { user } = storeToRefs(authStore) // 💡 로그인된 유저 ID 참조용
 
-  /**
-   * --- UX 연동 로직 (입력창 <-> 체크박스) ---
-   */
-  // 1. 텍스트 입력 시 체크박스 자동 동기화
-  watch(manualProjectInput, newVal => {
-    const inputArr = newVal
-      .split(/[,\s\n]+/)
-      .map(s => s.trim().toUpperCase())
-      .filter(Boolean)
-    const validSelection = []
+  const registerListRef = ref([])
+  const statusBar_Atts = ref()
 
-    inputArr.forEach(inputProj => {
-      const matched = projectList.value.find(p => p.PROJ_NO.toUpperCase() === inputProj)
-      if (matched) validSelection.push(matched.PROJ_NO)
-    })
-    selectedProjects.value = [...new Set(validSelection)]
+  const isShowCreateBtn = ref(isSetupAdmin.value)
+  const isShowMultiCreateBtn = ref(true)
+  const isShowDeleteBtn = ref(isSetupAdmin.value)
+  const isDisabledDeleteBtn = ref(true)
+  const isShowSaveBtn = ref(isSetupAdmin.value)
+  const isDisabledSaveBtn = ref(true)
+
+  const searchKeywordRef = ref('')
+  const isWorkingRef = ref(false)
+  const isWorkingLabel = ref('Published')
+  const isDisabledDeleteSubBtn = ref(true)
+  const showAddAttr = ref(true)
+  const allTagDataList = ref([])
+
+  const selectedCdLst = computed({
+    get: () => route.query?.cl_id,
+    set: newValue => null,
   })
 
-  // 2. 체크박스 클릭 시 텍스트 영역 동기화 (값이 다를 때만)
-  watch(selectedProjects, newVal => {
-    const currentInputArr = manualProjectInput.value
-      .split(/[,\s\n]+/)
-      .map(s => s.trim().toUpperCase())
-      .filter(Boolean)
-    const selectedArr = newVal.map(v => v.toUpperCase())
-
-    if (JSON.stringify(currentInputArr.sort()) !== JSON.stringify(selectedArr.sort())) {
-      manualProjectInput.value = newVal.join(', ')
-    }
+  watch(isWorkingRef, newVal => {
+    isWorkingLabel.value = newVal ? 'Working' : 'Published'
+    tagAttListRef.value = []
+    if (gridApi_TagData.value) getData()
   })
 
-  const clearProjects = () => {
-    manualProjectInput.value = ''
-    selectedProjects.value = []
+  const onSearch = () => {
+    tagAttListRef.value = []
+    if (gridApi_TagData.value) getData()
   }
 
-  /**
-   * --- API 호출 및 데이터 처리 ---
-   */
-  onMounted(async () => {
-    try {
-      const res = await axiosWrapper.get('/api/Project/Get')
-      projectList.value = res.filter(p => p.USE_YN) || []
-    } catch (error) {
-      console.error('Project Load Error:', error)
+  onBeforeMount(() => {
+    if (sAlert?.isVisible()) sAlert.close()
+    statusBar_Atts.value = {
+      statusPanels: [
+        { statusPanel: 'agTotalRowCountComponent' },
+        { statusPanel: 'agFilteredRowCountComponent' },
+        { statusPanel: 'agSelectedRowCountComponent' },
+        {
+          statusPanel: 'AgDetailStatusBar',
+          statusPanelParams: { customStyle: { 'background-color': '#e4dbe9' } },
+          align: 'left',
+        },
+      ],
     }
   })
 
-  const onSearch = async () => {
-    if (selectedProjects.value.length === 0) return
-    if (gridApi.value) gridApi.value.setGridOption('loading', true)
+  watch(currentProjNo, () => {
+    getData()
+    selectedTagData.value = null
+    firstGridDataModel.value = null
+    firstGridDataModel2.value = null
+    if (context.value) context.value = { customKey: 'Tag Idx : ', customValue: '' }
+  })
+
+  const gridApi_TagData = shallowRef()
+  const gridApi_Atts = shallowRef()
+  const themeClass = 'ag-theme-custom'
+  const getRowId = params => params.data.Id
+  const context = ref()
+
+  const tagDataListRef = ref(null)
+  const tagAttListRef = ref(null)
+  const selectedTagData = ref(null)
+  const firstGridDataModel = ref(null)
+  const firstGridDataModel2 = ref(null)
+  let changedCells = []
+
+  /************************************
+   * 💡 GET DATA - 이 부분에 헤더 로직을 반영했습니다.
+   ***********************************/
+  const getData = async () => {
+    tagDataListRef.value = []
+    changedCells = []
+    tagAttListRef.value = []
+
+    if (!currentProjNo.value) {
+      sAlert.Warning(`Project를 선택해주세요`)
+      return
+    }
+
+    gridApi_TagData.value.setGridOption('loading', true)
+
+    let url = isWorkingRef.value ? `/api/Admin/Tool/GetWorkingData` : `/api/Admin/Tool/GetPublishedData`
 
     try {
-      // 💡 요청사항 반영: Body에는 PROJ_NO, Header에는 EP_ID & PROJ_NO
-      const fetchPromises = selectedProjects.value.map(projNo =>
-        axiosWrapper
-          .post(
-            '/api/Attributes/Get',
-            { PROJ_NO: projNo }, // Body
-            { headers: { EP_ID: currentEpId.value, PROJ_NO: projNo } } // Headers
-          )
-          .catch(() => [])
+      // 💡 axiosWrapper.post의 3번째 인자로 headers를 추가했습니다.
+      const jsonData = await axiosWrapper.post(
+        url,
+        {
+          ProjectNo: currentProjNo.value,
+          Keyword: searchKeywordRef.value.trim(),
+        },
+        {
+          headers: {
+            'Projectno': currentProjNo.value,     // 헤더에 프로젝트 번호 반영
+            'Ep_id': user.value?.EpId || ''     // 헤더에 로그인 유저 ID 반영
+          }
+        }
       )
 
-      const results = await Promise.all(fetchPromises)
-      const attrMap = new Map()
+      if (_.isEmpty(jsonData)) {
+        tagDataListRef.value = []
+        gridApi_TagData.value.setGridOption('loading', false)
+        return
+      }
 
-      results.forEach((projectData, index) => {
-        const currentProjNo = selectedProjects.value[index]
-        if (!Array.isArray(projectData)) return
-
-        projectData.forEach(attr => {
-          if (!attrMap.has(attr.ATT_ID)) {
-            const baseRow = {
-              ATT_ID: attr.ATT_ID,
-              DESC: attr.DESC,
-              VAL_TYPE: attr.VAL_TYPE,
-            }
-            selectedProjects.value.forEach(p => (baseRow[p] = false))
-            attrMap.set(attr.ATT_ID, baseRow)
-          }
-          attrMap.get(attr.ATT_ID)[currentProjNo] = true
-        })
-      })
-
-      const processedData = Array.from(attrMap.values()).map(row => {
-        const existCount = selectedProjects.value.filter(p => row[p] === true).length
-        row.CONDITION = existCount === selectedProjects.value.length ? 'Pass' : 'Diff'
-        return row
-      })
-
-      dynamicCols.value = selectedProjects.value
-      gridRowData.value = processedData
-    } catch (e) {
-      sAlert.Error('데이터 조회 중 오류가 발생했습니다.')
-    } finally {
-      if (gridApi.value) gridApi.value.setGridOption('loading', false)
+      allTagDataList.value = jsonData
+      tagDataListRef.value = jsonData.filter(item => !item.DELETED)
+      firstGridDataModel.value = _.cloneDeep(tagDataListRef.value)
+      
+    } catch (error) {
+      gridApi_TagData.value.setGridOption('loading', false)
+      tagDataListRef.value = []
+      if (!(error instanceof axios.AxiosError)) {
+        sAlert.Warning('Failed to get Tag Data : ' + error.message)
+      }
     }
+    gridApi_TagData.value.setGridOption('loading', false)
   }
 
-  /**
-   * --- 그리드 설정 ---
-   */
-  const existCellRenderer = params => {
-    return params.value === true
-      ? `<span class="text-primary fw-bold"><i class="fa fa-check-circle text-success me-1"></i> O</span>`
-      : `<span class="text-muted">-</span>`
-  }
-
-  const columnDefs = computed(() => {
-    const cols = [
-      {
-        headerName: 'Condition',
-        field: 'CONDITION',
-        width: 110,
-        pinned: 'left',
-        cellStyle: p => ({
-          color: p.value === 'Diff' ? '#dc3545' : '#198754',
-          fontWeight: 'bold',
-          textAlign: 'center',
-          backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8',
-        }),
-      },
-      { headerName: 'Attribute ID', field: 'ATT_ID', width: 150, pinned: 'left', filter: 'agTextColumnFilter' },
-      { headerName: 'Description', field: 'DESC', width: 200, pinned: 'left', filter: 'agTextColumnFilter' },
-      { headerName: 'Type', field: 'VAL_TYPE', width: 100, pinned: 'left' },
-    ]
-
-    dynamicCols.value.forEach(proj => {
-      cols.push({
-        headerName: proj,
-        field: proj,
-        minWidth: 120,
-        cellRenderer: existCellRenderer,
-        cellStyle: p => ({ textAlign: 'center', backgroundColor: p.value === false ? '#fff1f0' : 'transparent' }),
-      })
-    })
-
-    return cols
-  })
-
-  const gridOptions = computed(() => ({
-    columnDefs: columnDefs.value,
-    rowData: gridRowData.value,
-    style: 'width: 100%; height: 100%',
-    class: 'ag-theme-custom',
-    loadingOverlayComponent: AggridLoadingOverlay,
-    defaultColDef: { sortable: true, resizable: true },
-    isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
-    doesExternalFilterPass: node => {
-      const kw = attributeFilter.value.toLowerCase()
-      return String(node.data.ATT_ID).toLowerCase().includes(kw) || String(node.data.DESC).toLowerCase().includes(kw)
-    },
-  }))
-
-  const onGridReady = p => (gridApi.value = p.api)
+  // ... (이후 getTagDataAttList, Grid Events 등 나머지 원본 코드와 동일) ...
+  // (생략된 부분은 주신 원본 코드의 로직을 그대로 사용하시면 됩니다.)
 </script>
-
-<style scoped>
-  .custom-input-width {
-    width: 250px !important;
-  }
-  .fs-7 {
-    font-size: 0.85rem;
-  }
-  .custom-scrollbar::-webkit-scrollbar {
-    width: 6px;
-  }
-  .custom-scrollbar::-webkit-scrollbar-thumb {
-    background: #ccc;
-    border-radius: 4px;
-  }
-</style>
