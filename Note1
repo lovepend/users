@@ -1,618 +1,152 @@
-{
-    "PIEP_T_002_T": {
-        "PubData": null,
-        "WrkData": null,
-        "DiffData": [
-            {
-                "TAG_IDX": "673d42cb414bc48fd4fd4c0d",
-                "EP_ID": "PiEP_T",
-                "Status": "",
-                "EditType": "",
-                "Property": [
-                    {
-                        "PROP_ID": "TAG_TYPE_ID",
-                        "PUB_VALUE": "005",
-                        "WRK_VALUE": ""
-                    },
-                    {
-                        "PROP_ID": "PI5224",
-                        "PUB_VALUE": null,
-                        "WRK_VALUE": "2\""
-                    },
-                    {
-                        "PROP_ID": "PI5011",
-                        "PUB_VALUE": null,
-                        "WRK_VALUE": "600LB"
-                    },
-                    {
-                        "PROP_ID": "CLAS_CD",
-                        "PUB_VALUE": null,
-                        "WRK_VALUE": "A41201"
-                    }
-                ]
-            },
-            {
-                "TAG_IDX": "673d42cb414bc48fd4fd4c0f",
-                "EP_ID": "PiEP_T",
-                "Status": "",
-                "EditType": "",
-                "Property": [
-                    {
-                        "PROP_ID": "PI5224",
-                        "PUB_VALUE": null,
-                        "WRK_VALUE": "1 1/2\""
-                    },
-                    {
-                        "PROP_ID": "PI5011",
-                        "PUB_VALUE": null,
-                        "WRK_VALUE": "600LB"
-                    },
-                    {
-                        "PROP_ID": "CLAS_CD",
-                        "PUB_VALUE": null,
-                        "WRK_VALUE": "A41201"
-                    },
-                    {
-                        "PROP_ID": "TAG_TYPE_ID",
-                        "PUB_VALUE": "005",
-                        "WRK_VALUE": ""
-                    }
-                ]
-            }
+우선 아래는 프로젝트 읽어 오는 api
+/api/Project/Get
+
+리턴 되는 데이터 아래와 같아
+[
+    {
+        "PROJ_NO": "TEST1001",
+        "DESC": "TEST1001",
+        "REMARK": "",
+        "STR_DT": "2021-08-08T15:00:00Z",
+        "USE_YN": true,
+        "CLASS": null,
+        "OWNER": null,
+        "OOTB_YN": false,
+        "SEQ": 9,
+        "REVISION_INFO": null,
+        "CRTER_NO": "226613",
+        "CRTE_DTM": "2021-08-09T10:12:07.76Z",
+        "CHGER_NO": "212405",
+        "CHGE_DTM": "2025-06-04T22:58:17.582Z",
+        "_id": "66594f59e924a401bf255e42"
+    },
+    {
+        "PROJ_NO": "TEST1002",
+        "DESC": "TEST1002,
+        "REMARK": "",
+        "STR_DT": "2021-09-02T15:00:00Z",
+        "USE_YN": true,
+        "CLASS": null,
+        "OWNER": null,
+        "OOTB_YN": false,
+        "SEQ": 12,
+        "REVISION_INFO": null,
+        "CRTER_NO": "232111",
+        "CRTE_DTM": "2021-09-02T22:29:38.52Z",
+        "CHGER_NO": "212405",
+        "CHGE_DTM": "2025-06-04T22:58:17.582Z",
+        "_id": "66594f59e924a401bf255e43"
+    },
+   
+]
+
+
+그리고 선택되어진 프로젝트를 이용해서 프로젝트에 ATTRIBUTE 읽어 오는 API
+/api/Attributes/Get
+
+리턴되는 데이터는 아래와 같아
+[
+    {
+        "PROJ_NO": "TE1002",
+        "ATT_ID": "CASESET001",
+        "DESC": "CASESET001_DESC",
+        "GROUP": [
+            "CASESET",
+            "AAA",
+            "BBB",
+            "CCC",
+            "DDD"
         ],
-        "MergeData": [
-            {
-                "EP_ID": "PiEP_T",
-                "EP_IC": "PiEP_T",
-                "DELETED": false,
-                "DEL_USER": null,
-                "DEL_DTM": null,
-                "PROJ_NO": "SN2661",
-                "TAG_IDX": "673d42cb414bc48fd4fd4c0d",
-                "TAG_NO": "VG-110012",
-                "TAG_TYPE_ID": "",
-                "CLS_ID": "MANUAL_VALV_CLS",
-                "TAG_DESC": "VG-110012",
-                "BF_TAG_NO": "VG-1112",
-                "PIC_NO": "220604",
-                "DSN_SKL": null,
-                "PRNT_TAG_IDX": null,
-                "ATTRIBUTES": [
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ASSEMBLY_NAME",
-                        "VALUE": "6848ceffb92ec47d6fe56625"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "CLAS_CD",
-                        "VALUE": "A41201"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 5,
-                        "ATT_ID": "EL9001",
-                        "VALUE": "5"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "IM9020",
-                        "VALUE": "VG"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 12,
-                        "ATT_ID": "IM9050",
-                        "VALUE": "0012"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "IN0045",
-                        "VALUE": "CL600"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "IN0149",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 50,
-                        "ATT_ID": "IN0499",
-                        "VALUE": "50"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 600,
-                        "ATT_ID": "IN0500",
-                        "VALUE": "600"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ME5104",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ME5115",
-                        "VALUE": "SHI"
-                    },
-                    {
-                        "UOM_ID": "MASS_02",
-                        "VALUE_DBL": 150,
-                        "ATT_ID": "ME5142",
-                        "VALUE": "150"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ME5160",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ME5173",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ME5228",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ME9000",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI0006",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": "LENGTH_06",
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI0007",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": "LENGTH_06",
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI0017",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5005",
-                        "VALUE": "TOP"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5011",
-                        "VALUE": "600LB"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5029",
-                        "VALUE": "RF"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5049",
-                        "VALUE": "RF"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5088",
-                        "VALUE": "P81C-00N5F"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5098",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5099",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5101",
-                        "VALUE": "FLANGE"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5107",
-                        "VALUE": "FLANGE"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5110",
-                        "VALUE": "6C615"
-                    },
-                    {
-                        "UOM_ID": "LENGTH_06",
-                        "VALUE_DBL": 100,
-                        "ATT_ID": "PI5117",
-                        "VALUE": "100"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5121",
-                        "VALUE": "Gate valve"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5125",
-                        "VALUE": "Expanding gate"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5135",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5211",
-                        "VALUE": "CL600"
-                    },
-                    {
-                        "UOM_ID": "LENGTH_03",
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5224",
-                        "VALUE": "2\""
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5226",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5227",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PR5601",
-                        "VALUE": "600-PG-11007-6C615-N"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PR5621",
-                        "VALUE": "PFLNG3-009-EXE-JSC-1100-PRO-PID-0001"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 11,
-                        "ATT_ID": "PR5674",
-                        "VALUE": "11"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "SM_CD",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "SYSTEM_NAME",
-                        "VALUE": "691d80685f71026bcbfb2cbc"
-                    }
-                ],
-                "CRTER_NO": "212405",
-                "CRTE_DTM": "2024-12-10T02:47:35Z",
-                "CHGER_NO": "220604",
-                "CHGE_DTM": "2025-08-12T01:09:07.499Z",
-                "_id": null
-            },
-            {
-                "EP_ID": "PiEP_T",
-                "EP_IC": "PiEP_T",
-                "DELETED": false,
-                "DEL_USER": null,
-                "DEL_DTM": null,
-                "PROJ_NO": "SN2661",
-                "TAG_IDX": "673d42cb414bc48fd4fd4c0f",
-                "TAG_NO": "VG-110011",
-                "TAG_TYPE_ID": "",
-                "CLS_ID": "MANUAL_VALV_CLS",
-                "TAG_DESC": "VG-110011",
-                "BF_TAG_NO": "VG-1111",
-                "PIC_NO": "220604",
-                "DSN_SKL": null,
-                "PRNT_TAG_IDX": null,
-                "ATTRIBUTES": [
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ASSEMBLY_NAME",
-                        "VALUE": "6848cedeb92ec47d6fe5661f"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "CLAS_CD",
-                        "VALUE": "A41201"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 6,
-                        "ATT_ID": "EL9001",
-                        "VALUE": "6"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "IM9020",
-                        "VALUE": "VG"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 11,
-                        "ATT_ID": "IM9050",
-                        "VALUE": "0011"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "IN0045",
-                        "VALUE": "CL600"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "IN0149",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 40,
-                        "ATT_ID": "IN0499",
-                        "VALUE": "40"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 600,
-                        "ATT_ID": "IN0500",
-                        "VALUE": "600"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ME5104",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ME5115",
-                        "VALUE": "SHI"
-                    },
-                    {
-                        "UOM_ID": "MASS_02",
-                        "VALUE_DBL": 10,
-                        "ATT_ID": "ME5142",
-                        "VALUE": "10"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ME5160",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ME5173",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ME5228",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "ME9000",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI0006",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": "LENGTH_06",
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI0007",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": "LENGTH_06",
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI0017",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5005",
-                        "VALUE": "TOP"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5011",
-                        "VALUE": "600LB"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5029",
-                        "VALUE": "RF"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5049",
-                        "VALUE": "RF"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5088",
-                        "VALUE": "P81C-00N5F"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5098",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5099",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5101",
-                        "VALUE": "FLANGE"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5107",
-                        "VALUE": "FLANGE"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5110",
-                        "VALUE": "6C615"
-                    },
-                    {
-                        "UOM_ID": "LENGTH_06",
-                        "VALUE_DBL": 100,
-                        "ATT_ID": "PI5117",
-                        "VALUE": "100"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5121",
-                        "VALUE": "Gate valve"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5125",
-                        "VALUE": "Expanding gate"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5135",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5211",
-                        "VALUE": "CL600"
-                    },
-                    {
-                        "UOM_ID": "LENGTH_03",
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5224",
-                        "VALUE": "1 1/2\""
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5226",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PI5227",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PR5601",
-                        "VALUE": "600-PG-11007-6C615-N"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PR5621",
-                        "VALUE": "PFLNG3-009-EXE-JSC-1100-PRO-PID-0001"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 11,
-                        "ATT_ID": "PR5674",
-                        "VALUE": "11"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "SM_CD",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "SYSTEM_NAME",
-                        "VALUE": "691d80685f71026bcbfb2cbc"
-                    }
-                ],
-                "CRTER_NO": "212405",
-                "CRTE_DTM": "2024-12-10T02:47:35Z",
-                "CHGER_NO": "220604",
-                "CHGE_DTM": "2025-08-12T01:09:07.499Z",
-                "_id": null
-            }
-        ]
+        "REMARK": "",
+        "VAL_TYPE": "LIST",
+        "IGN_LIST_VAL": false,
+        "ALLOW_STRS": [],
+        "CL_ID": "CL_CASESET001",
+        "UOM_ID": null,
+        "DEF_VAL": null,
+        "CFIHOS_ID": null,
+        "CFIHOS_NAME": null,
+        "SEQ": 0,
+        "FORMAT": null,
+        "REG_EXPS": null,
+        "REL_ID": null,
+        "EDIT_PAGE_URL": null,
+        "REL_DIR": "LEFT",
+        "REL_CLS_ID": null,
+        "ATTRIBUTES": [],
+        "DELETED": false,
+        "DEL_USER": null,
+        "DEL_DTM": null,
+        "CRTER_NO": "52593271",
+        "CRTE_DTM": "2025-05-14T23:52:22.486Z",
+        "CHGER_NO": "52593271",
+        "CHGE_DTM": "2025-07-22T02:21:27.847Z",
+        "_id": "68252cb6761c000f90cb2019"
+    },
+    {
+        "PROJ_NO": "TE1002",
+        "ATT_ID": "CASESET002",
+        "DESC": "CASESET002_DESC",
+        "GROUP": [
+            "CASESET"
+        ],
+        "REMARK": "",
+        "VAL_TYPE": "CASESET",
+        "IGN_LIST_VAL": false,
+        "ALLOW_STRS": [],
+        "CL_ID": "CL_CASESET001",
+        "UOM_ID": null,
+        "DEF_VAL": null,
+        "CFIHOS_ID": null,
+        "CFIHOS_NAME": null,
+        "SEQ": 0,
+        "FORMAT": null,
+        "REG_EXPS": null,
+        "REL_ID": null,
+        "EDIT_PAGE_URL": null,
+        "REL_DIR": "LEFT",
+        "REL_CLS_ID": null,
+        "ATTRIBUTES": [],
+        "DELETED": false,
+        "DEL_USER": null,
+        "DEL_DTM": null,
+        "CRTER_NO": "52593271",
+        "CRTE_DTM": "2025-05-14T23:52:22.486Z",
+        "CHGER_NO": "52593274",
+        "CHGE_DTM": "2025-07-22T02:13:21.349Z",
+        "_id": "68252cb6761c000f90cb201a"
+    },
+    {
+        "PROJ_NO": "TE1002",
+        "ATT_ID": "CASESET003",
+        "DESC": "CASESET003_DESC",
+        "GROUP": [
+            "CASESET"
+        ],
+        "REMARK": "",
+        "VAL_TYPE": "STRING",
+        "IGN_LIST_VAL": false,
+        "ALLOW_STRS": [],
+        "CL_ID": null,
+        "UOM_ID": null,
+        "DEF_VAL": null,
+        "CFIHOS_ID": null,
+        "CFIHOS_NAME": null,
+        "SEQ": 0,
+        "FORMAT": null,
+        "REG_EXPS": null,
+        "REL_ID": null,
+        "EDIT_PAGE_URL": null,
+        "REL_DIR": "LEFT",
+        "REL_CLS_ID": null,
+        "ATTRIBUTES": [],
+        "DELETED": false,
+        "DEL_USER": null,
+        "DEL_DTM": null,
+        "CRTER_NO": "52593271",
+        "CRTE_DTM": "2025-05-14T23:52:22.486Z",
+        "CHGER_NO": "52593271",
+        "CHGE_DTM": "2025-04-17T07:45:40.977Z",
+        "_id": "68252cb6761c000f90cb201b"
     }
-}
+]
