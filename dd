@@ -29,7 +29,6 @@
                     @click.stop
                   />
                 </li>
-
                 <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
                   <label class="form-check-label d-flex align-items-center w-100 fw-bold" style="cursor: pointer">
                     <input
@@ -42,11 +41,9 @@
                     <span>전체 선택 / 해제</span>
                   </label>
                 </li>
-                
                 <li v-if="filteredProjectList.length === 0" class="text-muted text-center py-2 fs-7">
                   검색 결과가 없습니다.
                 </li>
-                
                 <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
                   <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
                     <input
@@ -74,7 +71,7 @@
               type="text"
               class="form-control form-control-sm border-success custom-input-width"
               v-model="attributeFilter"
-              placeholder="ATT_ID 또는 DESC 검색"
+              placeholder="전역 검색 (ID/DESC)"
             />
           </div>
         </div>
@@ -115,9 +112,6 @@ const dynamicCols = ref([])
 const urlEpId = computed(() => route.query.ep_id || '')
 const urlProjNo = computed(() => route.query.project_no || '')
 
-/**
- * 프로젝트 리스트 필터링
- */
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   if (!kw) return projectList.value
@@ -127,9 +121,6 @@ const filteredProjectList = computed(() => {
   )
 })
 
-/**
- * 💡 전체 선택 상태 로직
- */
 const isAllSelected = computed(() => {
   return filteredProjectList.value.length > 0 && 
          filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
@@ -143,12 +134,9 @@ const isIndeterminate = computed(() => {
 const toggleAllSelection = (e) => {
   const checked = e.target.checked
   const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
-  
   if (checked) {
-    // 현재 필터링된 항목들을 모두 추가 (중복 제거)
     selectedProjects.value = [...new Set([...selectedProjects.value, ...filteredIds])]
   } else {
-    // 현재 필터링된 항목들만 선택에서 제외
     selectedProjects.value = selectedProjects.value.filter(id => !filteredIds.includes(id))
   }
 }
@@ -208,9 +196,13 @@ const onSearch = async () => {
   }
 }
 
+/**
+ * 프로젝트 셀 렌더러
+ * 데이터 존재 시 초록색 동그라미 하나 표시
+ */
 const existCellRenderer = params => {
   if (params.value === true) {
-    return `<span class="text-success fw-bold"><i class="fa fa-circle me-1" style="font-size: 8px;"></i>O</span>`
+    return `<span class="text-success"><i class="fa fa-circle" style="font-size: 8px;"></i></span>`
   }
   return `<span class="text-muted">-</span>`
 }
@@ -218,20 +210,23 @@ const existCellRenderer = params => {
 const columnDefs = computed(() => {
   const cols = [
     { 
-      headerName: 'Condition', field: 'CONDITION', width: 120, pinned: 'left', filter: 'agTextColumnFilter',
+      headerName: 'Condition', field: 'CONDITION', width: 120, pinned: 'left',
       cellStyle: p => ({ 
         color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', 
         backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' 
       }) 
     },
-    { headerName: 'Attribute ID', field: 'ATT_ID', width: 150, pinned: 'left', filter: 'agTextColumnFilter' },
-    { headerName: 'Description', field: 'DESC', width: 200, pinned: 'left', filter: 'agTextColumnFilter', tooltipField: 'DESC' },
+    { headerName: 'Attribute ID', field: 'ATT_ID', width: 150, pinned: 'left' },
+    { headerName: 'Description', field: 'DESC', width: 200, pinned: 'left', tooltipField: 'DESC' },
     { headerName: 'Type', field: 'VAL_TYPE', width: 120, pinned: 'left' },
   ]
   dynamicCols.value.forEach(proj => {
     cols.push({ 
       headerName: proj, field: proj, minWidth: 120, cellRenderer: existCellRenderer, 
-      cellStyle: { textAlign: 'center' } 
+      cellStyle: p => ({
+        textAlign: 'center',
+        backgroundColor: p.value === false ? '#fff1f0' : 'transparent' // 💡 데이터 없을 때 하이라이트 처리
+      }) 
     })
   })
   return cols
@@ -243,7 +238,11 @@ const gridOptions = computed(() => ({
   style: 'width: 100%; height: 100%',
   class: 'ag-theme-custom',
   loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, resizable: true },
+  defaultColDef: { 
+    sortable: true, 
+    resizable: true,
+    filter: 'agTextColumnFilter',
+  },
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: node => {
     const kw = attributeFilter.value.toLowerCase()
@@ -255,7 +254,6 @@ const onGridReady = p => { gridApi.value = p.api }
 </script>
 
 <style scoped>
-/* 💡 선택된 프로젝트가 많아도 버튼 높이가 깨지지 않도록 조정 */
 .custom-project-dropdown {
   width: 300px !important;
   max-width: 300px;
