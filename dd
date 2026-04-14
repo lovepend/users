@@ -10,17 +10,17 @@
             <span class="fw-bold text-dark text-nowrap">Projects</span>
             <div class="dropdown">
               <button
-                class="btn btn-sm btn-outline-secondary dropdown-toggle custom-input-width text-start d-flex justify-content-between align-items-center bg-white"
+                class="btn btn-sm btn-outline-secondary dropdown-toggle custom-project-dropdown text-start d-flex justify-content-between align-items-center bg-white"
                 type="button"
                 data-bs-toggle="dropdown"
                 data-bs-auto-close="outside"
               >
-                <span>{{
-                  selectedProjects.length > 0 ? `${selectedProjects.length}개 선택됨` : '프로젝트를 선택하세요'
-                }}</span>
+                <span class="text-truncate me-2">
+                  {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}
+                </span>
               </button>
-              <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 280px">
-                <li class="px-2 pb-2 border-bottom mb-2">
+              <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 300px">
+                <li class="px-2 pb-2 border-bottom mb-1">
                   <input
                     type="text"
                     class="form-control form-control-sm"
@@ -28,6 +28,19 @@
                     placeholder="프로젝트 번호/명 검색..."
                     @click.stop
                   />
+                </li>
+
+                <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
+                  <label class="form-check-label d-flex align-items-center w-100 fw-bold" style="cursor: pointer">
+                    <input
+                      class="form-check-input me-2 mt-0"
+                      type="checkbox"
+                      :checked="isAllSelected"
+                      :indeterminate="isIndeterminate"
+                      @change="toggleAllSelection"
+                    />
+                    <span>전체 선택 / 해제</span>
+                  </label>
                 </li>
                 
                 <li v-if="filteredProjectList.length === 0" class="text-muted text-center py-2 fs-7">
@@ -99,12 +112,11 @@ const gridApi = shallowRef()
 const gridRowData = ref([])
 const dynamicCols = ref([])
 
-// URL에서 ep_id와 project_no 파라미터 추출
 const urlEpId = computed(() => route.query.ep_id || '')
 const urlProjNo = computed(() => route.query.project_no || '')
 
 /**
- * 프로젝트 리스트 필터링 (키인 검색)
+ * 프로젝트 리스트 필터링
  */
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
@@ -116,64 +128,64 @@ const filteredProjectList = computed(() => {
 })
 
 /**
- * 초기 프로젝트 목록 로드
+ * 💡 전체 선택 상태 로직
  */
+const isAllSelected = computed(() => {
+  return filteredProjectList.value.length > 0 && 
+         filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+})
+
+const isIndeterminate = computed(() => {
+  const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
+  return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
+})
+
+const toggleAllSelection = (e) => {
+  const checked = e.target.checked
+  const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
+  
+  if (checked) {
+    // 현재 필터링된 항목들을 모두 추가 (중복 제거)
+    selectedProjects.value = [...new Set([...selectedProjects.value, ...filteredIds])]
+  } else {
+    // 현재 필터링된 항목들만 선택에서 제외
+    selectedProjects.value = selectedProjects.value.filter(id => !filteredIds.includes(id))
+  }
+}
+
 onMounted(async () => {
   try {
     const res = await axiosWrapper.get('/api/Project/Get', {
-      headers: {
-        'Projectno': urlProjNo.value,
-        'Ep_id': urlEpId.value
-      }
+      headers: { 'Projectno': urlProjNo.value, 'Ep_id': urlEpId.value }
     })
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
   } catch (error) {
     console.error('Project List Load Error:', error)
-    sAlert.Error('프로젝트 목록을 불러오지 못했습니다.')
   }
 })
 
-/**
- * 비교 조회 실행
- */
 const onSearch = async () => {
-  if (selectedProjects.value.length === 0) {
-    return sAlert.Warning('최소 하나 이상의 프로젝트를 선택하세요.')
-  }
-
+  if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
 
   try {
-    // 요청 페이로드: { "ContainDeleted": false, "ProjectNo": "..." }
     const fetchPromises = selectedProjects.value.map(projNo =>
       axiosWrapper.post('/api/Attributes/Get', 
-        { 
-          "ContainDeleted": false, 
-          "ProjectNo": projNo 
-        }, 
-        { 
-          headers: { 
-            'Projectno': projNo, 
-            'Ep_id': urlEpId.value 
-          } 
-        }
+        { "ContainDeleted": false, "ProjectNo": projNo }, 
+        { headers: { 'Projectno': projNo, 'Ep_id': urlEpId.value } }
       ).catch(() => [])
     )
 
     const results = await Promise.all(fetchPromises)
-
     const attrMap = new Map()
+
     results.forEach((projectData, index) => {
       const currentProjNoStr = selectedProjects.value[index]
       if (!Array.isArray(projectData)) return
 
       projectData.forEach(attr => {
         if (!attrMap.has(attr.ATT_ID)) {
-          const baseRow = {
-            ATT_ID: attr.ATT_ID,
-            DESC: attr.DESC,
-            VAL_TYPE: attr.VAL_TYPE,
-          }
+          const baseRow = { ATT_ID: attr.ATT_ID, DESC: attr.DESC, VAL_TYPE: attr.VAL_TYPE }
           selectedProjects.value.forEach(p => (baseRow[p] = false))
           attrMap.set(attr.ATT_ID, baseRow)
         }
@@ -190,30 +202,25 @@ const onSearch = async () => {
     dynamicCols.value = [...selectedProjects.value]
     gridRowData.value = processedData
   } catch (e) {
-    console.error('Attribute Load Error:', e)
-    sAlert.Error('속성 데이터를 가져오는 중 오류가 발생했습니다.')
+    sAlert.Error('데이터 조회 중 오류가 발생했습니다.')
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-// --- AG Grid ---
 const existCellRenderer = params => {
-  if (params.value === true) return `<span class="text-primary fw-bold"><i class="fa fa-circle text-success fs-8 me-1"></i> O</span>`
+  if (params.value === true) {
+    return `<span class="text-success fw-bold"><i class="fa fa-circle me-1" style="font-size: 8px;"></i>O</span>`
+  }
   return `<span class="text-muted">-</span>`
 }
 
 const columnDefs = computed(() => {
   const cols = [
     { 
-      headerName: 'Condition', 
-      field: 'CONDITION', 
-      width: 110, 
-      pinned: 'left', 
+      headerName: 'Condition', field: 'CONDITION', width: 120, pinned: 'left', filter: 'agTextColumnFilter',
       cellStyle: p => ({ 
-        color: p.value === 'Diff' ? '#dc3545' : '#198754', 
-        fontWeight: 'bold', 
-        textAlign: 'center', 
+        color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', 
         backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' 
       }) 
     },
@@ -221,14 +228,10 @@ const columnDefs = computed(() => {
     { headerName: 'Description', field: 'DESC', width: 200, pinned: 'left', filter: 'agTextColumnFilter', tooltipField: 'DESC' },
     { headerName: 'Type', field: 'VAL_TYPE', width: 120, pinned: 'left' },
   ]
-
   dynamicCols.value.forEach(proj => {
     cols.push({ 
-      headerName: proj, 
-      field: proj, 
-      minWidth: 120, 
-      cellRenderer: existCellRenderer, 
-      cellStyle: p => ({ textAlign: 'center', backgroundColor: p.value === false ? '#fff1f0' : 'transparent' }) 
+      headerName: proj, field: proj, minWidth: 120, cellRenderer: existCellRenderer, 
+      cellStyle: { textAlign: 'center' } 
     })
   })
   return cols
@@ -244,9 +247,7 @@ const gridOptions = computed(() => ({
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: node => {
     const kw = attributeFilter.value.toLowerCase()
-    const attId = String(node.data.ATT_ID || '').toLowerCase()
-    const desc = String(node.data.DESC || '').toLowerCase()
-    return attId.includes(kw) || desc.includes(kw)
+    return String(node.data.ATT_ID || '').toLowerCase().includes(kw) || String(node.data.DESC || '').toLowerCase().includes(kw)
   },
 }))
 
@@ -254,8 +255,13 @@ const onGridReady = p => { gridApi.value = p.api }
 </script>
 
 <style scoped>
+/* 💡 선택된 프로젝트가 많아도 버튼 높이가 깨지지 않도록 조정 */
+.custom-project-dropdown {
+  width: 300px !important;
+  max-width: 300px;
+  overflow: hidden;
+}
 .custom-input-width { width: 250px !important; }
 .fs-7 { font-size: 0.85rem; }
-.fs-8 { font-size: 0.75rem; }
 .dropdown-menu input { border-radius: 4px; }
 </style>
