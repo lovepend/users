@@ -49,9 +49,7 @@
                       :value="proj.PROJ_NO"
                       v-model="selectedProjects"
                     />
-                    <span class="text-truncate"
-                      >{{ proj.PROJ_NO }} <small class="text-muted">({{ proj.DESC }})</small></span
-                    >
+                    <span class="text-truncate">{{ proj.PROJ_NO }} <small class="text-muted">({{ proj.DESC }})</small></span>
                   </label>
                 </li>
               </ul>
@@ -68,7 +66,7 @@
               class="form-control form-control-sm border-primary custom-textarea-filter"
               v-model="attributeFilter"
               rows="1"
-              placeholder="ID 입력 (공백, 콤마, 줄바꿈 구분)"
+              placeholder="ID 입력 (자동 필터링)"
             ></textarea>
           </div>
         </div>
@@ -87,7 +85,7 @@
 </template>
 
 <script setup>
-import { ref, computed, shallowRef, onMounted } from 'vue'
+import { ref, computed, shallowRef, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { sAlert } from '@/utils/messages/alert-common'
@@ -100,7 +98,7 @@ const route = useRoute()
 const projectList = ref([]) 
 const projectSearchKeyword = ref('') 
 const selectedProjects = ref([]) 
-const attributeFilter = ref('') // 멀티 필터용 입력값
+const attributeFilter = ref('')
 
 const gridApi = shallowRef()
 const gridRowData = ref([])
@@ -109,14 +107,18 @@ const dynamicCols = ref([])
 const urlEpId = computed(() => route.query.ep_id || '')
 const urlProjNo = computed(() => route.query.project_no || '')
 
-// 프로젝트 리스트 필터링 및 선택 로직 (기존 유지)
+// 💡 [추가] 멀티 필터 입력 시 자동으로 그리드 필터 갱신
+watch(attributeFilter, () => {
+  if (gridApi.value) {
+    gridApi.value.onFilterChanged()
+  }
+})
+
+// 프로젝트 리스트 관련 로직 (기존 동일)
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   if (!kw) return projectList.value
-  return projectList.value.filter(p => 
-    (p.PROJ_NO && p.PROJ_NO.toLowerCase().includes(kw)) || 
-    (p.DESC && p.DESC.toLowerCase().includes(kw))
-  )
+  return projectList.value.filter(p => (p.PROJ_NO && p.PROJ_NO.toLowerCase().includes(kw)) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
 })
 
 const isAllSelected = computed(() => filteredProjectList.value.length > 0 && filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO)))
@@ -133,9 +135,7 @@ const toggleAllSelection = (e) => {
 
 onMounted(async () => {
   try {
-    const res = await axiosWrapper.get('/api/Project/Get', {
-      headers: { 'Projectno': urlProjNo.value, 'Ep_id': urlEpId.value }
-    })
+    const res = await axiosWrapper.get('/api/Project/Get', { headers: { 'Projectno': urlProjNo.value, 'Ep_id': urlEpId.value } })
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
   } catch (error) { console.error(error) }
 })
@@ -146,12 +146,8 @@ const onSearch = async () => {
 
   try {
     const fetchPromises = selectedProjects.value.map(projNo =>
-      axiosWrapper.post('/api/Attributes/Get', 
-        { "ContainDeleted": false, "ProjectNo": projNo }, 
-        { headers: { 'Projectno': projNo, 'Ep_id': urlEpId.value } }
-      ).catch(() => [])
+      axiosWrapper.post('/api/Attributes/Get', { "ContainDeleted": false, "ProjectNo": projNo }, { headers: { 'Projectno': projNo, 'Ep_id': urlEpId.value } }).catch(() => [])
     )
-
     const results = await Promise.all(fetchPromises)
     const attrMap = new Map()
 
@@ -172,10 +168,9 @@ const onSearch = async () => {
       row.CONDITION = selectedProjects.value.every(p => row[p] === true) ? 'Pass' : 'Diff'
       return row
     })
-
     dynamicCols.value = [...selectedProjects.value]
     gridRowData.value = processedData
-  } catch (e) { sAlert.Error('조회 실패') } finally {
+  } catch (e) { sAlert.Error('조회 오류') } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
@@ -186,10 +181,7 @@ const columnDefs = computed(() => {
   const cols = [
     { 
       headerName: 'Condition', field: 'CONDITION', width: 120, pinned: 'left',
-      cellStyle: p => ({ 
-        color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', 
-        backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' 
-      }) 
+      cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' }) 
     },
     { headerName: 'Attribute ID', field: 'ATT_ID', width: 150, pinned: 'left' },
     { headerName: 'Description', field: 'DESC', width: 200, pinned: 'left', tooltipField: 'DESC' },
@@ -214,38 +206,29 @@ const gridOptions = computed(() => ({
     sortable: true, 
     resizable: true,
     filter: 'agTextColumnFilter',
-    // 💡 [추가] 헤더 밑에 '미니 필터(입력창)' 상시 표시
     floatingFilter: true,
+    // 💡 [추가] 미니 필터 팝업 시 모든 데이터가 서치 리스트에 나오도록 설정
+    filterParams: {
+      buttons: ['reset', 'apply'],
+      closeOnApply: true,
+      debounceMs: 200,
+    }
   },
-  // 💡 [핵심] 외부 멀티 필터 로직
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
-  doesExternalFilterPass: node => {
-    // 공백, 쉼표, 줄바꿈을 기준으로 입력값을 배열로 분리
-    const inputIds = attributeFilter.value
-      .split(/[\s,\n]+/)
-      .filter(id => id.trim() !== '')
-      .map(id => id.toLowerCase())
-
+  doesExternalFilterPass: (node) => {
+    const inputIds = attributeFilter.value.split(/[\s,\n]+/).filter(id => id.trim() !== '').map(id => id.toLowerCase())
     if (inputIds.length === 0) return true
-    
     const targetId = String(node.data.ATT_ID || '').toLowerCase()
-    // 💡 입력된 ID 목록 중 하나라도 포함되면 표시 (정확히 일치 검색을 원하면 includes 대신 === 사용 가능)
     return inputIds.some(id => targetId.includes(id))
   },
 }))
 
-const onGridReady = p => { gridApi.value = p.api }
+const onGridReady = (p) => { gridApi.value = p.api }
 </script>
 
 <style scoped>
 .custom-project-dropdown { width: 300px !important; max-width: 300px; overflow: hidden; }
-/* 💡 멀티 필터용 텍스트 영역 스타일 */
-.custom-textarea-filter {
-  width: 280px !important;
-  font-size: 0.8rem;
-  resize: none;
-  padding: 4px 8px;
-}
+.custom-textarea-filter { width: 280px !important; font-size: 0.8rem; resize: none; padding: 4px 8px; border-radius: 4px; }
 .fs-7 { font-size: 0.85rem; }
 .dropdown-menu input { border-radius: 4px; }
 </style>
