@@ -80,166 +80,186 @@
 </template>
 
 <script setup>
-  import { ref, computed, shallowRef, onMounted } from 'vue'
-  import { useRoute } from 'vue-router'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sAlert } from '@/utils/messages/alert-common'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-  import PageTitle from '@/components/toolBar/PageTitle.vue'
+import { ref, computed, shallowRef, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
+import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-  const route = useRoute()
+const route = useRoute()
 
-  // --- State ---
-  const projectList = ref([]) 
-  const projectSearchKeyword = ref('') // 💡 프로젝트 검색용 키워드
-  const selectedProjects = ref([]) 
-  const attributeFilter = ref('')
+// --- State ---
+const projectList = ref([]) 
+const projectSearchKeyword = ref('') 
+const selectedProjects = ref([]) 
+const attributeFilter = ref('')
 
-  const gridApi = shallowRef()
-  const gridRowData = ref([])
-  const dynamicCols = ref([])
+const gridApi = shallowRef()
+const gridRowData = ref([])
+const dynamicCols = ref([])
 
-  // URL 파라미터 추출
-  const urlEpId = computed(() => route.query.ep_id || '')
-  const urlProjNo = computed(() => route.query.project_no || '')
+// URL 파라미터 추출 (ep_id와 project_no)
+const urlEpId = computed(() => route.query.ep_id || '')
+const urlProjNo = computed(() => route.query.project_no || '')
 
-  /**
-   * 💡 프로젝트 리스트 필터링 (키인 검색)
-   */
-  const filteredProjectList = computed(() => {
-    const kw = projectSearchKeyword.value.trim().toLowerCase()
-    if (!kw) return projectList.value
-    return projectList.value.filter(p => 
-      p.PROJ_NO.toLowerCase().includes(kw) || 
-      (p.DESC && p.DESC.toLowerCase().includes(kw))
-    )
-  })
+/**
+ * 프로젝트 리스트 필터링 (키인 검색)
+ */
+const filteredProjectList = computed(() => {
+  const kw = projectSearchKeyword.value.trim().toLowerCase()
+  if (!kw) return projectList.value
+  return projectList.value.filter(p => 
+    (p.PROJ_NO && p.PROJ_NO.toLowerCase().includes(kw)) || 
+    (p.DESC && p.DESC.toLowerCase().includes(kw))
+  )
+})
 
-  /**
-   * 🚀 초기 데이터 로드
-   */
-  onMounted(async () => {
-    try {
-      const res = await axiosWrapper.get('/api/Project/Get', {
-        headers: {
-          'Projectno': urlProjNo.value,
-          'Ep_id': urlEpId.value
-        }
-      })
-      projectList.value = res.filter(p => p.USE_YN) || []
-    } catch (error) {
-      console.error('Project List Load Error:', error)
-      sAlert.Error('프로젝트 목록을 불러오지 못했습니다.')
-    }
-  })
-
-  /**
-   * 🔍 데이터 조회 버튼 클릭
-   */
-  const onSearch = async () => {
-    if (selectedProjects.value.length === 0) {
-      return sAlert.Warning('최소 하나 이상의 프로젝트를 선택하세요.')
-    }
-
-    if (gridApi.value) gridApi.value.setGridOption('loading', true)
-
-    try {
-      // 💡 요청하신 페이로드 형식으로 수정
-      const fetchPromises = selectedProjects.value.map(projNo =>
-        axiosWrapper.post('/api/Attributes/Get', 
-          { 
-            "ContainDeleted": false, 
-            "ProjectNo": projNo 
-          }, 
-          { 
-            headers: { 
-              'Projectno': projNo, 
-              'Ep_id': urlEpId.value 
-            } 
-          }
-        ).catch(() => [])
-      )
-
-      const results = await Promise.all(fetchPromises)
-
-      // Pivot 데이터 구조화 로직
-      const attrMap = new Map()
-      results.forEach((projectData, index) => {
-        const currentProjNoStr = selectedProjects.value[index]
-        if (!Array.isArray(projectData)) return
-
-        projectData.forEach(attr => {
-          if (!attrMap.has(attr.ATT_ID)) {
-            const baseRow = {
-              ATT_ID: attr.ATT_ID,
-              DESC: attr.DESC,
-              VAL_TYPE: attr.VAL_TYPE,
-            }
-            selectedProjects.value.forEach(p => (baseRow[p] = false))
-            attrMap.set(attr.ATT_ID, baseRow)
-          }
-          attrMap.get(attr.ATT_ID)[currentProjNoStr] = true
-        })
-      })
-
-      const processedData = Array.from(attrMap.values()).map(row => {
-        const existCount = selectedProjects.value.filter(p => row[p] === true).length
-        row.CONDITION = existCount === selectedProjects.value.length ? 'Pass' : 'Diff'
-        return row
-      })
-
-      dynamicCols.value = selectedProjects.value
-      gridRowData.value = processedData
-    } catch (e) {
-      console.error('Attribute Load Error:', e)
-      sAlert.Error('속성 데이터를 가져오는 중 오류가 발생했습니다.')
-    } finally {
-      if (gridApi.value) gridApi.value.setGridOption('loading', false)
-    }
-  }
-
-  // AG Grid 설정
-  const existCellRenderer = params => {
-    if (params.value === true) return `<span class="text-primary fw-bold"><i class="fa fa-circle text-success fs-8 me-1"></i> O</span>`
-    return `<span class="text-muted">-</span>`
-  }
-
-  const columnDefs = computed(() => {
-    const cols = [
-      { headerName: 'Condition', field: 'CONDITION', width: 110, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' }) },
-      { headerName: 'Attribute ID', field: 'ATT_ID', width: 150, pinned: 'left', filter: 'agTextColumnFilter' },
-      { headerName: 'Description', field: 'DESC', width: 200, pinned: 'left', filter: 'agTextColumnFilter', tooltipField: 'DESC' },
-      { headerName: 'Type', field: 'VAL_TYPE', width: 120, pinned: 'left' },
-    ]
-    dynamicCols.value.forEach(proj => {
-      cols.push({ headerName: proj, field: proj, minWidth: 120, cellRenderer: existCellRenderer, cellStyle: p => ({ textAlign: 'center', backgroundColor: p.value === false ? '#fff1f0' : 'transparent' }) })
+/**
+ * 초기 프로젝트 목록 로드
+ */
+onMounted(async () => {
+  try {
+    const res = await axiosWrapper.get('/api/Project/Get', {
+      headers: {
+        'Projectno': urlProjNo.value,
+        'Ep_id': urlEpId.value
+      }
     })
-    return cols
-  })
+    projectList.value = res.filter(p => p.USE_YN) || []
+  } catch (error) {
+    console.error('Project List Load Error:', error)
+    sAlert.Error('프로젝트 목록을 불러오지 못했습니다.')
+  }
+})
 
-  const gridOptions = computed(() => ({
-    columnDefs: columnDefs.value,
-    rowData: gridRowData.value,
-    style: 'width: 100%; height: 100%',
-    class: 'ag-theme-custom',
-    loadingOverlayComponent: AggridLoadingOverlay,
-    defaultColDef: { sortable: true, resizable: true },
-    isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
-    doesExternalFilterPass: node => {
-      const kw = attributeFilter.value.toLowerCase()
-      return String(node.data.ATT_ID || '').toLowerCase().includes(kw) || String(node.data.DESC || '').toLowerCase().includes(kw)
+/**
+ * 데이터 조회 버튼 클릭
+ */
+const onSearch = async () => {
+  if (selectedProjects.value.length === 0) {
+    return sAlert.Warning('최소 하나 이상의 프로젝트를 선택하세요.')
+  }
+
+  if (gridApi.value) gridApi.value.setGridOption('loading', true)
+
+  try {
+    // 요청하신 페이로드 형식: { "ContainDeleted": false, "ProjectNo": "..." }
+    const fetchPromises = selectedProjects.value.map(projNo =>
+      axiosWrapper.post('/api/Attributes/Get', 
+        { 
+          "ContainDeleted": false, 
+          "ProjectNo": projNo 
+        }, 
+        { 
+          headers: { 
+            'Projectno': projNo, 
+            'Ep_id': urlEpId.value 
+          } 
+        }
+      ).catch(() => [])
+    )
+
+    const results = await Promise.all(fetchPromises)
+
+    const attrMap = new Map()
+    results.forEach((projectData, index) => {
+      const currentProjNoStr = selectedProjects.value[index]
+      if (!Array.isArray(projectData)) return
+
+      projectData.forEach(attr => {
+        if (!attrMap.has(attr.ATT_ID)) {
+          const baseRow = {
+            ATT_ID: attr.ATT_ID,
+            DESC: attr.DESC,
+            VAL_TYPE: attr.VAL_TYPE,
+          }
+          // 모든 선택 프로젝트 열을 초기화
+          selectedProjects.value.forEach(p => (baseRow[p] = false))
+          attrMap.set(attr.ATT_ID, baseRow)
+        }
+        attrMap.get(attr.ATT_ID)[currentProjNoStr] = true
+      })
+    })
+
+    const processedData = Array.from(attrMap.values()).map(row => {
+      const existCount = selectedProjects.value.filter(p => row[p] === true).length
+      row.CONDITION = existCount === selectedProjects.value.length ? 'Pass' : 'Diff'
+      return row
+    })
+
+    dynamicCols.value = [...selectedProjects.value] // 배열 복사
+    gridRowData.value = processedData
+  } catch (e) {
+    console.error('Attribute Load Error:', e)
+    sAlert.Error('속성 데이터를 가져오는 중 오류가 발생했습니다.')
+  } finally {
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
+  }
+}
+
+// --- AG Grid 설정 ---
+const existCellRenderer = params => {
+  if (params.value === true) return `<span class="text-primary fw-bold"><i class="fa fa-circle text-success fs-8 me-1"></i> O</span>`
+  return `<span class="text-muted">-</span>`
+}
+
+const columnDefs = computed(() => {
+  const cols = [
+    { 
+      headerName: 'Condition', 
+      field: 'CONDITION', 
+      width: 110, 
+      pinned: 'left', 
+      cellStyle: p => ({ 
+        color: p.value === 'Diff' ? '#dc3545' : '#198754', 
+        fontWeight: 'bold', 
+        textAlign: 'center', 
+        backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' 
+      }) 
     },
-  }))
+    { headerName: 'Attribute ID', field: 'ATT_ID', width: 150, pinned: 'left', filter: 'agTextColumnFilter' },
+    { headerName: 'Description', field: 'DESC', width: 200, pinned: 'left', filter: 'agTextColumnFilter', tooltipField: 'DESC' },
+    { headerName: 'Type', field: 'VAL_TYPE', width: 120, pinned: 'left' },
+  ]
 
-  const onGridReady = p => { gridApi.value = p.api }
+  dynamicCols.value.forEach(proj => {
+    cols.push({ 
+      headerName: proj, 
+      field: proj, 
+      minWidth: 120, 
+      cellRenderer: existCellRenderer, 
+      cellStyle: p => ({ 
+        textAlign: 'center', 
+        backgroundColor: p.value === false ? '#fff1f0' : 'transparent' 
+      }) 
+    })
+  })
+  return cols
+})
+
+const gridOptions = computed(() => ({
+  columnDefs: columnDefs.value,
+  rowData: gridRowData.value,
+  style: 'width: 100%; height: 100%',
+  class: 'ag-theme-custom',
+  loadingOverlayComponent: AggridLoadingOverlay,
+  defaultColDef: { sortable: true, resizable: true },
+  isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
+  doesExternalFilterPass: node => {
+    const kw = attributeFilter.value.toLowerCase()
+    const attId = String(node.data.ATT_ID || '').toLowerCase()
+    const desc = String(node.data.DESC || '').toLowerCase()
+    return attId.includes(kw) || desc.includes(kw)
+  },
+}))
+
+const onGridReady = p => { gridApi.value = p.api }
 </script>
 
 <style scoped>
-  .custom-input-width { width: 250px !important; }
-  .fs-7 { font-size: 0.85rem; }
-  .fs-8 { font-size: 0.75rem; }
-  /* 검색창 클릭 시 드롭다운 닫힘 방지 및 스타일링 */
-  .dropdown-menu input {
-    border-radius: 4px;
-  }
-</template>
+.custom-input-width { width: 250px !important; }
+.fs-7 { font-size: 0.85rem; }
+.fs-8 { font-size: 0.75rem; }
+.dropdown-menu input { border-radius: 4px; }
+</style>
