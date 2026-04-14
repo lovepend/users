@@ -1,1 +1,213 @@
-http://localhost:1001/dev/testattibute?proj_no=TE1002&ep_id=TeEP
+<template>
+  <div class="panel panel-expandable m-0 p-0 h-100">
+    <PageTitle
+      icon="fa-sliders"
+      :title="'프로젝트별 속성 비교 분석' + (selectedProjects.length ? ` [선택됨: ${selectedProjects.length}건]` : '')"
+    >
+      <template #actions>
+        <div class="d-flex align-items-center gap-3 ms-auto me-2">
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-dark text-nowrap">Projects</span>
+            <div class="dropdown">
+              <button
+                class="btn btn-sm btn-outline-secondary dropdown-toggle custom-input-width text-start d-flex justify-content-between align-items-center bg-white"
+                type="button"
+                data-bs-toggle="dropdown"
+                data-bs-auto-close="outside"
+              >
+                <span>{{
+                  selectedProjects.length > 0 ? `${selectedProjects.length}개 선택됨` : '프로젝트를 선택하세요'
+                }}</span>
+              </button>
+              <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 300px; overflow-y: auto; width: 250px">
+                <li v-if="projectList.length === 0" class="text-muted text-center py-2 fs-7">데이터가 없습니다.</li>
+                <li v-for="proj in projectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
+                  <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
+                    <input
+                      class="form-check-input me-2 mt-0"
+                      type="checkbox"
+                      :value="proj.PROJ_NO"
+                      v-model="selectedProjects"
+                    />
+                    <span class="text-truncate"
+                      >{{ proj.PROJ_NO }} <small class="text-muted">({{ proj.DESC }})</small></span
+                    >
+                  </label>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0">
+            <i class="fa fa-search me-1"></i>비교 조회
+          </button>
+
+          <div class="ms-2 border-start ps-3 d-flex align-items-center gap-2">
+            <span class="fw-bold text-success text-nowrap">속성 필터</span>
+            <input
+              type="text"
+              class="form-control form-control-sm border-success custom-input-width"
+              v-model="attributeFilter"
+              placeholder="ATT_ID 또는 DESC 검색"
+            />
+          </div>
+        </div>
+        <panel-toolbar />
+      </template>
+    </PageTitle>
+
+    <div class="panel-body m-0 p-0 h-100">
+      <div class="panel m-0 p-0 h-100">
+        <div class="panel-body overflow-hidden m-0 p-0 h-100">
+          <ag-grid-vue v-bind="gridOptions" @grid-ready="onGridReady" />
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+  import { ref, computed, shallowRef, onMounted } from 'vue'
+  import { useRoute } from 'vue-router' // 💡 URL 파라미터 접근을 위해 추가
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import { sAlert } from '@/utils/messages/alert-common'
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+  import PageTitle from '@/components/toolBar/PageTitle.vue'
+
+  const route = useRoute()
+
+  // --- State ---
+  const projectList = ref([]) 
+  const selectedProjects = ref([]) 
+  const attributeFilter = ref('')
+
+  const gridApi = shallowRef()
+  const gridRowData = ref([])
+  const dynamicCols = ref([])
+
+  /**
+   * 💡 URL에서 직접 값을 가져오는 헬퍼 변수
+   * URL에 ?ep_id=XXX&project_no=YYY 형태로 되어 있다고 가정합니다.
+   */
+  const urlEpId = computed(() => route.query.ep_id || '')
+  const urlProjNo = computed(() => route.query.project_no || '')
+
+  /**
+   * 🚀 초기 데이터 로드 (Project List)
+   */
+  onMounted(async () => {
+    try {
+      const res = await axiosWrapper.get('/api/Project/Get', {
+        headers: {
+          'Projectno': urlProjNo.value, // URL에서 가져온 프로젝트 번호
+          'Ep_id': urlEpId.value        // URL에서 가져온 이피아이디
+        }
+      })
+      projectList.value = res.filter(p => p.USE_YN) || []
+    } catch (error) {
+      console.error('Project List Load Error:', error)
+      sAlert.Error('프로젝트 목록을 불러오지 못했습니다.')
+    }
+  })
+
+  /**
+   * 🔍 데이터 조회 버튼 클릭
+   */
+  const onSearch = async () => {
+    if (selectedProjects.value.length === 0) {
+      return sAlert.Warning('최소 하나 이상의 프로젝트를 선택하세요.')
+    }
+
+    if (gridApi.value) gridApi.value.setGridOption('loading', true)
+
+    try {
+      const fetchPromises = selectedProjects.value.map(projNo =>
+        axiosWrapper.post('/api/Attributes/Get', 
+          { PROJ_NO: projNo }, 
+          { 
+            headers: { 
+              'Projectno': projNo,           // 조회 대상 프로젝트 번호
+              'Ep_id': urlEpId.value         // URL에서 추출한 이피아이디
+            } 
+          }
+        ).catch(() => [])
+      )
+
+      const results = await Promise.all(fetchPromises)
+
+      const attrMap = new Map()
+      results.forEach((projectData, index) => {
+        const currentProjNoStr = selectedProjects.value[index]
+        if (!Array.isArray(projectData)) return
+
+        projectData.forEach(attr => {
+          if (!attrMap.has(attr.ATT_ID)) {
+            const baseRow = {
+              ATT_ID: attr.ATT_ID,
+              DESC: attr.DESC,
+              VAL_TYPE: attr.VAL_TYPE,
+            }
+            selectedProjects.value.forEach(p => (baseRow[p] = false))
+            attrMap.set(attr.ATT_ID, baseRow)
+          }
+          attrMap.get(attr.ATT_ID)[currentProjNoStr] = true
+        })
+      })
+
+      const processedData = Array.from(attrMap.values()).map(row => {
+        const existCount = selectedProjects.value.filter(p => row[p] === true).length
+        row.CONDITION = existCount === selectedProjects.value.length ? 'Pass' : 'Diff'
+        return row
+      })
+
+      dynamicCols.value = selectedProjects.value
+      gridRowData.value = processedData
+    } catch (e) {
+      console.error('Attribute Load Error:', e)
+      sAlert.Error('속성 데이터를 가져오는 중 오류가 발생했습니다.')
+    } finally {
+      if (gridApi.value) gridApi.value.setGridOption('loading', false)
+    }
+  }
+
+  // --- AG Grid 설정 (이전과 동일) ---
+  const existCellRenderer = params => {
+    if (params.value === true) return `<span class="text-primary fw-bold"><i class="fa fa-circle text-success fs-8 me-1"></i> O</span>`
+    return `<span class="text-muted">-</span>`
+  }
+
+  const columnDefs = computed(() => {
+    const cols = [
+      { headerName: 'Condition', field: 'CONDITION', width: 110, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' }) },
+      { headerName: 'Attribute ID', field: 'ATT_ID', width: 150, pinned: 'left', filter: 'agTextColumnFilter' },
+      { headerName: 'Description', field: 'DESC', width: 200, pinned: 'left', filter: 'agTextColumnFilter', tooltipField: 'DESC' },
+      { headerName: 'Type', field: 'VAL_TYPE', width: 120, pinned: 'left' },
+    ]
+    dynamicCols.value.forEach(proj => {
+      cols.push({ headerName: proj, field: proj, minWidth: 120, cellRenderer: existCellRenderer, cellStyle: p => ({ textAlign: 'center', backgroundColor: p.value === false ? '#fff1f0' : 'transparent' }) })
+    })
+    return cols
+  })
+
+  const gridOptions = computed(() => ({
+    columnDefs: columnDefs.value,
+    rowData: gridRowData.value,
+    style: 'width: 100%; height: 100%',
+    class: 'ag-theme-custom',
+    loadingOverlayComponent: AggridLoadingOverlay,
+    defaultColDef: { sortable: true, resizable: true },
+    isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
+    doesExternalFilterPass: node => {
+      const kw = attributeFilter.value.toLowerCase()
+      return String(node.data.ATT_ID || '').toLowerCase().includes(kw) || String(node.data.DESC || '').toLowerCase().includes(kw)
+    },
+  }))
+
+  const onGridReady = p => { gridApi.value = p.api }
+</script>
+
+<style scoped>
+  .custom-input-width { width: 250px !important; }
+  .fs-7 { font-size: 0.85rem; }
+  .fs-8 { font-size: 0.75rem; }
+</style>
