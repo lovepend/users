@@ -41,9 +41,6 @@
                     <span>전체 선택 / 해제</span>
                   </label>
                 </li>
-                <li v-if="filteredProjectList.length === 0" class="text-muted text-center py-2 fs-7">
-                  검색 결과가 없습니다.
-                </li>
                 <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
                   <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
                     <input
@@ -66,13 +63,13 @@
           </button>
 
           <div class="ms-2 border-start ps-3 d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap">속성 필터</span>
-            <input
-              type="text"
-              class="form-control form-control-sm border-success custom-input-width"
+            <span class="fw-bold text-primary text-nowrap">ID 멀티 필터</span>
+            <textarea
+              class="form-control form-control-sm border-primary custom-textarea-filter"
               v-model="attributeFilter"
-              placeholder="전역 검색 (ID/DESC)"
-            />
+              rows="1"
+              placeholder="ID 입력 (공백, 콤마, 줄바꿈 구분)"
+            ></textarea>
           </div>
         </div>
         <panel-toolbar />
@@ -103,7 +100,7 @@ const route = useRoute()
 const projectList = ref([]) 
 const projectSearchKeyword = ref('') 
 const selectedProjects = ref([]) 
-const attributeFilter = ref('')
+const attributeFilter = ref('') // 멀티 필터용 입력값
 
 const gridApi = shallowRef()
 const gridRowData = ref([])
@@ -112,6 +109,7 @@ const dynamicCols = ref([])
 const urlEpId = computed(() => route.query.ep_id || '')
 const urlProjNo = computed(() => route.query.project_no || '')
 
+// 프로젝트 리스트 필터링 및 선택 로직 (기존 유지)
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   if (!kw) return projectList.value
@@ -121,11 +119,7 @@ const filteredProjectList = computed(() => {
   )
 })
 
-const isAllSelected = computed(() => {
-  return filteredProjectList.value.length > 0 && 
-         filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
-})
-
+const isAllSelected = computed(() => filteredProjectList.value.length > 0 && filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO)))
 const isIndeterminate = computed(() => {
   const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
   return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
@@ -134,11 +128,7 @@ const isIndeterminate = computed(() => {
 const toggleAllSelection = (e) => {
   const checked = e.target.checked
   const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
-  if (checked) {
-    selectedProjects.value = [...new Set([...selectedProjects.value, ...filteredIds])]
-  } else {
-    selectedProjects.value = selectedProjects.value.filter(id => !filteredIds.includes(id))
-  }
+  selectedProjects.value = checked ? [...new Set([...selectedProjects.value, ...filteredIds])] : selectedProjects.value.filter(id => !filteredIds.includes(id))
 }
 
 onMounted(async () => {
@@ -147,9 +137,7 @@ onMounted(async () => {
       headers: { 'Projectno': urlProjNo.value, 'Ep_id': urlEpId.value }
     })
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
-  } catch (error) {
-    console.error('Project List Load Error:', error)
-  }
+  } catch (error) { console.error(error) }
 })
 
 const onSearch = async () => {
@@ -170,7 +158,6 @@ const onSearch = async () => {
     results.forEach((projectData, index) => {
       const currentProjNoStr = selectedProjects.value[index]
       if (!Array.isArray(projectData)) return
-
       projectData.forEach(attr => {
         if (!attrMap.has(attr.ATT_ID)) {
           const baseRow = { ATT_ID: attr.ATT_ID, DESC: attr.DESC, VAL_TYPE: attr.VAL_TYPE }
@@ -182,30 +169,18 @@ const onSearch = async () => {
     })
 
     const processedData = Array.from(attrMap.values()).map(row => {
-      const existCount = selectedProjects.value.filter(p => row[p] === true).length
-      row.CONDITION = existCount === selectedProjects.value.length ? 'Pass' : 'Diff'
+      row.CONDITION = selectedProjects.value.every(p => row[p] === true) ? 'Pass' : 'Diff'
       return row
     })
 
     dynamicCols.value = [...selectedProjects.value]
     gridRowData.value = processedData
-  } catch (e) {
-    sAlert.Error('데이터 조회 중 오류가 발생했습니다.')
-  } finally {
+  } catch (e) { sAlert.Error('조회 실패') } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-/**
- * 프로젝트 셀 렌더러
- * 데이터 존재 시 초록색 동그라미 하나 표시
- */
-const existCellRenderer = params => {
-  if (params.value === true) {
-    return `<span class="text-success"><i class="fa fa-circle" style="font-size: 8px;"></i></span>`
-  }
-  return `<span class="text-muted">-</span>`
-}
+const existCellRenderer = params => params.value === true ? `<span class="text-success"><i class="fa fa-circle" style="font-size: 8px;"></i></span>` : `<span class="text-muted">-</span>`
 
 const columnDefs = computed(() => {
   const cols = [
@@ -223,10 +198,7 @@ const columnDefs = computed(() => {
   dynamicCols.value.forEach(proj => {
     cols.push({ 
       headerName: proj, field: proj, minWidth: 120, cellRenderer: existCellRenderer, 
-      cellStyle: p => ({
-        textAlign: 'center',
-        backgroundColor: p.value === false ? '#fff1f0' : 'transparent' // 💡 데이터 없을 때 하이라이트 처리
-      }) 
+      cellStyle: p => ({ textAlign: 'center', backgroundColor: p.value === false ? '#fff1f0' : 'transparent' }) 
     })
   })
   return cols
@@ -242,11 +214,23 @@ const gridOptions = computed(() => ({
     sortable: true, 
     resizable: true,
     filter: 'agTextColumnFilter',
+    // 💡 [추가] 헤더 밑에 '미니 필터(입력창)' 상시 표시
+    floatingFilter: true,
   },
+  // 💡 [핵심] 외부 멀티 필터 로직
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: node => {
-    const kw = attributeFilter.value.toLowerCase()
-    return String(node.data.ATT_ID || '').toLowerCase().includes(kw) || String(node.data.DESC || '').toLowerCase().includes(kw)
+    // 공백, 쉼표, 줄바꿈을 기준으로 입력값을 배열로 분리
+    const inputIds = attributeFilter.value
+      .split(/[\s,\n]+/)
+      .filter(id => id.trim() !== '')
+      .map(id => id.toLowerCase())
+
+    if (inputIds.length === 0) return true
+    
+    const targetId = String(node.data.ATT_ID || '').toLowerCase()
+    // 💡 입력된 ID 목록 중 하나라도 포함되면 표시 (정확히 일치 검색을 원하면 includes 대신 === 사용 가능)
+    return inputIds.some(id => targetId.includes(id))
   },
 }))
 
@@ -254,12 +238,14 @@ const onGridReady = p => { gridApi.value = p.api }
 </script>
 
 <style scoped>
-.custom-project-dropdown {
-  width: 300px !important;
-  max-width: 300px;
-  overflow: hidden;
+.custom-project-dropdown { width: 300px !important; max-width: 300px; overflow: hidden; }
+/* 💡 멀티 필터용 텍스트 영역 스타일 */
+.custom-textarea-filter {
+  width: 280px !important;
+  font-size: 0.8rem;
+  resize: none;
+  padding: 4px 8px;
 }
-.custom-input-width { width: 250px !important; }
 .fs-7 { font-size: 0.85rem; }
 .dropdown-menu input { border-radius: 4px; }
 </style>
