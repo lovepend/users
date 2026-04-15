@@ -1,9 +1,7 @@
 <template>
-  <div class="panel panel-expandable m-0 p-0 h-100 d-flex flex-column">
-    <PageTitle icon="fa-sliders" title="프로젝트별 속성 비교 분석 시스템" />
-
-    <div class="bg-white px-3 pt-2 border-bottom">
-      <ul class="nav nav-tabs border-0">
+  <div class="h-100 d-flex flex-column bg-light">
+    <div class="custom-tab-container shadow-sm">
+      <ul class="nav nav-pills custom-tabs">
         <li class="nav-item">
           <a
             class="nav-link"
@@ -11,7 +9,8 @@
             @click="activeTab = 'attr'"
             href="javascript:;"
           >
-            <i class="fa fa-list-check me-1"></i>속성 비교 분석
+            <i class="fa fa-layer-group me-2"></i>
+            속성 비교 분석
           </a>
         </li>
         <li class="nav-item">
@@ -21,13 +20,14 @@
             @click="activeTab = 'other'"
             href="javascript:;"
           >
-            <i class="fa fa-chart-network me-1"></i>기타 비교 항목
+            <i class="fa fa-chart-line me-2"></i>
+            기타 비교 항목
           </a>
         </li>
       </ul>
     </div>
 
-    <div class="flex-grow-1 overflow-hidden bg-light">
+    <div class="flex-grow-1 overflow-hidden">
       <keep-alive>
         <component :is="tabs[activeTab]" />
       </keep-alive>
@@ -36,15 +36,12 @@
 </template>
 
 <script setup>
-import { ref, shallowRef } from 'vue'
-import PageTitle from '@/components/toolBar/PageTitle.vue'
-// 컴포넌트 import (경로는 실제 환경에 맞춰 조정하세요)
+import { ref } from 'vue'
 import AttrCompareTab from './components/AttrCompareTab.vue'
 import OtherCompareTab from './components/OtherCompareTab.vue'
 
 const activeTab = ref('attr')
 
-// 컴포넌트를 맵핑 (성능을 위해 shallowRef 사용 추천)
 const tabs = {
   attr: AttrCompareTab,
   other: OtherCompareTab
@@ -52,27 +49,56 @@ const tabs = {
 </script>
 
 <style scoped>
-.nav-tabs .nav-link {
-  border: none;
-  border-bottom: 3px solid transparent;
-  color: #6c757d;
+/* 탭 컨테이너 전용 스타일 */
+.custom-tab-container {
+  background-color: #2c3e50; /* 기존 시스템의 다크한 톤 계승 */
+  padding: 8px 16px 0 16px;
+}
+
+.custom-tabs {
+  gap: 4px;
+}
+
+.custom-tabs .nav-link {
+  color: #bdc3c7;
   font-weight: 600;
-  padding: 10px 20px;
-  transition: all 0.2s;
+  font-size: 0.95rem;
+  border-radius: 8px 8px 0 0; /* 위쪽만 둥글게 해서 탭 느낌 강조 */
+  padding: 10px 24px;
+  border: none;
+  transition: all 0.25s ease;
+  background-color: rgba(255, 255, 255, 0.05);
 }
 
-.nav-tabs .nav-link:hover {
-  border-bottom: 3px solid #dee2e6;
+/* 선택되지 않은 탭에 마우스 올렸을 때 */
+.custom-tabs .nav-link:hover {
+  color: #ffffff;
+  background-color: rgba(255, 255, 255, 0.15);
 }
 
-.nav-tabs .nav-link.active {
-  color: #007bff;
-  background-color: transparent;
-  border-bottom: 3px solid #007bff;
-}
-
-/* 탭 전환 시 부드러운 배경 처리를 위해 */
-.flex-grow-1 {
+/* ⭐️ 선택된 탭 스타일 (기존 시스템 포인트 컬러 반영) */
+.custom-tabs .nav-link.active {
+  color: #ffffff !important;
+  background-color: #007bff !important; /* 포인트 블루 */
+  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
   position: relative;
+}
+
+/* 선택된 탭 하단에 화살표 같은 포인트를 주고 싶을 때 (선택사항) */
+.custom-tabs .nav-link.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 6px solid transparent;
+  border-right: 6px solid transparent;
+  border-bottom: 6px solid #f8f9fa; /* 배경색과 맞춤 */
+}
+
+/* 그리드 영역과의 경계 처리 */
+.flex-grow-1 {
+  background-color: #f8f9fa;
+  border-top: 1px solid #dee2e6;
 }
 </style>
