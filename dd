@@ -1,15 +1,3 @@
-RegisterCompareTab.Vue로 할꺼야 ㅎㅎ
-
-api는 아래와 같고
-/api/Register/Get
-
-CL_ID 대신 TYPE_ID가 키인거지 ㅎ
-const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'VAL_ATT_ID']
-이거 대신에 
-const COMPARE_FIELDS = ['DESC', 'EP_ID', 'DELETED','NEW_TAG_YN'] 을 비교 해줘야해 
-
-
-
 <template>
   <div class="d-flex flex-column h-100 bg-white">
     <div class="p-3 border-bottom shadow-sm bg-light">
@@ -67,21 +55,17 @@ const COMPARE_FIELDS = ['DESC', 'EP_ID', 'DELETED','NEW_TAG_YN'] 을 비교 해�
           </div>
         </div>
 
-        <button
-          class="btn btn-sm btn-primary px-3 shadow-sm"
-          @click="onSearch"
-          :disabled="selectedProjects.length === 0"
-        >
-          <i class="fa fa-search me-1"></i>코드 비교 조회
+        <button class="btn btn-sm btn-primary px-3 shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0">
+          <i class="fa fa-search me-1"></i>레지스터 비교 조회
         </button>
 
         <div class="ms-auto d-flex align-items-center gap-2">
-          <span class="fw-bold text-success text-nowrap">Code ID 멀티 필터</span>
+          <span class="fw-bold text-info text-nowrap">Type ID 멀티 필터</span>
           <textarea
-            class="form-control form-control-sm border-success custom-textarea-filter"
+            class="form-control form-control-sm border-info custom-textarea-filter"
             v-model="attributeFilter"
             rows="1"
-            placeholder="CL_ID 입력 (엔터/쉼표 구분)"
+            placeholder="TYPE_ID 입력 (엔터/쉼표 구분)"
           ></textarea>
         </div>
       </div>
@@ -94,281 +78,228 @@ const COMPARE_FIELDS = ['DESC', 'EP_ID', 'DELETED','NEW_TAG_YN'] 을 비교 해�
 </template>
 
 <script setup>
-  import { ref, computed, shallowRef, onMounted, watch } from 'vue'
-  import { useRoute } from 'vue-router'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sAlert } from '@/utils/messages/alert-common'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+import { ref, computed, shallowRef, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
+import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-  const route = useRoute()
+const route = useRoute()
 
-  // --- State ---
-  const projectList = ref([])
-  const projectSearchKeyword = ref('')
-  const selectedProjects = ref([])
-  const attributeFilter = ref('') // CL_ID 필터링용
+// --- State ---
+const projectList = ref([]) 
+const projectSearchKeyword = ref('') 
+const selectedProjects = ref([]) 
+const attributeFilter = ref('') // TYPE_ID 필터링용
 
-  const gridApi = shallowRef()
-  const gridRowData = ref([])
-  const dynamicCols = ref([])
+const gridApi = shallowRef()
+const gridRowData = ref([])
+const dynamicCols = ref([])
 
-  const urlEpId = computed(() => route.query.ep_id || '')
-  const urlProjNo = computed(() => route.query.project_no || '')
+const urlEpId = computed(() => route.query.ep_id || '')
+const urlProjNo = computed(() => route.query.project_no || '')
 
-  // 💡 비교 대상 필드 정의 (요청하신 대로 수정)
-  const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'VAL_ATT_ID']
+// 💡 비교 대상 필드 정의 (수정됨)
+const COMPARE_FIELDS = ['DESC', 'EP_ID', 'DELETED', 'NEW_TAG_YN']
 
-  // --- 프로젝트 선택 로직 (이전 탭과 동일) ---
-  const filteredProjectList = computed(() => {
-    const kw = projectSearchKeyword.value.trim().toLowerCase()
-    if (!kw) return projectList.value
-    return projectList.value.filter(
-      p => (p.PROJ_NO && p.PROJ_NO.toLowerCase().includes(kw)) || (p.DESC && p.DESC.toLowerCase().includes(kw))
-    )
-  })
-
-  const isAllSelected = computed(
-    () =>
-      filteredProjectList.value.length > 0 &&
-      filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+// --- 프로젝트 선택 로직 ---
+const filteredProjectList = computed(() => {
+  const kw = projectSearchKeyword.value.trim().toLowerCase()
+  if (!kw) return projectList.value
+  return projectList.value.filter(p => 
+    (p.PROJ_NO && p.PROJ_NO.toLowerCase().includes(kw)) || 
+    (p.DESC && p.DESC.toLowerCase().includes(kw))
   )
+})
 
-  const isIndeterminate = computed(() => {
-    const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
-    return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
-  })
+const isAllSelected = computed(() => 
+  filteredProjectList.value.length > 0 && 
+  filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+)
 
-  const toggleAllSelection = e => {
-    const checked = e.target.checked
-    const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
-    selectedProjects.value = checked
-      ? [...new Set([...selectedProjects.value, ...filteredIds])]
-      : selectedProjects.value.filter(id => !filteredIds.includes(id))
-  }
+const isIndeterminate = computed(() => {
+  const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
+  return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
+})
 
-  onMounted(async () => {
-    try {
-      const res = await axiosWrapper.get('/api/Project/Get', {
-        headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value },
-      })
-      projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
-    } catch (error) {
-      console.error(error)
-    }
-  })
+const toggleAllSelection = (e) => {
+  const checked = e.target.checked
+  const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
+  selectedProjects.value = checked ? [...new Set([...selectedProjects.value, ...filteredIds])] : selectedProjects.value.filter(id => !filteredIds.includes(id))
+}
 
-  // --- 데이터 조회 로직 (CodeList 전용) ---
-  const onSearch = async () => {
-    if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
-    if (gridApi.value) gridApi.value.setGridOption('loading', true)
+onMounted(async () => {
+  try {
+    const res = await axiosWrapper.get('/api/Project/Get', { 
+      headers: { 'Projectno': urlProjNo.value, 'Ep_id': urlEpId.value } 
+    })
+    projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
+  } catch (error) { console.error(error) }
+})
 
-    try {
-      const fetchPromises = selectedProjects.value.map(projNo =>
-        axiosWrapper
-          .post(
-            '/api/CodeList/Get',
-            { ContainDeleted: false, ProjectNo: projNo },
-            { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
-          )
-          .catch(() => [])
-      )
+// --- 데이터 조회 로직 (Register 전용) ---
+const onSearch = async () => {
+  if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
+  if (gridApi.value) gridApi.value.setGridOption('loading', true)
 
-      const results = await Promise.all(fetchPromises)
-      const codeMap = new Map()
+  try {
+    const fetchPromises = selectedProjects.value.map(projNo =>
+      axiosWrapper.post('/api/Register/Get', 
+        { "ContainDeleted": true, "ProjectNo": projNo }, // DELETED 비교를 위해 true
+        { headers: { 'Projectno': projNo, 'Ep_id': urlEpId.value } }
+      ).catch(() => [])
+    )
+    
+    const results = await Promise.all(fetchPromises)
+    const regMap = new Map()
 
-      results.forEach((projectData, index) => {
-        const currentProjNo = selectedProjects.value[index]
-        if (!Array.isArray(projectData)) return
-
-        projectData.forEach(item => {
-          if (!codeMap.has(item.CL_ID)) {
-            codeMap.set(item.CL_ID, { CL_ID: item.CL_ID, projects: {} })
-          }
-          // 프로젝트별 상세 속성 저장
-          codeMap.get(item.CL_ID).projects[currentProjNo] = {
-            EXIST: true,
-            DESC: item.DESC || '',
-            REG_TYPE_ID: item.REG_TYPE_ID || '',
-            VAL_ATT_ID: item.VAL_ATT_ID || '',
-          }
-        })
-      })
-
-      const processedData = Array.from(codeMap.values()).map(row => {
-        let isDiff = false
-        let diffDetails = []
-
-        // 1. 존재 여부 비교
-        if (Object.keys(row.projects).length !== selectedProjects.value.length) {
-          isDiff = true
-          diffDetails.push('Exist')
+    results.forEach((projectData, index) => {
+      const currentProjNo = selectedProjects.value[index]
+      if (!Array.isArray(projectData)) return
+      
+      projectData.forEach(item => {
+        if (!regMap.has(item.TYPE_ID)) {
+          regMap.set(item.TYPE_ID, { TYPE_ID: item.TYPE_ID, projects: {} })
         }
-
-        // 2. DESC, REG_TYPE_ID, VAL_ATT_ID 값 비교
-        COMPARE_FIELDS.forEach(field => {
-          const values = selectedProjects.value.filter(p => row.projects[p]).map(p => row.projects[p][field])
-
-          if (new Set(values).size > 1) {
-            isDiff = true
-            diffDetails.push(field)
-          }
-        })
-
-        const resultRow = {
-          CL_ID: row.CL_ID,
-          CONDITION: isDiff ? 'Diff' : 'Pass',
-          DIFF_INFO: diffDetails.join(', '),
+        regMap.get(item.TYPE_ID).projects[currentProjNo] = {
+          EXIST: true,
+          DESC: item.DESC || '',
+          EP_ID: item.EP_ID || '',
+          DELETED: item.DELETED ? 'Y' : 'N',
+          NEW_TAG_YN: item.NEW_TAG_YN || 'N'
         }
-
-        selectedProjects.value.forEach(p => {
-          resultRow[p] = row.projects[p] || { EXIST: false, DESC: '', REG_TYPE_ID: '', VAL_ATT_ID: '' }
-        })
-
-        return resultRow
-      })
-
-      dynamicCols.value = [...selectedProjects.value]
-      gridRowData.value = processedData
-    } catch (e) {
-      sAlert.Error('조회 실패')
-    } finally {
-      if (gridApi.value) gridApi.value.setGridOption('loading', false)
-    }
-  }
-
-  // --- 그리드 컬럼 설정 (CL_ID 기준) ---
-  const columnDefs = computed(() => {
-    const multiFilterParams = {
-      filters: [{ filter: 'agTextColumnFilter' }, { filter: 'agSetColumnFilter' }],
-    }
-
-    const cols = [
-      {
-        headerName: 'Condition',
-        field: 'CONDITION',
-        width: 110,
-        pinned: 'left',
-        filter: 'agMultiColumnFilter',
-        filterParams: multiFilterParams,
-        cellStyle: p => ({
-          color: p.value === 'Diff' ? '#dc3545' : '#198754',
-          fontWeight: 'bold',
-          textAlign: 'center',
-          backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8',
-        }),
-      },
-      {
-        // 💡 이 부분을 수정합니다!
-        headerName: 'Diff Info',
-        field: 'DIFF_INFO',
-        width: 140,
-        pinned: 'left',
-        filter: 'agMultiColumnFilter', // 일반 텍스트 필터 대신 멀티 필터 적용
-        filterParams: multiFilterParams, // Condition 컬럼과 동일한 필터 파라미터 사용
-        cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' },
-      },
-      {
-        headerName: 'Class ID',
-        field: 'CL_ID',
-        width: 160,
-        pinned: 'left',
-        filter: 'agMultiColumnFilter',
-        filterParams: multiFilterParams,
-      },
-    ]
-
-    dynamicCols.value.forEach(proj => {
-      cols.push({
-        headerName: `Project: ${proj}`,
-        marryChildren: true,
-        children: [
-          {
-            headerName: 'Exist',
-            valueGetter: p => (p.data[proj]?.EXIST ? 'Y' : '-'),
-            width: 70,
-            cellStyle: { textAlign: 'center' },
-            cellClassRules: { 'bg-danger-light': p => !p.data[proj]?.EXIST },
-          },
-          { headerName: 'Description', valueGetter: p => p.data[proj]?.DESC, width: 180, filter: 'agTextColumnFilter' },
-          {
-            headerName: 'Reg Type',
-            valueGetter: p => p.data[proj]?.REG_TYPE_ID,
-            width: 120,
-            filter: 'agTextColumnFilter',
-          },
-          {
-            headerName: 'Val Att ID',
-            valueGetter: p => p.data[proj]?.VAL_ATT_ID,
-            width: 120,
-            filter: 'agTextColumnFilter',
-          },
-        ],
       })
     })
 
-    return cols
-  })
+    const processedData = Array.from(regMap.values()).map(row => {
+      let isDiff = false
+      let diffDetails = []
 
-  const gridOptions = computed(() => ({
-    columnDefs: columnDefs.value,
-    rowData: gridRowData.value,
-    style: 'width: 100%; height: 100%',
-    class: 'ag-theme-custom',
-    loadingOverlayComponent: AggridLoadingOverlay,
-    sideBar: false,
-    statusBar: {
-      statusPanels: [
-        { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'right' },
-        { statusPanel: 'agSelectedRowCountComponent', align: 'right' },
-      ],
-    },
-    defaultColDef: { sortable: true, resizable: true, floatingFilter: true },
-    isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
-    doesExternalFilterPass: node => {
-      const inputIds = attributeFilter.value
-        .split(/[\s,\n]+/)
-        .filter(id => id.trim() !== '')
-        .map(id => id.toLowerCase())
-      if (inputIds.length === 0) return true
-      const targetId = String(node.data.CL_ID || '').toLowerCase()
-      return inputIds.some(id => targetId.includes(id))
-    },
-  }))
+      if (Object.keys(row.projects).length !== selectedProjects.value.length) {
+        isDiff = true
+        diffDetails.push('Exist')
+      }
 
-  const onGridReady = p => {
-    gridApi.value = p.api
+      COMPARE_FIELDS.forEach(field => {
+        const values = selectedProjects.value
+          .filter(p => row.projects[p])
+          .map(p => row.projects[p][field])
+        
+        if (new Set(values).size > 1) {
+          isDiff = true
+          diffDetails.push(field)
+        }
+      })
+
+      const resultRow = {
+        TYPE_ID: row.TYPE_ID,
+        CONDITION: isDiff ? 'Diff' : 'Pass',
+        DIFF_INFO: diffDetails.join(', ')
+      }
+      
+      selectedProjects.value.forEach(p => {
+        resultRow[p] = row.projects[p] || { EXIST: false, DESC: '', EP_ID: '', DELETED: '-', NEW_TAG_YN: '-' }
+      })
+
+      return resultRow
+    })
+
+    dynamicCols.value = [...selectedProjects.value]
+    gridRowData.value = processedData
+  } catch (e) {
+    sAlert.Error('조회 실패')
+  } finally {
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
+  }
+}
+
+// --- 그리드 컬럼 설정 (TYPE_ID 기준) ---
+const columnDefs = computed(() => {
+  const multiFilterParams = {
+    filters: [{ filter: 'agTextColumnFilter' }, { filter: 'agSetColumnFilter' }]
   }
 
-  watch(attributeFilter, () => {
-    if (gridApi.value) gridApi.value.onFilterChanged()
+  const cols = [
+    { 
+      headerName: 'Condition', field: 'CONDITION', width: 110, pinned: 'left',
+      filter: 'agMultiColumnFilter', filterParams: multiFilterParams,
+      cellStyle: p => ({ 
+        color: p.value === 'Diff' ? '#dc3545' : '#198754', 
+        fontWeight: 'bold', textAlign: 'center',
+        backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' 
+      }) 
+    },
+    { 
+      headerName: 'Diff Info', field: 'DIFF_INFO', width: 140, pinned: 'left',
+      filter: 'agMultiColumnFilter', filterParams: multiFilterParams, // ✅ 필터 활성화
+      cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' }
+    },
+    { 
+      headerName: 'Type ID', field: 'TYPE_ID', width: 160, pinned: 'left',
+      filter: 'agMultiColumnFilter', filterParams: multiFilterParams 
+    },
+  ]
+
+  dynamicCols.value.forEach(proj => {
+    cols.push({
+      headerName: `Project: ${proj}`,
+      marryChildren: true,
+      children: [
+        { 
+          headerName: 'Exist', valueGetter: p => p.data[proj]?.EXIST ? 'Y' : '-', 
+          width: 70, cellStyle: { textAlign: 'center' },
+          cellClassRules: { 'bg-danger-light': p => !p.data[proj]?.EXIST }
+        },
+        { headerName: 'Description', valueGetter: p => p.data[proj]?.DESC, width: 180, filter: 'agTextColumnFilter' },
+        { headerName: 'EP ID', valueGetter: p => p.data[proj]?.EP_ID, width: 100, filter: 'agTextColumnFilter' },
+        { headerName: 'Del', valueGetter: p => p.data[proj]?.DELETED, width: 70, cellStyle: { textAlign: 'center' } },
+        { headerName: 'New', valueGetter: p => p.data[proj]?.NEW_TAG_YN, width: 70, cellStyle: { textAlign: 'center' } }
+      ]
+    })
   })
+
+  return cols
+})
+
+const gridOptions = computed(() => ({
+  columnDefs: columnDefs.value,
+  rowData: gridRowData.value,
+  style: 'width: 100%; height: 100%',
+  class: 'ag-theme-custom',
+  loadingOverlayComponent: AggridLoadingOverlay,
+  sideBar: false,
+  statusBar: {
+    statusPanels: [
+      { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'right' },
+      { statusPanel: 'agSelectedRowCountComponent', align: 'right' }
+    ]
+  },
+  defaultColDef: { sortable: true, resizable: true, floatingFilter: true },
+  isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
+  doesExternalFilterPass: (node) => {
+    const inputIds = attributeFilter.value.split(/[\s,\n]+/).filter(id => id.trim() !== '').map(id => id.toLowerCase())
+    if (inputIds.length === 0) return true
+    const targetId = String(node.data.TYPE_ID || '').toLowerCase()
+    return inputIds.some(id => targetId.includes(id))
+  },
+}))
+
+const onGridReady = (p) => { gridApi.value = p.api }
+watch(attributeFilter, () => { if (gridApi.value) gridApi.value.onFilterChanged() })
 </script>
 
 <style scoped>
-  .custom-project-dropdown {
-    width: 300px !important;
-  }
-  .custom-textarea-filter {
-    width: 300px !important;
-    font-size: 0.8rem;
-    resize: none;
-  }
+.custom-project-dropdown { width: 300px !important; }
+.custom-textarea-filter { width: 300px !important; font-size: 0.8rem; resize: none; }
 
-  :deep(.ag-header-group-cell) {
-    background-color: #e9ecef !important;
-    font-weight: bold;
-    border-right: 1px solid #dee2e6 !important;
-  }
+:deep(.ag-header-group-cell) {
+  background-color: #d1d8e0 !important; /* 레지스터 탭 전용 색상 */
+  font-weight: bold;
+  border-right: 1px solid #dee2e6 !important;
+}
 
-  :deep(.bg-danger-light) {
-    background-color: #fff5f5 !important;
-    color: #fa5252 !important;
-  }
-
-  :deep(.ag-floating-filter-input) {
-    background-color: #fff !important;
-  }
-  :deep(.ag-floating-filter-body input) {
-    cursor: text !important;
-  }
+:deep(.bg-danger-light) {
+  background-color: #fff5f5 !important;
+  color: #fa5252 !important;
+}
 </style>
