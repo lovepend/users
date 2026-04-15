@@ -69,7 +69,7 @@
             class="form-control form-control-sm border-success custom-textarea-filter"
             v-model="attributeFilter"
             rows="1"
-            placeholder="CL_ID 입력 (엔터/쉼표 구분)"
+            placeholder="ATT_ID 입력 (엔터/쉼표 구분)"
           ></textarea>
         </div>
       </div>
@@ -103,7 +103,8 @@ const dynamicCols = ref([])
 const urlEpId = computed(() => route.query.ep_id || '')
 const urlProjNo = computed(() => route.query.project_no || '')
 
-const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'VAL_ATT_ID']
+// 💡 비교 대상 필드 (Attribute 전용)
+const COMPARE_FIELDS = ['DESC', 'DATA_FORMAT', 'DATA_LENGTH']
 
 // --- 프로젝트 선택 로직 ---
 const filteredProjectList = computed(() => {
@@ -141,39 +142,40 @@ onMounted(async () => {
   } catch (error) { console.error(error) }
 })
 
+// --- 데이터 조회 로직 (Attribute 전용) ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
 
   try {
     const fetchPromises = selectedProjects.value.map(projNo =>
-      axiosWrapper.post('/api/CodeList/Get',
+      axiosWrapper.post('/api/Attribute/Get',
         { ContainDeleted: false, ProjectNo: projNo },
         { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
       ).catch(() => [])
     )
 
     const results = await Promise.all(fetchPromises)
-    const codeMap = new Map()
+    const attrMap = new Map()
 
     results.forEach((projectData, index) => {
       const currentProjNo = selectedProjects.value[index]
       if (!Array.isArray(projectData)) return
 
       projectData.forEach(item => {
-        if (!codeMap.has(item.CL_ID)) {
-          codeMap.set(item.CL_ID, { CL_ID: item.CL_ID, projects: {} })
+        if (!attrMap.has(item.ATT_ID)) {
+          attrMap.set(item.ATT_ID, { ATT_ID: item.ATT_ID, projects: {} })
         }
-        codeMap.get(item.CL_ID).projects[currentProjNo] = {
+        attrMap.get(item.ATT_ID).projects[currentProjNo] = {
           EXIST: true,
           DESC: item.DESC || '',
-          REG_TYPE_ID: item.REG_TYPE_ID || '',
-          VAL_ATT_ID: item.VAL_ATT_ID || '',
+          DATA_FORMAT: item.DATA_FORMAT || '',
+          DATA_LENGTH: item.DATA_LENGTH || '',
         }
       })
     })
 
-    const processedData = Array.from(codeMap.values()).map(row => {
+    const processedData = Array.from(attrMap.values()).map(row => {
       let isDiff = false
       let diffDetails = []
 
@@ -191,13 +193,13 @@ const onSearch = async () => {
       })
 
       const resultRow = {
-        CL_ID: row.CL_ID,
+        ATT_ID: row.ATT_ID,
         CONDITION: isDiff ? 'Diff' : 'Pass',
         DIFF_INFO: diffDetails.join(', '),
       }
 
       selectedProjects.value.forEach(p => {
-        resultRow[p] = row.projects[p] || { EXIST: false, DESC: '', REG_TYPE_ID: '', VAL_ATT_ID: '' }
+        resultRow[p] = row.projects[p] || { EXIST: false, DESC: '', DATA_FORMAT: '', DATA_LENGTH: '' }
       })
 
       return resultRow
@@ -212,7 +214,7 @@ const onSearch = async () => {
   }
 }
 
-// --- 그리드 컬럼 설정 (멀티 필터 적용) ---
+// --- 그리드 컬럼 설정 (멀티 필터 파라미터 구성) ---
 const columnDefs = computed(() => {
   const multiFilterParams = {
     filters: [
@@ -246,8 +248,8 @@ const columnDefs = computed(() => {
       cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' },
     },
     {
-      headerName: 'Class ID',
-      field: 'CL_ID',
+      headerName: 'Attribute ID',
+      field: 'ATT_ID',
       width: 180,
       pinned: 'left',
       filter: 'agMultiColumnFilter',
@@ -264,7 +266,7 @@ const columnDefs = computed(() => {
           headerName: 'Exist',
           valueGetter: p => (p.data[proj]?.EXIST ? 'Y' : '-'),
           width: 90,
-          filter: 'agMultiColumnFilter', // 💡 멀티 필터 적용
+          filter: 'agMultiColumnFilter',
           filterParams: multiFilterParams,
           cellStyle: { textAlign: 'center' },
           cellClassRules: { 'bg-danger-light': p => !p.data[proj]?.EXIST },
@@ -273,22 +275,23 @@ const columnDefs = computed(() => {
           headerName: 'Description', 
           valueGetter: p => p.data[proj]?.DESC, 
           width: 200, 
-          filter: 'agMultiColumnFilter', // 💡 멀티 필터 적용
+          filter: 'agMultiColumnFilter',
           filterParams: multiFilterParams,
         },
         {
-          headerName: 'Reg Type',
-          valueGetter: p => p.data[proj]?.REG_TYPE_ID,
-          width: 130,
-          filter: 'agMultiColumnFilter', // 💡 멀티 필터 적용
+          headerName: 'Format',
+          valueGetter: p => p.data[proj]?.DATA_FORMAT,
+          width: 120,
+          filter: 'agMultiColumnFilter',
           filterParams: multiFilterParams,
         },
         {
-          headerName: 'Val Att ID',
-          valueGetter: p => p.data[proj]?.VAL_ATT_ID,
-          width: 130,
-          filter: 'agMultiColumnFilter', // 💡 멀티 필터 적용
+          headerName: 'Length',
+          valueGetter: p => p.data[proj]?.DATA_LENGTH,
+          width: 100,
+          filter: 'agMultiColumnFilter',
           filterParams: multiFilterParams,
+          cellStyle: { textAlign: 'right' },
         },
       ],
     })
@@ -316,9 +319,9 @@ const gridOptions = computed(() => ({
     filter: true, 
     floatingFilter: true,
   },
-  popupParent: document.body, // 💡 필터 팝업 위치 보정
+  popupParent: document.body, // 필터 팝업 가려짐 방지
   
-  // 💡 유료 버전: 멀티 셀(범위) 선택 및 복사 기능
+  // 💡 유료 버전: 멀티 셀 선택 및 클립보드 복사 기능
   enableRangeSelection: true,
   copyHeadersToClipboard: true,
   suppressRowClickSelection: true,
@@ -330,7 +333,7 @@ const gridOptions = computed(() => ({
       .filter(id => id.trim() !== '')
       .map(id => id.toLowerCase())
     if (inputIds.length === 0) return true
-    const targetId = String(node.data.CL_ID || '').toLowerCase()
+    const targetId = String(node.data.ATT_ID || '').toLowerCase()
     return inputIds.some(id => targetId.includes(id))
   },
 }))
