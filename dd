@@ -1,68 +1,88 @@
 <template>
   <div class="d-flex flex-column h-100 bg-white">
     <div class="p-3 border-bottom shadow-sm bg-light">
-      <div class="d-flex align-items-center gap-3">
-        <div class="d-flex align-items-center gap-2">
-          <span class="fw-bold text-dark text-nowrap">Projects</span>
-          <div class="dropdown">
-            <button
-              class="btn btn-sm btn-outline-secondary dropdown-toggle custom-project-dropdown text-start d-flex justify-content-between align-items-center bg-white"
-              type="button"
-              data-bs-toggle="dropdown"
-              data-bs-auto-close="outside"
-            >
-              <span class="text-truncate me-2">
-                {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}
-              </span>
-            </button>
-            <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 350px">
-              <li class="px-2 pb-2 border-bottom mb-1">
-                <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="프로젝트 검색..." @click.stop />
-              </li>
-              <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
-                <label class="form-check-label d-flex align-items-center w-100 fw-bold" style="cursor: pointer">
-                  <input class="form-check-input me-2 mt-0" type="checkbox" :checked="isAllSelected" :indeterminate="isIndeterminate" @change="toggleAllSelection" />
-                  <span>전체 선택 / 해제</span>
-                </label>
-              </li>
-              <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
-                <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
-                  <input class="form-check-input me-2 mt-0" type="checkbox" :value="proj.PROJ_NO" v-model="selectedProjects" />
-                  <span class="text-truncate">
-                    <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
-                    <small class="text-muted ms-1">({{ proj.DESC }})</small>
-                  </span>
-                </label>
-              </li>
-            </ul>
+      <div class="d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-3">
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-dark text-nowrap">Projects</span>
+            <div class="dropdown">
+              <button
+                class="btn btn-sm btn-outline-secondary dropdown-toggle custom-project-dropdown text-start d-flex justify-content-between align-items-center bg-white"
+                type="button"
+                data-bs-toggle="dropdown"
+                data-bs-auto-close="outside"
+              >
+                <span class="text-truncate me-2">
+                  {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}
+                </span>
+              </button>
+              <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 350px">
+                <li class="px-2 pb-2 border-bottom mb-1">
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    v-model="projectSearchKeyword"
+                    placeholder="프로젝트 번호/명 검색..."
+                    @click.stop
+                  />
+                </li>
+                <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
+                  <label class="form-check-label d-flex align-items-center w-100 fw-bold" style="cursor: pointer">
+                    <input
+                      class="form-check-input me-2 mt-0"
+                      type="checkbox"
+                      :checked="isAllSelected"
+                      :indeterminate="isIndeterminate"
+                      @change="toggleAllSelection"
+                    />
+                    <span>전체 선택 / 해제</span>
+                  </label>
+                </li>
+                <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
+                  <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
+                    <input
+                      class="form-check-input me-2 mt-0"
+                      type="checkbox"
+                      :value="proj.PROJ_NO"
+                      v-model="selectedProjects"
+                    />
+                    <span class="text-truncate">
+                      <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
+                      <small class="text-muted ms-1">({{ proj.DESC }})</small>
+                    </span>
+                  </label>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <button
+            class="btn btn-sm btn-primary px-3 shadow-sm"
+            @click="onSearch"
+            :disabled="selectedProjects.length === 0"
+          >
+            <i class="fa fa-search me-1"></i>비교 조회
+          </button>
+
+          <div class="view-mode-toggle-container ms-3">
+            <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
+              <input type="radio" class="btn-check" name="viewMode" id="modeSimple" value="simple" v-model="viewMode" autocomplete="off">
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeSimple">간편 조회</label>
+
+              <input type="radio" class="btn-check" name="viewMode" id="modeDetail" value="detail" v-model="viewMode" autocomplete="off">
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeDetail">상세 조회</label>
+            </div>
           </div>
         </div>
 
-        <button class="btn btn-sm btn-primary px-3 shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0">
-          <i class="fa fa-search me-1"></i>비교 조회
-        </button>
-
-        <div class="ms-auto d-flex align-items-center gap-3 bg-white border rounded px-3 py-1 shadow-sm">
-          <div class="d-flex align-items-center gap-3 border-end pe-3">
-            <div class="form-check form-check-inline mb-0">
-              <input class="form-check-input" type="radio" v-model="viewMode" value="detail" id="modeDetail" />
-              <label class="form-check-label fw-bold text-dark" for="modeDetail" style="cursor:pointer">상세 조회</label>
-            </div>
-            <div class="form-check form-check-inline mb-0">
-              <input class="form-check-input" type="radio" v-model="viewMode" value="simple" id="modeSimple" />
-              <label class="form-check-label fw-bold text-dark" for="modeSimple" style="cursor:pointer">간편 조회</label>
-            </div>
-          </div>
-
-          <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>멀티 필터</span>
-            <textarea
-              class="form-control form-control-sm border-success custom-textarea-filter"
-              v-model="attributeFilter"
-              rows="1"
-              placeholder="ATT_ID 입력 (엔터/쉼표 구분)"
-            ></textarea>
-          </div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>멀티 필터</span>
+          <textarea
+            class="form-control form-control-sm border-success custom-textarea-filter"
+            v-model="attributeFilter"
+            rows="1"
+            placeholder="ATT_ID 입력 (엔터/쉼표 구분)"
+          ></textarea>
         </div>
       </div>
     </div>
@@ -87,7 +107,7 @@ const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
 const attributeFilter = ref('')
-const viewMode = ref('detail') // 'detail' | 'simple'
+const viewMode = ref('simple') // 간편 조회가 기본값
 
 const gridApi = shallowRef()
 const gridRowData = ref([])
@@ -98,26 +118,38 @@ const urlProjNo = computed(() => route.query.project_no || '')
 
 const COMPARE_FIELDS = ['DESC', 'DATA_FORMAT', 'DATA_LENGTH']
 
-// --- 프로젝트 선택 로직 (생략 - 기존과 동일) ---
+// --- 프로젝트 선택 관련 로직 ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   if (!kw) return projectList.value
-  return projectList.value.filter(p => (p.PROJ_NO && p.PROJ_NO.toLowerCase().includes(kw)) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
+  return projectList.value.filter(
+    p => (p.PROJ_NO && p.PROJ_NO.toLowerCase().includes(kw)) || (p.DESC && p.DESC.toLowerCase().includes(kw))
+  )
 })
-const isAllSelected = computed(() => filteredProjectList.value.length > 0 && filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO)))
+
+const isAllSelected = computed(() => 
+  filteredProjectList.value.length > 0 && 
+  filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+)
+
 const isIndeterminate = computed(() => {
   const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
   return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
 })
+
 const toggleAllSelection = e => {
   const checked = e.target.checked
   const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
-  selectedProjects.value = checked ? [...new Set([...selectedProjects.value, ...filteredIds])] : selectedProjects.value.filter(id => !filteredIds.includes(id))
+  selectedProjects.value = checked
+    ? [...new Set([...selectedProjects.value, ...filteredIds])]
+    : selectedProjects.value.filter(id => !filteredIds.includes(id))
 }
 
 onMounted(async () => {
   try {
-    const res = await axiosWrapper.get('/api/Project/Get', { headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value } })
+    const res = await axiosWrapper.get('/api/Project/Get', {
+      headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value },
+    })
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
   } catch (error) { console.error(error) }
 })
@@ -129,7 +161,10 @@ const onSearch = async () => {
 
   try {
     const fetchPromises = selectedProjects.value.map(projNo =>
-      axiosWrapper.post('/api/Attribute/Get', { ContainDeleted: false, ProjectNo: projNo }, { headers: { Projectno: projNo, Ep_id: urlEpId.value } }).catch(() => [])
+      axiosWrapper.post('/api/Attribute/Get',
+        { ContainDeleted: false, ProjectNo: projNo },
+        { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
+      ).catch(() => [])
     )
 
     const results = await Promise.all(fetchPromises)
@@ -138,6 +173,7 @@ const onSearch = async () => {
     results.forEach((projectData, index) => {
       const currentProjNo = selectedProjects.value[index]
       if (!Array.isArray(projectData)) return
+
       projectData.forEach(item => {
         if (!attrMap.has(item.ATT_ID)) {
           attrMap.set(item.ATT_ID, { ATT_ID: item.ATT_ID, projects: {} })
@@ -154,10 +190,12 @@ const onSearch = async () => {
     const processedData = Array.from(attrMap.values()).map(row => {
       let isDiff = false
       let diffDetails = []
+
       if (Object.keys(row.projects).length !== selectedProjects.value.length) {
         isDiff = true
         diffDetails.push('Exist')
       }
+
       COMPARE_FIELDS.forEach(field => {
         const values = selectedProjects.value.filter(p => row.projects[p]).map(p => row.projects[p][field])
         if (new Set(values).size > 1) {
@@ -165,10 +203,17 @@ const onSearch = async () => {
           diffDetails.push(field)
         }
       })
-      const resultRow = { ATT_ID: row.ATT_ID, CONDITION: isDiff ? 'Diff' : 'Pass', DIFF_INFO: diffDetails.join(', ') }
+
+      const resultRow = {
+        ATT_ID: row.ATT_ID,
+        CONDITION: isDiff ? 'Diff' : 'Pass',
+        DIFF_INFO: diffDetails.join(', '),
+      }
+
       selectedProjects.value.forEach(p => {
         resultRow[p] = row.projects[p] || { EXIST: false, DESC: '', DATA_FORMAT: '', DATA_LENGTH: '' }
       })
+
       return resultRow
     })
 
@@ -181,9 +226,11 @@ const onSearch = async () => {
   }
 }
 
-// --- 그리드 컬럼 설정 (상세/간편 모드 대응) ---
+// --- 그리드 컬럼 설정 (상세/간편 모드 동적 반영) ---
 const columnDefs = computed(() => {
-  const multiFilterParams = { filters: [{ filter: 'agTextColumnFilter' }, { filter: 'agSetColumnFilter' }] }
+  const multiFilterParams = {
+    filters: [ { filter: 'agTextColumnFilter' }, { filter: 'agSetColumnFilter' } ],
+  }
 
   const cols = [
     {
@@ -228,12 +275,14 @@ const columnDefs = computed(() => {
         filter: 'agMultiColumnFilter',
         filterParams: multiFilterParams,
         cellStyle: { textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-        cellRenderer: p => (p.value === 'Y' ? `<i class="fa fa-check-circle" style="color: #198754; font-size: 1.2rem;"></i>` : `<span class="text-muted">-</span>`),
+        cellRenderer: p => (p.value === 'Y' 
+          ? `<i class="fa fa-check-circle" style="color: #198754; font-size: 1.2rem;"></i>` 
+          : `<span class="text-muted">-</span>`),
         cellClassRules: { 'bg-danger-light': p => !p.data[proj]?.EXIST },
       },
     ]
 
-    // 💡 상세 조회일 때만 추가 컬럼 표시
+    // 상세 조회 모드일 때만 추가
     if (viewMode.value === 'detail') {
       children.push(
         { headerName: 'Description', valueGetter: p => p.data[proj]?.DESC, width: 200, filter: 'agMultiColumnFilter', filterParams: multiFilterParams },
@@ -259,8 +308,18 @@ const gridOptions = computed(() => ({
   class: 'ag-theme-custom',
   loadingOverlayComponent: AggridLoadingOverlay,
   sideBar: false,
-  statusBar: { statusPanels: [{ statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'right' }, { statusPanel: 'agSelectedRowCountComponent', align: 'right' }] },
-  defaultColDef: { sortable: true, resizable: true, filter: true, floatingFilter: true },
+  statusBar: {
+    statusPanels: [
+      { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'right' },
+      { statusPanel: 'agSelectedRowCountComponent', align: 'right' },
+    ],
+  },
+  defaultColDef: { 
+    sortable: true, 
+    resizable: true, 
+    filter: true, 
+    floatingFilter: true,
+  },
   popupParent: document.body,
   enableRangeSelection: true,
   copyHeadersToClipboard: true,
@@ -283,10 +342,38 @@ watch([attributeFilter, viewMode], () => {
 
 <style scoped>
 .custom-project-dropdown { width: 300px !important; }
-.custom-textarea-filter { width: 300px !important; font-size: 0.8rem; resize: none; border-left: none; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.custom-textarea-filter { width: 300px !important; font-size: 0.8rem; resize: none; }
 
-:deep(.ag-header-group-cell) { background-color: #e9ecef !important; font-weight: bold; border-right: 1px solid #dee2e6 !important; }
-:deep(.bg-danger-light) { background-color: #fff5f5 !important; color: #fa5252 !important; }
+/* 슬라이딩 토글 버튼 스타일 */
+.view-mode-toggle-container .btn-group {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+
+.toggle-label {
+  border: none !important;
+  color: #6c757d;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  font-size: 0.82rem;
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+.btn-check:checked + .toggle-label {
+  background-color: #ffffff !important;
+  color: #0d6efd !important;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+:deep(.ag-header-group-cell) {
+  background-color: #f8f9fa !important;
+  font-weight: bold;
+  border-right: 1px solid #dee2e6 !important;
+}
+
+:deep(.bg-danger-light) {
+  background-color: #fff5f5 !important;
+}
+
 :deep(.ag-floating-filter-input) { background-color: #fff !important; }
-:deep(.ag-floating-filter-body input) { cursor: text !important; }
 </style>
