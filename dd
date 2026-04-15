@@ -141,6 +141,7 @@ onMounted(async () => {
   } catch (error) { console.error(error) }
 })
 
+// --- 데이터 조회 로직 (CodeList) ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
@@ -264,7 +265,7 @@ const columnDefs = computed(() => {
           headerName: 'Exist',
           valueGetter: p => (p.data[proj]?.EXIST ? 'Y' : '-'),
           width: 90,
-          filter: 'agMultiColumnFilter', // 💡 멀티 필터 적용
+          filter: 'agMultiColumnFilter',
           filterParams: multiFilterParams,
           cellStyle: { textAlign: 'center' },
           cellClassRules: { 'bg-danger-light': p => !p.data[proj]?.EXIST },
@@ -272,22 +273,22 @@ const columnDefs = computed(() => {
         { 
           headerName: 'Description', 
           valueGetter: p => p.data[proj]?.DESC, 
-          width: 200, 
-          filter: 'agMultiColumnFilter', // 💡 멀티 필터 적용
+          width: 220, 
+          filter: 'agMultiColumnFilter',
           filterParams: multiFilterParams,
         },
         {
           headerName: 'Reg Type',
           valueGetter: p => p.data[proj]?.REG_TYPE_ID,
-          width: 130,
-          filter: 'agMultiColumnFilter', // 💡 멀티 필터 적용
+          width: 140,
+          filter: 'agMultiColumnFilter',
           filterParams: multiFilterParams,
         },
         {
           headerName: 'Val Att ID',
           valueGetter: p => p.data[proj]?.VAL_ATT_ID,
-          width: 130,
-          filter: 'agMultiColumnFilter', // 💡 멀티 필터 적용
+          width: 140,
+          filter: 'agMultiColumnFilter',
           filterParams: multiFilterParams,
         },
       ],
@@ -316,7 +317,7 @@ const gridOptions = computed(() => ({
     filter: true, 
     floatingFilter: true,
   },
-  popupParent: document.body, // 💡 필터 팝업 위치 보정
+  popupParent: document.body,
   
   // 💡 유료 버전: 멀티 셀(범위) 선택 및 복사 기능
   enableRangeSelection: true,
