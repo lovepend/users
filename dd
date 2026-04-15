@@ -1,104 +1,176 @@
 <template>
-  <div class="h-100 d-flex flex-column bg-light">
-    <div class="custom-tab-container shadow-sm">
-      <ul class="nav nav-pills custom-tabs">
-        <li class="nav-item">
-          <a
-            class="nav-link"
-            :class="{ active: activeTab === 'attr' }"
-            @click="activeTab = 'attr'"
-            href="javascript:;"
-          >
-            <i class="fa fa-layer-group me-2"></i>
-            속성 비교 분석
-          </a>
-        </li>
-        <li class="nav-item">
-          <a
-            class="nav-link"
-            :class="{ active: activeTab === 'other' }"
-            @click="activeTab = 'other'"
-            href="javascript:;"
-          >
-            <i class="fa fa-chart-line me-2"></i>
-            기타 비교 항목
-          </a>
-        </li>
-      </ul>
+  <div class="d-flex flex-column h-100 bg-white">
+    <div class="p-3 border-bottom shadow-sm">
+      <div class="d-flex align-items-center gap-3">
+        <div class="d-flex align-items-center gap-2">
+          <span class="fw-bold">Projects</span>
+          </div>
+
+        <button class="btn btn-sm btn-primary px-3" @click="onSearch" :disabled="selectedProjects.length === 0">
+          <i class="fa fa-search me-1"></i>비교 조회
+        </button>
+
+        <div class="ms-auto d-flex align-items-center gap-2">
+          <span class="fw-bold text-primary">ID 멀티 필터</span>
+          <textarea class="form-control form-control-sm custom-textarea-filter" v-model="attributeFilter" rows="1" placeholder="ID 입력..."></textarea>
+        </div>
+      </div>
     </div>
 
-    <div class="flex-grow-1 overflow-hidden">
-      <keep-alive>
-        <component :is="tabs[activeTab]" />
-      </keep-alive>
+    <div class="flex-grow-1">
+      <ag-grid-vue v-bind="gridOptions" @grid-ready="onGridReady" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import AttrCompareTab from './components/AttrCompareTab.vue'
-import OtherCompareTab from './components/OtherCompareTab.vue'
+import { ref, computed, shallowRef, watch } from 'vue'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
 
-const activeTab = ref('attr')
+const gridApi = shallowRef()
+const gridRowData = ref([])
+const dynamicCols = ref([]) // 선택된 프로젝트 리스트
+const selectedProjects = ref([])
+const attributeFilter = ref('')
 
-const tabs = {
-  attr: AttrCompareTab,
-  other: OtherCompareTab
+// 비교 필드 정의
+const COMPARE_FIELDS = ['DESC', 'CL_ID', 'VAL_TYPE']
+
+const onSearch = async () => {
+  if (selectedProjects.value.length === 0) return
+  if (gridApi.value) gridApi.value.setGridOption('loading', true)
+
+  try {
+    const fetchPromises = selectedProjects.value.map(projNo =>
+      axiosWrapper.post('/api/Attributes/Get', { "ProjectNo": projNo })
+    )
+    const results = await Promise.all(fetchPromises)
+    
+    const attrMap = new Map()
+
+    results.forEach((projectData, index) => {
+      const projNo = selectedProjects.value[index]
+      if (!Array.isArray(projectData)) return
+
+      projectData.forEach(attr => {
+        if (!attrMap.has(attr.ATT_ID)) {
+          attrMap.set(attr.ATT_ID, { ATT_ID: attr.ATT_ID, projects: {} })
+        }
+        // 각 프로젝트별 상세 정보 저장
+        attrMap.get(attr.ATT_ID).projects[projNo] = {
+          EXIST: true,
+          DESC: attr.DESC || '',
+          CL_ID: attr.CL_ID || '',
+          VAL_TYPE: attr.VAL_TYPE || ''
+        }
+      })
+    })
+
+    const processedData = Array.from(attrMap.values()).map(row => {
+      let isDiff = false
+      let diffDetails = []
+
+      // 1. 존재 여부 체크
+      const existCount = Object.keys(row.projects).length
+      if (existCount !== selectedProjects.value.length) {
+        isDiff = true
+        diffDetails.push('Missing')
+      }
+
+      // 2. 값 비교 (선택된 프로젝트들 간의 DESC, CL_ID, VAL_TYPE 비교)
+      COMPARE_FIELDS.forEach(field => {
+        const values = selectedProjects.value
+          .filter(p => row.projects[p])
+          .map(p => row.projects[p][field])
+        
+        const uniqueValues = new Set(values)
+        if (uniqueValues.size > 1) {
+          isDiff = true
+          diffDetails.push(field)
+        }
+      })
+
+      return {
+        ATT_ID: row.ATT_ID,
+        CONDITION: isDiff ? 'Diff' : 'Pass',
+        DIFF_INFO: diffDetails.join(', '),
+        ...row.projects // 각 프로젝트별 데이터 전개
+      }
+    })
+
+    dynamicCols.value = [...selectedProjects.value]
+    gridRowData.value = processedData
+  } catch (e) {
+    sAlert.Error('조회 중 오류 발생')
+  } finally {
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
+  }
 }
+
+const columnDefs = computed(() => {
+  const multiFilterParams = {
+    filters: [
+      { filter: 'agTextColumnFilter' },
+      { filter: 'agSetColumnFilter' }
+    ]
+  }
+
+  // 1. 고정 컬럼 (앞부분)
+  const cols = [
+    { 
+      headerName: 'Condition', field: 'CONDITION', width: 110, pinned: 'left',
+      filter: 'agMultiColumnFilter', filterParams: multiFilterParams,
+      cellStyle: p => ({ 
+        color: p.value === 'Diff' ? '#dc3545' : '#198754', 
+        fontWeight: 'bold', textAlign: 'center',
+        backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' 
+      })
+    },
+    { 
+      headerName: 'Diff Details', field: 'DIFF_INFO', width: 130, pinned: 'left',
+      filter: 'agTextColumnFilter',
+      cellStyle: { fontSize: '11px', color: '#666' }
+    },
+    { 
+      headerName: 'Attribute ID', field: 'ATT_ID', width: 160, pinned: 'left',
+      filter: 'agMultiColumnFilter', filterParams: multiFilterParams
+    }
+  ]
+
+  // 2. 프로젝트별 동적 그룹 컬럼 (뒷부분)
+  dynamicCols.value.forEach(proj => {
+    cols.push({
+      headerName: `Project: ${proj}`,
+      children: [
+        { 
+          headerName: 'Exist', valueGetter: p => p.data[proj]?.EXIST ? 'Y' : '-', 
+          width: 80, cellStyle: { textAlign: 'center' },
+          cellClassRules: { 'bg-light-danger': p => !p.data[proj]?.EXIST }
+        },
+        { headerName: 'Description', valueGetter: p => p.data[proj]?.DESC, width: 180, filter: 'agTextColumnFilter' },
+        { headerName: 'Class ID', valueGetter: p => p.data[proj]?.CL_ID, width: 120, filter: 'agTextColumnFilter' },
+        { headerName: 'Type', valueGetter: p => p.data[proj]?.VAL_TYPE, width: 100, filter: 'agTextColumnFilter' }
+      ]
+    })
+  })
+
+  return cols
+})
+
+const gridOptions = {
+  // (기존 gridOptions 설정 유지: statusBar, floatingFilter 등)
+  columnDefs: columnDefs.value,
+  defaultColDef: { resizable: true, sortable: true, floatingFilter: true },
+  // ...
+}
+
+const onGridReady = (p) => { gridApi.value = p.api }
 </script>
 
 <style scoped>
-/* 탭 컨테이너 전용 스타일 */
-.custom-tab-container {
-  background-color: #2c3e50; /* 기존 시스템의 다크한 톤 계승 */
-  padding: 8px 16px 0 16px;
-}
-
-.custom-tabs {
-  gap: 4px;
-}
-
-.custom-tabs .nav-link {
-  color: #bdc3c7;
-  font-weight: 600;
-  font-size: 0.95rem;
-  border-radius: 8px 8px 0 0; /* 위쪽만 둥글게 해서 탭 느낌 강조 */
-  padding: 10px 24px;
-  border: none;
-  transition: all 0.25s ease;
-  background-color: rgba(255, 255, 255, 0.05);
-}
-
-/* 선택되지 않은 탭에 마우스 올렸을 때 */
-.custom-tabs .nav-link:hover {
-  color: #ffffff;
-  background-color: rgba(255, 255, 255, 0.15);
-}
-
-/* ⭐️ 선택된 탭 스타일 (기존 시스템 포인트 컬러 반영) */
-.custom-tabs .nav-link.active {
-  color: #ffffff !important;
-  background-color: #007bff !important; /* 포인트 블루 */
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.2);
-  position: relative;
-}
-
-/* 선택된 탭 하단에 화살표 같은 포인트를 주고 싶을 때 (선택사항) */
-.custom-tabs .nav-link.active::after {
-  content: '';
-  position: absolute;
-  bottom: 0;
-  left: 50%;
-  transform: translateX(-50%);
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 6px solid #f8f9fa; /* 배경색과 맞춤 */
-}
-
-/* 그리드 영역과의 경계 처리 */
-.flex-grow-1 {
-  background-color: #f8f9fa;
-  border-top: 1px solid #dee2e6;
-}
+.custom-textarea-filter { width: 250px; }
+:deep(.bg-light-danger) { background-color: #fff1f0 !important; }
+/* 그룹 헤더 스타일 강조 */
+:deep(.ag-header-group-cell) { background-color: #f8f9fa; font-weight: bold; border-bottom: 1px solid #ddd; }
 </style>
