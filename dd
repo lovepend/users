@@ -88,6 +88,8 @@ import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { sAlert } from '@/utils/messages/alert-common'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
+// (참고) Enterprise 기능을 위해 상위에서 LicenseManager.setLicenseKey를 호출했는지 확인 필요
+
 const route = useRoute()
 
 // --- State ---
@@ -103,10 +105,9 @@ const dynamicCols = ref([])
 const urlEpId = computed(() => route.query.ep_id || '')
 const urlProjNo = computed(() => route.query.project_no || '')
 
-// 비교 필드 정의
 const COMPARE_FIELDS = ['DESC', 'NEW_TAG_YN']
 
-// 프로젝트 선택 로직
+// --- 프로젝트 선택 로직 ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   if (!kw) return projectList.value
@@ -142,7 +143,7 @@ onMounted(async () => {
   } catch (error) { console.error(error) }
 })
 
-// 데이터 조회 로직
+// --- 데이터 조회 및 가공 ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
@@ -213,23 +214,22 @@ const onSearch = async () => {
   }
 }
 
-// --- 그리드 설정 ---
+// --- Enterprise 그리드 컬럼 설정 ---
 const columnDefs = computed(() => {
-  const multiFilterParams = {
-    filters: [
-      { filter: 'agTextColumnFilter', filterParams: { buttons: ['reset'] } },
-      { filter: 'agSetColumnFilter', filterParams: { buttons: ['reset'] } }
-    ],
+  // Enterprise용 범용 필터 파라미터
+  const commonFilterParams = {
+    buttons: ['reset', 'apply'],
+    closeOnApply: true,
   }
 
   const cols = [
     {
       headerName: 'Condition',
       field: 'CONDITION',
-      width: 110,
+      width: 120,
       pinned: 'left',
-      filter: 'agMultiColumnFilter',
-      filterParams: multiFilterParams,
+      filter: 'agSetColumnFilter', // ✅ Enterprise 리스트 필터
+      filterParams: commonFilterParams,
       cellStyle: p => ({
         color: p.value === 'Diff' ? '#dc3545' : '#198754',
         fontWeight: 'bold',
@@ -240,19 +240,19 @@ const columnDefs = computed(() => {
     {
       headerName: 'Diff Info',
       field: 'DIFF_INFO',
-      width: 140,
+      width: 150,
       pinned: 'left',
-      filter: 'agMultiColumnFilter',
-      filterParams: multiFilterParams,
+      filter: 'agSetColumnFilter', // ✅ Enterprise 리스트 필터
+      filterParams: commonFilterParams,
       cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' },
     },
     {
       headerName: 'Register ID',
       field: 'TYPE_ID',
-      width: 160,
+      width: 180,
       pinned: 'left',
-      filter: 'agMultiColumnFilter',
-      filterParams: multiFilterParams,
+      filter: 'agTextColumnFilter',
+      filterParams: commonFilterParams,
     },
   ]
 
@@ -264,22 +264,25 @@ const columnDefs = computed(() => {
         {
           headerName: 'Exist',
           valueGetter: p => (p.data[proj]?.EXIST ? 'Y' : '-'),
-          width: 80,
-          filter: 'agTextColumnFilter', // ✅ 필터 명시
+          width: 90,
+          filter: 'agSetColumnFilter', // ✅ Y/- 리스트 선택 가능
+          filterParams: commonFilterParams,
           cellStyle: { textAlign: 'center' },
           cellClassRules: { 'bg-danger-light': p => !p.data[proj]?.EXIST },
         },
         { 
           headerName: 'Description', 
           valueGetter: p => p.data[proj]?.DESC, 
-          width: 200, 
-          filter: 'agTextColumnFilter' // ✅ 필터 명시
+          width: 220, 
+          filter: 'agTextColumnFilter',
+          filterParams: commonFilterParams
         },
         {
           headerName: 'Object Create',
           valueGetter: p => p.data[proj]?.NEW_TAG_YN,
-          width: 130,
-          filter: 'agTextColumnFilter', // ✅ 필터 명시
+          width: 150,
+          filter: 'agSetColumnFilter', // ✅ 리스트 선택 가능
+          filterParams: commonFilterParams,
         },
       ],
     })
@@ -294,20 +297,23 @@ const gridOptions = computed(() => ({
   style: 'width: 100%; height: 100%',
   class: 'ag-theme-custom',
   loadingOverlayComponent: AggridLoadingOverlay,
-  sideBar: false,
+  sideBar: 'filters', // 우측 사이드바 필터 활성화 (Enterprise 기능)
   statusBar: {
     statusPanels: [
       { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'right' },
       { statusPanel: 'agSelectedRowCountComponent', align: 'right' },
     ],
   },
-  // 💡 필터 활성화를 위한 핵심 설정
   defaultColDef: { 
     sortable: true, 
     resizable: true, 
-    filter: true, // 전역 필터 허용
-    floatingFilter: true // 미니 필터(입력창) 표시
+    filter: true, 
+    floatingFilter: true,
+    menuTabs: ['filterMenuTab', 'generalMenuTab'], // 필터 탭 활성화
   },
+  // 💡 중요: 팝업 메뉴가 그리드 경계에 잘리지 않도록 설정
+  popupParent: document.body,
+  
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: node => {
     const inputIds = attributeFilter.value
@@ -342,10 +348,7 @@ watch(attributeFilter, () => {
   color: #fa5252 !important;
 }
 
-:deep(.ag-floating-filter-input) {
-  background-color: #fff !important;
-}
-:deep(.ag-floating-filter-body input) {
-  cursor: text !important;
-}
+/* 유료버전 미니필터 스타일 보정 */
+:deep(.ag-floating-filter-input) { background-color: #fff !important; }
+:deep(.ag-floating-filter-body input) { cursor: text !important; }
 </style>
