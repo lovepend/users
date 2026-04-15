@@ -212,9 +212,8 @@ const onSearch = async () => {
   }
 }
 
-// --- 그리드 컬럼 설정 (멀티 필터 적용) ---
+// --- 그리드 컬럼 설정 ---
 const columnDefs = computed(() => {
-  // 💡 입력창(Text) + 리스트(Set)를 동시에 지원하는 필터 설정
   const multiFilterParams = {
     filters: [
       { filter: 'agTextColumnFilter' },
@@ -297,7 +296,7 @@ const gridOptions = computed(() => ({
   style: 'width: 100%; height: 100%',
   class: 'ag-theme-custom',
   loadingOverlayComponent: AggridLoadingOverlay,
-  sideBar: false, // 💡 오른쪽 필터 메뉴 숨김
+  sideBar: false,
   statusBar: {
     statusPanels: [
       { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'right' },
@@ -308,10 +307,15 @@ const gridOptions = computed(() => ({
     sortable: true, 
     resizable: true, 
     filter: true, 
-    floatingFilter: true, // 💡 미니 필터(입력창) 유지
+    floatingFilter: true,
   },
   popupParent: document.body,
   
+  // 💡 유료 버전 기능 활성화
+  enableRangeSelection: true,      // 멀티 셀 드래그 선택 가능
+  copyHeadersToClipboard: true,    // 복사 시 헤더 포함
+  suppressRowClickSelection: true, // 행 전체 선택 대신 셀 단위 선택 강조
+
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: node => {
     const inputIds = attributeFilter.value
