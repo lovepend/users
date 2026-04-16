@@ -40,10 +40,11 @@
                 class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white shadow-sm"
                 type="button"
                 data-bs-toggle="dropdown"
+                :disabled="!selectedProjNo"
               >
-                <span class="text-truncate">{{ selectedRegTypeId || 'ID 선택' }}</span>
+                <span class="text-truncate">{{ !selectedProjNo ? '프로젝트를 먼저 선택하세요' : (selectedRegTypeId || 'ID 선택') }}</span>
               </button>
-              <ul class="dropdown-menu shadow-lg p-0" style="max-height: 400px; min-width: 280px; overflow: hidden; margin-top: 5px;">
+              <ul v-if="selectedProjNo" class="dropdown-menu shadow-lg p-0" style="max-height: 400px; min-width: 280px; overflow: hidden; margin-top: 5px;">
                 <li class="p-2 bg-light border-bottom">
                   <input type="text" class="form-control form-control-sm" v-model="regSearchQuery" placeholder="Register ID 검색..." @click.stop />
                 </li>
@@ -54,6 +55,7 @@
                       <span>{{ reg.TYPE_ID }}</span>
                     </div>
                   </li>
+                  <li v-if="filteredRegOptions.length === 0" class="text-center py-2 text-muted small">데이터가 없습니다.</li>
                 </div>
               </ul>
             </div>
@@ -82,12 +84,21 @@
     <div class="bg-light border-bottom px-3 py-1 d-flex align-items-center gap-3">
       <div class="d-flex align-items-center gap-2">
         <span class="fw-bold text-info text-nowrap small"><i class="fa fa-columns"></i> 헤더 필터</span>
-        <input type="text" class="form-control form-control-sm border-info" style="width: 200px;" v-model="headerFilterQuery" placeholder="표시할 컬럼 (공백/콤마)" />
+        <input type="text" class="form-control form-control-sm border-info" style="width: 200px;" v-model="headerFilterQuery" placeholder="표시할 컬럼" />
       </div>
       <div class="d-flex align-items-center gap-2">
         <span class="fw-bold text-success text-nowrap small"><i class="fa fa-filter"></i> 결과 필터</span>
         <input type="text" class="form-control form-control-sm border-success" style="width: 200px;" v-model="localFilterQuery" placeholder="결과 내 검색" />
       </div>
+    </div>
+
+    <div class="panel-body flex-grow-1 overflow-hidden m-0 p-0 h-100">
+      <ag-grid-vue
+        v-bind="gridBindProps"
+        @grid-ready="onGridReady"
+        @cell-clicked="onCellClicked"
+        class="ag-theme-alpine w-100 h-100"
+      />
     </div>
 
     <div v-if="showJsonModal" class="custom-modal-overlay" @click.self="showJsonModal = false">
@@ -101,16 +112,6 @@
         </div>
       </div>
     </div>
-
-    <div class="panel-body flex-grow-1 overflow-hidden m-0 p-0 h-100">
-      <ag-grid-vue
-        v-bind="gridBindProps"
-        @grid-ready="onGridReady"
-        @cell-clicked="onCellClicked"
-        :tooltipShowDelay="0"
-        class="ag-theme-alpine w-100 h-100"
-      />
-    </div>
   </div>
 </template>
 
@@ -123,7 +124,6 @@ import { useAppMenuStore } from '@/stores/app-menu'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-// AG Grid Enterprise 전용
 import 'ag-grid-enterprise'
 import 'ag-grid-community/styles/ag-grid.css'
 import 'ag-grid-community/styles/ag-theme-alpine.css'
@@ -131,7 +131,6 @@ import 'ag-grid-community/styles/ag-theme-alpine.css'
 const appMenu = useAppMenuStore()
 const { currentProjNo } = storeToRefs(appMenu)
 
-// 상태 변수
 const projectOptions = ref([])
 const regOptions = ref([])
 const selectedProjNo = ref('')
@@ -152,19 +151,32 @@ const rawDataList = ref([])
 const diffMap = ref(new Map())
 const dynamicCols = ref([])
 
-/** 1. 프로젝트 및 Register 목록 로드 **/
-const initOptions = async () => {
+/** 1. 초기 프로젝트 목록 로드 **/
+const fetchProjectList = async () => {
   try {
-    const [pList, rList] = await Promise.all([
-      axiosWrapper.get('/api/Project/GetProjectList'),
-      axiosWrapper.get('/api/Register/Get')
-    ])
-    projectOptions.value = pList.map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
-    regOptions.value = rList // TYPE_ID 포함됨
-    
+    const res = await axiosWrapper.get('/api/Project/GetProjectList')
+    projectOptions.value = res.map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
+    // 초기값 세팅 (있을 경우)
     if (currentProjNo.value) selectedProjNo.value = currentProjNo.value
-  } catch (e) { console.error("Init Error", e) }
+  } catch (e) { console.error("Project List Load Error", e) }
 }
+
+/** 2. 프로젝트 선택 시 Register ID 목록 로드 (Watcher) **/
+watch(selectedProjNo, async (newVal) => {
+  selectedRegTypeId.value = '' // 프로젝트 변경 시 선택된 ID 초기화
+  regOptions.value = []
+  
+  if (!newVal) return
+
+  try {
+    // 프로젝트 번호를 파라미터로 전달하여 해당 프로젝트의 Register 리스트 호출
+    const res = await axiosWrapper.get('/api/Register/Get', { ProjectNo: newVal })
+    regOptions.value = res
+  } catch (e) {
+    console.error("Register List Load Error", e)
+    sAlert.Error("Register 목록을 불러오지 못했습니다.")
+  }
+})
 
 const filteredProjectOptions = computed(() => {
   const q = projSearchQuery.value.toLowerCase()
@@ -176,31 +188,7 @@ const filteredRegOptions = computed(() => {
   return regOptions.value.filter(r => r.TYPE_ID.toLowerCase().includes(q))
 })
 
-/** 2. 셀 렌더링 및 스타일 (기존 로직 유지) **/
-const diffCellRenderer = p => {
-  let val = String(p.value ?? '')
-  const kw = localFilterQuery.value.trim().toLowerCase()
-  if (kw && val.toLowerCase().includes(kw)) {
-    const regex = new RegExp(`(${kw})`, 'gi')
-    val = val.replace(regex, '<mark class="bg-warning text-dark fw-bold">$1</mark>')
-  }
-  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-  return diffInfo ? `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</div>` : val
-}
-
-const getCellStyle = p => {
-  let style = {}
-  if (p.colDef.field === 'TAG_NO') {
-    style = { cursor: 'pointer', color: '#0d6efd', textDecoration: 'underline', fontWeight: 'bold' }
-  }
-  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-  if (diffInfo) {
-    style.backgroundColor = '#fff9db'; style.fontWeight = 'bold'; style.color = '#d94111';
-  }
-  return style
-}
-
-/** 3. 데이터 조회 로직 (기존 로직 유지) **/
+/** 3. 데이터 조회 및 그리드 로직 (기존 유지) **/
 const onSearch = async () => {
   if (!selectedProjNo.value || !selectedRegTypeId.value) {
     return sAlert.Warning('Project No와 Register ID를 선택하세요.')
@@ -224,7 +212,6 @@ const onSearch = async () => {
       return sAlert.Info('조회된 데이터가 없습니다.')
     }
 
-    // Diff 맵 생성
     const newDiffMap = new Map()
     if (resultData.DiffData) {
       resultData.DiffData.forEach(diff => {
@@ -263,7 +250,8 @@ const onSearch = async () => {
     }).map(key => ({
       headerName: key, field: key, minWidth: 150,
       pinned: ['TAG_NO', 'TAG_IDX', 'CLS_ID'].includes(key) ? 'left' : null,
-      cellRenderer: diffCellRenderer, cellStyle: getCellStyle,
+      cellRenderer: diffCellRenderer,
+      cellStyle: getCellStyle,
       tooltipValueGetter: p => {
         const diff = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
         return diff ? `[차이발생]\nPublish: ${diff.pub ?? 'null'}\nWorking: ${diff.wrk ?? 'null'}` : null
@@ -272,18 +260,50 @@ const onSearch = async () => {
 
     rawDataList.value = processed
   } catch (e) {
-    sAlert.Error('조회 중 오류 발생')
+    sAlert.Error('데이터 로드 실패')
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-/** 4. 필터 및 그리드 바인딩 **/
+/** 셀 스타일/렌더러 (기존 유지) **/
+const diffCellRenderer = p => {
+  let val = String(p.value ?? '')
+  const kw = localFilterQuery.value.trim().toLowerCase()
+  if (kw && val.toLowerCase().includes(kw)) {
+    const regex = new RegExp(`(${kw})`, 'gi')
+    val = val.replace(regex, `<mark class="bg-warning text-dark fw-bold">$1</mark>`)
+  }
+  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+  return diffInfo ? `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</div>` : val
+}
+
+const getCellStyle = p => {
+  let style = {}
+  if (p.colDef.field === 'TAG_NO') style = { cursor: 'pointer', color: '#0d6efd', textDecoration: 'underline', fontWeight: 'bold' }
+  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+  if (diffInfo) { style.backgroundColor = '#fff9db'; style.fontWeight = 'bold'; style.color = '#d94111'; }
+  return style
+}
+
+/** 그리드 바인딩 (Enterprise 기능 포함) **/
+const gridBindProps = computed(() => ({
+  columnDefs: filteredColumns.value,
+  rowData: filteredData.value,
+  pagination: true,
+  paginationPageSize: 100,
+  loadingOverlayComponent: AggridLoadingOverlay,
+  defaultColDef: { sortable: true, filter: true, resizable: true },
+  enableRangeSelection: true,
+  enableFillHandle: true,
+  rowSelection: 'multiple',
+  suppressRowClickSelection: true,
+}))
+
 const filteredColumns = computed(() => {
   if (!headerFilterQuery.value.trim()) return dynamicCols.value
   const keywords = headerFilterQuery.value.split(/[,\s\n]+/).filter(k => k.trim()).map(k => k.toLowerCase())
   const alwaysVisible = ['tag_no', 'tag_idx', 'cls_id']
-  
   const pinnedCols = dynamicCols.value.filter(col => alwaysVisible.includes(col.field.toLowerCase()))
   const matchedCols = []
   keywords.forEach(kw => {
@@ -303,29 +323,6 @@ const filteredData = computed(() => {
   return rawDataList.value.filter(row => Object.values(row).some(val => String(val).toLowerCase().includes(kw)))
 })
 
-// AG Grid Enterprise 설정 포함
-const gridBindProps = computed(() => ({
-  columnDefs: filteredColumns.value,
-  rowData: filteredData.value,
-  pagination: true,
-  paginationPageSize: 100,
-  loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { 
-    sortable: true, 
-    filter: true, 
-    resizable: true,
-    flex: 0,
-    minWidth: 100
-  },
-  // Enterprise 기능 (엑셀 스타일 셀 선택)
-  enableRangeSelection: true,      // 범위 선택 활성화
-  enableFillHandle: true,           // 엑셀 채우기 핸들
-  rowSelection: 'multiple',         // 다중 행 선택
-  suppressRowClickSelection: true,  // 클릭 시 행 전체 선택 방지 (셀 선택 위주)
-  undoRedoCellEditing: true,
-  clipboardDelimited: '\t',         // 복사 붙여넣기 구분자
-}))
-
 const onGridReady = p => { gridApi.value = p.api }
 const onCellClicked = p => {
   if (p.colDef.field === 'TAG_NO' && p.data) {
@@ -334,35 +331,27 @@ const onCellClicked = p => {
   }
 }
 
-watch(localFilterQuery, () => { if (gridApi.value) gridApi.value.refreshCells({ force: true }) })
-
-onMounted(initOptions)
+onMounted(fetchProjectList)
 </script>
 
 <style scoped lang="scss">
-/* 드롭다운 커스텀 */
 .custom-dropdown {
   .dropdown-toggle::after { margin-left: auto; }
-  .dropdown-menu { border: 1px solid #cbd5e1; }
+  .dropdown-menu { border: 1px solid #cbd5e1; left: 0 !important; }
   .dropdown-item {
     transition: background 0.2s;
-    &:hover { background-color: #f1f5f9; }
-    &.active-proj { background-color: #e2e8f0; font-weight: bold; }
+    &.active-proj { background-color: #f1f5f9; font-weight: bold; }
   }
+  .custom-check-box { display: flex; align-items: center; padding-left: 5px; }
+  .form-check-input { width: 16px; height: 16px; cursor: pointer; border-radius: 3px; }
 }
 
-.cursor-pointer { cursor: pointer; }
-
-/* 모달 커스텀 */
 .custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .custom-modal-window { background: #fff; width: 800px; height: 70%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
 .modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
 .modal-body-content { flex-grow: 1; min-height: 0; }
 
 ::v-deep(.diff-wrapper) { display: flex; align-items: center; }
-::v-deep(mark) { padding: 0; }
-
-/* AG Grid 스타일 최적화 */
 :deep(.ag-theme-alpine) {
   --ag-font-size: 12px;
   .ag-header-cell { border-right: 1px solid #dee2e6 !important; }
