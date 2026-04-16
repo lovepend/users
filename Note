@@ -1,45 +1,63 @@
-이건 MergeTab.vue인데 
-아래와 같이 수정해줘 
-1. 이거도 프로젝트 선택해서 값을 입력하게 하자. 이전 태그타입 프로젝트 호출 하는거 참조하면 될듯
-2. Register ID 또한 우리 Tag Type 한것 처럼 아래의 Api 사용해서 똑같이 작동하게 하자
-/api/Register/Get  
-키는 "TYPE_ID" 불러서 리스트 보여주면 되는거지
-
-3. 그리고 우리가 하는거 AG Grid 유료버전으로 적용 하는거지 그리고 셀 선택이 부자연 스럽던데 엔터프라이즈 멀티 셀 선택되자나. 
-엑셀처럼 말이야 그렇게 적용해주고.
-
-4. 제일 중요한건 기존 기능이 다 유지 되어야한다는 점!!!!
-
-수정해서 풀코드 전달해줘
-
-
-
 <template>
-  <div class="panel panel-expandable m-0 p-0 h-100">
+  <div class="panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
     <PageTitle
       icon="fa-search-plus"
-      :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')"
+      :title="'Tag 통합 분석 및 속성 비교' + (selectedProjNo ? ` [ ${selectedProjNo} ]` : '')"
     >
       <template #actions>
         <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <label class="d-flex align-items-center gap-2">
+          
+          <div class="d-flex align-items-center gap-2" style="min-width: 250px;">
             <span class="fw-bold text-dark text-nowrap">Project No</span>
-            <input
-              type="text"
-              class="form-control form-control-sm custom-input-width"
-              v-model="manualProjNo"
-              placeholder="예: SN2661"
-            />
-          </label>
-          <label class="d-flex align-items-center gap-2">
+            <div class="flex-grow-1 dropdown custom-dropdown">
+              <button 
+                class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white shadow-sm"
+                type="button"
+                data-bs-toggle="dropdown"
+              >
+                <span class="text-truncate">{{ selectedProjNo || '프로젝트 선택' }}</span>
+              </button>
+              <ul class="dropdown-menu shadow-lg p-0" style="max-height: 400px; min-width: 250px; overflow: hidden; margin-top: 5px;">
+                <li class="p-2 bg-light border-bottom">
+                  <input type="text" class="form-control form-control-sm" v-model="projSearchQuery" placeholder="프로젝트 검색..." @click.stop />
+                </li>
+                <div style="max-height: 300px; overflow-y: auto;" class="py-1">
+                  <li v-for="proj in filteredProjectOptions" :key="proj.value">
+                    <div class="dropdown-item d-flex align-items-center gap-2 py-2 px-3 cursor-pointer" @click="selectedProjNo = proj.value">
+                      <input type="checkbox" class="form-check-input mt-0" :checked="selectedProjNo === proj.value" @click.stop="selectedProjNo = proj.value">
+                      <span>{{ proj.text }}</span>
+                    </div>
+                  </li>
+                </div>
+              </ul>
+            </div>
+          </div>
+
+          <div class="d-flex align-items-center gap-2" style="min-width: 280px;">
             <span class="fw-bold text-nowrap">Register ID</span>
-            <input
-              type="text"
-              class="form-control form-control-sm custom-input-width"
-              v-model="regTypeId"
-              placeholder="예: PIEP_T_002_T"
-            />
-          </label>
+            <div class="flex-grow-1 dropdown custom-dropdown">
+              <button 
+                class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white shadow-sm"
+                type="button"
+                data-bs-toggle="dropdown"
+              >
+                <span class="text-truncate">{{ selectedRegTypeId || 'ID 선택' }}</span>
+              </button>
+              <ul class="dropdown-menu shadow-lg p-0" style="max-height: 400px; min-width: 280px; overflow: hidden; margin-top: 5px;">
+                <li class="p-2 bg-light border-bottom">
+                  <input type="text" class="form-control form-control-sm" v-model="regSearchQuery" placeholder="Register ID 검색..." @click.stop />
+                </li>
+                <div style="max-height: 300px; overflow-y: auto;" class="py-1">
+                  <li v-for="reg in filteredRegOptions" :key="reg.TYPE_ID">
+                    <div class="dropdown-item d-flex align-items-center gap-2 py-2 px-3 cursor-pointer" @click="selectedRegTypeId = reg.TYPE_ID">
+                      <input type="checkbox" class="form-check-input mt-0" :checked="selectedRegTypeId === reg.TYPE_ID" @click.stop="selectedRegTypeId = reg.TYPE_ID">
+                      <span>{{ reg.TYPE_ID }}</span>
+                    </div>
+                  </li>
+                </div>
+              </ul>
+            </div>
+          </div>
 
           <div class="d-flex align-items-center gap-2 border-start ps-3 ms-2">
             <span class="fw-bold text-nowrap">조회 대상</span>
@@ -54,299 +72,300 @@
             <label class="form-check-label fw-bold" for="delCheck">삭제 포함</label>
           </div>
 
-          <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
+          <button class="btn btn-xs btn-primary shadow-sm px-3" @click="onSearch">
             <i class="fa fa-search me-1"></i>조회
           </button>
-
-          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-info text-nowrap">헤더 필터</span>
-            <input
-              type="text"
-              class="form-control form-control-sm border-info custom-input-width"
-              v-model="headerFilterQuery"
-              placeholder="공백, 콤마 분리"
-            />
-          </div>
-
-          <div class="ms-2 border-start ps-3 d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap">결과 필터</span>
-            <input
-              type="text"
-              class="form-control form-control-sm border-success custom-input-width"
-              v-model="localFilterQuery"
-              placeholder="결과 내 검색 (하이라이트)"
-            />
-          </div>
         </div>
-        <panel-toolbar />
       </template>
     </PageTitle>
 
-    <div v-if="showJsonModal" class="modal-backdrop fade show" style="z-index: 1040"></div>
-    <div v-if="showJsonModal" class="modal fade show d-block" tabindex="-1" style="z-index: 1050">
-      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" style="max-width: 800px">
-        <div class="modal-content shadow-lg">
-          <div class="modal-header bg-light p-3">
-            <h5 class="modal-title fw-bold text-dark"><i class="fa fa-code me-2"></i>Row Data (JSON)</h5>
-            <button type="button" class="btn-close" @click="showJsonModal = false"></button>
-          </div>
-          <div class="modal-body bg-dark text-white p-3 overflow-auto" style="max-height: 60vh">
-            <pre class="m-0" style="white-space: pre-wrap; font-size: 0.9em"><code>{{ selectedJsonData }}</code></pre>
-          </div>
-          <div class="modal-footer bg-light p-2">
-            <button type="button" class="btn btn-sm btn-secondary" @click="showJsonModal = false">닫기</button>
-          </div>
+    <div class="bg-light border-bottom px-3 py-1 d-flex align-items-center gap-3">
+      <div class="d-flex align-items-center gap-2">
+        <span class="fw-bold text-info text-nowrap small"><i class="fa fa-columns"></i> 헤더 필터</span>
+        <input type="text" class="form-control form-control-sm border-info" style="width: 200px;" v-model="headerFilterQuery" placeholder="표시할 컬럼 (공백/콤마)" />
+      </div>
+      <div class="d-flex align-items-center gap-2">
+        <span class="fw-bold text-success text-nowrap small"><i class="fa fa-filter"></i> 결과 필터</span>
+        <input type="text" class="form-control form-control-sm border-success" style="width: 200px;" v-model="localFilterQuery" placeholder="결과 내 검색" />
+      </div>
+    </div>
+
+    <div v-if="showJsonModal" class="custom-modal-overlay" @click.self="showJsonModal = false">
+      <div class="custom-modal-window shadow-lg">
+        <div class="modal-header-dark">
+          <span class="fw-bold text-white"><i class="fa fa-code me-2"></i>Row Data (JSON)</span>
+          <button @click="showJsonModal = false" class="btn btn-xs btn-danger">✕</button>
+        </div>
+        <div class="modal-body-content bg-dark overflow-auto p-3">
+          <pre class="m-0 text-white" style="white-space: pre-wrap; font-size: 13px;"><code>{{ selectedJsonData }}</code></pre>
         </div>
       </div>
     </div>
 
-    <div class="panel-body m-0 p-0 h-100">
-      <div class="panel m-0 p-0 h-100">
-        <div class="panel-body overflow-hidden m-0 p-0 h-100">
-          <ag-grid-vue
-            v-bind="gridBindProps"
-            @grid-ready="onGridReady"
-            @cell-clicked="onCellClicked"
-            :tooltipShowDelay="0"
-          />
-        </div>
-      </div>
+    <div class="panel-body flex-grow-1 overflow-hidden m-0 p-0 h-100">
+      <ag-grid-vue
+        v-bind="gridBindProps"
+        @grid-ready="onGridReady"
+        @cell-clicked="onCellClicked"
+        :tooltipShowDelay="0"
+        class="ag-theme-alpine w-100 h-100"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-  import { ref, computed, shallowRef, watch } from 'vue'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sAlert } from '@/utils/messages/alert-common'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-  import PageTitle from '@/components/toolBar/PageTitle.vue'
+import { ref, computed, shallowRef, watch, onMounted } from 'vue'
+import { storeToRefs } from 'pinia'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
+import { useAppMenuStore } from '@/stores/app-menu'
+import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-  const manualProjNo = ref('SN2661')
-  const regTypeId = ref('PIEP_T_002_T')
-  const selectedType = ref('Working')
-  const containDeleted = ref(false)
+// AG Grid Enterprise 전용
+import 'ag-grid-enterprise'
+import 'ag-grid-community/styles/ag-grid.css'
+import 'ag-grid-community/styles/ag-theme-alpine.css'
 
-  const localFilterQuery = ref('')
-  const headerFilterQuery = ref('')
+const appMenu = useAppMenuStore()
+const { currentProjNo } = storeToRefs(appMenu)
 
-  const showJsonModal = ref(false)
-  const selectedJsonData = ref('')
+// 상태 변수
+const projectOptions = ref([])
+const regOptions = ref([])
+const selectedProjNo = ref('')
+const selectedRegTypeId = ref('')
+const projSearchQuery = ref('')
+const regSearchQuery = ref('')
 
-  const gridApi = shallowRef()
-  const rawDataList = ref([])
-  const diffMap = ref(new Map())
-  const dynamicCols = ref([])
+const selectedType = ref('Working')
+const containDeleted = ref(false)
+const localFilterQuery = ref('')
+const headerFilterQuery = ref('')
 
-  /**
-   * 🎨 셀 렌더링 및 스타일 정의
-   */
-  const diffCellRenderer = p => {
-    let val = String(p.value ?? '')
-    const kw = localFilterQuery.value.trim().toLowerCase()
+const showJsonModal = ref(false)
+const selectedJsonData = ref('')
 
-    if (kw && val.toLowerCase().includes(kw)) {
-      const regex = new RegExp(`(${kw})`, 'gi')
-      val = val.replace(regex, '<span class="bg-warning text-dark fw-bold">$1</span>')
-    }
+const gridApi = shallowRef()
+const rawDataList = ref([])
+const diffMap = ref(new Map())
+const dynamicCols = ref([])
 
-    const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-    if (diffInfo) {
-      return `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</div>`
-    }
-    return val
+/** 1. 프로젝트 및 Register 목록 로드 **/
+const initOptions = async () => {
+  try {
+    const [pList, rList] = await Promise.all([
+      axiosWrapper.get('/api/Project/GetProjectList'),
+      axiosWrapper.get('/api/Register/Get')
+    ])
+    projectOptions.value = pList.map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
+    regOptions.value = rList // TYPE_ID 포함됨
+    
+    if (currentProjNo.value) selectedProjNo.value = currentProjNo.value
+  } catch (e) { console.error("Init Error", e) }
+}
+
+const filteredProjectOptions = computed(() => {
+  const q = projSearchQuery.value.toLowerCase()
+  return projectOptions.value.filter(p => p.text.toLowerCase().includes(q))
+})
+
+const filteredRegOptions = computed(() => {
+  const q = regSearchQuery.value.toLowerCase()
+  return regOptions.value.filter(r => r.TYPE_ID.toLowerCase().includes(q))
+})
+
+/** 2. 셀 렌더링 및 스타일 (기존 로직 유지) **/
+const diffCellRenderer = p => {
+  let val = String(p.value ?? '')
+  const kw = localFilterQuery.value.trim().toLowerCase()
+  if (kw && val.toLowerCase().includes(kw)) {
+    const regex = new RegExp(`(${kw})`, 'gi')
+    val = val.replace(regex, '<mark class="bg-warning text-dark fw-bold">$1</mark>')
   }
+  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+  return diffInfo ? `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</div>` : val
+}
 
-  const getCellStyle = p => {
-    let style = {}
-
-    if (p.colDef.field === 'TAG_NO') {
-      style.cursor = 'pointer'
-      style.color = '#0d6efd'
-      style.textDecoration = 'underline'
-      style.fontWeight = 'bold'
-    }
-
-    const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-    if (diffInfo) {
-      style.backgroundColor = '#fff9db'
-      style.fontWeight = 'bold'
-      style.color = '#d94111'
-    }
-    return Object.keys(style).length > 0 ? style : null
+const getCellStyle = p => {
+  let style = {}
+  if (p.colDef.field === 'TAG_NO') {
+    style = { cursor: 'pointer', color: '#0d6efd', textDecoration: 'underline', fontWeight: 'bold' }
   }
+  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+  if (diffInfo) {
+    style.backgroundColor = '#fff9db'; style.fontWeight = 'bold'; style.color = '#d94111';
+  }
+  return style
+}
 
-  watch(localFilterQuery, () => {
-    if (gridApi.value) {
-      gridApi.value.refreshCells({ force: true })
+/** 3. 데이터 조회 로직 (기존 로직 유지) **/
+const onSearch = async () => {
+  if (!selectedProjNo.value || !selectedRegTypeId.value) {
+    return sAlert.Warning('Project No와 Register ID를 선택하세요.')
+  }
+  if (gridApi.value) gridApi.value.setGridOption('loading', true)
+
+  try {
+    const payload = {
+      ProjectNo: selectedProjNo.value,
+      REG_TYPE_ID: selectedRegTypeId.value,
+      Type: selectedType.value,
+      ContainDeleted: containDeleted.value,
     }
-  })
 
-  const onSearch = async () => {
-    if (!manualProjNo.value || !regTypeId.value) {
-      return sAlert.Warning('Project No와 Register ID를 입력하세요.')
+    const res = await axiosWrapper.post('/api/Data/GetMergedData', payload)
+    const rootKey = selectedRegTypeId.value
+    const resultData = res[rootKey]
+
+    if (!resultData) {
+      rawDataList.value = []
+      return sAlert.Info('조회된 데이터가 없습니다.')
     }
 
-    if (gridApi.value) gridApi.value.setGridOption('loading', true)
-
-    try {
-      const payload = {
-        ProjectNo: manualProjNo.value.trim(),
-        REG_TYPE_ID: regTypeId.value.trim(),
-        Type: selectedType.value,
-        ContainDeleted: containDeleted.value,
-      }
-
-      const res = await axiosWrapper.post('/api/Data/GetMergedData', payload)
-      const rootKey = regTypeId.value.trim()
-      const resultData = res[rootKey]
-
-      if (!resultData) {
-        rawDataList.value = []
-        return sAlert.Info('조회된 데이터가 없습니다.')
-      }
-
-      const newDiffMap = new Map()
-      if (resultData.DiffData) {
-        resultData.DiffData.forEach(diff => {
-          ;(diff.Property || []).forEach(prop => {
-            if (prop.PUB_VALUE !== prop.WRK_VALUE) {
-              newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, {
-                pub: prop.PUB_VALUE,
-                wrk: prop.WRK_VALUE,
-              })
-            }
-          })
+    // Diff 맵 생성
+    const newDiffMap = new Map()
+    if (resultData.DiffData) {
+      resultData.DiffData.forEach(diff => {
+        ;(diff.Property || []).forEach(prop => {
+          if (prop.PUB_VALUE !== prop.WRK_VALUE) {
+            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { pub: prop.PUB_VALUE, wrk: prop.WRK_VALUE })
+          }
         })
-      }
-      diffMap.value = newDiffMap
-
-      let sourceData = []
-      if (selectedType.value === 'Working') sourceData = resultData.WrkData || []
-      else if (selectedType.value === 'Publish') sourceData = resultData.PubData || []
-      else sourceData = resultData.MergeData || []
-
-      const processed = sourceData.map(item => {
-        const flat = { ...item }
-        if (Array.isArray(item.ATTRIBUTES)) {
-          item.ATTRIBUTES.forEach(attr => {
-            flat[attr.ATT_ID] = attr.VALUE
-          })
-        }
-        return flat
       })
-
-      const fixedFields = ['TAG_NO', 'TAG_IDX', 'CLS_ID', 'EP_ID', 'TAG_DESC']
-      const allKeys = new Set()
-      processed.forEach(row =>
-        Object.keys(row).forEach(k => {
-          if (k !== 'ATTRIBUTES' && k !== '_id') allKeys.add(k)
-        })
-      )
-
-      dynamicCols.value = Array.from(allKeys)
-        .sort((a, b) => {
-          const aIdx = fixedFields.indexOf(a),
-            bIdx = fixedFields.indexOf(b)
-          if (aIdx > -1 && bIdx > -1) return aIdx - bIdx
-          if (aIdx > -1) return -1
-          if (bIdx > -1) return 1
-          return a.localeCompare(b)
-        })
-        .map(key => ({
-          headerName: key,
-          field: key,
-          minWidth: 150,
-          pinned: ['TAG_NO', 'TAG_IDX', 'CLS_ID'].includes(key) ? 'left' : null,
-          cellRenderer: diffCellRenderer,
-          cellStyle: getCellStyle,
-          tooltipValueGetter: p => {
-            const diff = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-            return diff ? `[차이발생]\nPublish: ${diff.pub ?? 'null'}\nWorking: ${diff.wrk ?? 'null'}` : null
-          },
-        }))
-
-      rawDataList.value = processed
-    } catch (e) {
-      console.error(e)
-      sAlert.Error('데이터를 가져오는 중 오류가 발생했습니다.')
-    } finally {
-      if (gridApi.value) gridApi.value.setGridOption('loading', false)
     }
-  }
+    diffMap.value = newDiffMap
 
-  // 변경된 부분: 헤더 다중 필터 적용 (고정 컬럼은 무조건 포함)
-  // 변경된 부분: 헤더 다중 필터 적용 및 입력 순서 정렬
-  const filteredColumns = computed(() => {
-    if (!headerFilterQuery.value.trim()) return dynamicCols.value
+    let sourceData = []
+    if (selectedType.value === 'Working') sourceData = resultData.WrkData || []
+    else if (selectedType.value === 'Publish') sourceData = resultData.PubData || []
+    else sourceData = resultData.MergeData || []
 
-    // 1. 입력된 키워드 배열화 (공백, 콤마, 줄바꿈 기준)
-    const keywords = headerFilterQuery.value
-      .split(/[,\s\n]+/)
-      .filter(k => k.trim())
-      .map(k => k.toLowerCase())
-
-    // 항상 노출할 고정 컬럼 목록
-    const alwaysVisibleFields = ['tag_no', 'tag_idx', 'cls_id']
-
-    // 2. 고정 컬럼 먼저 필터링
-    const pinnedCols = dynamicCols.value.filter(col => alwaysVisibleFields.includes(col.field.toLowerCase()))
-
-    // 3. 입력한 키워드 '순서대로' 나머지 컬럼들 추출
-    const matchedCols = []
-    keywords.forEach(kw => {
-      dynamicCols.value.forEach(col => {
-        const fieldName = col.field.toLowerCase()
-        // 고정 컬럼이 아니고, 키워드를 포함하며, 아직 추가되지 않은 컬럼인 경우
-        if (
-          !alwaysVisibleFields.includes(fieldName) &&
-          fieldName.includes(kw) &&
-          !matchedCols.find(m => m.field === col.field)
-        ) {
-          matchedCols.push(col)
-        }
-      })
+    const processed = sourceData.map(item => {
+      const flat = { ...item }
+      if (Array.isArray(item.ATTRIBUTES)) {
+        item.ATTRIBUTES.forEach(attr => { flat[attr.ATT_ID] = attr.VALUE })
+      }
+      return flat
     })
 
-    // 4. [고정 컬럼] + [입력 순서에 따른 매칭 컬럼] 합쳐서 리턴
-    return [...pinnedCols, ...matchedCols]
-  })
+    const fixedFields = ['TAG_NO', 'TAG_IDX', 'CLS_ID', 'EP_ID', 'TAG_DESC']
+    const allKeys = new Set()
+    processed.forEach(row => Object.keys(row).forEach(k => { if (k !== 'ATTRIBUTES' && k !== '_id') allKeys.add(k) }))
 
-  const filteredData = computed(() => {
-    if (!localFilterQuery.value.trim()) return rawDataList.value
-    const kw = localFilterQuery.value.toLowerCase()
-    return rawDataList.value.filter(row => Object.values(row).some(val => String(val).toLowerCase().includes(kw)))
-  })
+    dynamicCols.value = Array.from(allKeys).sort((a, b) => {
+      const aIdx = fixedFields.indexOf(a), bIdx = fixedFields.indexOf(b)
+      if (aIdx > -1 && bIdx > -1) return aIdx - bIdx
+      if (aIdx > -1) return -1
+      if (bIdx > -1) return 1
+      return a.localeCompare(b)
+    }).map(key => ({
+      headerName: key, field: key, minWidth: 150,
+      pinned: ['TAG_NO', 'TAG_IDX', 'CLS_ID'].includes(key) ? 'left' : null,
+      cellRenderer: diffCellRenderer, cellStyle: getCellStyle,
+      tooltipValueGetter: p => {
+        const diff = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+        return diff ? `[차이발생]\nPublish: ${diff.pub ?? 'null'}\nWorking: ${diff.wrk ?? 'null'}` : null
+      },
+    }))
 
-  const gridBindProps = computed(() => ({
-    columnDefs: filteredColumns.value,
-    rowData: filteredData.value,
-    style: 'width: 100%; height: 100%',
-    class: 'ag-theme-custom shadow-sm',
-    pagination: true,
-    paginationPageSize: 100,
-    loadingOverlayComponent: AggridLoadingOverlay,
-    defaultColDef: { sortable: true, filter: true, resizable: true },
-  }))
-
-  const onGridReady = p => {
-    gridApi.value = p.api
+    rawDataList.value = processed
+  } catch (e) {
+    sAlert.Error('조회 중 오류 발생')
+  } finally {
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
+}
 
-  const onCellClicked = p => {
-    if (p.colDef.field === 'TAG_NO' && p.data) {
-      selectedJsonData.value = JSON.stringify(p.data, null, 2)
-      showJsonModal.value = true
-    }
+/** 4. 필터 및 그리드 바인딩 **/
+const filteredColumns = computed(() => {
+  if (!headerFilterQuery.value.trim()) return dynamicCols.value
+  const keywords = headerFilterQuery.value.split(/[,\s\n]+/).filter(k => k.trim()).map(k => k.toLowerCase())
+  const alwaysVisible = ['tag_no', 'tag_idx', 'cls_id']
+  
+  const pinnedCols = dynamicCols.value.filter(col => alwaysVisible.includes(col.field.toLowerCase()))
+  const matchedCols = []
+  keywords.forEach(kw => {
+    dynamicCols.value.forEach(col => {
+      const fieldName = col.field.toLowerCase()
+      if (!alwaysVisible.includes(fieldName) && fieldName.includes(kw) && !matchedCols.find(m => m.field === col.field)) {
+        matchedCols.push(col)
+      }
+    })
+  })
+  return [...pinnedCols, ...matchedCols]
+})
+
+const filteredData = computed(() => {
+  if (!localFilterQuery.value.trim()) return rawDataList.value
+  const kw = localFilterQuery.value.toLowerCase()
+  return rawDataList.value.filter(row => Object.values(row).some(val => String(val).toLowerCase().includes(kw)))
+})
+
+// AG Grid Enterprise 설정 포함
+const gridBindProps = computed(() => ({
+  columnDefs: filteredColumns.value,
+  rowData: filteredData.value,
+  pagination: true,
+  paginationPageSize: 100,
+  loadingOverlayComponent: AggridLoadingOverlay,
+  defaultColDef: { 
+    sortable: true, 
+    filter: true, 
+    resizable: true,
+    flex: 0,
+    minWidth: 100
+  },
+  // Enterprise 기능 (엑셀 스타일 셀 선택)
+  enableRangeSelection: true,      // 범위 선택 활성화
+  enableFillHandle: true,           // 엑셀 채우기 핸들
+  rowSelection: 'multiple',         // 다중 행 선택
+  suppressRowClickSelection: true,  // 클릭 시 행 전체 선택 방지 (셀 선택 위주)
+  undoRedoCellEditing: true,
+  clipboardDelimited: '\t',         // 복사 붙여넣기 구분자
+}))
+
+const onGridReady = p => { gridApi.value = p.api }
+const onCellClicked = p => {
+  if (p.colDef.field === 'TAG_NO' && p.data) {
+    selectedJsonData.value = JSON.stringify(p.data, null, 2)
+    showJsonModal.value = true
   }
+}
+
+watch(localFilterQuery, () => { if (gridApi.value) gridApi.value.refreshCells({ force: true }) })
+
+onMounted(initOptions)
 </script>
 
-<style scoped>
-  .custom-input-width {
-    width: 150px !important;
+<style scoped lang="scss">
+/* 드롭다운 커스텀 */
+.custom-dropdown {
+  .dropdown-toggle::after { margin-left: auto; }
+  .dropdown-menu { border: 1px solid #cbd5e1; }
+  .dropdown-item {
+    transition: background 0.2s;
+    &:hover { background-color: #f1f5f9; }
+    &.active-proj { background-color: #e2e8f0; font-weight: bold; }
   }
-  ::v-deep(.diff-wrapper) {
-    display: flex;
-    align-items: center;
-  }
+}
+
+.cursor-pointer { cursor: pointer; }
+
+/* 모달 커스텀 */
+.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.6); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.custom-modal-window { background: #fff; width: 800px; height: 70%; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
+.modal-body-content { flex-grow: 1; min-height: 0; }
+
+::v-deep(.diff-wrapper) { display: flex; align-items: center; }
+::v-deep(mark) { padding: 0; }
+
+/* AG Grid 스타일 최적화 */
+:deep(.ag-theme-alpine) {
+  --ag-font-size: 12px;
+  .ag-header-cell { border-right: 1px solid #dee2e6 !important; }
+  .ag-cell { border-right: 1px solid #f1f3f5 !important; }
+}
 </style>
