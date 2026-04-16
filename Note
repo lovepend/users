@@ -10,132 +10,128 @@ function UserSelectCellType(FIELD, NAME_FIELD, DEPT_FIELD) {
   this.nameField = NAME_FIELD
   this.deptField = DEPT_FIELD
   this.searchTimer = null
+  this.listbox = null // 리스트박스 참조 유지
 }
 
 UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
 
-// 셀에 표시될 텍스트 렌더링
+// 페인트 함수 (기존과 동일)
 UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
   const sheet = options.sheet
   const data = sheet.getDataItem(options.row)
   const name = data?.[this.nameField] ?? ''
   const dept = data?.[this.deptField] ?? ''
   const text = name ? `${name}${dept ? `(${dept})` : ''}` : (value || '')
-  
   GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, text, x, y, w, h, style, options])
 }
 
-// 에디터 생성 (엑셀 목록 스타일)
 UserSelectCellType.prototype.createEditorElement = function (context) {
   const wrapper = document.createElement('div')
   wrapper.setAttribute('gcUIElement', 'gcEditingInput')
   wrapper.setAttribute('EditorType', _EditorType)
-  wrapper.style.position = 'relative'
-  wrapper.style.overflow = 'visible' // 목록이 셀 밖으로 나가야 함
+  wrapper.style.backgroundColor = 'white'
+  wrapper.style.display = 'flex'
+  wrapper.style.alignItems = 'center'
 
-  // 실제 입력창 (엑셀 셀처럼 보이게)
   const input = document.createElement('input')
-  input.className = 'spread-input-editor'
+  input.setAttribute('editoruses', 'text-input')
   input.style.width = '100%'
-  input.style.height = '100%'
   input.style.border = 'none'
   input.style.outline = 'none'
   input.style.padding = '0 4px'
-  input.setAttribute('editoruses', 'text-input')
 
-  // 드롭다운 목록
+  // 전역 리스트박스 생성 (잘림 방지를 위해 body에 부착)
   const listbox = document.createElement('ul')
-  listbox.className = 'vs__dropdown-menu' // 기존 스타일 유지 또는 정의 필요
+  listbox.className = 'vs__dropdown-menu' 
   listbox.style.position = 'absolute'
-  listbox.style.top = '100%'
-  listbox.style.left = '0'
-  listbox.style.width = '100%'
-  listbox.style.minWidth = '200px'
-  listbox.style.zIndex = '1000'
+  listbox.style.width = '250px' // 너비 고정 또는 계산
+  listbox.style.maxHeight = '200px'
+  listbox.style.overflowY = 'auto'
+  listbox.style.zIndex = '99999'
   listbox.style.backgroundColor = 'white'
-  listbox.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)'
-  listbox.style.listStyle = 'none'
-  listbox.style.margin = '0'
+  listbox.style.boxShadow = '0 4px 8px rgba(0,0,0,0.15)'
+  listbox.style.display = 'none'
   listbox.style.padding = '0'
-  listbox.style.display = 'none' // 초기엔 숨김
-  listbox.setAttribute('editoruses', 'list-container')
+  listbox.style.margin = '0'
+  listbox.style.listStyle = 'none'
+  document.body.appendChild(listbox)
+  this.listbox = listbox
 
-  let selectedValue = ''
+  let selectedInfo = null
 
-  // 입력 이벤트: API 호출
   input.addEventListener('input', (e) => {
-    const keyword = e.target.value
+    const keyword = e.target.value.trim()
     if (this.searchTimer) clearTimeout(this.searchTimer)
 
-    if (!keyword || keyword.length < 2) {
+    if (keyword.length < 2) {
       listbox.style.display = 'none'
       return
     }
 
     this.searchTimer = setTimeout(async () => {
-      try {
-        const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: keyword })
-        listbox.innerHTML = ''
-        
-        if (response && response.length > 0) {
-          listbox.style.display = 'block'
-          response.forEach(item => {
-            const li = document.createElement('li')
-            li.style.padding = '4px 8px'
-            li.style.cursor = 'pointer'
-            li.className = 'vs__dropdown-option'
-            li.innerText = `${item.EMP_NM}(${item.DEPT_NAME || ''})`
+      const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: keyword })
+      listbox.innerHTML = ''
+
+      if (response && response.length > 0) {
+        // 리스트박스 위치 설정 (셀 바로 아래)
+        const rect = input.getBoundingClientRect()
+        listbox.style.top = `${rect.bottom + window.scrollY}px`
+        listbox.style.left = `${rect.left + window.scrollX}px`
+        listbox.style.display = 'block'
+
+        response.forEach(item => {
+          const li = document.createElement('li')
+          li.className = 'vs__dropdown-option'
+          li.style.padding = '8px'
+          li.style.cursor = 'pointer'
+          li.style.borderBottom = '1px solid #f0f0f0'
+          li.innerText = `${item.EMP_NM}(${item.DEPT_NAME || ''})`
+          
+          li.onmousedown = (event) => {
+            event.preventDefault() // input blur 방지
+            selectedInfo = item
+            input.value = item.EMP_NM
+            setEmployeeInfo({ ...item, code: item.EMP_NO })
             
-            li.onmousedown = () => { // click보다 mousedown이 blur 이전에 발생함
-              selectedValue = item.EMP_NO
-              input.value = item.EMP_NM
-              setEmployeeInfo({ ...item, code: item.EMP_NO })
-              
-              // 선택 후 에디터 종료를 위해 SpreadJS 명령 실행
-              const sheet = GC.Spread.Sheets.findControl(wrapper).getActiveSheet()
-              sheet.endEdit()
-            }
-            listbox.appendChild(li)
-          })
-        } else {
-          listbox.style.display = 'none'
-        }
-      } catch (err) {
+            listbox.style.display = 'none'
+            // 편집 강제 종료
+            const sheet = GC.Spread.Sheets.findControl(wrapper.closest('.gc-spread-sheets')).getActiveSheet()
+            sheet.endEdit()
+          }
+          listbox.appendChild(li)
+        })
+      } else {
         listbox.style.display = 'none'
       }
     }, 300)
   })
 
-  wrapper.appendChild(input)
-  wrapper.appendChild(listbox)
-  
-  // 가상의 'value' 저장용 속성
-  wrapper.getFinalValue = () => selectedValue
+  // 에디터가 닫힐 때 리스트박스 제거
+  wrapper.addEventListener('focusout', (e) => {
+      // 약간의 지연을 주어 클릭 이벤트가 먼저 실행되도록 함
+      setTimeout(() => { if(this.listbox) this.listbox.style.display = 'none' }, 150)
+  })
 
+  wrapper.appendChild(input)
+  wrapper.getFinalValue = () => selectedInfo?.EMP_NO
   return wrapper
 }
 
-// 에디터가 열릴 때 기존 값 세팅
-UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
-  if (editorContext) {
-    const input = editorContext.querySelector('[editoruses="text-input"]')
-    input.value = value || ''
-    input.focus()
-  }
-}
-
-// 편집 종료 시 반환할 값
 UserSelectCellType.prototype.getEditorValue = function (editorContext) {
-  if (editorContext) {
-    return editorContext.getFinalValue() || editorContext.querySelector('[editoruses="text-input"]').value
-  }
+  return editorContext.getFinalValue() || editorContext.querySelector('input').value
 }
 
-UserSelectCellType.prototype.updateEditor = function (editorContext, cellStyle, cellRect) {
-  if (editorContext) {
-    // 셀의 크기에 맞춤
-    return { width: cellRect.width, height: cellRect.height }
-  }
+UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
+  const input = editorContext.querySelector('input')
+  input.value = value || ''
+}
+
+// 에디터 제거 시 DOM 정리 (메모리 누수 방지)
+UserSelectCellType.prototype.destroyEditorElement = function (editorContext) {
+    if (this.listbox) {
+        this.listbox.remove()
+        this.listbox = null
+    }
 }
 
 export default UserSelectCellType
