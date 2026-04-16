@@ -3,29 +3,25 @@ import { ApiCommon } from '@/utils/axios/api-common'
 import { useEmployees } from '@/stores/app-employees'
 const { setEmployeeInfo } = useEmployees()
 
-const _EditorType = 'SimpleExcelEditor'
+const _EditorType = 'MinimalUserEditor'
 
-// CSS: 캡처 화면 스타일 재현 및 외부 버튼 설정
-if (!document.getElementById('excel-clean-style')) {
+// CSS: 군더더기 없는 깔끔한 리스트 UI
+if (!document.getElementById('minimal-popup-style')) {
   const style = document.createElement('style');
-  style.id = 'excel-clean-style';
+  style.id = 'minimal-popup-style';
   style.innerHTML = `
-    .excel-external-btn {
-      position: fixed; z-index: 15000; width: 17px; background: #f0f0f0;
-      border: 1px solid #abadb3; display: flex; align-items: center; justify-content: center;
-    }
-    .excel-external-arrow {
-      width: 0; height: 0; border-left: 3.5px solid transparent; border-right: 3.5px solid transparent; border-top: 5px solid #333;
-    }
-    .excel-clean-list {
-      position: fixed; z-index: 16000; background: white;
+    .minimal-list-box {
+      position: fixed; z-index: 20000; background: white;
       border: 1px solid black; box-sizing: border-box;
       padding: 0; margin: 0; list-style: none; overflow-y: auto; max-height: 200px;
+      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
     }
-    .excel-clean-item {
-      padding: 3px 10px; font-size: 13px; color: black; cursor: pointer;
+    .minimal-list-item {
+      padding: 6px 10px; font-size: 13px; color: black; cursor: pointer;
+      border-bottom: 1px solid #f0f0f0;
     }
-    .excel-clean-item:hover {
+    .minimal-list-item:last-child { border-bottom: none; }
+    .minimal-list-item:hover {
       background-color: #0078d4 !important; color: white !important;
     }
   `;
@@ -37,14 +33,14 @@ function UserSelectCellType(FIELD, NAME_FIELD, DEPT_FIELD) {
   this.nameField = NAME_FIELD
   this.deptField = DEPT_FIELD
   this.searchTimer = null
-  this.elements = { btn: null, list: null }
-  this.originalValue = null
-  this.selectedEmpNo = null
+  this.listbox = null
+  this.originalValue = null // 기존 사번 보관
+  this.selectedEmpNo = null // 선택된 사번 보관
 }
 
 UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
 
-// 1. 화면 표시: 이름(부서) 형식으로 복구
+// 셀 화면 표시 (이름(부서))
 UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
   const sheet = options.sheet
   const data = sheet.getDataItem(options.row)
@@ -54,60 +50,64 @@ UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, op
   GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, text, x, y, w, h, style, options])
 }
 
-// 2. 에디터 생성: 복잡한 내부 사각형 제거
+// 에디터 생성: 역삼각형 없이 오직 인풋만
 UserSelectCellType.prototype.createEditorElement = function (context) {
-  // 인풋만 깔끔하게 생성
   const input = document.createElement('input')
   input.setAttribute('gcUIElement', 'gcEditingInput')
+  // 셀에 딱 붙는 깔끔한 테두리만 적용
   input.style.cssText = 'border: 2px solid #217346; outline: none; padding: 0 4px; box-sizing: border-box; width: 100%; height: 100%;'
 
-  // 외부 삼각형 버튼 생성 (Body 부착)
-  const btn = document.createElement('div')
-  btn.className = 'excel-external-btn'
-  btn.innerHTML = '<div class="excel-external-arrow"></div>'
-  document.body.appendChild(btn)
-  this.elements.btn = btn
-
   // 리스트박스 생성 (Body 부착)
-  const list = document.createElement('ul')
-  list.className = 'excel-clean-list'
-  list.style.display = 'none'
-  document.body.appendChild(list)
-  this.elements.list = list
+  const listbox = document.createElement('ul')
+  listbox.className = 'minimal-list-box'
+  listbox.style.display = 'none'
+  document.body.appendChild(listbox)
+  this.listbox = listbox
 
   input.addEventListener('input', (e) => {
     if (this.searchTimer) clearTimeout(this.searchTimer)
     const keyword = e.target.value.trim()
 
     this.searchTimer = setTimeout(async () => {
-      if (keyword.length < 1) { list.style.display = 'none'; return; }
-      const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: keyword }) ?? []
-      list.innerHTML = ''
+      if (keyword.length < 1) { listbox.style.display = 'none'; return; }
+      
+      try {
+        const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: keyword }) ?? []
+        listbox.innerHTML = ''
 
-      if (response.length > 0) {
-        const rect = input.getBoundingClientRect()
-        list.style.width = `${rect.width}px`
-        list.style.top = `${rect.bottom}px`
-        list.style.left = `${rect.left}px`
-        list.style.display = 'block'
+        if (response.length > 0) {
+          const rect = input.getBoundingClientRect()
+          listbox.style.width = `${rect.width}px`
+          listbox.style.top = `${rect.bottom + window.scrollY}px`
+          listbox.style.left = `${rect.left + window.scrollX}px`
+          listbox.style.display = 'block'
 
-        response.forEach(item => {
-          const li = document.createElement('li')
-          li.className = 'excel-clean-item'
-          // 리스트에서도 이름(부서)으로 표현
-          li.innerText = `${item.EMP_NM}(${item.DEPT_NAME || ''})`
-          
-          li.onmousedown = (ev) => {
-            ev.preventDefault()
-            this.selectedEmpNo = item.EMP_NO // 사번 저장
-            input.value = item.EMP_NM
+          response.forEach(item => {
+            const li = document.createElement('li')
+            li.className = 'minimal-list-item'
+            li.innerText = `${item.EMP_NM}(${item.DEPT_NAME || ''})`
             
-            setEmployeeInfo({ ...item, code: item.EMP_NO })
-            list.style.display = 'none'
-            context.sheet.endEdit() // 값 확정 및 종료
-          }
-          list.appendChild(li)
-        })
+            li.onmousedown = (ev) => {
+              ev.preventDefault() // 인풋 포커스 아웃 방지
+              
+              // 1. 값 세팅
+              this.selectedEmpNo = item.EMP_NO 
+              input.value = item.EMP_NM // 인풋 창에는 이름 노출
+              
+              // 2. 외부 스토어 저장
+              setEmployeeInfo({ ...item, code: item.EMP_NO })
+              
+              // 3. 리스트 숨기고 편집 강제 종료
+              listbox.style.display = 'none'
+              context.sheet.endEdit()
+            }
+            listbox.appendChild(li)
+          })
+        } else {
+          listbox.style.display = 'none'
+        }
+      } catch (err) {
+        listbox.style.display = 'none'
       }
     }, 500)
   })
@@ -115,34 +115,31 @@ UserSelectCellType.prototype.createEditorElement = function (context) {
   return input
 }
 
-// 3. 에디터 및 외부 버튼 위치 조정
+// 편집 종료 시 값 반환 로직
+UserSelectCellType.prototype.getEditorValue = function (editorContext) {
+  // 사용자가 리스트에서 클릭한 사번이 있으면 그 값을, 
+  // 없으면(ESC 등) 처음 갖고 있던 원본 값(originalValue)을 리턴합니다.
+  return this.selectedEmpNo || this.originalValue
+}
+
+// 편집 시작 시 초기화 로직
+UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
+  this.originalValue = value // 기존 사번 보관
+  this.selectedEmpNo = null  // 선택값 초기화
+  editorContext.value = ''   // 입력창 비우기
+}
+
 UserSelectCellType.prototype.updateEditor = function (editorContext, cellStyle, cellRect) {
-  if (editorContext && this.elements.btn) {
-    const rect = editorContext.getBoundingClientRect()
-    // 버튼을 셀 오른쪽 끝 바깥에 배치
-    this.elements.btn.style.top = `${rect.top}px`
-    this.elements.btn.style.left = `${rect.right + 1}px`
-    this.elements.btn.style.height = `${rect.height}px`
-    
+  if (editorContext) {
     return { width: cellRect.width, height: cellRect.height }
   }
 }
 
-// 4. 값 리턴: 선택 시 사번, 취소 시 기존값
-UserSelectCellType.prototype.getEditorValue = function (editorContext) {
-  // 선택된 사번이 있으면 반환, 없으면(ESC 등) 기존에 가지고 있던 값(originalValue) 반환
-  return this.selectedEmpNo || this.originalValue
-}
-
-UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
-  this.originalValue = value // 기존 사번 보관
-  this.selectedEmpNo = null
-  editorContext.value = '' // 입력창 비우기
-}
-
 UserSelectCellType.prototype.destroyEditorElement = function (editorContext) {
-  if (this.elements.btn) this.elements.btn.remove()
-  if (this.elements.list) this.elements.list.remove()
+  if (this.listbox) {
+    this.listbox.remove()
+    this.listbox = null
+  }
 }
 
 export default UserSelectCellType
