@@ -1,144 +1,201 @@
+또 실패네 그냥 Spread JS 에서 셀 떠블 클릭하면 셀에디터모드에서 값을 입력하면 그거 전달 받아서 그 밑에 우리 팝업 리스트를 최대한
+유효성검사 목록과 똑같이 유아이 구성하고 싶은거야.
+그리고 리스트에서 선택하면 사번이 입력되고 해야하는데 계속 그게 안되었던거 같아.
+만약 ESC나 선택안하고 취소했을때 기존의 사번을 유지해야하는거지 
+이해했어?
+
+
 import GC from '@mescius/spread-sheets-designer'
 import { ApiCommon } from '@/utils/axios/api-common'
 import { useEmployees } from '@/stores/app-employees'
 const { setEmployeeInfo } = useEmployees()
 
-const _EditorType = 'MinimalUserEditor'
-
-// CSS: 군더더기 없는 깔끔한 리스트 UI
-if (!document.getElementById('minimal-popup-style')) {
-  const style = document.createElement('style');
-  style.id = 'minimal-popup-style';
-  style.innerHTML = `
-    .minimal-list-box {
-      position: fixed; z-index: 20000; background: white;
-      border: 1px solid black; box-sizing: border-box;
-      padding: 0; margin: 0; list-style: none; overflow-y: auto; max-height: 200px;
-      box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-    }
-    .minimal-list-item {
-      padding: 6px 10px; font-size: 13px; color: black; cursor: pointer;
-      border-bottom: 1px solid #f0f0f0;
-    }
-    .minimal-list-item:last-child { border-bottom: none; }
-    .minimal-list-item:hover {
-      background-color: #0078d4 !important; color: white !important;
-    }
-  `;
-  document.head.appendChild(style);
-}
+const _EditorType = 'UserEditor'
+const _EditorWidth = 300
+const _EditorHeight = 65
 
 function UserSelectCellType(FIELD, NAME_FIELD, DEPT_FIELD) {
   this.field = FIELD
   this.nameField = NAME_FIELD
   this.deptField = DEPT_FIELD
+  this.name = ''
+  this.searchID = 0
   this.searchTimer = null
-  this.listbox = null
-  this.originalValue = null // 기존 사번 보관
-  this.selectedEmpNo = null // 선택된 사번 보관
 }
-
 UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
-
-// 셀 화면 표시 (이름(부서))
 UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
+  // if (value) { GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, value, x, y, w, h, style, options]); }
+
   const sheet = options.sheet
-  const data = sheet.getDataItem(options.row)
+  const row = options.row
+  // const col = options.col
+  let data = sheet.getDataItem(row)
+  if (!data) {
+    const dataSource = sheet.getDataSource()
+    if (dataSource && !Array.isArray(dataSource)) {
+      data = dataSource.getSource()
+    }
+  }
   const name = data?.[this.nameField] ?? ''
   const dept = data?.[this.deptField] ?? ''
-  const text = name ? `${name}${dept ? `(${dept})` : ''}` : ''
+  const deptV = dept ? `(${dept})` : ''
+  const text = !data ? '' : `${name}${deptV}`
   GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, text, x, y, w, h, style, options])
+  return
 }
-
-// 에디터 생성: 역삼각형 없이 오직 인풋만
-UserSelectCellType.prototype.createEditorElement = function (context) {
-  const input = document.createElement('input')
-  input.setAttribute('gcUIElement', 'gcEditingInput')
-  // 셀에 딱 붙는 깔끔한 테두리만 적용
-  input.style.cssText = 'border: 2px solid #217346; outline: none; padding: 0 4px; box-sizing: border-box; width: 100%; height: 100%;'
-
-  // 리스트박스 생성 (Body 부착)
-  const listbox = document.createElement('ul')
-  listbox.className = 'minimal-list-box'
-  listbox.style.display = 'none'
-  document.body.appendChild(listbox)
-  this.listbox = listbox
-
-  input.addEventListener('input', (e) => {
-    if (this.searchTimer) clearTimeout(this.searchTimer)
-    const keyword = e.target.value.trim()
-
-    this.searchTimer = setTimeout(async () => {
-      if (keyword.length < 1) { listbox.style.display = 'none'; return; }
-      
-      try {
-        const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: keyword }) ?? []
-        listbox.innerHTML = ''
-
-        if (response.length > 0) {
-          const rect = input.getBoundingClientRect()
-          listbox.style.width = `${rect.width}px`
-          listbox.style.top = `${rect.bottom + window.scrollY}px`
-          listbox.style.left = `${rect.left + window.scrollX}px`
-          listbox.style.display = 'block'
-
-          response.forEach(item => {
-            const li = document.createElement('li')
-            li.className = 'minimal-list-item'
-            li.innerText = `${item.EMP_NM}(${item.DEPT_NAME || ''})`
-            
-            li.onmousedown = (ev) => {
-              ev.preventDefault() // 인풋 포커스 아웃 방지
-              
-              // 1. 값 세팅
-              this.selectedEmpNo = item.EMP_NO 
-              input.value = item.EMP_NM // 인풋 창에는 이름 노출
-              
-              // 2. 외부 스토어 저장
-              setEmployeeInfo({ ...item, code: item.EMP_NO })
-              
-              // 3. 리스트 숨기고 편집 강제 종료
-              listbox.style.display = 'none'
-              context.sheet.endEdit()
-            }
-            listbox.appendChild(li)
-          })
-        } else {
-          listbox.style.display = 'none'
-        }
-      } catch (err) {
-        listbox.style.display = 'none'
-      }
-    }, 500)
-  })
-
-  return input
-}
-
-// 편집 종료 시 값 반환 로직
-UserSelectCellType.prototype.getEditorValue = function (editorContext) {
-  // 사용자가 리스트에서 클릭한 사번이 있으면 그 값을, 
-  // 없으면(ESC 등) 처음 갖고 있던 원본 값(originalValue)을 리턴합니다.
-  return this.selectedEmpNo || this.originalValue
-}
-
-// 편집 시작 시 초기화 로직
-UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
-  this.originalValue = value // 기존 사번 보관
-  this.selectedEmpNo = null  // 선택값 초기화
-  editorContext.value = ''   // 입력창 비우기
-}
-
-UserSelectCellType.prototype.updateEditor = function (editorContext, cellStyle, cellRect) {
+UserSelectCellType.prototype.updateEditor = function (editorContext /*cellStyle, cellRect*/) {
   if (editorContext) {
-    return { width: cellRect.width, height: cellRect.height }
+    editorContext.parentNode.style.width = '100%'
+    editorContext.parentNode.style.height = '100%'
+    return { width: _EditorWidth, height: _EditorHeight }
   }
 }
+UserSelectCellType.prototype.isEditingValueChanged = function (oldValue, newValue) {
+  return newValue !== oldValue
+}
+// prettier-ignore
+UserSelectCellType.prototype.createEditorElement = function () {
+  let userOptions = []
+  let userIndex = {}
 
-UserSelectCellType.prototype.destroyEditorElement = function (editorContext) {
-  if (this.listbox) {
-    this.listbox.remove()
-    this.listbox = null
+  // WRAPPER
+  const wrapper = document.createElement('div')
+  wrapper.setAttribute('gcUIElement', 'gcEditingInput')
+  wrapper.setAttribute('EditorType', _EditorType)
+  wrapper.className = 'spread-user-editor w-100 h-100 p-1 v-select'
+  wrapper.style.backgroundColor = 'white'
+  wrapper.style.overflow = 'hidden'
+
+  // HEADER
+  const header = document.createElement('div')
+  header.className = 'w-100'
+
+  // TITLE
+  const title = document.createElement('span')
+  title.className = ''
+  title.innerText = 'Search User'
+
+  // COMBO_BOX
+  const combo = document.createElement('div')
+  combo.className = 'cursor-text px-2 py-1 d-flex border border-1 border-light rounded-2'
+
+  // SEARCH_INPUT
+  if (this.searchTimer) { clearTimeout(this.searchTimer); }
+  const search = document.createElement('input')
+  search.className = 'border-0'
+  search.style.flex = 'auto'
+  search.style.outline = 'none'
+  search.type = 'text'
+  search.autocomplete = 'off'
+  search.placeholder = 'Name to search for. ex)홍길동 / ㅎㄱㄷ'
+  search.setAttribute('aria-autocomplete', 'list')
+  search.addEventListener('focus', function () {
+    listbox.style.opacity = 1
+    listbox.style.visibility = 'visible'
+  })
+  search.addEventListener('blur', function () {
+    listbox.style.opacity = 0
+    listbox.style.visibility = 'hidden'
+  })
+  search.addEventListener('input', e => {
+    if (this.searchTimer) { clearTimeout(this.searchTimer); }
+    if (!e.target) { return; }
+    if (!e.isComposing && e.data) {
+      e.target.value = this.name
+      return
+    }
+
+    listbox.innerHTML = ''
+    const userName = String(e.target.value ?? '').replaceAll(' ', '')
+    if (userName.length < 2) { return; }
+
+    this.name = e.target.value
+    const currentID = (this.searchID += 1)
+    this.searchTimer = setTimeout(async () => {
+      try {
+        const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: userName }) ?? [];
+        if (currentID !== this.searchID) { return; }
+        userOptions = []
+        userIndex = {}
+        const itemList = []
+        response?.forEach((item, index) => {
+          if (!item.EMP_NO) { return; } // UserID가 있는 항목만 필터링
+          const code = item.EMP_NO
+          const label = `${item.EMP_NM ?? ''}(${item.DEPT_NAME ?? ''})`
+          const userInfo = { ...item, code, label }
+          setEmployeeInfo(userInfo)
+
+          const listitem = document.createElement('li')
+          listitem.className = 'vs__dropdown-option'
+          listitem.innerText = label
+          listitem.setAttribute('option-id', index)
+          itemList.push(listitem)
+
+          userOptions.push(userInfo)
+          userIndex[index] = userInfo
+        })
+        listbox.append(...itemList)
+      } catch (error) {
+        // console.error(error);
+      }
+    }, 300)
+  })
+  setTimeout(()=> search.focus(), 10)
+
+  // INDICATOR_ICON
+  const indicator = document.createElement('i')
+  indicator.className = 'fa fa-angle-down align-self-center'
+
+  // SELECT_BOX
+  const listbox = document.createElement('ul')
+  listbox.className = 'vs__dropdown-menu rounded-2 position-fixed'
+  listbox.style.top = 'unset'
+  listbox.style.left = 'unset'
+  listbox.style.width = '290px'
+  listbox.style.opacity = 0
+  listbox.style.visibility = 'hidden'
+  listbox.style.transition = 'opacity 0.2s linear, visibility 0s linear 0.2s'
+  listbox.setAttribute('EditorUses', 'list')
+  listbox.addEventListener('click', function (e) {
+    if (e.target && e.target.nodeName === 'LI') {
+      const optionId = e.target.getAttribute('option-id')
+      const optionText = e.target.innerText
+      const userInfo = userIndex?.[optionId]
+      search.value = optionText
+      editorVal.value = userInfo?.code
+    }
+  })
+
+  // HIDDEN_VALUE
+  const editorVal = document.createElement('input')
+  editorVal.type = 'text'
+  editorVal.style.display = 'none'
+  editorVal.disabled = true
+  editorVal.readonly = true
+  editorVal.setAttribute('EditorUses', 'value')
+
+  // CREATE_EDITOR
+  header.appendChild(title)
+  combo.appendChild(search)
+  combo.appendChild(indicator)
+  wrapper.appendChild(header)
+  wrapper.appendChild(combo)
+  wrapper.appendChild(listbox)
+  wrapper.appendChild(editorVal)
+  return wrapper
+}
+UserSelectCellType.prototype.getEditorValue = function (editorContext) {
+  if (editorContext && editorContext.getAttribute('EditorType') === _EditorType) {
+    const valNode = editorContext.querySelector('[editoruses="value"]')
+    return valNode.value
+  }
+}
+UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
+  if (editorContext && editorContext.getAttribute('EditorType') === _EditorType) {
+    if (value) {
+      const valNode = editorContext.querySelector('[editoruses="value"]')
+      valNode.value = value
+    }
   }
 }
 
