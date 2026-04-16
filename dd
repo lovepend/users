@@ -1,145 +1,144 @@
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100">
     <PageTitle
-      icon="fa-check-circle"
-      :title="'Tag 번호 유효성 검사 (개발자용)'"
+      icon="fa-search-plus"
+      :title="'Tag 통합 분석 및 속성 비교' + (manualProjNo ? ` [ ${manualProjNo} ]` : '')"
     >
       <template #actions>
-        <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap">Project No</span>
+        <div class="d-flex align-items-center me-2">
+          <div class="d-flex align-items-center px-2 border-end">
+            <span class="fw-bold me-2 text-nowrap" style="font-size: 12px;">Project No</span>
             <input
               type="text"
-              class="form-control form-control-sm custom-input-width"
+              class="form-control form-control-sm fw-bold"
+              style="width: 130px;"
               v-model="manualProjNo"
+              @change="onProjectChange"
               placeholder="예: TE1002"
             />
-          </label>
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-primary text-nowrap">검사할 Tag No</span>
+          </div>
+
+          <div class="d-flex align-items-center px-2 border-end">
+            <span class="fw-bold me-2 text-nowrap" style="font-size: 12px;">조회 키워드</span>
+            <textarea
+              class="form-control form-control-sm"
+              style="width: 180px; height: 31px; resize: none"
+              v-model="searchKeywordRef"
+              placeholder="Tag No (공백/엔터)"
+            ></textarea>
+          </div>
+
+          <div class="px-2">
+            <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
+              <i class="fa fa-search me-1"></i>조회
+            </button>
+          </div>
+
+          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
+            <span class="fw-bold text-success text-nowrap" style="font-size: 12px;"><i class="fa fa-filter"></i> 결과 필터</span>
             <input
               type="text"
-              class="form-control form-control-sm border-primary"
-              style="width: 250px"
-              v-model="tagNoForValidator"
-              placeholder="검증할 태그 번호 입력"
+              class="form-control form-control-sm border-success"
+              style="width: 150px;"
+              v-model="localFilterQuery"
+              placeholder="결과 내 검색"
             />
-          </label>
-          <button class="btn btn-xs btn-info shadow-sm" @click="showPasteModal = true">
-            <i class="fa fa-paste me-1"></i>엑셀 붙여넣기
-          </button>
+          </div>
+
+          <div class="ms-2 d-flex align-items-center gap-2">
+            <span class="fw-bold text-primary text-nowrap" style="font-size: 12px;"><i class="fa fa-columns"></i> 컬럼 필터</span>
+            <textarea
+              class="form-control form-control-sm border-primary"
+              style="width: 150px; height: 31px; resize: none"
+              v-model="columnFilterQuery"
+              placeholder="표시할 컬럼명"
+            ></textarea>
+          </div>
         </div>
         <panel-toolbar />
       </template>
     </PageTitle>
 
-    <div class="panel-body m-0 p-0 h-100 overflow-hidden">
-      <div class="row m-0 h-100">
-        <div class="col-md-5 p-0 border-end h-100 d-flex flex-column">
-          <div class="panel-heading bg-light border-bottom px-3 py-2">
-            <div class="d-flex justify-content-between align-items-center">
-              <span class="fw-bold"><i class="fa fa-list-ol me-2"></i>1. 규칙 설정</span>
-              <button class="btn btn-xs btn-success" @click="addRule">
-                <i class="fa fa-plus"></i> 규칙 추가
-              </button>
-            </div>
-          </div>
-          <div class="flex-grow-1 overflow-auto p-0">
-            <table class="table table-sm table-hover mb-0 custom-table">
-              <thead class="table-light sticky-top">
-                <tr>
-                  <th class="text-center" width="50">No</th>
-                  <th width="80">구분자</th>
-                  <th>정규식 (Regex)</th>
-                  <th width="40"></th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(rule, index) in tagRules" :key="index">
-                  <td class="text-center align-middle text-muted small">#{{ index + 1 }}</td>
-                  <td>
-                    <input type="text" v-model="rule.delimiter" class="form-control form-control-xs text-center font-monospace" placeholder="없음" />
-                  </td>
-                  <td>
-                    <input type="text" v-model="rule.regex" class="form-control form-control-xs font-monospace" placeholder="예: ^[A-Z]+$" />
-                  </td>
-                  <td class="text-center">
-                    <button @click="removeRule(index)" class="btn btn-link btn-xs text-danger p-0"><i class="fa fa-times"></i></button>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+    <div class="panel-body m-0 p-0 h-100">
+      <div class="panel m-0 p-0 h-100 d-flex flex-column">
+        <div class="panel-heading p-0 m-0">
+          <div class="w-100">
+            <BasicToolBar
+              :showCreate="false"
+              :showMultiCreate="false"
+              :showSave="false"
+              :showDelete="true"
+              :isDisabledDeleteBtn="isDisabledDeleteBtn"
+              @delete="onDelete"
+            />
           </div>
         </div>
+        <div class="panel-body overflow-hidden m-0 p-0 flex-grow-1">
+          <ag-grid-vue
+            v-bind="gridBindProps"
+            @grid-ready="onGridReady"
+            @selection-changed="onSelectionChanged"
+            @cell-clicked="onCellClicked"
+            rowSelection="multiple"
+            :suppressRowClickSelection="true"
+          />
+        </div>
+      </div>
+    </div>
 
-        <div class="col-md-7 p-0 h-100 d-flex flex-column bg-light">
-          <div class="panel-heading bg-light border-bottom px-3 py-2">
-            <span class="fw-bold"><i class="fa fa-search me-2"></i>2. 유효성 분석 결과</span>
+    <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
+      <div class="custom-modal-window shadow-lg">
+        <div class="modal-header-dark">
+          <div class="d-flex align-items-center gap-2">
+            <span
+              class="badge shadow-sm"
+              :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }"
+              >{{ selectedRow?.Source }}</span
+            >
+            <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
           </div>
-          
-          <div class="p-3 flex-grow-1 overflow-auto">
-            <div :class="['alert d-flex align-items-center shadow-sm mb-3', isTagNoValid ? 'alert-success border-success' : 'alert-danger border-danger']">
-              <i :class="['fa fa-2x me-3', isTagNoValid ? 'fa-check-circle text-success' : 'fa-times-circle text-danger']"></i>
-              <div>
-                <h5 class="alert-heading mb-1 fw-bold">{{ isTagNoValid ? '검증 통과' : '검증 실패' }}</h5>
-                <div class="small font-monospace opacity-75">Full Pattern: {{ combinedRegexDisplay }}</div>
-              </div>
-            </div>
-
-            <div class="card shadow-sm border-0">
-              <div class="card-header bg-white py-2 fw-bold text-secondary small">구성요소별 매칭 상세</div>
-              <div class="card-body p-0">
-                <table class="table table-sm mb-0">
-                  <thead class="bg-light small text-uppercase">
-                    <tr>
-                      <th class="ps-3" width="100">구성요소</th>
-                      <th>추출된 값</th>
-                      <th class="text-center" width="70">구분자</th>
-                      <th class="text-center" width="70">내용</th>
-                      <th class="text-center" width="80">결과</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(part, index) in tagParts" :key="index">
-                      <td class="ps-3 text-muted small">규칙 #{{ index + 1 }}</td>
-                      <td class="fw-bold">{{ part.matchedValue === '' ? '(빈값)' : part.matchedValue || '-' }}</td>
-                      <td class="text-center">
-                        <span v-if="part.hasDelimiterRule" :class="part.isDelimiterValid ? 'text-success' : 'text-danger fw-bold'">{{ part.isDelimiterValid ? 'OK' : 'ERR' }}</span>
-                        <span v-else class="text-muted">-</span>
-                      </td>
-                      <td class="text-center">
-                        <span :class="part.isContentValid ? 'text-success' : 'text-danger fw-bold'">{{ part.isContentValid ? 'OK' : 'ERR' }}</span>
-                      </td>
-                      <td class="text-center">
-                        <span :class="['badge w-100', part.isValid ? 'bg-success' : 'bg-danger']">{{ part.isValid ? 'PASS' : 'FAIL' }}</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            <div v-if="!isTagNoValid" class="mt-3 alert alert-warning border-0 shadow-sm py-2">
-              <i class="fa fa-exclamation-triangle me-2"></i>
-              <strong>분석 의견:</strong> 입력된 태그 번호가 정의된 정규식 규칙 및 구분자와 일치하지 않습니다.
-            </div>
+          <div class="d-flex gap-2">
+            <button class="btn btn-xs btn-outline-light" @click="isJsonMode = !isJsonMode">
+              {{ isJsonMode ? 'Table View' : 'JSON View' }}
+            </button>
+            <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
+          </div>
+        </div>
+        <div class="modal-body-content">
+          <div v-if="isJsonMode" class="json-wrapper">
+            <pre class="json-content"><code>{{ JSON.stringify(selectedRow, null, 2) }}</code></pre>
+          </div>
+          <div v-else class="modal-grid-container ag-theme-alpine">
+            <ag-grid-vue v-bind="modalGridBindProps" class="w-100 h-100" />
           </div>
         </div>
       </div>
     </div>
 
-    <div v-if="showPasteModal" class="custom-modal-overlay" @click.self="showPasteModal = false">
-      <div class="custom-modal-window shadow-lg" style="width: 500px; height: 500px;">
-        <div class="modal-header-dark bg-primary">
-          <span class="fw-bold text-white"><i class="fa fa-paste me-2"></i>엑셀 데이터 붙여넣기</span>
-          <button @click="showPasteModal = false" class="btn btn-xs btn-danger">✕</button>
+    <div v-if="showClassModal" class="custom-modal-overlay" @click.self="closeClassModal">
+      <div class="custom-modal-window shadow-lg" style="width: 850px; height: 65%">
+        <div class="modal-header-dark" style="background: #334155">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fa fa-info-circle text-info"></i>
+            <span class="fw-bold text-white">Class Info: {{ clickedClassId }}</span>
+          </div>
+          <button @click="closeClassModal" class="btn btn-xs btn-danger">✕</button>
         </div>
         <div class="modal-body-content p-3">
-          <p class="small text-muted mb-2">엑셀에서 [구분자], [정규식] 열을 복사해 붙여넣으세요.</p>
-          <textarea v-model="pasteData" class="form-control flex-grow-1 font-monospace mb-3" placeholder="구분자 [Tab] 정규식..."></textarea>
-          <div class="d-flex justify-content-end gap-2">
-            <button @click="applyPasteData" class="btn btn-primary btn-sm px-4">데이터 적용</button>
-            <button @click="showPasteModal = false" class="btn btn-secondary btn-sm">닫기</button>
+          <div class="alert alert-info py-2 mb-3 border-0 shadow-sm" style="background-color: #f0f7ff; font-size: 12px;">
+            <i class="fa fa-external-link me-2"></i><b>Register No</b>를 클릭하면 해당 설정 페이지가
+            <span class="badge bg-primary" style="min-width: 50px;">새 탭</span>으로 열립니다.
+          </div>
+          <div class="modal-grid-container ag-theme-alpine shadow-sm">
+            <ag-grid-vue
+              style="width: 100%; height: 100%"
+              :columnDefs="classModalColDefs"
+              :rowData="classModalData"
+              :defaultColDef="{ resizable: true, sortable: true, filter: true }"
+              @cell-clicked="onClassGridCellClicked"
+              :headerHeight="40"
+              :rowHeight="38"
+            />
           </div>
         </div>
       </div>
@@ -148,138 +147,267 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
-import PageTitle from '@/components/toolBar/PageTitle.vue'
+  import { ref, computed, shallowRef, watch, onMounted } from 'vue'
+  import { useRouter, useRoute } from 'vue-router'
+  import { storeToRefs } from 'pinia'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import { sortBy } from 'lodash-es'
+  import { useAppMenuStore } from '@/stores/app-menu'
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+  import { sAlert } from '@/utils/messages/alert-common'
+  import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
+  import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-const manualProjNo = ref('')
-const tagNoForValidator = ref('AA-11-BB-2222-C')
-const showPasteModal = ref(false)
-const pasteData = ref('')
-const tagRules = ref([
-  { delimiter: '', regex: '^[A-Z]{2}$' },
-  { delimiter: '-', regex: '^[0-9]{2}$' },
-  { delimiter: '-', regex: '^[A-Z]{2}$' },
-  { delimiter: '-', regex: '^[0-9]{4}$' },
-  { delimiter: '-', regex: '^[A-Z]{1}$' },
-])
+  const router = useRouter()
+  const route = useRoute()
+  const appMenu = useAppMenuStore()
+  const { currentProjNo, currentEpId } = storeToRefs(appMenu)
 
-const canBeEmpty = (regexStr) => {
-  try {
-    return new RegExp(`^(${regexStr.replace(/^\^|\$/g, '')})$`).test('')
-  } catch { return false }
-}
+  const gridApi = shallowRef()
+  const manualProjNo = ref('')
+  const searchKeywordRef = ref('')
+  const localFilterQuery = ref('')
+  const columnFilterQuery = ref('')
+  const rawDataList = ref([])
+  const dynamicAttCols = ref([])
+  const dynamicRemainingCols = ref([])
+  const isDisabledDeleteBtn = ref(true)
 
-const tagParts = computed(() => {
-  const results = []
-  let currentStr = tagNoForValidator.value || ''
-  let cursor = 0
+  const showModal = ref(false)
+  const selectedRow = ref(null)
+  const isJsonMode = ref(false)
+  const showClassModal = ref(false)
+  const classModalData = ref([])
+  const clickedClassId = ref('')
 
-  for (let i = 0; i < tagRules.value.length; i++) {
-    const rule = tagRules.value[i]
-    const delim = rule.delimiter
-    const pureRegex = rule.regex.replace(/^\^|\$/g, '')
-    let dOk = true, cOk = false, matchedVal = null
-    const hasDelim = delim !== ''
-
-    if (hasDelim) {
-      if (currentStr.substring(cursor).startsWith(delim)) {
-        cursor += delim.length
-        dOk = true
-      } else {
-        dOk = canBeEmpty(rule.regex)
-      }
+  // 1. 초기 로드 및 URL 동기화
+  const syncParamsToUrl = () => {
+    const pNo = manualProjNo.value || currentProjNo.value
+    const eId = currentEpId.value
+    if (pNo) {
+      router.replace({ query: { ...route.query, proj_no: pNo, ep_id: eId } })
     }
+  }
+
+  onMounted(() => {
+    const targetProjNo = route.query.proj_no || currentProjNo.value
+    if (targetProjNo) manualProjNo.value = targetProjNo
+    syncParamsToUrl()
+  })
+
+  const onProjectChange = () => syncParamsToUrl()
+  watch(currentProjNo, newVal => {
+    if (newVal) { manualProjNo.value = newVal; syncParamsToUrl(); }
+  })
+
+  // 2. API 요청 로직 (페이로드 수정 완료)
+  const onSearch = () => {
+    syncParamsToUrl()
+    getData()
+  }
+
+  const getData = async () => {
+    const pNo = manualProjNo.value?.trim() || currentProjNo.value
+    if (!pNo) return sAlert.Warning(`Project No를 입력하세요.`)
+    
+    const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
+    if (searchKeys.length === 0) return sAlert.Warning(`조회 키워드를 입력하세요.`)
+
+    if (gridApi.value) gridApi.value.setGridOption('loading', true)
 
     try {
-      const matcher = new RegExp(`^(${pureRegex})`).exec(currentStr.substring(cursor))
-      if (matcher) {
-        matchedVal = matcher[1]
-        cursor += matchedVal.length
-        cOk = true
-      } else if (canBeEmpty(rule.regex)) {
-        matchedVal = ''
-        cOk = true
-      }
-    } catch { cOk = false }
+      let combined = []
+      for (const key of searchKeys) {
+        // 수정된 페이로드: ProjectNo, Keyword
+        const payload = { ProjectNo: pNo, Keyword: key }
+        
+        const [p, w] = await Promise.allSettled([
+          axiosWrapper.post('/api/Data/SearchPublishData', payload),
+          axiosWrapper.post('/api/Data/SearchWorkingData', payload),
+        ])
 
-    results.push({
-      hasDelimiterRule: hasDelim,
-      isDelimiterValid: dOk,
-      isContentValid: cOk,
-      matchedValue: matchedVal,
-      isValid: dOk && cOk,
-    })
-    if (!(dOk && cOk)) break
+        if (p.status === 'fulfilled' && p.value) {
+          const data = Array.isArray(p.value) ? p.value : [p.value]
+          combined.push(...data.map(i => ({ ...i, Source: 'Published' })))
+        }
+        if (w.status === 'fulfilled' && w.value) {
+          const data = Array.isArray(w.value) ? w.value : [w.value]
+          combined.push(...data.map(i => ({ ...i, Source: 'Working' })))
+        }
+      }
+
+      // 동적 컬럼 분석 및 가공
+      const allAttIds = new Set()
+      const allKeys = new Set()
+      const fixedKeys = ['Source', 'DELETED', 'TAG_IDX', 'TAG_NO', 'EP_ID', 'CLS_ID', 'ATTRIBUTES', '_id']
+
+      combined.forEach(item => {
+        ;(item.ATTRIBUTES || []).forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
+        Object.keys(item).forEach(k => {
+          if (!fixedKeys.includes(k) && typeof item[k] !== 'object') allKeys.add(k)
+        })
+      })
+
+      const processedData = combined.map(item => {
+        const flatItem = { ...item }
+        allAttIds.forEach(id => {
+          const target = (item.ATTRIBUTES || []).find(a => a?.ATT_ID === id)
+          flatItem[`ATT_${id}`] = target && target.VALUE !== null ? target.VALUE : 'null'
+        })
+        return flatItem
+      })
+
+      dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
+        headerName: id, field: `ATT_${id}`, minWidth: 130, headerClass: 'att-column-header',
+        cellRenderer: highlightRenderer,
+        cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000' }),
+      }))
+
+      dynamicRemainingCols.value = Array.from(allKeys).sort().map(k => ({ 
+        headerName: k, field: k, minWidth: 150, cellRenderer: highlightRenderer 
+      }))
+
+      rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
+    } catch (err) {
+      sAlert.Error('조회 중 오류가 발생했습니다.')
+    } finally {
+      if (gridApi.value) gridApi.value.setGridOption('loading', false)
+    }
   }
-  return results
-})
 
-const isTagNoValid = computed(() => {
-  const allPartsPass = tagParts.value.length === tagRules.value.length && tagParts.value.every(p => p.isValid)
-  if (!allPartsPass) return false
-  let usedLen = 0
-  tagParts.value.forEach((p, i) => {
-    if (p.hasDelimiterRule && p.isDelimiterValid) {
-      if (tagNoForValidator.value.substring(usedLen).startsWith(tagRules.value[i].delimiter)) {
-        usedLen += tagRules.value[i].delimiter.length
+  // 3. Class 정보 조회 API (페이로드 수정 완료)
+  const onCellClicked = async p => {
+    const colId = p.column.getColId()
+    const pNo = manualProjNo.value?.trim() || currentProjNo.value
+    if (colId === 'Source') {
+      selectedRow.value = p.data; showModal.value = true; isJsonMode.value = false;
+    } else if (colId === 'CLS_ID' && p.value) {
+      clickedClassId.value = p.value
+      try {
+        if (gridApi.value) gridApi.value.setGridOption('loading', true)
+        // 수정된 페이로드: ContainDeleted, ProjectNo, ClassIDs
+        const res = await axiosWrapper.post('/api/Register/GetByClassIDs', {
+          ContainDeleted: false,
+          ProjectNo: pNo,
+          ClassIDs: [p.value],
+        })
+        classModalData.value = Array.isArray(res) ? res : [res]
+        showClassModal.value = true
+      } catch (e) {
+        sAlert.Error('Class 정보를 불러오지 못했습니다.')
+      } finally {
+        if (gridApi.value) gridApi.value.setGridOption('loading', false)
       }
     }
-    if (p.matchedValue) usedLen += p.matchedValue.length
+  }
+
+  // --- 이하 유틸리티 및 그리드 설정 ---
+  const highlightRenderer = p => {
+    const val = p.value === null || p.value === undefined ? '' : String(p.value)
+    if (!val || !localFilterQuery.value.trim()) return val
+    const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
+    let text = val
+    kws.forEach(kw => {
+      const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      text = text.replace(new RegExp(`(${escapedKw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
+    })
+    return text
+  }
+
+  const mainColDefs = computed(() => {
+    const fixedCols = [
+      { headerName: 'Source', field: 'Source', width: 130, pinned: 'left', checkboxSelection: true, headerCheckboxSelection: true,
+        cellRenderer: p => `<span class="badge shadow-sm" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;">${p.value}</span>` },
+      { field: 'DELETED', headerName: 'Deleted', width: 90, pinned: 'left',
+        cellRenderer: p => p.value ? `<span class="badge bg-danger shadow-sm w-100">True</span>` : `<span class="badge bg-secondary shadow-sm w-100">False</span>` },
+      { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
+      { field: 'TAG_IDX', headerName: 'TAG_IDX', width: 120, pinned: 'left' },
+      { field: 'EP_ID', headerName: 'EP ID', width: 120, pinned: 'left' },
+      { field: 'CLS_ID', headerName: 'Class', width: 150, pinned: 'left', cellStyle: { cursor: 'pointer', textDecoration: 'underline', color: '#0d6efd', fontWeight: 'bold' } },
+    ]
+    const colFilterKws = columnFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
+    const filteredAtts = colFilterKws.length ? dynamicAttCols.value.filter(c => colFilterKws.some(kw => c.headerName.toLowerCase().includes(kw))) : dynamicAttCols.value
+    const filteredRems = colFilterKws.length ? dynamicRemainingCols.value.filter(c => colFilterKws.some(kw => c.headerName.toLowerCase().includes(kw))) : dynamicRemainingCols.value
+    return [...fixedCols, ...filteredAtts, ...filteredRems]
   })
-  return usedLen === (tagNoForValidator.value || '').length
-})
 
-const applyPasteData = () => {
-  if (!pasteData.value.trim()) return
-  const rows = pasteData.value.split('\n')
-  const newRules = rows.map(row => {
-    const cols = row.split('\t')
-    let delim = cols[0] ? cols[0].trim() : ''
-    let regex = cols[1] ? cols[1].trim() : ''
-    if (cols.length === 1 && delim.includes('^')) {
-      regex = delim
-      delim = ''
+  const filteredData = computed(() => {
+    if (!localFilterQuery.value.trim()) return rawDataList.value
+    const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
+    return rawDataList.value.filter(i => {
+      const target = `${i.TAG_NO || ''} ${i.EP_ID || ''} ${i.CLS_ID || ''} ${i.Source || ''}`.toLowerCase()
+      return kws.some(kw => target.includes(kw))
+    })
+  })
+
+  const gridBindProps = computed(() => ({
+    columnDefs: mainColDefs.value, rowData: filteredData.value,
+    style: 'width: 100%; height: 100%', class: 'ag-theme-custom shadow-sm',
+    pagination: true, paginationPageSize: 100, loadingOverlayComponent: AggridLoadingOverlay,
+    defaultColDef: { sortable: true, filter: true, resizable: true },
+  }))
+
+  const modalGridBindProps = computed(() => {
+    if (!selectedRow.value) return {}
+    const rows = []
+    Object.entries(selectedRow.value).forEach(([k, v]) => {
+      if (k !== 'ATTRIBUTES' && !k.startsWith('ATT_') && k !== 'Source') rows.push({ category: 'System', key: k, value: v ?? '-' })
+    })
+    const attrs = selectedRow.value.ATTRIBUTES || []
+    attrs.forEach(a => rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' }))
+    return {
+      columnDefs: [
+        { headerName: 'Category', field: 'category', width: 120, cellStyle: { fontWeight: 'bold', background: '#f8f9fa' } },
+        { headerName: 'Property', field: 'key', width: 220 },
+        { headerName: 'Value', field: 'value', flex: 1, cellStyle: p => ({ color: p.value === 'null' ? '#adb5bd' : '#000' }) },
+      ],
+      rowData: rows, headerHeight: 35, rowHeight: 32,
     }
-    return { delimiter: delim, regex: regex }
-  }).filter(r => r.delimiter || r.regex)
+  })
 
-  if (newRules.length) tagRules.value = newRules
-  showPasteModal.value = false
-  pasteData.value = ''
-}
+  const onDelete = async () => {
+    const nodes = gridApi.value?.getSelectedNodes() || []
+    const pNo = manualProjNo.value?.trim() || currentProjNo.value
+    if (!nodes.length) return sAlert.Warning('항목을 선택해주세요.')
+    if (!confirm(`${nodes.length}건을 삭제하시겠습니까?`)) return
+    try {
+      gridApi.value.setGridOption('loading', true)
+      for (const n of nodes) {
+        const url = n.data.Source === 'Published' ? '/api/Admin/Tool/DeletePublishedData' : '/api/Admin/Tool/DeleteWorkingData'
+        await axiosWrapper.post(url, { ProjectNo: pNo, TagIdx: n.data.TAG_IDX })
+      }
+      sAlert.Success('삭제 완료'); await getData()
+    } catch (e) { sAlert.Error('삭제 중 에러 발생') } 
+    finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
+  }
 
-const combinedRegexDisplay = computed(() =>
-  tagRules.value.map(r => (r.delimiter ? `[${r.delimiter}]` : '') + `(${r.regex.replace(/^\^|\$/g, '')})`).join('')
-)
+  const onGridReady = p => { gridApi.value = p.api }
+  const onSelectionChanged = () => { if (gridApi.value) isDisabledDeleteBtn.value = gridApi.value.getSelectedNodes().length === 0 }
+  const closeModal = () => { showModal.value = false; selectedRow.value = null; }
+  const closeClassModal = () => { showClassModal.value = false; classModalData.value = []; }
 
-const addRule = () => tagRules.value.push({ delimiter: '', regex: '' })
-const removeRule = (i) => tagRules.value.splice(i, 1)
-
-defineOptions({ name: 'TagValidatorIntegratedUI' })
+  defineOptions({ name: 'TagAnalysisIntegrationFinal' })
 </script>
 
 <style scoped lang="scss">
-.custom-input-width { width: 150px !important; }
-.custom-table {
-  font-size: 0.85rem;
-  thead th { font-weight: 600; color: #475569; }
-}
-.form-control-xs {
-  height: calc(1.5em + 0.25rem + 2px);
-  padding: 0.125rem 0.25rem;
-  font-size: 0.75rem;
-}
-.custom-modal-overlay {
-  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(0, 0, 0, 0.6); z-index: 9999;
-  display: flex; align-items: center; justify-content: center;
-}
-.custom-modal-window {
-  background: #fff; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden;
-}
-.modal-header-dark {
-  padding: 10px 15px; display: flex; justify-content: space-between; align-items: center;
-}
-.modal-body-content { flex-grow: 1; display: flex; flex-direction: column; }
-.font-monospace { font-family: 'Consolas', 'Monaco', monospace !important; }
+  .custom-modal-overlay {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0, 0, 0, 0.6); z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .custom-modal-window {
+    background: #fff; width: 1000px; height: 85%; border-radius: 8px;
+    display: flex; flex-direction: column; overflow: hidden;
+  }
+  .modal-header-dark {
+    background: #0f172a; color: #fff; padding: 12px 20px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .modal-body-content { flex-grow: 1; min-height: 0; background: #fff; display: flex; flex-direction: column; }
+  .modal-grid-container { flex: 1; width: 100%; height: 100%; background: #fff; border: 1px solid #dee2e6 !important; }
+  .json-wrapper { flex: 1; background: #1e293b; overflow: auto; padding: 15px; }
+  .json-content { margin: 0; color: #f1f5f9; font-family: 'Consolas', monospace; font-size: 13px; white-space: pre-wrap; }
+  
+  :deep(.filter-highlight) { background-color: #ffeb3b !important; color: #000 !important; font-weight: bold; }
+  :deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; }
 </style>
