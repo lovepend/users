@@ -1,520 +1,200 @@
-<template>
-  <div class="panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
-    <PageTitle
-      icon="fa-search-plus"
-      :title="'Tag 통합 분석 및 속성 비교' + (selectedProjNo ? ` [ ${selectedProjNo} ]` : '')"
-    >
-      <template #actions>
-        <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <div class="d-flex align-items-center gap-2" style="min-width: 250px">
-            <span class="fw-bold text-dark text-nowrap">Project No</span>
-            <div class="flex-grow-1 dropdown custom-dropdown">
-              <button
-                class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white shadow-sm"
-                type="button"
-                data-bs-toggle="dropdown"
-              >
-                <span class="text-truncate">{{ selectedProjNo || '프로젝트 선택' }}</span>
-              </button>
-              <ul
-                class="dropdown-menu shadow-lg p-0"
-                style="max-height: 400px; min-width: 250px; overflow: hidden; margin-top: 5px"
-              >
-                <li class="p-2 bg-light border-bottom">
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    v-model="projSearchQuery"
-                    placeholder="프로젝트 검색..."
-                    @click.stop
-                  />
-                </li>
-                <div style="max-height: 300px; overflow-y: auto" class="py-1">
-                  <li v-for="proj in filteredProjectOptions" :key="proj.value">
-                    <div
-                      class="dropdown-item d-flex align-items-center gap-2 py-2 px-3 cursor-pointer"
-                      @click="selectedProjNo = proj.value"
-                    >
-                      <input
-                        type="checkbox"
-                        class="form-check-input mt-0"
-                        :checked="selectedProjNo === proj.value"
-                        @click.stop="selectedProjNo = proj.value"
-                      />
-                      <span>{{ proj.text }}</span>
-                    </div>
-                  </li>
-                </div>
-              </ul>
-            </div>
-          </div>
+Spread JS 에서 떠블클릭했을 때 아래와 같이 .js을 실행해서 하고 있는데
+이것은 약간 이질감이 들어서 엑셀의 데이터 유효성 검사 "목록"를 하는것처럼 셀을 떠블 클릭하고 글자를 입력하면 api 호출해서 아래 리스트 를 보여주는것에서 선택해서 값을 입력되는것으로 코드 수정해줬으면해
 
-          <div class="d-flex align-items-center gap-2" style="min-width: 280px">
-            <span class="fw-bold text-nowrap">Register ID</span>
-            <div class="flex-grow-1 dropdown custom-dropdown">
-              <button
-                class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white shadow-sm"
-                type="button"
-                data-bs-toggle="dropdown"
-                :disabled="!selectedProjNo"
-              >
-                <span class="text-truncate">{{
-                  !selectedProjNo ? '프로젝트를 먼저 선택하세요' : selectedRegTypeId || 'ID 선택'
-                }}</span>
-              </button>
-              <ul
-                v-if="selectedProjNo"
-                class="dropdown-menu shadow-lg p-0"
-                style="max-height: 400px; min-width: 280px; overflow: hidden; margin-top: 5px"
-              >
-                <li class="p-2 bg-light border-bottom">
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    v-model="regSearchQuery"
-                    placeholder="Register ID 검색..."
-                    @click.stop
-                  />
-                </li>
-                <div style="max-height: 300px; overflow-y: auto" class="py-1">
-                  <li v-for="reg in filteredRegOptions" :key="reg.TYPE_ID">
-                    <div
-                      class="dropdown-item d-flex align-items-center gap-2 py-2 px-3 cursor-pointer"
-                      @click="selectedRegTypeId = reg.TYPE_ID"
-                    >
-                      <input
-                        type="checkbox"
-                        class="form-check-input mt-0"
-                        :checked="selectedRegTypeId === reg.TYPE_ID"
-                        @click.stop="selectedRegTypeId = reg.TYPE_ID"
-                      />
-                      <span>{{ reg.TYPE_ID }}</span>
-                    </div>
-                  </li>
-                  <li v-if="filteredRegOptions.length === 0" class="text-center py-2 text-muted small">
-                    데이터가 없습니다.
-                  </li>
-                </div>
-              </ul>
-            </div>
-          </div>
 
-          <div class="d-flex align-items-center gap-2 border-start ps-3 ms-2">
-            <span class="fw-bold text-nowrap">조회 대상</span>
-            <div class="form-check form-check-inline mb-0" v-for="opt in ['Publish', 'Working', 'Merged']" :key="opt">
-              <input class="form-check-input" type="radio" :id="opt" :value="opt" v-model="selectedType" />
-              <label class="form-check-label" :for="opt">{{ opt }}</label>
-            </div>
-          </div>
 
-          <div class="form-check mb-0 border-start ps-3">
-            <input class="form-check-input" type="checkbox" id="delCheck" v-model="containDeleted" />
-            <label class="form-check-label fw-bold" for="delCheck">삭제 포함</label>
-          </div>
+import GC from '@mescius/spread-sheets-designer'
+import { ApiCommon } from '@/utils/axios/api-common'
+import { useEmployees } from '@/stores/app-employees'
+const { setEmployeeInfo } = useEmployees()
 
-          <button class="btn btn-xs btn-primary shadow-sm px-3" @click="onSearch">
-            <i class="fa fa-search me-1"></i>조회
-          </button>
-        </div>
-      </template>
-    </PageTitle>
+const _EditorType = 'UserEditor'
+const _EditorWidth = 300
+const _EditorHeight = 65
 
-    <div class="bg-light border-bottom px-3 py-1 d-flex align-items-center gap-3">
-      <div class="d-flex align-items-center gap-2">
-        <span class="fw-bold text-info text-nowrap small"><i class="fa fa-columns"></i> 헤더 필터</span>
-        <input
-          type="text"
-          class="form-control form-control-sm border-info"
-          style="width: 200px"
-          v-model="headerFilterQuery"
-          placeholder="표시할 컬럼 (공백/콤마 분리)"
-        />
-      </div>
-      <div class="d-flex align-items-center gap-2">
-        <span class="fw-bold text-success text-nowrap small"><i class="fa fa-filter"></i> 결과 필터</span>
-        <input
-          type="text"
-          class="form-control form-control-sm border-success"
-          style="width: 200px"
-          v-model="localFilterQuery"
-          placeholder="결과 내 검색 (하이라이트)"
-        />
-      </div>
-    </div>
+function UserSelectCellType(FIELD, NAME_FIELD, DEPT_FIELD) {
+  this.field = FIELD
+  this.nameField = NAME_FIELD
+  this.deptField = DEPT_FIELD
+  this.name = ''
+  this.searchID = 0
+  this.searchTimer = null
+}
+UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
+UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
+  // if (value) { GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, value, x, y, w, h, style, options]); }
 
-    <div class="panel-body flex-grow-1 overflow-hidden m-0 p-0 h-100">
-      <ag-grid-vue
-        v-bind="gridBindProps"
-        @grid-ready="onGridReady"
-        @cell-clicked="onCellClicked"
-        class="ag-theme-alpine w-100 h-100"
-      />
-    </div>
-
-    <div v-if="showJsonModal" class="custom-modal-overlay" @click.self="showJsonModal = false">
-      <div class="custom-modal-window shadow-lg">
-        <div class="modal-header-dark">
-          <span class="fw-bold text-white"><i class="fa fa-code me-2"></i>Row Data (JSON)</span>
-          <button @click="showJsonModal = false" class="btn btn-xs btn-danger">✕</button>
-        </div>
-        <div class="modal-body-content bg-dark overflow-auto p-3">
-          <pre
-            class="m-0 text-white"
-            style="white-space: pre-wrap; font-size: 13px"
-          ><code>{{ selectedJsonData }}</code></pre>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup>
-import { ref, computed, shallowRef, watch, onMounted } from 'vue'
-import { storeToRefs } from 'pinia'
-import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import { sAlert } from '@/utils/messages/alert-common'
-import { useAppMenuStore } from '@/stores/app-menu'
-import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-import PageTitle from '@/components/toolBar/PageTitle.vue'
-
-// AG Grid Enterprise 임포트
-import 'ag-grid-enterprise'
-import 'ag-grid-community/styles/ag-grid.css'
-import 'ag-grid-community/styles/ag-theme-alpine.css'
-
-const appMenu = useAppMenuStore()
-const { currentProjNo } = storeToRefs(appMenu)
-
-const projectOptions = ref([])
-const regOptions = ref([])
-const selectedProjNo = ref('')
-const selectedRegTypeId = ref('')
-const projSearchQuery = ref('')
-const regSearchQuery = ref('')
-
-const selectedType = ref('Working')
-const containDeleted = ref(false)
-const localFilterQuery = ref('')
-const headerFilterQuery = ref('')
-
-const showJsonModal = ref(false)
-const selectedJsonData = ref('')
-
-const gridApi = shallowRef()
-const rawDataList = ref([])
-const diffMap = ref(new Map())
-const dynamicCols = ref([])
-
-/** 1. 초기 프로젝트 목록 로드 **/
-const fetchProjectList = async () => {
-  try {
-    const res = await axiosWrapper.get('/api/Project/Get')
-    projectOptions.value = res.map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
-    if (currentProjNo.value) selectedProjNo.value = currentProjNo.value
-  } catch (e) {
-    console.error('Project List Load Error', e)
+  const sheet = options.sheet
+  const row = options.row
+  // const col = options.col
+  let data = sheet.getDataItem(row)
+  if (!data) {
+    const dataSource = sheet.getDataSource()
+    if (dataSource && !Array.isArray(dataSource)) {
+      data = dataSource.getSource()
+    }
+  }
+  const name = data?.[this.nameField] ?? ''
+  const dept = data?.[this.deptField] ?? ''
+  const deptV = dept ? `(${dept})` : ''
+  const text = !data ? '' : `${name}${deptV}`
+  GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, text, x, y, w, h, style, options])
+  return
+}
+UserSelectCellType.prototype.updateEditor = function (editorContext /*cellStyle, cellRect*/) {
+  if (editorContext) {
+    editorContext.parentNode.style.width = '100%'
+    editorContext.parentNode.style.height = '100%'
+    return { width: _EditorWidth, height: _EditorHeight }
   }
 }
-
-/** * 2. 프로젝트 선택 시 Register ID 목록 로드 
- * [수정] 405 Method Not Allowed 해결을 위해 GET에서 POST로 변경
- **/
-watch(selectedProjNo, async newVal => {
-  selectedRegTypeId.value = '' 
-  regOptions.value = []
-
-  if (!newVal) return
-
-  try {
-    // 서버가 GET을 허용하지 않으므로 POST로 요청을 보냅니다.
-    const res = await axiosWrapper.post('/api/Register/Get', { ProjectNo: newVal })
-    if (res && Array.isArray(res)) {
-      regOptions.value = res
-    }
-  } catch (e) {
-    console.error('Register List Load Error', e)
-    sAlert.Error('Register 목록을 불러오지 못했습니다.')
-  }
-})
-
-const filteredProjectOptions = computed(() => {
-  const q = projSearchQuery.value.toLowerCase()
-  return projectOptions.value.filter(p => p.text.toLowerCase().includes(q))
-})
-
-const filteredRegOptions = computed(() => {
-  const q = regSearchQuery.value.toLowerCase()
-  return regOptions.value.filter(r => r.TYPE_ID.toLowerCase().includes(q))
-})
-
-/** 3. 데이터 조회 로직 **/
-const onSearch = async () => {
-  if (!selectedProjNo.value || !selectedRegTypeId.value) {
-    return sAlert.Warning('Project No와 Register ID를 선택하세요.')
-  }
-  if (gridApi.value) gridApi.value.setGridOption('loading', true)
-
-  try {
-    const payload = {
-      ProjectNo: selectedProjNo.value,
-      REG_TYPE_ID: selectedRegTypeId.value,
-      Type: selectedType.value,
-      ContainDeleted: containDeleted.value,
-    }
-
-    const res = await axiosWrapper.post('/api/Data/GetMergedData', payload)
-    const rootKey = selectedRegTypeId.value
-    const resultData = res[rootKey]
-
-    if (!resultData) {
-      rawDataList.value = []
-      return sAlert.Info('조회된 데이터가 없습니다.')
-    }
-
-    // 차이(Diff) 데이터 매핑
-    const newDiffMap = new Map()
-    if (resultData.DiffData) {
-      resultData.DiffData.forEach(diff => {
-        ;(diff.Property || []).forEach(prop => {
-          if (prop.PUB_VALUE !== prop.WRK_VALUE) {
-            newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, { 
-              pub: prop.PUB_VALUE, 
-              wrk: prop.WRK_VALUE 
-            })
-          }
-        })
-      })
-    }
-    diffMap.value = newDiffMap
-
-    // 선택된 타입에 따른 데이터 추출
-    let sourceData = []
-    if (selectedType.value === 'Working') sourceData = resultData.WrkData || []
-    else if (selectedType.value === 'Publish') sourceData = resultData.PubData || []
-    else sourceData = resultData.MergeData || []
-
-    const processed = sourceData.map(item => {
-      const flat = { ...item }
-      if (Array.isArray(item.ATTRIBUTES)) {
-        item.ATTRIBUTES.forEach(attr => {
-          flat[attr.ATT_ID] = attr.VALUE
-        })
-      }
-      return flat
-    })
-
-    // 컬럼 정의 생성
-    const fixedFields = ['TAG_NO', 'TAG_IDX', 'CLS_ID', 'EP_ID', 'TAG_DESC']
-    const allKeys = new Set()
-    processed.forEach(row =>
-      Object.keys(row).forEach(k => {
-        if (k !== 'ATTRIBUTES' && k !== '_id') allKeys.add(k)
-      })
-    )
-
-    dynamicCols.value = Array.from(allKeys)
-      .sort((a, b) => {
-        const aIdx = fixedFields.indexOf(a), bIdx = fixedFields.indexOf(b)
-        if (aIdx > -1 && bIdx > -1) return aIdx - bIdx
-        if (aIdx > -1) return -1
-        if (bIdx > -1) return 1
-        return a.localeCompare(b)
-      })
-      .map(key => ({
-        headerName: key,
-        field: key,
-        minWidth: 150,
-        pinned: ['TAG_NO', 'TAG_IDX', 'CLS_ID'].includes(key) ? 'left' : null,
-        cellRenderer: diffCellRenderer,
-        cellStyle: getCellStyle,
-        tooltipValueGetter: p => {
-          const diff = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-          return diff ? `[차이발생]\nPublish: ${diff.pub ?? 'null'}\nWorking: ${diff.wrk ?? 'null'}` : null
-        },
-      }))
-
-    rawDataList.value = processed
-  } catch (e) {
-    console.error(e)
-    sAlert.Error('데이터 로드 실패')
-  } finally {
-    if (gridApi.value) gridApi.value.setGridOption('loading', false)
-  }
+UserSelectCellType.prototype.isEditingValueChanged = function (oldValue, newValue) {
+  return newValue !== oldValue
 }
+// prettier-ignore
+UserSelectCellType.prototype.createEditorElement = function () {
+  let userOptions = []
+  let userIndex = {}
 
-/** 셀 스타일 및 렌더러 **/
-const diffCellRenderer = p => {
-  let val = String(p.value ?? '')
-  const kw = localFilterQuery.value.trim().toLowerCase()
-  if (kw && val.toLowerCase().includes(kw)) {
-    const regex = new RegExp(`(${kw})`, 'gi')
-    val = val.replace(regex, `<mark class="bg-warning text-dark fw-bold">$1</mark>`)
-  }
-  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-  return diffInfo
-    ? `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</div>`
-    : val
-}
+  // WRAPPER
+  const wrapper = document.createElement('div')
+  wrapper.setAttribute('gcUIElement', 'gcEditingInput')
+  wrapper.setAttribute('EditorType', _EditorType)
+  wrapper.className = 'spread-user-editor w-100 h-100 p-1 v-select'
+  wrapper.style.backgroundColor = 'white'
+  wrapper.style.overflow = 'hidden'
 
-const getCellStyle = p => {
-  let style = {}
-  if (p.colDef.field === 'TAG_NO')
-    style = { cursor: 'pointer', color: '#0d6efd', textDecoration: 'underline', fontWeight: 'bold' }
-  const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
-  if (diffInfo) {
-    style.backgroundColor = '#fff9db'
-    style.fontWeight = 'bold'
-    style.color = '#d94111'
-  }
-  return style
-}
+  // HEADER
+  const header = document.createElement('div')
+  header.className = 'w-100'
 
-/** AG Grid Enterprise 설정 (멀티 셀 선택 포함) **/
-const gridBindProps = computed(() => ({
-  columnDefs: filteredColumns.value,
-  rowData: filteredData.value,
-  pagination: true,
-  paginationPageSize: 100,
-  loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { 
-    sortable: true, 
-    filter: true, 
-    resizable: true,
-    flex: 1,
-    minWidth: 100
-  },
-  // Enterprise 기능 활성화 (엑셀 스타일 범위 선택)
-  enableRangeSelection: true, 
-  cellSelection: true,
-  rowSelection: 'multiple',
-  suppressRowClickSelection: true,
-  // 툴팁 설정
-  tooltipShowDelay: 0,
-}))
+  // TITLE
+  const title = document.createElement('span')
+  title.className = ''
+  title.innerText = 'Search User'
 
-const filteredColumns = computed(() => {
-  if (!headerFilterQuery.value.trim()) return dynamicCols.value
-  const keywords = headerFilterQuery.value.split(/[,\s\n]+/).filter(k => k.trim()).map(k => k.toLowerCase())
-  const alwaysVisible = ['tag_no', 'tag_idx', 'cls_id']
-  
-  const pinnedCols = dynamicCols.value.filter(col => alwaysVisible.includes(col.field.toLowerCase()))
-  const matchedCols = []
-  
-  keywords.forEach(kw => {
-    dynamicCols.value.forEach(col => {
-      const fieldName = col.field.toLowerCase()
-      if (!alwaysVisible.includes(fieldName) && fieldName.includes(kw) && !matchedCols.find(m => m.field === col.field)) {
-        matchedCols.push(col)
-      }
-    })
+  // COMBO_BOX
+  const combo = document.createElement('div')
+  combo.className = 'cursor-text px-2 py-1 d-flex border border-1 border-light rounded-2'
+
+  // SEARCH_INPUT
+  if (this.searchTimer) { clearTimeout(this.searchTimer); }
+  const search = document.createElement('input')
+  search.className = 'border-0'
+  search.style.flex = 'auto'
+  search.style.outline = 'none'
+  search.type = 'text'
+  search.autocomplete = 'off'
+  search.placeholder = 'Name to search for. ex)홍길동 / ㅎㄱㄷ'
+  search.setAttribute('aria-autocomplete', 'list')
+  search.addEventListener('focus', function () {
+    listbox.style.opacity = 1
+    listbox.style.visibility = 'visible'
   })
-  return [...pinnedCols, ...matchedCols]
-})
+  search.addEventListener('blur', function () {
+    listbox.style.opacity = 0
+    listbox.style.visibility = 'hidden'
+  })
+  search.addEventListener('input', e => {
+    if (this.searchTimer) { clearTimeout(this.searchTimer); }
+    if (!e.target) { return; }
+    if (!e.isComposing && e.data) {
+      e.target.value = this.name
+      return
+    }
 
-const filteredData = computed(() => {
-  if (!localFilterQuery.value.trim()) return rawDataList.value
-  const kw = localFilterQuery.value.toLowerCase()
-  return rawDataList.value.filter(row => Object.values(row).some(val => String(val).toLowerCase().includes(kw)))
-})
+    listbox.innerHTML = ''
+    const userName = String(e.target.value ?? '').replaceAll(' ', '')
+    if (userName.length < 2) { return; }
 
-const onGridReady = p => {
-  gridApi.value = p.api
+    this.name = e.target.value
+    const currentID = (this.searchID += 1)
+    this.searchTimer = setTimeout(async () => {
+      try {
+        const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: userName }) ?? [];
+        if (currentID !== this.searchID) { return; }
+        userOptions = []
+        userIndex = {}
+        const itemList = []
+        response?.forEach((item, index) => {
+          if (!item.EMP_NO) { return; } // UserID가 있는 항목만 필터링
+          const code = item.EMP_NO
+          const label = `${item.EMP_NM ?? ''}(${item.DEPT_NAME ?? ''})`
+          const userInfo = { ...item, code, label }
+          setEmployeeInfo(userInfo)
+
+          const listitem = document.createElement('li')
+          listitem.className = 'vs__dropdown-option'
+          listitem.innerText = label
+          listitem.setAttribute('option-id', index)
+          itemList.push(listitem)
+
+          userOptions.push(userInfo)
+          userIndex[index] = userInfo
+        })
+        listbox.append(...itemList)
+      } catch (error) {
+        // console.error(error);
+      }
+    }, 300)
+  })
+  setTimeout(()=> search.focus(), 10)
+
+  // INDICATOR_ICON
+  const indicator = document.createElement('i')
+  indicator.className = 'fa fa-angle-down align-self-center'
+
+  // SELECT_BOX
+  const listbox = document.createElement('ul')
+  listbox.className = 'vs__dropdown-menu rounded-2 position-fixed'
+  listbox.style.top = 'unset'
+  listbox.style.left = 'unset'
+  listbox.style.width = '290px'
+  listbox.style.opacity = 0
+  listbox.style.visibility = 'hidden'
+  listbox.style.transition = 'opacity 0.2s linear, visibility 0s linear 0.2s'
+  listbox.setAttribute('EditorUses', 'list')
+  listbox.addEventListener('click', function (e) {
+    if (e.target && e.target.nodeName === 'LI') {
+      const optionId = e.target.getAttribute('option-id')
+      const optionText = e.target.innerText
+      const userInfo = userIndex?.[optionId]
+      search.value = optionText
+      editorVal.value = userInfo?.code
+    }
+  })
+
+  // HIDDEN_VALUE
+  const editorVal = document.createElement('input')
+  editorVal.type = 'text'
+  editorVal.style.display = 'none'
+  editorVal.disabled = true
+  editorVal.readonly = true
+  editorVal.setAttribute('EditorUses', 'value')
+
+  // CREATE_EDITOR
+  header.appendChild(title)
+  combo.appendChild(search)
+  combo.appendChild(indicator)
+  wrapper.appendChild(header)
+  wrapper.appendChild(combo)
+  wrapper.appendChild(listbox)
+  wrapper.appendChild(editorVal)
+  return wrapper
 }
-
-const onCellClicked = p => {
-  if (p.colDef.field === 'TAG_NO' && p.data) {
-    selectedJsonData.value = JSON.stringify(p.data, null, 2)
-    showJsonModal.value = true
+UserSelectCellType.prototype.getEditorValue = function (editorContext) {
+  if (editorContext && editorContext.getAttribute('EditorType') === _EditorType) {
+    const valNode = editorContext.querySelector('[editoruses="value"]')
+    return valNode.value
+  }
+}
+UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
+  if (editorContext && editorContext.getAttribute('EditorType') === _EditorType) {
+    if (value) {
+      const valNode = editorContext.querySelector('[editoruses="value"]')
+      valNode.value = value
+    }
   }
 }
 
-onMounted(fetchProjectList)
-</script>
-
-<style scoped lang="scss">
-.custom-dropdown {
-  .dropdown-toggle::after {
-    margin-left: auto;
-  }
-  .dropdown-menu {
-    border: 1px solid #cbd5e1;
-    z-index: 1060;
-  }
-  .dropdown-item {
-    transition: background 0.2s;
-    &:hover { background-color: #f8fafc; }
-  }
-  .form-check-input {
-    width: 16px;
-    height: 16px;
-    cursor: pointer;
-  }
-}
-
-.custom-modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(0, 0, 0, 0.6);
-  z-index: 9999;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.custom-modal-window {
-  background: #fff;
-  width: 800px;
-  max-height: 80%;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.modal-header-dark {
-  background: #0f172a;
-  color: #fff;
-  padding: 12px 20px;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.modal-body-content {
-  flex-grow: 1;
-  overflow-y: auto;
-}
-
-:deep(.ag-theme-alpine) {
-  --ag-font-size: 12px;
-  --ag-grid-size: 4px;
-  --ag-header-background-color: #f8f9fa;
-  
-  .ag-header-cell {
-    border-right: 1px solid #dee2e6 !important;
-    font-weight: bold;
-  }
-  .ag-cell {
-    border-right: 1px solid #f1f3f5 !important;
-    display: flex;
-    align-items: center;
-  }
-  /* 범위 선택 시 스타일 스타일 */
-  .ag-range-selected {
-    background-color: rgba(33, 150, 243, 0.1) !important;
-  }
-}
-
-::v-deep(.diff-wrapper) {
-  display: flex;
-  align-items: center;
-}
-
-mark {
-  padding: 0;
-  border-radius: 2px;
-}
-</style>
+export default UserSelectCellType
