@@ -1,3 +1,10 @@
+아래에 다시 수정해줘
+1. 셀을 떠블클릭해서 에디터모드 될때 오른쪽에 역삼각형 생성
+2. 이름을 입력 후 역삼각형을 눌렀을때
+3. 리스트를 아래에 표현 
+4. 단 UI는 우리 엑셀에서 데이터유효성검사 "목록"으로 설정한것처럼 되어야 함
+
+
 import GC from '@mescius/spread-sheets-designer'
 import { ApiCommon } from '@/utils/axios/api-common'
 import { useEmployees } from '@/stores/app-employees'
