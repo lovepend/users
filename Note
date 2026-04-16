@@ -5,18 +5,23 @@ const { setEmployeeInfo } = useEmployees()
 
 const _EditorType = 'UserSelectEditor'
 
-// 1. 엑셀 스타일 리스트 UI (CSS)
+// CSS: 엑셀 스타일의 리스트와 에디터 스타일
 if (!document.getElementById('excel-popup-style')) {
   const style = document.createElement('style');
   style.id = 'excel-popup-style';
   style.innerHTML = `
+    .excel-editor-wrapper {
+      position: fixed; z-index: 15000; background: white;
+      border: 2px solid #217346; box-sizing: border-box;
+      display: flex; align-items: stretch;
+    }
     .excel-list-box { 
       position: fixed; z-index: 20000; background: white; 
       border: 1px solid #808080; box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
       overflow-y: auto; max-height: 200px; padding: 0; margin: 0; list-style: none;
     }
     .excel-list-item { 
-      padding: 5px 10px; cursor: pointer; font-size: 13px; color: black; font-family: sans-serif;
+      padding: 5px 10px; cursor: pointer; font-size: 13px; color: black;
     }
     .excel-list-item:hover { background-color: #0078d4 !important; color: white !important; }
   `;
@@ -29,13 +34,13 @@ function UserSelectCellType(FIELD, NAME_FIELD, DEPT_FIELD) {
   this.deptField = DEPT_FIELD
   this.searchTimer = null
   this.listbox = null
-  this.originalValue = null // 기존 사번 보관용
-  this.selectedEmpNo = null // 선택된 사번 보관용
+  this.originalValue = null 
+  this.selectedEmpNo = null 
 }
 
 UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
 
-// 셀 화면 표시 (사번 -> 이름/부서)
+// 1. 셀 화면 표시 (아이콘 없이 텍스트만 깨끗하게)
 UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
   const sheet = options.sheet
   const data = sheet.getDataItem(options.row)
@@ -45,20 +50,20 @@ UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, op
   GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, text, x, y, w, h, style, options])
 }
 
+// 2. 에디터 생성 (셀 위치에 팝업으로 생성)
 UserSelectCellType.prototype.createEditorElement = function (context) {
+  // 팝업 에디터 외각 (셀과 동일한 위치/크기로 설정될 예정)
   const wrapper = document.createElement('div')
+  wrapper.className = 'excel-editor-wrapper'
   wrapper.setAttribute('gcUIElement', 'gcEditingInput')
-  wrapper.style.cssText = 'background: white; display: flex; border: 1px solid #217346; box-sizing: border-box;'
 
   const input = document.createElement('input')
   input.style.cssText = 'flex: 1; border: none; outline: none; padding: 0 4px; font-size: 13px;'
   
-  // 엑셀 삼각형 버튼 디자인
   const btn = document.createElement('div')
   btn.style.cssText = 'width: 18px; background: #f0f0f0; border-left: 1px solid #808080; display: flex; align-items: center; justify-content: center;'
   btn.innerHTML = '<div style="width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid #333;"></div>'
 
-  // 리스트박스 생성 (Body 부착)
   const listbox = document.createElement('ul')
   listbox.className = 'excel-list-box'
   listbox.style.display = 'none'
@@ -74,7 +79,6 @@ UserSelectCellType.prototype.createEditorElement = function (context) {
       return
     }
 
-    // 0.5초 디바운스 적용
     this.searchTimer = setTimeout(async () => {
       const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: keyword }) ?? []
       listbox.innerHTML = ''
@@ -93,13 +97,10 @@ UserSelectCellType.prototype.createEditorElement = function (context) {
           
           li.onmousedown = (ev) => {
             ev.preventDefault()
-            this.selectedEmpNo = item.EMP_NO // 사번 저장
+            this.selectedEmpNo = item.EMP_NO 
             input.value = item.EMP_NM
-            
             setEmployeeInfo({ ...item, code: item.EMP_NO })
             listbox.style.display = 'none'
-            
-            // 편집 종료
             context.sheet.endEdit()
           }
           listbox.appendChild(li)
@@ -113,39 +114,41 @@ UserSelectCellType.prototype.createEditorElement = function (context) {
   wrapper.appendChild(input)
   wrapper.appendChild(btn)
   
+  // 에디터 위치 정보 저장 (updateEditor에서 사용)
+  wrapper.listbox = listbox
+  
   setTimeout(() => input.focus(), 10)
   return wrapper
 }
 
-// 편집 시작 시 호출 (기존 사번 보관 및 초기화)
+// 3. 에디터 위치 및 크기 동적 할당 (셀의 위치를 계산해서 팝업으로 띄움)
+UserSelectCellType.prototype.updateEditor = function (editorContext, cellStyle, cellRect) {
+  if (editorContext) {
+    // 셀의 위치를 브라우저 절대 좌표로 계산
+    editorContext.style.width = `${cellRect.width}px`
+    editorContext.style.height = `${cellRect.height}px`
+    
+    // SpreadJS 에디터 레이어에 의해 자동으로 위치가 잡히지만, 
+    // 필요시 fixed 좌표를 수동으로 계산할 수도 있습니다.
+    return { width: cellRect.width, height: cellRect.height }
+  }
+}
+
 UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
-  this.originalValue = value; // 취소 시 복구할 기존 사번
-  this.selectedEmpNo = null;  // 선택 값 초기화
+  this.originalValue = value
+  this.selectedEmpNo = null
   const input = editorContext.querySelector('input')
   input.value = ''
 }
 
-// 편집 종료 시 호출 (최종 반환 값 결정)
 UserSelectCellType.prototype.getEditorValue = function (editorContext) {
-  // 1. 리스트에서 선택한 사번이 있다면 그것을 반환
-  if (this.selectedEmpNo) {
-    return this.selectedEmpNo
-  }
-  
-  // 2. 선택하지 않고 그냥 나갔거나 ESC를 누른 경우 (기존 사번 유지)
-  return this.originalValue
+  return this.selectedEmpNo || this.originalValue
 }
 
 UserSelectCellType.prototype.destroyEditorElement = function (editorContext) {
   if (this.listbox) {
     this.listbox.remove()
     this.listbox = null
-  }
-}
-
-UserSelectCellType.prototype.updateEditor = function (editorContext, cellStyle, cellRect) {
-  if (editorContext) {
-    return { width: cellRect.width, height: cellRect.height }
   }
 }
 
