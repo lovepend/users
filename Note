@@ -1,7 +1,18 @@
-우선 아래의 코드 참조해봐 UI만 아래것 참조해서 다음에 주는 코드에 반영해서 해줘야 할것 같아
+이건 MergeTab.vue인데 
+아래와 같이 수정해줘 
+1. 이거도 프로젝트 선택해서 값을 입력하게 하자. 이전 태그타입 프로젝트 호출 하는거 참조하면 될듯
+2. Register ID 또한 우리 Tag Type 한것 처럼 아래의 Api 사용해서 똑같이 작동하게 하자
+/api/Register/Get  
+키는 "TYPE_ID" 불러서 리스트 보여주면 되는거지
 
-1. 아래의 코드는 UI 참조 코드 
-기억만 하고 있고 답변 안줘도 된다
+3. 그리고 우리가 하는거 AG Grid 유료버전으로 적용 하는거지 그리고 셀 선택이 부자연 스럽던데 엔터프라이즈 멀티 셀 선택되자나. 
+엑셀처럼 말이야 그렇게 적용해주고.
+
+4. 제일 중요한건 기존 기능이 다 유지 되어야한다는 점!!!!
+
+수정해서 풀코드 전달해줘
+
+
 
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100">
@@ -17,127 +28,87 @@
               type="text"
               class="form-control form-control-sm custom-input-width"
               v-model="manualProjNo"
-              @change="onProjectChange"
-              placeholder="예: TE1002"
+              placeholder="예: SN2661"
             />
           </label>
           <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-nowrap">조회 키워드</span>
-            <textarea
+            <span class="fw-bold text-nowrap">Register ID</span>
+            <input
+              type="text"
               class="form-control form-control-sm custom-input-width"
-              style="height: 31px; resize: none"
-              v-model="searchKeywordRef"
-              placeholder="Tag No (공백/엔터 구분)"
-            ></textarea>
+              v-model="regTypeId"
+              placeholder="예: PIEP_T_002_T"
+            />
           </label>
+
+          <div class="d-flex align-items-center gap-2 border-start ps-3 ms-2">
+            <span class="fw-bold text-nowrap">조회 대상</span>
+            <div class="form-check form-check-inline mb-0" v-for="opt in ['Publish', 'Working', 'Merged']" :key="opt">
+              <input class="form-check-input" type="radio" :id="opt" :value="opt" v-model="selectedType" />
+              <label class="form-check-label" :for="opt">{{ opt }}</label>
+            </div>
+          </div>
+
+          <div class="form-check mb-0 border-start ps-3">
+            <input class="form-check-input" type="checkbox" id="delCheck" v-model="containDeleted" />
+            <label class="form-check-label fw-bold" for="delCheck">삭제 포함</label>
+          </div>
+
           <button class="btn btn-xs btn-primary shadow-sm" @click="onSearch">
             <i class="fa fa-search me-1"></i>조회
           </button>
 
           <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap"><i class="fa-search"></i> 결과 필터</span>
+            <span class="fw-bold text-info text-nowrap">헤더 필터</span>
+            <input
+              type="text"
+              class="form-control form-control-sm border-info custom-input-width"
+              v-model="headerFilterQuery"
+              placeholder="공백, 콤마 분리"
+            />
+          </div>
+
+          <div class="ms-2 border-start ps-3 d-flex align-items-center gap-2">
+            <span class="fw-bold text-success text-nowrap">결과 필터</span>
             <input
               type="text"
               class="form-control form-control-sm border-success custom-input-width"
               v-model="localFilterQuery"
-              placeholder="결과 내 검색"
+              placeholder="결과 내 검색 (하이라이트)"
             />
-          </div>
-          <div class="ms-1 d-flex align-items-center gap-2">
-            <span class="fw-bold text-primary text-nowrap"><i class="fa-columns"></i> 컬럼 필터</span>
-            <textarea
-              class="form-control form-control-sm border-primary custom-input-width"
-              style="height: 31px; resize: none"
-              v-model="columnFilterQuery"
-              placeholder="표시할 컬럼명"
-            ></textarea>
           </div>
         </div>
         <panel-toolbar />
       </template>
     </PageTitle>
 
-    <div class="panel-body m-0 p-0 h-100">
-      <div class="panel m-0 p-0 h-100">
-        <div class="panel-heading p-0 m-0">
-          <div class="w-100 h-100">
-            <BasicToolBar
-              :showCreate="false"
-              :showMultiCreate="false"
-              :showSave="false"
-              :showDelete="true"
-              :isDisabledDeleteBtn="isDisabledDeleteBtn"
-              @delete="onDelete"
-            />
+    <div v-if="showJsonModal" class="modal-backdrop fade show" style="z-index: 1040"></div>
+    <div v-if="showJsonModal" class="modal fade show d-block" tabindex="-1" style="z-index: 1050">
+      <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg" style="max-width: 800px">
+        <div class="modal-content shadow-lg">
+          <div class="modal-header bg-light p-3">
+            <h5 class="modal-title fw-bold text-dark"><i class="fa fa-code me-2"></i>Row Data (JSON)</h5>
+            <button type="button" class="btn-close" @click="showJsonModal = false"></button>
+          </div>
+          <div class="modal-body bg-dark text-white p-3 overflow-auto" style="max-height: 60vh">
+            <pre class="m-0" style="white-space: pre-wrap; font-size: 0.9em"><code>{{ selectedJsonData }}</code></pre>
+          </div>
+          <div class="modal-footer bg-light p-2">
+            <button type="button" class="btn btn-sm btn-secondary" @click="showJsonModal = false">닫기</button>
           </div>
         </div>
+      </div>
+    </div>
+
+    <div class="panel-body m-0 p-0 h-100">
+      <div class="panel m-0 p-0 h-100">
         <div class="panel-body overflow-hidden m-0 p-0 h-100">
           <ag-grid-vue
             v-bind="gridBindProps"
             @grid-ready="onGridReady"
-            @selection-changed="onSelectionChanged"
             @cell-clicked="onCellClicked"
-            rowSelection="multiple"
-            :suppressRowClickSelection="true"
+            :tooltipShowDelay="0"
           />
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
-      <div class="custom-modal-window shadow-lg">
-        <div class="modal-header-dark">
-          <div class="d-flex align-items-center gap-2">
-            <span
-              class="badge shadow-sm"
-              :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }"
-              >{{ selectedRow?.Source }}</span
-            >
-            <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
-          </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-xs btn-outline-light" @click="isJsonMode = !isJsonMode">
-              {{ isJsonMode ? 'Table View' : 'JSON View' }}
-            </button>
-            <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
-          </div>
-        </div>
-        <div class="modal-body-content">
-          <div v-if="isJsonMode" class="json-wrapper">
-            <pre class="json-content"><code>{{ JSON.stringify(selectedRow, null, 2) }}</code></pre>
-          </div>
-          <div v-else class="modal-grid-container ag-theme-alpine">
-            <ag-grid-vue v-bind="modalGridBindProps" class="w-100 h-100" />
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showClassModal" class="custom-modal-overlay" @click.self="closeClassModal">
-      <div class="custom-modal-window shadow-lg" style="width: 850px; height: 65%">
-        <div class="modal-header-dark" style="background: #334155">
-          <div class="d-flex align-items-center gap-2">
-            <i class="fa fa-info-circle text-info"></i>
-            <span class="fw-bold text-white">Class Info: {{ clickedClassId }}</span>
-          </div>
-          <button @click="closeClassModal" class="btn btn-xs btn-danger">✕</button>
-        </div>
-        <div class="modal-body-content p-3">
-          <div class="alert alert-info py-2 mb-3 border-0 shadow-sm" style="background-color: #f0f7ff">
-            <i class="fa fa-external-link me-2"></i><b>Register No</b>를 클릭하면 해당 설정 페이지가
-            <span class="badge bg-primary">새 탭</span>으로 열립니다.
-          </div>
-          <div class="modal-grid-container ag-theme-alpine shadow-sm">
-            <ag-grid-vue
-              style="width: 100%; height: 100%"
-              :columnDefs="classModalColDefs"
-              :rowData="classModalData"
-              :defaultColDef="{ resizable: true, sortable: true, filter: true }"
-              @cell-clicked="onClassGridCellClicked"
-              :headerHeight="40"
-              :rowHeight="38"
-            />
-          </div>
         </div>
       </div>
     </div>
@@ -145,286 +116,210 @@
 </template>
 
 <script setup>
-  import { ref, computed, shallowRef, watch, onMounted } from 'vue'
-  import { useRouter, useRoute } from 'vue-router'
-  import { storeToRefs } from 'pinia'
+  import { ref, computed, shallowRef, watch } from 'vue'
   import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sortBy } from 'lodash-es'
-  import { useAppMenuStore } from '@/stores/app-menu'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
   import { sAlert } from '@/utils/messages/alert-common'
-  import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
   import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-  const router = useRouter()
-  const route = useRoute()
-  const appMenu = useAppMenuStore()
-  const { currentProjNo, currentEpId } = storeToRefs(appMenu)
-
-  const gridApi = shallowRef()
-  const manualProjNo = ref('')
-  const searchKeywordRef = ref('')
-
-  const syncParamsToUrl = () => {
-    const pNo = manualProjNo.value || currentProjNo.value
-    const eId = currentEpId.value
-
-    if (pNo) {
-      router.replace({
-        query: { ...route.query, proj_no: pNo, ep_id: eId },
-      })
-    }
-  }
-
-  onMounted(() => {
-    const targetProjNo = route.query.proj_no || currentProjNo.value
-    if (targetProjNo) {
-      manualProjNo.value = targetProjNo
-    }
-    syncParamsToUrl()
-  })
-
-  const onProjectChange = () => {
-    syncParamsToUrl()
-  }
-
-  watch(currentProjNo, newVal => {
-    if (newVal) {
-      manualProjNo.value = newVal
-      syncParamsToUrl()
-    }
-  })
+  const manualProjNo = ref('SN2661')
+  const regTypeId = ref('PIEP_T_002_T')
+  const selectedType = ref('Working')
+  const containDeleted = ref(false)
 
   const localFilterQuery = ref('')
-  const columnFilterQuery = ref('')
+  const headerFilterQuery = ref('')
+
+  const showJsonModal = ref(false)
+  const selectedJsonData = ref('')
+
+  const gridApi = shallowRef()
   const rawDataList = ref([])
-  const dynamicAttCols = ref([])
-  const dynamicRemainingCols = ref([])
-  const isDisabledDeleteBtn = ref(true)
+  const diffMap = ref(new Map())
+  const dynamicCols = ref([])
 
-  const showModal = ref(false)
-  const selectedRow = ref(null)
-  const isJsonMode = ref(false)
-  const showClassModal = ref(false)
-  const classModalData = ref([])
-  const clickedClassId = ref('')
+  /**
+   * 🎨 셀 렌더링 및 스타일 정의
+   */
+  const diffCellRenderer = p => {
+    let val = String(p.value ?? '')
+    const kw = localFilterQuery.value.trim().toLowerCase()
 
-  const classModalColDefs = [
-    {
-      headerName: 'Register No (Link)',
-      field: 'TYPE_ID',
-      flex: 1,
-      cellStyle: { fontWeight: 'bold', color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer' },
-    },
-    { headerName: 'Description', field: 'DESC', flex: 1.5 },
-    { headerName: 'EP ID', field: 'EP_ID', width: 120 },
-    { headerName: 'Project No', field: 'PROJ_NO', width: 120 },
-  ]
-
-  const onClassGridCellClicked = p => {
-    if (p.column.getColId() === 'TYPE_ID' && p.value) {
-      const targetProjNo = manualProjNo.value || currentProjNo.value
-      const targetEpId = p.data.EP_ID || currentEpId.value
-
-      const routeData = router.resolve({
-        path: '/register-mapping-setup',
-        query: {
-          reg_type_id: p.data.TYPE_ID,
-          proj_no: targetProjNo,
-          ep_id: targetEpId,
-        },
-      })
-      window.open(routeData.href, '_blank')
+    if (kw && val.toLowerCase().includes(kw)) {
+      const regex = new RegExp(`(${kw})`, 'gi')
+      val = val.replace(regex, '<span class="bg-warning text-dark fw-bold">$1</span>')
     }
+
+    const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+    if (diffInfo) {
+      return `<div class="diff-wrapper"><i class="fa fa-exclamation-circle text-warning me-1"></i>${val}</div>`
+    }
+    return val
   }
 
-  const highlightRenderer = p => {
-    const val = p.value === null || p.value === undefined ? '' : String(p.value)
-    if (!val || !localFilterQuery.value.trim()) return val
-    const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
-    let text = val
-    kws.forEach(kw => {
-      const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      text = text.replace(new RegExp(`(${escapedKw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
-    })
-    return text
+  const getCellStyle = p => {
+    let style = {}
+
+    if (p.colDef.field === 'TAG_NO') {
+      style.cursor = 'pointer'
+      style.color = '#0d6efd'
+      style.textDecoration = 'underline'
+      style.fontWeight = 'bold'
+    }
+
+    const diffInfo = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+    if (diffInfo) {
+      style.backgroundColor = '#fff9db'
+      style.fontWeight = 'bold'
+      style.color = '#d94111'
+    }
+    return Object.keys(style).length > 0 ? style : null
   }
 
-  const onSearch = () => {
-    syncParamsToUrl()
-    getData()
-  }
+  watch(localFilterQuery, () => {
+    if (gridApi.value) {
+      gridApi.value.refreshCells({ force: true })
+    }
+  })
 
-  const getData = async () => {
-    const pNo = manualProjNo.value?.trim() || currentProjNo.value
-    if (!pNo) return sAlert.Warning(`Project No를 입력하세요.`)
+  const onSearch = async () => {
+    if (!manualProjNo.value || !regTypeId.value) {
+      return sAlert.Warning('Project No와 Register ID를 입력하세요.')
+    }
+
     if (gridApi.value) gridApi.value.setGridOption('loading', true)
 
     try {
-      const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
-      let combined = []
-
-      for (const key of searchKeys) {
-        const payload = { ProjectNo: pNo, Keyword: key }
-        const [p, w] = await Promise.allSettled([
-          axiosWrapper.post('/api/Data/SearchPublishData', payload),
-          axiosWrapper.post('/api/Data/SearchWorkingData', payload),
-        ])
-
-        // N개의 배열 데이터를 모두 담도록 처리
-        if (p.status === 'fulfilled' && p.value) {
-          const data = Array.isArray(p.value) ? p.value : [p.value]
-          combined.push(...data.map(i => ({ ...i, Source: 'Published' })))
-        }
-        if (w.status === 'fulfilled' && w.value) {
-          const data = Array.isArray(w.value) ? w.value : [w.value]
-          combined.push(...data.map(i => ({ ...i, Source: 'Working' })))
-        }
+      const payload = {
+        ProjectNo: manualProjNo.value.trim(),
+        REG_TYPE_ID: regTypeId.value.trim(),
+        Type: selectedType.value,
+        ContainDeleted: containDeleted.value,
       }
 
-      const allAttIds = new Set()
+      const res = await axiosWrapper.post('/api/Data/GetMergedData', payload)
+      const rootKey = regTypeId.value.trim()
+      const resultData = res[rootKey]
+
+      if (!resultData) {
+        rawDataList.value = []
+        return sAlert.Info('조회된 데이터가 없습니다.')
+      }
+
+      const newDiffMap = new Map()
+      if (resultData.DiffData) {
+        resultData.DiffData.forEach(diff => {
+          ;(diff.Property || []).forEach(prop => {
+            if (prop.PUB_VALUE !== prop.WRK_VALUE) {
+              newDiffMap.set(`${diff.TAG_IDX}_${prop.PROP_ID}`, {
+                pub: prop.PUB_VALUE,
+                wrk: prop.WRK_VALUE,
+              })
+            }
+          })
+        })
+      }
+      diffMap.value = newDiffMap
+
+      let sourceData = []
+      if (selectedType.value === 'Working') sourceData = resultData.WrkData || []
+      else if (selectedType.value === 'Publish') sourceData = resultData.PubData || []
+      else sourceData = resultData.MergeData || []
+
+      const processed = sourceData.map(item => {
+        const flat = { ...item }
+        if (Array.isArray(item.ATTRIBUTES)) {
+          item.ATTRIBUTES.forEach(attr => {
+            flat[attr.ATT_ID] = attr.VALUE
+          })
+        }
+        return flat
+      })
+
+      const fixedFields = ['TAG_NO', 'TAG_IDX', 'CLS_ID', 'EP_ID', 'TAG_DESC']
       const allKeys = new Set()
-      // DELETED는 고정 컬럼이므로 동적 생성에서 제외
-      const fixedKeys = ['Source', 'DELETED', 'TAG_IDX', 'TAG_NO', 'EP_ID', 'CLS_ID', 'ATTRIBUTES', '_id']
-
-      combined.forEach(item => {
-        ;(item.ATTRIBUTES || []).forEach(a => {
-          if (a?.ATT_ID) allAttIds.add(a.ATT_ID)
+      processed.forEach(row =>
+        Object.keys(row).forEach(k => {
+          if (k !== 'ATTRIBUTES' && k !== '_id') allKeys.add(k)
         })
-        Object.keys(item).forEach(k => {
-          if (!fixedKeys.includes(k) && typeof item[k] !== 'object') allKeys.add(k)
-        })
-      })
+      )
 
-      // 삭제된 데이터(!i.DELETED) 필터링 제거 -> 모두 노출되도록 수정
-      const processedData = combined.map(item => {
-        const flatItem = { ...item }
-        allAttIds.forEach(id => {
-          const target = (item.ATTRIBUTES || []).find(a => a?.ATT_ID === id)
-          flatItem[`ATT_${id}`] = target && target.VALUE !== null ? target.VALUE : 'null'
+      dynamicCols.value = Array.from(allKeys)
+        .sort((a, b) => {
+          const aIdx = fixedFields.indexOf(a),
+            bIdx = fixedFields.indexOf(b)
+          if (aIdx > -1 && bIdx > -1) return aIdx - bIdx
+          if (aIdx > -1) return -1
+          if (bIdx > -1) return 1
+          return a.localeCompare(b)
         })
-        return flatItem
-      })
-
-      dynamicAttCols.value = Array.from(allAttIds)
-        .sort()
-        .map(id => ({
-          headerName: id,
-          field: `ATT_${id}`,
-          minWidth: 130,
-          headerClass: 'att-column-header',
-          cellRenderer: highlightRenderer,
-          cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000' }),
+        .map(key => ({
+          headerName: key,
+          field: key,
+          minWidth: 150,
+          pinned: ['TAG_NO', 'TAG_IDX', 'CLS_ID'].includes(key) ? 'left' : null,
+          cellRenderer: diffCellRenderer,
+          cellStyle: getCellStyle,
+          tooltipValueGetter: p => {
+            const diff = diffMap.value.get(`${p.data.TAG_IDX}_${p.colDef.field}`)
+            return diff ? `[차이발생]\nPublish: ${diff.pub ?? 'null'}\nWorking: ${diff.wrk ?? 'null'}` : null
+          },
         }))
 
-      dynamicRemainingCols.value = Array.from(allKeys)
-        .sort()
-        .map(k => ({ headerName: k, field: k, minWidth: 150, cellRenderer: highlightRenderer }))
-
-      rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
-    } catch (err) {
-      sAlert.Error('조회 중 오류가 발생했습니다.')
+      rawDataList.value = processed
+    } catch (e) {
+      console.error(e)
+      sAlert.Error('데이터를 가져오는 중 오류가 발생했습니다.')
     } finally {
       if (gridApi.value) gridApi.value.setGridOption('loading', false)
     }
   }
 
-  const onCellClicked = async p => {
-    const colId = p.column.getColId()
-    const pNo = manualProjNo.value?.trim() || currentProjNo.value
-    if (colId === 'Source') {
-      selectedRow.value = p.data
-      showModal.value = true
-      isJsonMode.value = false
-    } else if (colId === 'CLS_ID' && p.value) {
-      clickedClassId.value = p.value
-      try {
-        if (gridApi.value) gridApi.value.setGridOption('loading', true)
-        const res = await axiosWrapper.post('/api/Register/GetByClassIDs', {
-          ContainDeleted: false,
-          ProjectNo: pNo,
-          ClassIDs: [p.value],
-        })
-        classModalData.value = Array.isArray(res) ? res : [res]
-        showClassModal.value = true
-      } catch (e) {
-        sAlert.Error('Class 정보를 불러오지 못했습니다.')
-      } finally {
-        if (gridApi.value) gridApi.value.setGridOption('loading', false)
-      }
-    }
-  }
+  // 변경된 부분: 헤더 다중 필터 적용 (고정 컬럼은 무조건 포함)
+  // 변경된 부분: 헤더 다중 필터 적용 및 입력 순서 정렬
+  const filteredColumns = computed(() => {
+    if (!headerFilterQuery.value.trim()) return dynamicCols.value
 
-  const closeModal = () => {
-    showModal.value = false
-    selectedRow.value = null
-  }
-  const closeClassModal = () => {
-    showClassModal.value = false
-    classModalData.value = []
-  }
-
-  const mainColDefs = computed(() => {
-    const fixedCols = [
-      {
-        headerName: 'Source',
-        field: 'Source',
-        width: 130,
-        pinned: 'left',
-        checkboxSelection: true,
-        headerCheckboxSelection: true,
-        cellRenderer: p =>
-          `<span class="badge shadow-sm" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;">${p.value}</span>`,
-      },
-      {
-        field: 'DELETED',
-        headerName: 'Deleted',
-        width: 90,
-        pinned: 'left',
-        cellRenderer: p =>
-          p.value
-            ? `<span class="badge bg-danger shadow-sm w-100">True</span>`
-            : `<span class="badge bg-secondary shadow-sm w-100">False</span>`,
-      },
-      { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-      { field: 'TAG_IDX', headerName: 'TAG_IDX', width: 120, pinned: 'left', cellRenderer: highlightRenderer },
-      { field: 'EP_ID', headerName: 'EP ID', width: 120, pinned: 'left', cellRenderer: highlightRenderer },
-      {
-        field: 'CLS_ID',
-        headerName: 'Class',
-        width: 150,
-        pinned: 'left',
-        cellRenderer: highlightRenderer,
-        cellStyle: { cursor: 'pointer', textDecoration: 'underline', color: '#0d6efd', fontWeight: 'bold' },
-      },
-    ]
-    const colFilterKws = columnFilterQuery.value
-      .split(/[\s,\n]+/)
-      .filter(k => k)
+    // 1. 입력된 키워드 배열화 (공백, 콤마, 줄바꿈 기준)
+    const keywords = headerFilterQuery.value
+      .split(/[,\s\n]+/)
+      .filter(k => k.trim())
       .map(k => k.toLowerCase())
-    const filteredAtts = colFilterKws.length
-      ? dynamicAttCols.value.filter(c => colFilterKws.some(kw => c.headerName.toLowerCase().includes(kw)))
-      : dynamicAttCols.value
-    const filteredRems = colFilterKws.length
-      ? dynamicRemainingCols.value.filter(c => colFilterKws.some(kw => c.headerName.toLowerCase().includes(kw)))
-      : dynamicRemainingCols.value
-    return [...fixedCols, ...filteredAtts, ...filteredRems]
+
+    // 항상 노출할 고정 컬럼 목록
+    const alwaysVisibleFields = ['tag_no', 'tag_idx', 'cls_id']
+
+    // 2. 고정 컬럼 먼저 필터링
+    const pinnedCols = dynamicCols.value.filter(col => alwaysVisibleFields.includes(col.field.toLowerCase()))
+
+    // 3. 입력한 키워드 '순서대로' 나머지 컬럼들 추출
+    const matchedCols = []
+    keywords.forEach(kw => {
+      dynamicCols.value.forEach(col => {
+        const fieldName = col.field.toLowerCase()
+        // 고정 컬럼이 아니고, 키워드를 포함하며, 아직 추가되지 않은 컬럼인 경우
+        if (
+          !alwaysVisibleFields.includes(fieldName) &&
+          fieldName.includes(kw) &&
+          !matchedCols.find(m => m.field === col.field)
+        ) {
+          matchedCols.push(col)
+        }
+      })
+    })
+
+    // 4. [고정 컬럼] + [입력 순서에 따른 매칭 컬럼] 합쳐서 리턴
+    return [...pinnedCols, ...matchedCols]
   })
 
   const filteredData = computed(() => {
     if (!localFilterQuery.value.trim()) return rawDataList.value
-    const kws = localFilterQuery.value
-      .split(/[\s,\n]+/)
-      .filter(k => k)
-      .map(k => k.toLowerCase())
-    return rawDataList.value.filter(i => {
-      const target = `${i.TAG_NO || ''} ${i.EP_ID || ''} ${i.CLS_ID || ''} ${i.Source || ''}`.toLowerCase()
-      return kws.some(kw => target.includes(kw))
-    })
+    const kw = localFilterQuery.value.toLowerCase()
+    return rawDataList.value.filter(row => Object.values(row).some(val => String(val).toLowerCase().includes(kw)))
   })
 
   const gridBindProps = computed(() => ({
-    columnDefs: mainColDefs.value,
+    columnDefs: filteredColumns.value,
     rowData: filteredData.value,
     style: 'width: 100%; height: 100%',
     class: 'ag-theme-custom shadow-sm',
@@ -434,145 +329,24 @@
     defaultColDef: { sortable: true, filter: true, resizable: true },
   }))
 
-  const modalGridBindProps = computed(() => {
-    if (!selectedRow.value) return {}
-    const rows = []
-    Object.entries(selectedRow.value).forEach(([k, v]) => {
-      if (k !== 'ATTRIBUTES' && !k.startsWith('ATT_') && k !== 'Source')
-        rows.push({ category: 'System', key: k, value: v ?? '-' })
-    })
-    const attrs = selectedRow.value.ATTRIBUTES || []
-    attrs.forEach(a => rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' }))
-    return {
-      columnDefs: [
-        {
-          headerName: 'Category',
-          field: 'category',
-          width: 120,
-          cellStyle: { fontWeight: 'bold', background: '#f8f9fa' },
-        },
-        { headerName: 'Property', field: 'key', width: 220 },
-        {
-          headerName: 'Value',
-          field: 'value',
-          flex: 1,
-          cellStyle: p => ({ color: p.value === 'null' ? '#adb5bd' : '#000' }),
-        },
-      ],
-      rowData: rows,
-      headerHeight: 35,
-      rowHeight: 32,
-    }
-  })
-
-  const onDelete = async () => {
-    const nodes = gridApi.value?.getSelectedNodes() || []
-    const pNo = manualProjNo.value?.trim() || currentProjNo.value
-    if (!nodes.length) return sAlert.Warning('항목을 선택해주세요.')
-    if (!confirm(`${nodes.length}건을 삭제하시겠습니까?`)) return
-    try {
-      gridApi.value.setGridOption('loading', true)
-      for (const n of nodes) {
-        const url =
-          n.data.Source === 'Published' ? '/api/Admin/Tool/DeletePublishedData' : '/api/Admin/Tool/DeleteWorkingData'
-        await axiosWrapper.post(url, { ProjectNo: pNo, TagIdx: n.data.TAG_IDX })
-      }
-      sAlert.Success('삭제 완료')
-      await getData()
-    } catch (e) {
-      sAlert.Error('삭제 중 에러 발생')
-    } finally {
-      if (gridApi.value) gridApi.value.setGridOption('loading', false)
-    }
-  }
-
   const onGridReady = p => {
     gridApi.value = p.api
   }
-  const onSelectionChanged = () => {
-    if (gridApi.value) isDisabledDeleteBtn.value = gridApi.value.getSelectedNodes().length === 0
+
+  const onCellClicked = p => {
+    if (p.colDef.field === 'TAG_NO' && p.data) {
+      selectedJsonData.value = JSON.stringify(p.data, null, 2)
+      showJsonModal.value = true
+    }
   }
-  defineOptions({ name: 'TagAnalysisFinalIntegration' })
 </script>
 
-<style scoped lang="scss">
+<style scoped>
   .custom-input-width {
-    width: 160px !important;
+    width: 150px !important;
   }
-  .custom-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 9999;
+  ::v-deep(.diff-wrapper) {
     display: flex;
     align-items: center;
-    justify-content: center;
-  }
-  .custom-modal-window {
-    background: #fff;
-    width: 1000px;
-    height: 85%;
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .modal-header-dark {
-    background: #0f172a;
-    color: #fff;
-    padding: 12px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-shrink: 0;
-  }
-  .modal-body-content {
-    flex-grow: 1;
-    min-height: 0;
-    background: #fff;
-    display: flex;
-    flex-direction: column;
-  }
-  .modal-grid-container {
-    flex: 1;
-    width: 100%;
-    height: 100%;
-    background: #fff;
-    border: 1px solid #dee2e6 !important;
-  }
-  .json-wrapper {
-    flex: 1;
-    background: #1e293b;
-    overflow: auto;
-    padding: 15px;
-  }
-  .json-content {
-    margin: 0;
-    color: #f1f5f9;
-    font-family: 'Consolas', monospace;
-    font-size: 13px;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-  }
-  ::v-deep(.filter-highlight) {
-    background-color: #ffeb3b !important;
-    color: #000 !important;
-    padding: 0 2px;
-    border-radius: 2px;
-    font-weight: bold;
-  }
-  ::v-deep(.badge) {
-    min-width: 80px;
-    text-align: center;
-    cursor: pointer;
-    border: none;
-  }
-  ::v-deep(.att-column-header) {
-    background-color: #fff9db !important;
-    color: #856404 !important;
-    font-weight: bold !important;
   }
 </style>
