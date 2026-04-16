@@ -1,199 +1,140 @@
-Spread JS 에서 떠블클릭했을 때 아래와 같이 .js을 실행해서 하고 있는데
-이것은 약간 이질감이 들어서 엑셀의 데이터 유효성 검사 "목록"를 하는것처럼 셀을 떠블 클릭하고 글자를 입력하면 api 호출해서 아래 리스트 를 보여주는것에서 선택해서 값을 입력되는것으로 코드 수정해줬으면해
-
-
-
 import GC from '@mescius/spread-sheets-designer'
 import { ApiCommon } from '@/utils/axios/api-common'
 import { useEmployees } from '@/stores/app-employees'
 const { setEmployeeInfo } = useEmployees()
 
 const _EditorType = 'UserEditor'
-const _EditorWidth = 300
-const _EditorHeight = 65
 
 function UserSelectCellType(FIELD, NAME_FIELD, DEPT_FIELD) {
   this.field = FIELD
   this.nameField = NAME_FIELD
   this.deptField = DEPT_FIELD
-  this.name = ''
-  this.searchID = 0
   this.searchTimer = null
 }
-UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
-UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
-  // if (value) { GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, value, x, y, w, h, style, options]); }
 
+UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
+
+// 셀에 표시될 텍스트 렌더링
+UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
   const sheet = options.sheet
-  const row = options.row
-  // const col = options.col
-  let data = sheet.getDataItem(row)
-  if (!data) {
-    const dataSource = sheet.getDataSource()
-    if (dataSource && !Array.isArray(dataSource)) {
-      data = dataSource.getSource()
-    }
-  }
+  const data = sheet.getDataItem(options.row)
   const name = data?.[this.nameField] ?? ''
   const dept = data?.[this.deptField] ?? ''
-  const deptV = dept ? `(${dept})` : ''
-  const text = !data ? '' : `${name}${deptV}`
+  const text = name ? `${name}${dept ? `(${dept})` : ''}` : (value || '')
+  
   GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, text, x, y, w, h, style, options])
-  return
 }
-UserSelectCellType.prototype.updateEditor = function (editorContext /*cellStyle, cellRect*/) {
-  if (editorContext) {
-    editorContext.parentNode.style.width = '100%'
-    editorContext.parentNode.style.height = '100%'
-    return { width: _EditorWidth, height: _EditorHeight }
-  }
-}
-UserSelectCellType.prototype.isEditingValueChanged = function (oldValue, newValue) {
-  return newValue !== oldValue
-}
-// prettier-ignore
-UserSelectCellType.prototype.createEditorElement = function () {
-  let userOptions = []
-  let userIndex = {}
 
-  // WRAPPER
+// 에디터 생성 (엑셀 목록 스타일)
+UserSelectCellType.prototype.createEditorElement = function (context) {
   const wrapper = document.createElement('div')
   wrapper.setAttribute('gcUIElement', 'gcEditingInput')
   wrapper.setAttribute('EditorType', _EditorType)
-  wrapper.className = 'spread-user-editor w-100 h-100 p-1 v-select'
-  wrapper.style.backgroundColor = 'white'
-  wrapper.style.overflow = 'hidden'
+  wrapper.style.position = 'relative'
+  wrapper.style.overflow = 'visible' // 목록이 셀 밖으로 나가야 함
 
-  // HEADER
-  const header = document.createElement('div')
-  header.className = 'w-100'
+  // 실제 입력창 (엑셀 셀처럼 보이게)
+  const input = document.createElement('input')
+  input.className = 'spread-input-editor'
+  input.style.width = '100%'
+  input.style.height = '100%'
+  input.style.border = 'none'
+  input.style.outline = 'none'
+  input.style.padding = '0 4px'
+  input.setAttribute('editoruses', 'text-input')
 
-  // TITLE
-  const title = document.createElement('span')
-  title.className = ''
-  title.innerText = 'Search User'
+  // 드롭다운 목록
+  const listbox = document.createElement('ul')
+  listbox.className = 'vs__dropdown-menu' // 기존 스타일 유지 또는 정의 필요
+  listbox.style.position = 'absolute'
+  listbox.style.top = '100%'
+  listbox.style.left = '0'
+  listbox.style.width = '100%'
+  listbox.style.minWidth = '200px'
+  listbox.style.zIndex = '1000'
+  listbox.style.backgroundColor = 'white'
+  listbox.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)'
+  listbox.style.listStyle = 'none'
+  listbox.style.margin = '0'
+  listbox.style.padding = '0'
+  listbox.style.display = 'none' // 초기엔 숨김
+  listbox.setAttribute('editoruses', 'list-container')
 
-  // COMBO_BOX
-  const combo = document.createElement('div')
-  combo.className = 'cursor-text px-2 py-1 d-flex border border-1 border-light rounded-2'
+  let selectedValue = ''
 
-  // SEARCH_INPUT
-  if (this.searchTimer) { clearTimeout(this.searchTimer); }
-  const search = document.createElement('input')
-  search.className = 'border-0'
-  search.style.flex = 'auto'
-  search.style.outline = 'none'
-  search.type = 'text'
-  search.autocomplete = 'off'
-  search.placeholder = 'Name to search for. ex)홍길동 / ㅎㄱㄷ'
-  search.setAttribute('aria-autocomplete', 'list')
-  search.addEventListener('focus', function () {
-    listbox.style.opacity = 1
-    listbox.style.visibility = 'visible'
-  })
-  search.addEventListener('blur', function () {
-    listbox.style.opacity = 0
-    listbox.style.visibility = 'hidden'
-  })
-  search.addEventListener('input', e => {
-    if (this.searchTimer) { clearTimeout(this.searchTimer); }
-    if (!e.target) { return; }
-    if (!e.isComposing && e.data) {
-      e.target.value = this.name
+  // 입력 이벤트: API 호출
+  input.addEventListener('input', (e) => {
+    const keyword = e.target.value
+    if (this.searchTimer) clearTimeout(this.searchTimer)
+
+    if (!keyword || keyword.length < 2) {
+      listbox.style.display = 'none'
       return
     }
 
-    listbox.innerHTML = ''
-    const userName = String(e.target.value ?? '').replaceAll(' ', '')
-    if (userName.length < 2) { return; }
-
-    this.name = e.target.value
-    const currentID = (this.searchID += 1)
     this.searchTimer = setTimeout(async () => {
       try {
-        const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: userName }) ?? [];
-        if (currentID !== this.searchID) { return; }
-        userOptions = []
-        userIndex = {}
-        const itemList = []
-        response?.forEach((item, index) => {
-          if (!item.EMP_NO) { return; } // UserID가 있는 항목만 필터링
-          const code = item.EMP_NO
-          const label = `${item.EMP_NM ?? ''}(${item.DEPT_NAME ?? ''})`
-          const userInfo = { ...item, code, label }
-          setEmployeeInfo(userInfo)
-
-          const listitem = document.createElement('li')
-          listitem.className = 'vs__dropdown-option'
-          listitem.innerText = label
-          listitem.setAttribute('option-id', index)
-          itemList.push(listitem)
-
-          userOptions.push(userInfo)
-          userIndex[index] = userInfo
-        })
-        listbox.append(...itemList)
-      } catch (error) {
-        // console.error(error);
+        const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: keyword })
+        listbox.innerHTML = ''
+        
+        if (response && response.length > 0) {
+          listbox.style.display = 'block'
+          response.forEach(item => {
+            const li = document.createElement('li')
+            li.style.padding = '4px 8px'
+            li.style.cursor = 'pointer'
+            li.className = 'vs__dropdown-option'
+            li.innerText = `${item.EMP_NM}(${item.DEPT_NAME || ''})`
+            
+            li.onmousedown = () => { // click보다 mousedown이 blur 이전에 발생함
+              selectedValue = item.EMP_NO
+              input.value = item.EMP_NM
+              setEmployeeInfo({ ...item, code: item.EMP_NO })
+              
+              // 선택 후 에디터 종료를 위해 SpreadJS 명령 실행
+              const sheet = GC.Spread.Sheets.findControl(wrapper).getActiveSheet()
+              sheet.endEdit()
+            }
+            listbox.appendChild(li)
+          })
+        } else {
+          listbox.style.display = 'none'
+        }
+      } catch (err) {
+        listbox.style.display = 'none'
       }
     }, 300)
   })
-  setTimeout(()=> search.focus(), 10)
 
-  // INDICATOR_ICON
-  const indicator = document.createElement('i')
-  indicator.className = 'fa fa-angle-down align-self-center'
-
-  // SELECT_BOX
-  const listbox = document.createElement('ul')
-  listbox.className = 'vs__dropdown-menu rounded-2 position-fixed'
-  listbox.style.top = 'unset'
-  listbox.style.left = 'unset'
-  listbox.style.width = '290px'
-  listbox.style.opacity = 0
-  listbox.style.visibility = 'hidden'
-  listbox.style.transition = 'opacity 0.2s linear, visibility 0s linear 0.2s'
-  listbox.setAttribute('EditorUses', 'list')
-  listbox.addEventListener('click', function (e) {
-    if (e.target && e.target.nodeName === 'LI') {
-      const optionId = e.target.getAttribute('option-id')
-      const optionText = e.target.innerText
-      const userInfo = userIndex?.[optionId]
-      search.value = optionText
-      editorVal.value = userInfo?.code
-    }
-  })
-
-  // HIDDEN_VALUE
-  const editorVal = document.createElement('input')
-  editorVal.type = 'text'
-  editorVal.style.display = 'none'
-  editorVal.disabled = true
-  editorVal.readonly = true
-  editorVal.setAttribute('EditorUses', 'value')
-
-  // CREATE_EDITOR
-  header.appendChild(title)
-  combo.appendChild(search)
-  combo.appendChild(indicator)
-  wrapper.appendChild(header)
-  wrapper.appendChild(combo)
+  wrapper.appendChild(input)
   wrapper.appendChild(listbox)
-  wrapper.appendChild(editorVal)
+  
+  // 가상의 'value' 저장용 속성
+  wrapper.getFinalValue = () => selectedValue
+
   return wrapper
 }
-UserSelectCellType.prototype.getEditorValue = function (editorContext) {
-  if (editorContext && editorContext.getAttribute('EditorType') === _EditorType) {
-    const valNode = editorContext.querySelector('[editoruses="value"]')
-    return valNode.value
+
+// 에디터가 열릴 때 기존 값 세팅
+UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
+  if (editorContext) {
+    const input = editorContext.querySelector('[editoruses="text-input"]')
+    input.value = value || ''
+    input.focus()
   }
 }
-UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
-  if (editorContext && editorContext.getAttribute('EditorType') === _EditorType) {
-    if (value) {
-      const valNode = editorContext.querySelector('[editoruses="value"]')
-      valNode.value = value
-    }
+
+// 편집 종료 시 반환할 값
+UserSelectCellType.prototype.getEditorValue = function (editorContext) {
+  if (editorContext) {
+    return editorContext.getFinalValue() || editorContext.querySelector('[editoruses="text-input"]').value
+  }
+}
+
+UserSelectCellType.prototype.updateEditor = function (editorContext, cellStyle, cellRect) {
+  if (editorContext) {
+    // 셀의 크기에 맞춤
+    return { width: cellRect.width, height: cellRect.height }
   }
 }
 
