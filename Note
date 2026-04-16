@@ -3,18 +3,39 @@ import { ApiCommon } from '@/utils/axios/api-common'
 import { useEmployees } from '@/stores/app-employees'
 const { setEmployeeInfo } = useEmployees()
 
+const _EditorType = 'UserSelectEditor'
+
+// 1. 엑셀 스타일 리스트 UI (CSS)
+if (!document.getElementById('excel-popup-style')) {
+  const style = document.createElement('style');
+  style.id = 'excel-popup-style';
+  style.innerHTML = `
+    .excel-list-box { 
+      position: fixed; z-index: 20000; background: white; 
+      border: 1px solid #808080; box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+      overflow-y: auto; max-height: 200px; padding: 0; margin: 0; list-style: none;
+    }
+    .excel-list-item { 
+      padding: 5px 10px; cursor: pointer; font-size: 13px; color: black; font-family: sans-serif;
+    }
+    .excel-list-item:hover { background-color: #0078d4 !important; color: white !important; }
+  `;
+  document.head.appendChild(style);
+}
+
 function UserSelectCellType(FIELD, NAME_FIELD, DEPT_FIELD) {
   this.field = FIELD
   this.nameField = NAME_FIELD
   this.deptField = DEPT_FIELD
   this.searchTimer = null
-  this.currentResponse = []
-  this.originalValue = null // ESC 대비 기존 값 보관
+  this.listbox = null
+  this.originalValue = null // 기존 사번 보관용
+  this.selectedEmpNo = null // 선택된 사번 보관용
 }
 
 UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
 
-// 1. 화면 렌더링: 사번 대신 이름(부서) 표시
+// 셀 화면 표시 (사번 -> 이름/부서)
 UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
   const sheet = options.sheet
   const data = sheet.getDataItem(options.row)
@@ -24,73 +45,102 @@ UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, op
   GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, text, x, y, w, h, style, options])
 }
 
-// 2. 에디터 생성
 UserSelectCellType.prototype.createEditorElement = function (context) {
+  const wrapper = document.createElement('div')
+  wrapper.setAttribute('gcUIElement', 'gcEditingInput')
+  wrapper.style.cssText = 'background: white; display: flex; border: 1px solid #217346; box-sizing: border-box;'
+
   const input = document.createElement('input')
-  input.setAttribute('gcUIElement', 'gcEditingInput')
-  input.style.cssText = 'border: none; outline: none; padding: 0 4px; width: 100%; height: 100%; box-sizing: border-box;'
+  input.style.cssText = 'flex: 1; border: none; outline: none; padding: 0 4px; font-size: 13px;'
   
-  const sheet = context.sheet
-  const row = context.row
-  const col = context.col
+  // 엑셀 삼각형 버튼 디자인
+  const btn = document.createElement('div')
+  btn.style.cssText = 'width: 18px; background: #f0f0f0; border-left: 1px solid #808080; display: flex; align-items: center; justify-content: center;'
+  btn.innerHTML = '<div style="width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid #333;"></div>'
+
+  // 리스트박스 생성 (Body 부착)
+  const listbox = document.createElement('ul')
+  listbox.className = 'excel-list-box'
+  listbox.style.display = 'none'
+  document.body.appendChild(listbox)
+  this.listbox = listbox
 
   input.addEventListener('input', (e) => {
     if (this.searchTimer) clearTimeout(this.searchTimer)
     const keyword = e.target.value.trim()
 
-    if (keyword.length < 1) return
+    if (keyword.length < 1) {
+      listbox.style.display = 'none'
+      return
+    }
 
-    // 0.5초 대기 후 실행 (디바운스)
+    // 0.5초 디바운스 적용
     this.searchTimer = setTimeout(async () => {
-      try {
-        const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: keyword }) ?? []
-        this.currentResponse = response
+      const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: keyword }) ?? []
+      listbox.innerHTML = ''
 
-        if (response.length > 0) {
-          // 목록 구성
-          const listString = response.map(item => `${item.EMP_NM}(${item.DEPT_NAME || ''})`).join(',')
+      if (response.length > 0) {
+        const rect = wrapper.getBoundingClientRect()
+        listbox.style.width = `${rect.width}px`
+        listbox.style.top = `${rect.bottom + window.scrollY}px`
+        listbox.style.left = `${rect.left + window.scrollX}px`
+        listbox.style.display = 'block'
+
+        response.forEach(item => {
+          const li = document.createElement('li')
+          li.className = 'excel-list-item'
+          li.innerText = `${item.EMP_NM}(${item.DEPT_NAME || ''})`
           
-          // 데이터 유효성 검사(목록) 생성 및 적용
-          const dv = GC.Spread.Sheets.DataValidation.createListValidator(listString)
-          dv.highlightInvalidData(false)
-          sheet.setDataValidator(row, col, dv)
-          
-          // 리스트 강제 호출 (사용자에게 목록 노출)
-          sheet.showCellEditDropDown(row, col)
-        }
-      } catch (err) {
-        console.error('Search Error:', err)
+          li.onmousedown = (ev) => {
+            ev.preventDefault()
+            this.selectedEmpNo = item.EMP_NO // 사번 저장
+            input.value = item.EMP_NM
+            
+            setEmployeeInfo({ ...item, code: item.EMP_NO })
+            listbox.style.display = 'none'
+            
+            // 편집 종료
+            context.sheet.endEdit()
+          }
+          listbox.appendChild(li)
+        })
+      } else {
+        listbox.style.display = 'none'
       }
-    }, 500) // 0.5초 반응 없으면 호출
+    }, 500)
   })
 
-  return input
-}
-
-// 3. 값 확정 및 사번 리턴
-UserSelectCellType.prototype.getEditorValue = function (editorContext) {
-  const textValue = editorContext.value
+  wrapper.appendChild(input)
+  wrapper.appendChild(btn)
   
-  // 리스트 결과 중 선택된 텍스트와 일치하는 항목 찾기
-  if (this.currentResponse && this.currentResponse.length > 0) {
-    const matched = this.currentResponse.find(item => 
-      `${item.EMP_NM}(${item.DEPT_NAME || ''})` === textValue || item.EMP_NM === textValue
-    )
-    
-    if (matched) {
-      setEmployeeInfo({ ...matched, code: matched.EMP_NO })
-      return matched.EMP_NO // 실제 데이터로 사번 반환
-    }
-  }
-
-  // 매칭되는 항목이 없거나 ESC 등으로 나갈 경우 기존 값 유지 (또는 입력 텍스트 반환)
-  return this.originalValue; 
+  setTimeout(() => input.focus(), 10)
+  return wrapper
 }
 
-// 4. 편집 시작 시 초기 설정
+// 편집 시작 시 호출 (기존 사번 보관 및 초기화)
 UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
-  this.originalValue = value; // 취소 대비 기존 값 저장 (사번)
-  editorContext.value = '';   // 입력창은 비워서 시작
+  this.originalValue = value; // 취소 시 복구할 기존 사번
+  this.selectedEmpNo = null;  // 선택 값 초기화
+  const input = editorContext.querySelector('input')
+  input.value = ''
+}
+
+// 편집 종료 시 호출 (최종 반환 값 결정)
+UserSelectCellType.prototype.getEditorValue = function (editorContext) {
+  // 1. 리스트에서 선택한 사번이 있다면 그것을 반환
+  if (this.selectedEmpNo) {
+    return this.selectedEmpNo
+  }
+  
+  // 2. 선택하지 않고 그냥 나갔거나 ESC를 누른 경우 (기존 사번 유지)
+  return this.originalValue
+}
+
+UserSelectCellType.prototype.destroyEditorElement = function (editorContext) {
+  if (this.listbox) {
+    this.listbox.remove()
+    this.listbox = null
+  }
 }
 
 UserSelectCellType.prototype.updateEditor = function (editorContext, cellStyle, cellRect) {
