@@ -3,40 +3,17 @@ import { ApiCommon } from '@/utils/axios/api-common'
 import { useEmployees } from '@/stores/app-employees'
 const { setEmployeeInfo } = useEmployees()
 
-const _EditorType = 'UserEditor'
-
-// 엑셀 스타일 UI를 위한 CSS 주입
-if (!document.getElementById('spread-excel-style')) {
-  const style = document.createElement('style');
-  style.id = 'spread-excel-style';
-  style.innerHTML = `
-    .excel-popup-list { 
-      position: fixed; z-index: 10000; background: white; 
-      border: 1px solid #808080; box-shadow: 2px 2px 3px rgba(0,0,0,0.2);
-      overflow-y: auto; max-height: 200px; padding: 0; margin: 0; list-style: none;
-    }
-    .excel-popup-item { 
-      padding: 3px 10px; cursor: pointer; font-size: 13px; color: black; font-family: Calibri, sans-serif;
-    }
-    .excel-popup-item:hover { background-color: #0078d4 !important; color: white !important; }
-    .excel-popup-list::-webkit-scrollbar { width: 14px; }
-    .excel-popup-list::-webkit-scrollbar-thumb { background: #cdcdcd; border: 3px solid white; border-radius: 7px; }
-  `;
-  document.head.appendChild(style);
-}
-
 function UserSelectCellType(FIELD, NAME_FIELD, DEPT_FIELD) {
   this.field = FIELD
   this.nameField = NAME_FIELD
   this.deptField = DEPT_FIELD
-  this.name = ''
-  this.searchID = 0
   this.searchTimer = null
+  this.currentResponse = [] // API 결과를 들고 있을 변수
 }
 
 UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
 
-// 평상시 셀에 이름(부서) 표시
+// 1. 화면 표시: 사번 데이터 대신 이름(부서) 표시
 UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
   const sheet = options.sheet
   const data = sheet.getDataItem(options.row)
@@ -46,126 +23,76 @@ UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, op
   GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, text, x, y, w, h, style, options])
 }
 
-UserSelectCellType.prototype.createEditorElement = function () {
-  let userIndex = {}
+// 2. 에디터 생성: SpreadJS 기본 인풋을 사용하면서 입력 시 Validator를 갱신
+UserSelectCellType.prototype.createEditorElement = function (context) {
+  const input = document.createElement('input')
+  input.setAttribute('gcUIElement', 'gcEditingInput')
+  input.style.cssText = 'border: none; outline: none; padding: 0 4px;'
+  
+  const sheet = context.sheet
+  const row = context.row
+  const col = context.col
 
-  // 1. WRAPPER (셀 크기에 딱 맞는 에디터 테두리)
-  const wrapper = document.createElement('div')
-  wrapper.setAttribute('gcUIElement', 'gcEditingInput')
-  wrapper.setAttribute('EditorType', _EditorType)
-  wrapper.style.cssText = 'background: white; display: flex; align-items: stretch; border: 1px solid #217346; box-sizing: border-box; overflow: visible;'
+  input.addEventListener('input', (e) => {
+    const keyword = e.target.value.trim()
+    if (this.searchTimer) clearTimeout(this.searchTimer)
+    if (keyword.length < 1) return
 
-  // 2. SEARCH_INPUT (실제 입력창)
-  const search = document.createElement('input')
-  search.style.cssText = 'flex: 1; border: none; outline: none; padding: 0 4px; font-size: 13px; min-width: 0;'
-  search.type = 'text'
-  search.autocomplete = 'off'
-
-  // 3. EXCEL BUTTON (우측 역삼각형 버튼)
-  const btn = document.createElement('div')
-  btn.style.cssText = 'width: 17px; background: #f0f0f0; border-left: 1px solid #808080; display: flex; align-items: center; justify-content: center; flex-shrink: 0;'
-  const arrow = document.createElement('div')
-  arrow.style.cssText = 'width: 0; height: 0; border-left: 3.5px solid transparent; border-right: 3.5px solid transparent; border-top: 5px solid #333;'
-  btn.appendChild(arrow)
-
-  // 4. LISTBOX (팝업 리스트)
-  const listbox = document.createElement('ul')
-  listbox.className = 'excel-popup-list'
-  listbox.style.display = 'none'
-  document.body.appendChild(listbox) // 최상단 노출을 위해 body에 부착
-
-  // 5. HIDDEN_VALUE (사번 저장용)
-  const editorVal = document.createElement('input')
-  editorVal.type = 'hidden'
-  editorVal.setAttribute('EditorUses', 'value')
-
-  // API 호출 및 리스트 생성
-  search.addEventListener('input', e => {
-    if (this.searchTimer) { clearTimeout(this.searchTimer); }
-    const userName = e.target.value.trim()
-    
-    if (userName.length < 1) {
-      listbox.style.display = 'none'
-      return
-    }
-
-    const currentID = (this.searchID += 1)
     this.searchTimer = setTimeout(async () => {
       try {
-        const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: userName }) ?? []
-        if (currentID !== this.searchID) return
-
-        listbox.innerHTML = ''
-        userIndex = {}
+        const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: keyword }) ?? []
+        this.currentResponse = response
 
         if (response.length > 0) {
-          // 위치 계산: 에디터 바로 아래에 붙임
-          const rect = wrapper.getBoundingClientRect()
-          listbox.style.width = `${rect.width}px`
-          listbox.style.left = `${rect.left + window.scrollX}px`
-          listbox.style.top = `${rect.bottom + window.scrollY}px`
-          listbox.style.display = 'block'
-
-          response.forEach((item, index) => {
-            const listitem = document.createElement('li')
-            listitem.className = 'excel-popup-item'
-            listitem.innerText = `${item.EMP_NM}(${item.DEPT_NAME ?? ''})`
-            
-            listitem.onmousedown = (ev) => {
-              ev.preventDefault() // Input 포커스 유지
-              search.value = item.EMP_NM
-              editorVal.value = item.EMP_NO // 사번 저장
-              
-              setEmployeeInfo({ ...item, code: item.EMP_NO })
-              listbox.style.display = 'none'
-              
-              // 즉시 편집 종료
-              const sheet = GC.Spread.Sheets.findControl(wrapper.closest('.gc-spread-sheets')).getActiveSheet()
-              sheet.endEdit()
-            }
-            listbox.appendChild(listitem)
-            userIndex[index] = item
-          })
-        } else {
-          listbox.style.display = 'none'
+          // 1. API 결과를 "이름(부서)" 형태의 문자열 목록으로 변환
+          const listArray = response.map(item => `${item.EMP_NM}(${item.DEPT_NAME || ''})`)
+          
+          // 2. SpreadJS 내장 리스트 유효성 검사 생성
+          const dv = GC.Spread.Sheets.DataValidation.createListValidator(listArray.join(','))
+          dv.highlightInvalidData(false) // 잘못된 값 표시 끄기 (엑셀 스타일)
+          
+          // 3. 해당 셀에 즉시 유효성 검사 적용 (삼각형 버튼 자동 생성)
+          sheet.setDataValidator(row, col, dv)
+          
+          // 4. 리스트 드롭다운을 즉시 펼쳐서 사용자에게 보여줌
+          // 편집 중인 상태에서 드롭다운만 호출하는 명령
+          GC.Spread.Sheets.Commands.showList.execute(sheet.getParent(), {
+              row: row,
+              col: col,
+              dropDownVisible: true
+          });
         }
-      } catch (error) {
-        listbox.style.display = 'none'
+      } catch (err) {
+        console.error(err)
       }
     }, 300)
   })
 
-  wrapper.appendChild(search)
-  wrapper.appendChild(btn)
-  wrapper.appendChild(editorVal)
-
-  // 에디터가 메모리에서 해제될 때 리스트박스도 삭제하도록 참조 저장
-  wrapper.listbox = listbox
-  
-  setTimeout(() => search.focus(), 10)
-  return wrapper
+  return input
 }
 
+// 3. 값 확정: 사용자가 목록에서 선택한 '이름(부서)'을 '사번'으로 치환하여 저장
 UserSelectCellType.prototype.getEditorValue = function (editorContext) {
-  const valNode = editorContext.querySelector('[editoruses="value"]')
-  return valNode.value || editorContext.querySelector('input[type="text"]').value
+  const selectedText = editorContext.value
+  
+  if (this.currentResponse.length > 0) {
+    // 텍스트와 매칭되는 사번 찾기
+    const matched = this.currentResponse.find(item => 
+      `${item.EMP_NM}(${item.DEPT_NAME || ''})` === selectedText || item.EMP_NM === selectedText
+    )
+    
+    if (matched) {
+      // 스토어 정보 업데이트
+      setEmployeeInfo({ ...matched, code: matched.EMP_NO })
+      // 셀 데이터로 사번(EMP_NO) 리턴
+      return matched.EMP_NO
+    }
+  }
+  return selectedText
 }
 
 UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
-  const textInput = editorContext.querySelector('input[type="text"]')
-  textInput.value = '' // 입력 시작 시 초기화
-}
-
-UserSelectCellType.prototype.updateEditor = function (editorContext, cellStyle, cellRect) {
-  if (editorContext) {
-    return { width: cellRect.width, height: cellRect.height }
-  }
-}
-
-UserSelectCellType.prototype.destroyEditorElement = function (editorContext) {
-  if (editorContext.listbox) {
-    editorContext.listbox.remove()
-  }
+  editorContext.value = '' // 편집 시작 시 초기화
 }
 
 export default UserSelectCellType
