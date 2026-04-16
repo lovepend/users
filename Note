@@ -3,27 +3,32 @@ import { ApiCommon } from '@/utils/axios/api-common'
 import { useEmployees } from '@/stores/app-employees'
 const { setEmployeeInfo } = useEmployees()
 
-const _EditorType = 'UserSelectEditor'
+const _EditorType = 'ExcelStylePopupEditor'
 
-// CSS: 엑셀 스타일의 리스트와 에디터 스타일
-if (!document.getElementById('excel-popup-style')) {
+// CSS: 캡처 화면과 동일한 드롭다운 및 버튼 스타일
+if (!document.getElementById('excel-pure-style')) {
   const style = document.createElement('style');
-  style.id = 'excel-popup-style';
+  style.id = 'excel-pure-style';
   style.innerHTML = `
-    .excel-editor-wrapper {
-      position: fixed; z-index: 15000; background: white;
-      border: 2px solid #217346; box-sizing: border-box;
-      display: flex; align-items: stretch;
+    .excel-btn-anchor {
+      position: fixed; z-index: 15000; width: 18px; height: 18px;
+      background: #e1e1e1; border: 1px solid #abadb3; 
+      display: flex; align-items: center; justify-content: center; cursor: default;
     }
-    .excel-list-box { 
-      position: fixed; z-index: 20000; background: white; 
-      border: 1px solid #808080; box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
-      overflow-y: auto; max-height: 200px; padding: 0; margin: 0; list-style: none;
+    .excel-btn-arrow {
+      width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid #555;
     }
-    .excel-list-item { 
-      padding: 5px 10px; cursor: pointer; font-size: 13px; color: black;
+    .excel-dropdown-list {
+      position: fixed; z-index: 16000; background: white;
+      border: 1px solid black; box-sizing: border-box;
+      padding: 0; margin: 0; list-style: none; overflow-y: auto; max-height: 200px;
     }
-    .excel-list-item:hover { background-color: #0078d4 !important; color: white !important; }
+    .excel-dropdown-item {
+      padding: 2px 8px; font-size: 13px; color: black; cursor: pointer; white-space: nowrap;
+    }
+    .excel-dropdown-item:hover {
+      background-color: #0078d4 !important; color: white !important;
+    }
   `;
   document.head.appendChild(style);
 }
@@ -33,14 +38,14 @@ function UserSelectCellType(FIELD, NAME_FIELD, DEPT_FIELD) {
   this.nameField = NAME_FIELD
   this.deptField = DEPT_FIELD
   this.searchTimer = null
-  this.listbox = null
-  this.originalValue = null 
-  this.selectedEmpNo = null 
+  this.elements = { btn: null, list: null };
+  this.originalValue = null;
+  this.selectedEmpNo = null;
 }
 
 UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
 
-// 1. 셀 화면 표시 (아이콘 없이 텍스트만 깨끗하게)
+// 셀 출력 (텍스트만 깔끔하게)
 UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
   const sheet = options.sheet
   const data = sheet.getDataItem(options.row)
@@ -50,106 +55,91 @@ UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, op
   GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, text, x, y, w, h, style, options])
 }
 
-// 2. 에디터 생성 (셀 위치에 팝업으로 생성)
 UserSelectCellType.prototype.createEditorElement = function (context) {
-  // 팝업 에디터 외각 (셀과 동일한 위치/크기로 설정될 예정)
-  const wrapper = document.createElement('div')
-  wrapper.className = 'excel-editor-wrapper'
-  wrapper.setAttribute('gcUIElement', 'gcEditingInput')
-
+  // 1. 인풋 에디터 (셀 테두리 안에 존재)
   const input = document.createElement('input')
-  input.style.cssText = 'flex: 1; border: none; outline: none; padding: 0 4px; font-size: 13px;'
-  
-  const btn = document.createElement('div')
-  btn.style.cssText = 'width: 18px; background: #f0f0f0; border-left: 1px solid #808080; display: flex; align-items: center; justify-content: center;'
-  btn.innerHTML = '<div style="width: 0; height: 0; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid #333;"></div>'
+  input.setAttribute('gcUIElement', 'gcEditingInput')
+  input.style.cssText = 'border: 2px solid #217346; outline: none; padding: 0 4px; box-sizing: border-box;'
 
-  const listbox = document.createElement('ul')
-  listbox.className = 'excel-list-box'
-  listbox.style.display = 'none'
-  document.body.appendChild(listbox)
-  this.listbox = listbox
+  // 2. 우측 버튼 (셀 바깥에 배치하기 위해 body에 부착)
+  const btn = document.createElement('div')
+  btn.className = 'excel-btn-anchor'
+  btn.innerHTML = '<div class="excel-btn-arrow"></div>'
+  document.body.appendChild(btn)
+  this.elements.btn = btn
+
+  // 3. 리스트박스 (body 부착)
+  const list = document.createElement('ul')
+  list.className = 'excel-dropdown-list'
+  list.style.display = 'none'
+  document.body.appendChild(list)
+  this.elements.list = list
 
   input.addEventListener('input', (e) => {
     if (this.searchTimer) clearTimeout(this.searchTimer)
     const keyword = e.target.value.trim()
 
-    if (keyword.length < 1) {
-      listbox.style.display = 'none'
-      return
-    }
-
     this.searchTimer = setTimeout(async () => {
+      if (keyword.length < 1) { list.style.display = 'none'; return; }
       const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: keyword }) ?? []
-      listbox.innerHTML = ''
+      list.innerHTML = ''
 
       if (response.length > 0) {
-        const rect = wrapper.getBoundingClientRect()
-        listbox.style.width = `${rect.width}px`
-        listbox.style.top = `${rect.bottom + window.scrollY}px`
-        listbox.style.left = `${rect.left + window.scrollX}px`
-        listbox.style.display = 'block'
+        const rect = input.getBoundingClientRect()
+        // 캡처 화면처럼 리스트 위치 잡기
+        list.style.width = `${rect.width}px`
+        list.style.top = `${rect.bottom}px`
+        list.style.left = `${rect.left}px`
+        list.style.display = 'block'
 
         response.forEach(item => {
           const li = document.createElement('li')
-          li.className = 'excel-list-item'
-          li.innerText = `${item.EMP_NM}(${item.DEPT_NAME || ''})`
+          li.className = 'excel-dropdown-item'
+          li.innerText = item.EMP_NM // 캡처처럼 이름만 표시하거나 부서 포함 가능
           
           li.onmousedown = (ev) => {
             ev.preventDefault()
-            this.selectedEmpNo = item.EMP_NO 
+            this.selectedEmpNo = item.EMP_NO
             input.value = item.EMP_NM
             setEmployeeInfo({ ...item, code: item.EMP_NO })
-            listbox.style.display = 'none'
+            list.style.display = 'none'
             context.sheet.endEdit()
           }
-          listbox.appendChild(li)
+          list.appendChild(li)
         })
-      } else {
-        listbox.style.display = 'none'
       }
     }, 500)
   })
 
-  wrapper.appendChild(input)
-  wrapper.appendChild(btn)
-  
-  // 에디터 위치 정보 저장 (updateEditor에서 사용)
-  wrapper.listbox = listbox
-  
-  setTimeout(() => input.focus(), 10)
-  return wrapper
+  return input
 }
 
-// 3. 에디터 위치 및 크기 동적 할당 (셀의 위치를 계산해서 팝업으로 띄움)
+// 에디터/버튼 위치 조정
 UserSelectCellType.prototype.updateEditor = function (editorContext, cellStyle, cellRect) {
-  if (editorContext) {
-    // 셀의 위치를 브라우저 절대 좌표로 계산
-    editorContext.style.width = `${cellRect.width}px`
-    editorContext.style.height = `${cellRect.height}px`
+  if (editorContext && this.elements.btn) {
+    const rect = editorContext.getBoundingClientRect()
+    // 버튼을 셀 오른쪽에 살짝 걸치게 배치 (캡처화면 재현)
+    this.elements.btn.style.top = `${rect.top}px`
+    this.elements.btn.style.left = `${rect.right + 2}px`
+    this.elements.btn.style.height = `${rect.height}px`
     
-    // SpreadJS 에디터 레이어에 의해 자동으로 위치가 잡히지만, 
-    // 필요시 fixed 좌표를 수동으로 계산할 수도 있습니다.
     return { width: cellRect.width, height: cellRect.height }
   }
-}
-
-UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
-  this.originalValue = value
-  this.selectedEmpNo = null
-  const input = editorContext.querySelector('input')
-  input.value = ''
 }
 
 UserSelectCellType.prototype.getEditorValue = function (editorContext) {
   return this.selectedEmpNo || this.originalValue
 }
 
+UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
+  this.originalValue = value
+  this.selectedEmpNo = null
+  editorContext.value = ''
+}
+
 UserSelectCellType.prototype.destroyEditorElement = function (editorContext) {
-  if (this.listbox) {
-    this.listbox.remove()
-    this.listbox = null
-  }
+  if (this.elements.btn) this.elements.btn.remove()
+  if (this.elements.list) this.elements.list.remove()
 }
 
 export default UserSelectCellType
