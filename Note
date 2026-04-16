@@ -1,128 +1,1058 @@
-import GC from '@mescius/spread-sheets-designer'
-import { ApiCommon } from '@/utils/axios/api-common'
-import { useEmployees } from '@/stores/app-employees'
-const { setEmployeeInfo } = useEmployees()
+<template>
+  <div class="component-template">
+    <header class="template__page-head">
+      <h1 class="template__page-title">컴포넌트 템플릿 예시</h1>
+      <p class="template__page-desc">목차 아래 영역만 스크롤되며, 목차로 섹션으로 이동할 수 있습니다.</p>
+    </header>
 
-const _EditorType = 'PopupFloatingEditor'
+    <div class="template__body">
+      <nav class="template__toc" aria-label="페이지 섹션">
+        <a class="template__toc-link" href="#tpl-section-pageTitle">PageTitle</a>
+        <a class="template__toc-link" href="#tpl-section-cards">DefaultCard</a>
+        <a class="template__toc-link" href="#tpl-section-buttons">Buttons</a>
+        <a class="template__toc-link" href="#tpl-section-checkbox">CheckBox</a>
+        <a class="template__toc-link" href="#tpl-section-selectbox">SelectBox</a>
+        <a class="template__toc-link" href="#tpl-section-inputbox">InputBox</a>
+        <a class="template__toc-link" href="#tpl-section-switchbox">SwitchBox</a>
+        <a class="template__toc-link" href="#tpl-section-toast">Toast</a>
+      </nav>
 
-function UserSelectCellType(FIELD, NAME_FIELD, DEPT_FIELD) {
-  this.field = FIELD
-  this.nameField = NAME_FIELD
-  this.deptField = DEPT_FIELD
-  this.searchTimer = null
-  this.originalValue = null // 기존 사번 보관
-  this.selectedValue = null // 선택된 사번 보관
-}
+      <div class="template__stack">
+        <section
+          class="template__section template__section--first"
+          id="tpl-section-pageTitle"
+          aria-labelledby="section-pageTitle-title"
+        >
+          <h2 id="section-pageTitle-title" class="template__section-title">PageTitle</h2>
+          <p class="template__section-desc">페이지 타이틀입니다.</p>
+          <div class="tpl-check-demo tpl-field-demo">
+            <PageTitle icon="fa-lock" :title="'타이틀 예시'" style="width: 100%">
+              <template #sub-content>
+                <CheckBox
+                  id="tpl-cb-agree"
+                  label="약관 동의"
+                  v-model:value="checkDemo.agree"
+                  @change="onCheckDemoChange('agree', $event)"
+                />
+              </template>
+              <template #actions>
+                <InputBox
+                  id="tpl-in-keywords"
+                  label="검색어"
+                  v-model:value="formDemo.inputText"
+                  icon="fa-search"
+                  @input="onFormInputDemo"
+                  @clear="onFormInputClear"
+                />
+                <SelectBox
+                  label="카테고리"
+                  :list="formDemo.selectList"
+                  v-model:value="formDemo.selectId"
+                  placeholder="항목 선택"
+                  @change="onFormSelectChange"
+                />
+                <SwitchBox
+                  label="비활성 포함"
+                  :list="formDemo.switchListDisabled"
+                  v-model:value="formDemo.switchId2"
+                  :disabled="false"
+                />
+              </template>
+            </PageTitle>
+          </div>
+        </section>
+        <section id="tpl-section-cards" class="template__section" aria-labelledby="section-cards-title">
+          <h2 id="section-cards-title" class="template__section-title">DefaultCard</h2>
+          <p class="template__section-desc">헤더(제목·탭·우측 슬롯) → actions → contents 순 레이아웃 예시입니다.</p>
 
-UserSelectCellType.prototype = new GC.Spread.Sheets.CellTypes.Base()
+          <div class="template__grid">
+            <!-- 1) 제목 + 탭(오른쪽) + header-right + actions + 그리드 형 콘텐츠 -->
+            <div class="template__demo">
+              <p class="template__demo-caption">예시 1 · 제목 + 탭 + 헤더우측 + actions + 그리드류</p>
+              <DefaultCard
+                :title="example1.title"
+                :tabs="example1.tabs"
+                v-model:active-tab="activeTab1"
+                class="template__card"
+                @tab-change="onTabChange('예시1', $event)"
+              >
+                <template #header-right>
+                  <ButtonsComponent :buttons="buttonData0" @button-click="handleButtonClick" />
+                </template>
+                <template #actions>
+                  <CheckBox
+                    id="tpl-cb-agree"
+                    label="약관 동의"
+                    v-model:value="checkDemo.agree"
+                    @change="onCheckDemoChange('agree', $event)"
+                  />
+                </template>
+                <div class="tpl-mini-grid" role="table" aria-label="샘플 데이터">
+                  <div class="tpl-mini-grid__head tpl-mini-grid__row">
+                    <span>코드</span><span>항목</span><span>수량</span><span>상태</span>
+                  </div>
+                  <div v-for="row in miniRows" :key="row.code" class="tpl-mini-grid__row">
+                    <span>{{ row.code }}</span
+                    ><span>{{ row.name }}</span
+                    ><span class="tpl-num">{{ row.qty }}</span
+                    ><span>{{ row.status }}</span>
+                  </div>
+                </div>
+              </DefaultCard>
+            </div>
 
-// 1. 셀 화면 표시: 이름(부서)
-UserSelectCellType.prototype.paint = function (ctx, value, x, y, w, h, style, options) {
-  const data = options.sheet.getDataItem(options.row)
-  const name = data?.[this.nameField] ?? ''
-  const dept = data?.[this.deptField] ?? ''
-  const text = name ? `${name}${dept ? `(${dept})` : ''}` : ''
-  GC.Spread.Sheets.CellTypes.Base.prototype.paint.apply(this, [ctx, text, x, y, w, h, style, options])
-}
+            <!-- 2) 탭만 → 탭 왼쪽 정렬 -->
+            <div class="template__demo">
+              <p class="template__demo-caption">예시 2 · 탭만</p>
+              <DefaultCard :tabs="example2.tabs" :title="null" v-model:active-tab="activeTab2" class="template__card">
+                <template #header-right>
+                  <SwitchBox
+                    label="비활성 포함"
+                    :list="formDemo.switchListDisabled"
+                    v-model:value="formDemo.switchId2"
+                    :disabled="false"
+                  />
+                </template>
+                <template #actions>
+                  <SelectBox
+                    label="카테고리"
+                    :list="formDemo.selectList"
+                    v-model:value="formDemo.selectId"
+                    placeholder="항목 선택"
+                    @change="onFormSelectChange"
+                  />
+                </template>
+                <div class="tpl-placeholder">
+                  선택 탭: <strong>{{ activeTab2 }}</strong>
+                  <p class="tpl-placeholder__hint">제목 없이 tabs만 넘기면 탭이 헤더 왼쪽에 붙습니다.</p>
+                </div>
+              </DefaultCard>
+            </div>
 
-// 2. 에디터 생성: 셀 '위'에 띄울 플로팅 컨테이너
-UserSelectCellType.prototype.createEditorElement = function (context) {
-  this.selectedValue = null; // 초기화
+            <!-- 3) 제목만 (탭 없음) -->
+            <div class="template__demo">
+              <p class="template__demo-caption">예시 3 · 제목만 + 그리드 콘텐츠</p>
+              <DefaultCard :title="example3.title" :tabs="[]" class="template__card">
+                <template #header-right>
+                  <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--ghost">더보기</button>
+                </template>
+                <template #actions>
+                  <span class="tpl-meta">최종 수정: 2026-04-06 14:00</span>
+                </template>
+                <div class="tpl-excel-mock">
+                  <div class="tpl-excel-mock__corner" />
+                  <div v-for="c in 8" :key="'h' + c" class="tpl-excel-mock__h">
+                    {{ colLabel(c) }}
+                  </div>
+                  <template v-for="r in 6" :key="'r' + r">
+                    <div class="tpl-excel-mock__r">{{ r }}</div>
+                    <div v-for="c in 8" :key="r + '-' + c" class="tpl-excel-mock__cell">{{ r }},{{ c }}</div>
+                  </template>
+                </div>
+              </DefaultCard>
+            </div>
+          </div>
+        </section>
 
-  // 컨테이너 (셀 위치에 딱 맞게 배치될 상자)
-  const container = document.createElement('div')
-  container.setAttribute('gcUIElement', 'gcEditingInput')
-  container.style.cssText = `
-    position: fixed; 
-    z-index: 20000; 
-    background: white; 
-    border: 2px solid #217346; 
+        <section class="template__section" id="tpl-section-buttons" aria-labelledby="section-buttons-title">
+          <h2 id="section-buttons-title" class="template__section-title">Buttons</h2>
+          <p class="template__section-desc">버튼 리스트 컴포넌트 예시입니다.</p>
+          <div class="tpl-check-demo tpl-field-demo">
+            <ButtonsComponent :buttons="buttonData2" @button-click="handleButtonClick" />
+          </div>
+          <p class="tpl-field-demo__state">
+            선택된 버튼 id:
+            <code class="tpl-code">{{ clickedButtonId }}</code>
+          </p>
+        </section>
+
+        <section class="template__section" aria-labelledby="section-checkbox-title" id="tpl-section-checkbox">
+          <h2 id="section-checkbox-title" class="template__section-title">CheckBox</h2>
+          <p class="template__section-desc">
+            라벨은 체크박스 왼쪽에 표시됩니다. 클릭 시
+            <code class="tpl-code">update:value</code>, <code class="tpl-code">change</code>,
+            <code class="tpl-code">click</code> 이벤트가 발생합니다.
+          </p>
+          <div class="tpl-check-demo">
+            <CheckBox
+              id="tpl-cb-agree"
+              label="약관 동의"
+              v-model:value="checkDemo.agree"
+              @change="onCheckDemoChange('agree', $event)"
+            />
+            <CheckBox
+              id="tpl-cb-news"
+              label="알림 수신"
+              v-model:value="checkDemo.news"
+              @change="onCheckDemoChange('news', $event)"
+            />
+            <CheckBox id="tpl-cb-disabled-sample" label="비활성(고정)" :value="false" :disabled="true" />
+            <CheckBox
+              v-if="checkDemo.showHidden"
+              id="tpl-cb-conditional"
+              label="조건부 표시"
+              v-model:value="checkDemo.conditional"
+            />
+          </div>
+          <div class="tpl-check-demo__meta">
+            <button
+              type="button"
+              class="tpl-btn tpl-btn--sm tpl-btn--ghost"
+              @click="checkDemo.showHidden = !checkDemo.showHidden"
+            >
+              {{ checkDemo.showHidden ? '숨김 항목 접기' : '숨김 항목 보기' }}
+            </button>
+            <span v-if="checkDemo.lastEvent" class="tpl-check-demo__log">{{ checkDemo.lastEvent }}</span>
+          </div>
+        </section>
+
+        <section class="template__section" id="tpl-section-selectbox" aria-labelledby="section-selectbox-title">
+          <h2 id="section-selectbox-title" class="template__section-title">SelectBox</h2>
+          <p class="template__section-desc">
+            라벨 왼쪽, 네이티브 드롭다운 오른쪽. 값이 있을 때 드롭다운
+            <strong>왼쪽</strong>에 초기화(×) 버튼이 보입니다. <code class="tpl-code">update:value</code> ·
+            <code class="tpl-code">change</code> (선택된 항목의 <code class="tpl-code">id</code>).
+          </p>
+          <div class="tpl-check-demo tpl-field-demo">
+            <SelectBox
+              label="카테고리"
+              :list="formDemo.selectList"
+              v-model:value="formDemo.selectId"
+              placeholder="항목 선택"
+              @change="onFormSelectChange"
+            />
+          </div>
+          <p class="tpl-field-demo__state">
+            선택 id:
+            <code class="tpl-code">{{ formDemo.selectId === '' ? '(없음)' : String(formDemo.selectId) }}</code>
+          </p>
+        </section>
+
+        <section class="template__section" id="tpl-section-inputbox" aria-labelledby="section-inputbox-title">
+          <h2 id="section-inputbox-title" class="template__section-title">InputBox</h2>
+          <p class="template__section-desc">
+            라벨 왼쪽, 입력 필드 오른쪽. <code class="tpl-code">icon</code>은 필드 안쪽 왼쪽에 표시됩니다. 값이 있으면
+            오른쪽 ×로 지울 수 있습니다. <code class="tpl-code">update:value</code> ·
+            <code class="tpl-code">input</code> · <code class="tpl-code">clear</code>.
+          </p>
+          <div class="tpl-check-demo tpl-field-demo">
+            <InputBox
+              id="tpl-in-keywords"
+              label="검색어"
+              v-model:value="formDemo.inputText"
+              icon="fa-search"
+              @input="onFormInputDemo"
+              @clear="onFormInputClear"
+            />
+            <InputBox id="tpl-in-plain" label="메모" v-model:value="formDemo.inputMemo" />
+          </div>
+          <p class="tpl-field-demo__state">
+            마지막 이벤트:
+            <span class="tpl-check-demo__log">{{ formDemo.lastForm || '—' }}</span>
+          </p>
+        </section>
+
+        <section class="template__section" id="tpl-section-switchbox" aria-labelledby="section-switchbox-title">
+          <h2 id="section-switchbox-title" class="template__section-title">SwitchBox</h2>
+          <p class="template__section-desc">
+            라벨 왼쪽, 세그먼트 형 버튼 오른쪽.
+            <code class="tpl-code">list</code>의 <code class="tpl-code">id</code>가
+            <code class="tpl-code">value</code>와 일치하는 항목이 선택됩니다.
+            <code class="tpl-code">update:value</code> · <code class="tpl-code">change</code>.
+          </p>
+          <div class="tpl-check-demo tpl-field-demo">
+            <SwitchBox
+              label="보기"
+              :list="formDemo.switchList"
+              v-model:value="formDemo.switchId"
+              @change="onFormSwitchChange"
+            />
+            <SwitchBox
+              label="비활성 포함"
+              :list="formDemo.switchListDisabled"
+              v-model:value="formDemo.switchId2"
+              :disabled="false"
+            />
+          </div>
+          <p class="tpl-field-demo__state">
+            보기 id:
+            <code class="tpl-code">{{ String(formDemo.switchId) }}</code> · 샘플2 id:
+            <code class="tpl-code">{{ String(formDemo.switchId2) }}</code>
+          </p>
+        </section>
+
+        <section class="template__section" id="tpl-section-toast" aria-labelledby="section-toast-title">
+          <h2 id="section-toast-title" class="template__section-title">Toast</h2>
+          <p class="template__section-desc">
+            <code class="tpl-code">useToast()</code> 로 전역 토스트를 띄웁니다. 실제 표시는 루트의
+            <code class="tpl-code">ToastContainer</code>가 담당합니다(앱에 마운트되어 있어야 합니다).
+            <code class="tpl-code">okText</code> / <code class="tpl-code">cancelText</code>가 없으면 우측 하단, 있으면
+            화면 중앙 모달입니다.
+          </p>
+          <div class="tpl-check-demo tpl-toast-demo">
+            <div class="tpl-toast-demo__buttons" role="group" aria-label="토스트 유형 테스트">
+              <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--ghost" @click="showTplToastDefault">
+                기본
+              </button>
+              <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--ghost" @click="showTplToastSuccess">
+                성공 · 3초
+              </button>
+              <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--ghost" @click="showTplToastFail">실패</button>
+              <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--ghost" @click="showTplToastWarningCorner">
+                주의 · 우하단 · 3.5초
+              </button>
+              <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--ghost" @click="showTplToastWarning">
+                주의 · 모달
+              </button>
+              <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--primary" @click="showTplToastConfirm">
+                확인/취소
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script setup>
+  import { reactive, ref } from 'vue'
+  import PageTitle from '@/components/toolBar/PageTitle.vue'
+  import ButtonsComponent from '@/components/editors/button/ButtonsComponent.vue'
+  import DefaultCard from '@/components/default/DefaultCard.vue'
+  import CheckBox from '@/components/default/editors/CheckBox.vue'
+  import SelectBox from '@/components/default/editors/SelectBox.vue'
+  import InputBox from '@/components/default/editors/InputBox.vue'
+  import SwitchBox from '@/components/default/editors/SwitchBox.vue'
+  import { useToast } from '@/composables/useToast'
+
+  const toast = useToast()
+
+  const activeTab1 = ref('list')
+  const activeTab2 = ref('a')
+
+  const example1 = {
+    title: {
+      icon: 'fa-list',
+      title: '재고 현황',
+      subtitle: '창고별 집계 · 실시간 반영',
+    },
+    tabs: [
+      { id: 'list', name: '목록', icon: 'fa-list' },
+      { id: 'chart', name: '차트', icon: 'fa-pie-chart' },
+      { id: 'pivot', name: '피벗', icon: 'fa-location-arrow' },
+    ],
+  }
+
+  const example2 = {
+    tabs: [
+      { id: 'a', name: '탭 A' },
+      { id: 'b', name: '탭 B' },
+      { id: 'c', name: '탭 C' },
+    ],
+  }
+
+  const example3 = {
+    title: {
+      title: '엑셀/그리드 영역',
+      subtitle: 'contents 슬롯에 붙이면 됨',
+    },
+  }
+
+  const miniRows = [
+    { code: 'SKU-001', name: '부품 A', qty: 120, status: '정상' },
+    { code: 'SKU-002', name: '부품 B', qty: 8, status: '부족' },
+    { code: 'SKU-003', name: '부품 C', qty: 540, status: '정상' },
+    { code: 'SKU-004', name: '부품 D', qty: 0, status: '품절' },
+  ]
+
+  const clickedButtonId = ref(null)
+  const buttonData0 = ref([
+    { id: 'test', text: '', color: 'var(--btn08)', align: 'right', icon: 'fa-plus' },
+    {
+      id: 'replace',
+      text: 'Replace',
+      color: 'var(--btn07)',
+      align: 'right',
+      icon: 'fa-arrows-rotate',
+      children: [
+        { id: 'fromWorking', text: 'From Working', color: 'var(--btn07)', icon: 'fa-pencil' },
+        { id: 'fromPublish', text: 'From Publish', color: 'var(--btn07)', icon: 'fa-pencil' },
+      ],
+    },
+    { id: 'refresh', text: 'Refresh', color: 'var(--btn05)', align: 'right', icon: 'fa-rotate-right' },
+  ])
+  const buttonData1 = ref([
+    {
+      id: 'replace',
+      text: 'Replace',
+      color: 'var(--btn07)',
+      align: 'right',
+      icon: 'fa-arrows-rotate',
+      children: [
+        { id: 'fromWorking', text: 'From Working', color: 'var(--btn07)', icon: 'fa-pencil' },
+        { id: 'fromPublish', text: 'From Publish', color: 'var(--btn07)', icon: 'fa-pencil' },
+      ],
+    },
+    { id: 'utility', text: 'Utility', color: 'var(--btn02)', align: 'right', icon: 'fa-wrench' },
+    { id: 'adapter', text: 'Adapter', color: 'var(--btn02)', align: 'right', icon: 'fa-plug' },
+    { id: 'refresh', text: 'Refresh', color: 'var(--btn05)', align: 'right', icon: 'fa-rotate-right' },
+  ])
+  const buttonData2 = ref([
+    {
+      id: 'new',
+      text: 'New',
+      color: 'var(--btn03)',
+      align: 'left',
+      icon: 'fa-plus',
+      children: [
+        { id: 'create', text: 'Create', color: 'var(--btn03)', icon: 'fa-plus' },
+        { id: 'multi', text: 'Multi Create', color: 'var(--btn03)', icon: 'fa-plus', disabled: true },
+        { id: 'copy', text: 'Copy', color: 'var(--btn03)', icon: 'fa-copy' },
+      ],
+    },
+    { id: 'delete', text: 'Delete', color: 'var(--btn04)', align: 'left', icon: 'fa-minus' },
+    { id: 'save', text: 'Save', color: 'var(--btn04)', align: 'left', icon: 'fa-check', disabled: true },
+    { id: 'publish', text: 'Publish', color: 'var(--btn06)', align: 'left', icon: 'fa-flag' },
+    { id: 'revision', text: 'Revision', color: 'var(--btn07)', align: 'left', icon: 'fa-clock-rotate-left' },
+    {
+      id: 'excel',
+      text: 'Excel',
+      color: 'var(--btn07)',
+      align: 'left',
+      icon: 'fa-file-excel',
+      children: [
+        { id: 'import', text: 'Import', color: 'var(--btn07)', icon: 'fa-file-import' },
+        { id: 'export', text: 'Export', color: 'var(--btn07)', icon: 'fa-file-export' },
+      ],
+    },
+    { id: 'utility', text: 'Utility', color: 'var(--btn02)', align: 'right', icon: 'fa-wrench' },
+    { id: 'adapter', text: 'Adapter', color: 'var(--btn02)', align: 'right', icon: 'fa-plug' },
+    { id: 'test', text: '', color: 'var(--btn08)', align: 'right', icon: 'fa-plus' },
+    {
+      id: 'replace',
+      text: 'Replace',
+      color: 'var(--btn07)',
+      align: 'right',
+      icon: 'fa-arrows-rotate',
+      children: [
+        { id: 'fromWorking', text: 'From Working', color: 'var(--btn07)', icon: 'fa-pencil' },
+        { id: 'fromPublish', text: 'From Publish', color: 'var(--btn07)', icon: 'fa-pencil' },
+      ],
+    },
+    { id: 'refresh', text: 'Refresh', color: 'var(--btn05)', align: 'right', icon: 'fa-rotate-right' },
+  ])
+
+  function colLabel(n) {
+    return String.fromCharCode(64 + n)
+  }
+
+  function onTabChange(label, id) {
+    // 데모용; 필요 시 로깅
+    void label
+    void id
+  }
+
+  const checkDemo = reactive({
+    agree: true,
+    news: false,
+    conditional: true,
+    showHidden: false,
+    lastEvent: '',
+  })
+
+  function onCheckDemoChange(key, checked) {
+    checkDemo.lastEvent = `${key} → ${checked ? '선택' : '해제'} (${new Date().toLocaleTimeString()})`
+  }
+
+  const formDemo = reactive({
+    selectList: Array.from({ length: 20 }, (_, i) => ({
+      id: `opt-${i + 1}`,
+      label: `옵션 ${String(i + 1).padStart(2, '0')}`,
+      disabled: i === 6,
+    })),
+    selectId: 'opt-3',
+    inputText: '데모',
+    inputMemo: '',
+    switchList: [
+      { id: 'day', label: '일' },
+      { id: 'week', label: '주' },
+      { id: 'month', label: '월' },
+    ],
+    switchListDisabled: [
+      { id: 'a', label: 'A' },
+      { id: 'b', label: 'B', disabled: true },
+      { id: 'c', label: 'C' },
+    ],
+    switchId: 'week',
+    switchId2: 'a',
+    lastForm: '',
+  })
+
+  function onFormSelectChange(v) {
+    formDemo.lastForm = `SelectBox change: ${String(v)}`
+  }
+
+  function onFormInputDemo(v) {
+    formDemo.lastForm = `InputBox input: ${v}`
+  }
+
+  function onFormInputClear() {
+    formDemo.lastForm = 'InputBox clear'
+  }
+
+  function onFormSwitchChange(v) {
+    formDemo.lastForm = `SwitchBox change: ${String(v)}`
+  }
+
+  const handleButtonClick = (e, buttonId) => {
+    clickedButtonId.value = buttonId
+    console.log(`버튼 클릭: ${buttonId}`)
+  }
+
+  function showTplToastDefault() {
+    toast.show({
+      title: '기본 알림',
+      content: 'Toast 기본 타입입니다. 제목·내용·코드를 표시할 수 있습니다.',
+      code: 'TOAST_001',
+    })
+  }
+
+  function showTplToastSuccess() {
+    toast.success({
+      title: '저장 완료',
+      content: '변경 사항이 정상적으로 저장되었습니다.',
+      duration: 3000,
+    })
+  }
+
+  function showTplToastFail() {
+    toast.fail({
+      title: '요청 실패',
+      content: '서버와 통신 중 오류가 발생했습니다. 잠시 후 다시 시도해 주세요.',
+      code: 'ERR_500',
+    })
+  }
+
+  function showTplToastWarningCorner() {
+    toast.warning({
+      title: '주의 알림',
+      content: '확인 버튼 없이 우측 하단에만 표시되는 warning 타입입니다. 잠시 후 자동으로 닫힙니다.',
+      duration: 3500,
+    })
+  }
+
+  function showTplToastWarning() {
+    toast.warning({
+      title: '입력 확인',
+      content: '필수 항목을 모두 입력해 주세요.',
+      okText: '확인',
+      onOk: () => {
+        toast.success({
+          title: '확인됨',
+          content: '확인 버튼을 눌렀습니다.',
+          duration: 2000,
+        })
+      },
+    })
+  }
+
+  function showTplToastConfirm() {
+    toast.show({
+      title: '삭제 확인',
+      content: '선택한 항목을 삭제할까요? 이 작업은 되돌릴 수 없습니다.',
+      code: 'CONFIRM_DELETE',
+      okText: '삭제',
+      cancelText: '취소',
+      onOk: () => {
+        toast.fail({
+          title: '삭제됨',
+          content: '삭제 처리되었습니다.',
+          duration: 2000,
+        })
+      },
+      onCancel: () => {
+        toast.show({
+          title: '취소됨',
+          content: '삭제를 취소했습니다.',
+          duration: 2000,
+        })
+      },
+    })
+  }
+</script>
+
+<style scoped>
+  .component-template {
+    --tpl-divider: rgba(0, 0, 0, 0.08);
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
-  `
-
-  // 입력창
-  const input = document.createElement('input')
-  input.style.cssText = 'width: 100%; height: 100%; border: none; outline: none; padding: 0 4px; font-size: 13px;'
-  input.type = 'text'
-  container.appendChild(input)
-
-  // 리스트박스
-  const listbox = document.createElement('ul')
-  listbox.style.cssText = `
-    position: absolute; 
-    top: 100%; left: -2px; width: calc(100% + 4px); 
-    background: white; border: 1px solid black; 
-    margin: 0; padding: 0; list-style: none; 
-    display: none; max-height: 200px; overflow-y: auto;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-  `
-  container.appendChild(listbox)
-
-  input.addEventListener('input', (e) => {
-    if (this.searchTimer) clearTimeout(this.searchTimer)
-    const keyword = e.target.value.trim()
-
-    this.searchTimer = setTimeout(async () => {
-      if (keyword.length < 1) { listbox.style.display = 'none'; return; }
-
-      const response = await ApiCommon.postOfficeFindEmployee({ Type: 'Name', Keyword: keyword }) ?? []
-      listbox.innerHTML = ''
-
-      if (response.length > 0) {
-        listbox.style.display = 'block'
-        response.forEach(item => {
-          const li = document.createElement('li')
-          li.style.cssText = 'padding: 5px 10px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #eee;'
-          li.innerText = `${item.EMP_NM}(${item.DEPT_NAME || ''})`
-          
-          li.onmouseover = () => { li.style.backgroundColor = '#0078d4'; li.style.color = 'white'; }
-          li.onmouseout = () => { li.style.backgroundColor = 'white'; li.style.color = 'black'; }
-
-          li.onmousedown = (ev) => {
-            ev.preventDefault()
-            this.selectedValue = item.EMP_NO // 사번 확정
-            setEmployeeInfo({ ...item, code: item.EMP_NO })
-            listbox.style.display = 'none'
-            context.sheet.endEdit() // 편집 종료 트리거
-          }
-          listbox.appendChild(li)
-        })
-      } else {
-        listbox.style.display = 'none'
-      }
-    }, 400)
-  })
-
-  // 에디터 위치는 updateEditor에서 정해지므로 일단 리턴
-  setTimeout(() => input.focus(), 10)
-  return container
-}
-
-// 3. 에디터 위치 결정: 셀 위에 팝업처럼 덧씌움
-UserSelectCellType.prototype.updateEditor = function (editorContext, cellStyle, cellRect) {
-  if (editorContext) {
-    // 셀의 위치 정보를 받아와서 컨테이너 크기를 맞춤
-    editorContext.style.width = `${cellRect.width}px`
-    editorContext.style.height = `${cellRect.height}px`
-    
-    // SpreadJS가 기본적으로 제공하는 cellRect를 그대로 사용하여 '셀 위'에 배치
-    return { width: cellRect.width, height: cellRect.height }
+    /*
+   * layouts/Layout.vue: main은 헤더· 태그뷰만큼 margin-top(70px / 102px) 후 남은 세로만 사용.
+   * content-container는 height:100%. 여기서 100vh를 쓰면 부모보다 커져 하단이 overflow:hidden에 잘림.
+   */
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    max-width: 1180px;
+    margin: 0 auto;
+    overflow: hidden;
+    color: var(--txt03);
+    background: var(--bg01);
   }
-}
 
-// 4. 값 반환: 선택했다면 사번을, 아니면 기존 값을 반환
-UserSelectCellType.prototype.getEditorValue = function (editorContext) {
-  // 사용자가 리스트를 눌러서 확정한 사번이 있으면 반환, 없으면(ESC 등) 원본 유지
-  return this.selectedValue || this.originalValue
-}
+  .template__page-head {
+    flex-shrink: 0;
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid var(--tpl-divider);
+  }
 
-// 5. 편집 시작 시 값 세팅
-UserSelectCellType.prototype.setEditorValue = function (editorContext, value) {
-  this.originalValue = value // 기존 사번 보관
-  const input = editorContext.querySelector('input')
-  input.value = '' // 입력창은 깨끗하게 시작
-}
+  .template__page-title {
+    margin: 0 0 8px;
+    font-size: 1.25rem;
+    font-weight: 400;
+    letter-spacing: 0.00735em;
+    line-height: 1.75rem;
+    color: var(--txt03);
+  }
 
-export default UserSelectCellType
+  .template__page-desc {
+    margin: 0;
+    max-width: 56ch;
+    font-size: 0.875rem;
+    font-weight: 400;
+    line-height: 1.43;
+    letter-spacing: 0.01071em;
+    color: var(--txt13);
+  }
+
+  .template__body {
+    flex: 1 1 0;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .template__toc {
+    flex-shrink: 0;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 20px 12px;
+    border-bottom: 1px solid var(--tpl-divider);
+    background: var(--bg01);
+  }
+
+  .template__toc-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    letter-spacing: 0.006em;
+    color: var(--primary-color);
+    text-decoration: none;
+    border: 1px solid var(--tpl-divider);
+    border-radius: 0;
+    background: var(--card-bg);
+    transition: background 0.15s ease;
+  }
+
+  .template__toc-link:hover {
+    background: rgba(var(--primary-color-rgb), 0.08);
+  }
+
+  .template__toc-link:focus-visible {
+    outline: 2px solid rgba(var(--primary-color-rgb), 0.35);
+    outline-offset: 2px;
+  }
+
+  .template__stack {
+    flex: 1 1 0;
+    min-height: 0;
+    /* flex 기본 min-height:auto 때문에 스크롤 박스가 콘텐츠 높이까지 커지는 경우 방지 */
+    height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scroll-behavior: smooth;
+    scroll-padding-top: 16px;
+    scroll-padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+    padding: 16px 20px calc(48px + env(safe-area-inset-bottom, 0px));
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  .template__grid {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  .template__demo {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-height: 0;
+  }
+
+  .template__demo-caption {
+    margin: 0;
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    text-transform: none;
+    color: var(--txt13);
+  }
+
+  .template__card {
+    min-height: 0;
+  }
+
+  .template__section {
+    margin-top: 28px;
+    padding-top: 24px;
+    border-top: 1px solid var(--tpl-divider);
+  }
+
+  .template__section--first {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+  }
+
+  .template__section[id] {
+    scroll-margin-top: 12px;
+  }
+
+  .template__section-title {
+    margin: 0 0 8px;
+    font-size: 1.125rem;
+    font-weight: 500;
+    letter-spacing: 0.00938em;
+    line-height: 1.4;
+    color: var(--txt03);
+  }
+
+  .template__section-desc {
+    margin: 0 0 16px;
+    max-width: 72ch;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--txt13);
+  }
+
+  .tpl-code {
+    padding: 1px 6px;
+    font-size: 0.8125rem;
+    font-family: ui-monospace, monospace;
+    border-radius: 0;
+    background: rgba(0, 0, 0, 0.06);
+    color: var(--txt03);
+  }
+
+  .tpl-check-demo {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 16px 20px;
+    padding: 16px;
+    border-radius: 0;
+    border: thin solid var(--tpl-divider);
+    background: var(--card-bg);
+  }
+
+  .tpl-check-demo__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-top: 12px;
+  }
+
+  .tpl-check-demo__log {
+    font-size: 0.8125rem;
+    color: var(--txt13);
+  }
+
+  .tpl-field-demo {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px 16px;
+  }
+
+  .tpl-field-demo__state {
+    margin: 10px 0 0;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--txt13);
+  }
+
+  .tpl-toast-demo {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .tpl-toast-demo__buttons {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 10px;
+  }
+
+  /* v-btn: outlined / flat / contained */
+  .tpl-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 64px;
+    height: 36px;
+    padding: 0 16px;
+    font-size: 0.875rem;
+    font-weight: 500;
+    letter-spacing: 0.006em;
+    border-radius: 0;
+    border: thin solid var(--border01);
+    background: transparent;
+    color: var(--primary-color);
+    cursor: pointer;
+    line-height: normal;
+    text-transform: none;
+    transition:
+      background 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .tpl-btn:hover {
+    background: rgba(var(--primary-color-rgb), 0.08);
+  }
+
+  .tpl-btn--sm {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 0.8125rem;
+  }
+
+  .tpl-btn--ghost {
+    border-color: transparent;
+    color: var(--txt03);
+  }
+
+  .tpl-btn--ghost:hover {
+    background: rgba(0, 0, 0, 0.04);
+  }
+
+  .tpl-btn--primary {
+    border: none;
+    background: var(--primary-color);
+    color: #fff;
+    box-shadow:
+      0 2px 2px 0 rgba(0, 0, 0, 0.14),
+      0 3px 1px -2px rgba(0, 0, 0, 0.12),
+      0 1px 5px 0 rgba(0, 0, 0, 0.2);
+  }
+
+  .tpl-btn--primary:hover {
+    box-shadow:
+      0 3px 3px -2px rgba(0, 0, 0, 0.2),
+      0 3px 4px 0 rgba(0, 0, 0, 0.14),
+      0 1px 8px 0 rgba(0, 0, 0, 0.12);
+  }
+
+  .tpl-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.875rem;
+    font-weight: 400;
+    letter-spacing: 0.006em;
+    cursor: pointer;
+    user-select: none;
+    color: var(--txt03);
+  }
+
+  .tpl-search {
+    width: 200px;
+    max-width: 100%;
+    height: 40px;
+    padding: 0 12px;
+    font-size: 0.875rem;
+    border: thin solid var(--border01);
+    border-radius: 0;
+    background: var(--card-bg);
+    color: var(--txt03);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .tpl-search:focus {
+    border-color: var(--primary-color);
+    border-width: 2px;
+    padding: 0 11px;
+  }
+
+  .tpl-meta {
+    font-size: 0.75rem;
+    font-weight: 400;
+    letter-spacing: 0.006em;
+    color: var(--txt13);
+  }
+
+  .tpl-mini-grid {
+    display: grid;
+    grid-template-columns: 72px 1fr 56px 56px;
+    gap: 0;
+    font-size: 0.875rem;
+    border: thin solid var(--tpl-divider);
+    border-radius: 0;
+    overflow: hidden;
+    background: var(--card-bg);
+    box-shadow:
+      0 2px 1px -1px rgba(0, 0, 0, 0.2),
+      0 1px 1px 0 rgba(0, 0, 0, 0.14),
+      0 1px 3px 0 rgba(0, 0, 0, 0.12);
+  }
+
+  .tpl-mini-grid__row {
+    display: contents;
+  }
+
+  .tpl-mini-grid__row > span {
+    padding: 12px 16px;
+    border-bottom: thin solid var(--tpl-divider);
+    border-right: thin solid var(--tpl-divider);
+    background: var(--card-bg);
+  }
+
+  .tpl-mini-grid__row:last-child > span {
+    border-bottom: none;
+  }
+
+  .tpl-mini-grid__row > span:nth-child(4n) {
+    border-right: none;
+  }
+
+  .tpl-mini-grid__head > span {
+    font-weight: 500;
+    font-size: 0.75rem;
+    letter-spacing: 0.006em;
+    color: var(--txt13);
+    background: rgba(0, 0, 0, 0.02);
+    border-bottom: thin solid var(--tpl-divider);
+  }
+
+  .tpl-num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .tpl-placeholder {
+    font-size: 0.875rem;
+    line-height: 1.43;
+    padding: 16px;
+    border-radius: 0;
+    border: thin dashed var(--border01);
+    background: var(--card-bg);
+    color: var(--txt03);
+  }
+
+  .tpl-placeholder__hint {
+    margin: 8px 0 0;
+    font-size: 0.8125rem;
+    color: var(--txt13);
+    line-height: 1.5;
+  }
+
+  .tpl-excel-mock {
+    display: grid;
+    grid-template-columns: 28px repeat(8, minmax(52px, 1fr));
+    gap: 0;
+    font-size: 0.75rem;
+    border: thin solid var(--tpl-divider);
+    border-radius: 4px;
+    overflow: auto;
+    max-height: 240px;
+    background: var(--card-bg);
+    box-shadow:
+      0 2px 1px -1px rgba(0, 0, 0, 0.2),
+      0 1px 1px 0 rgba(0, 0, 0, 0.14),
+      0 1px 3px 0 rgba(0, 0, 0, 0.12);
+  }
+
+  .tpl-excel-mock__corner {
+    position: sticky;
+    left: 0;
+    top: 0;
+    z-index: 2;
+    background: var(--card-bg);
+    border-right: thin solid var(--tpl-divider);
+    border-bottom: thin solid var(--tpl-divider);
+  }
+
+  .tpl-excel-mock__h {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    padding: 8px 6px;
+    text-align: center;
+    font-weight: 500;
+    font-size: 0.75rem;
+    background: rgba(0, 0, 0, 0.02);
+    border-right: thin solid var(--tpl-divider);
+    border-bottom: thin solid var(--tpl-divider);
+  }
+
+  .tpl-excel-mock__r {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    padding: 6px 4px;
+    text-align: center;
+    font-weight: 500;
+    font-size: 0.75rem;
+    background: rgba(0, 0, 0, 0.02);
+    border-right: thin solid var(--tpl-divider);
+    border-bottom: thin solid var(--tpl-divider);
+  }
+
+  .tpl-excel-mock__cell {
+    padding: 8px 8px;
+    border-right: thin solid var(--tpl-divider);
+    border-bottom: thin solid var(--tpl-divider);
+    background: var(--card-bg);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  [data-theme='dark'] .template {
+    --tpl-divider: rgba(255, 255, 255, 0.12);
+  }
+
+  [data-theme='dark'] .tpl-code {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  [data-theme='dark'] .tpl-btn--ghost:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+
+  @media (max-width: 640px) {
+    .template__page-head {
+      padding: 16px 14px 12px;
+    }
+
+    .template__toc {
+      padding: 8px 14px 10px;
+    }
+
+    .template__stack {
+      padding: 12px 14px calc(40px + env(safe-area-inset-bottom, 0px));
+    }
+  }
+</style>
