@@ -1,37 +1,51 @@
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100 d-flex flex-column">
-    <PageTitle icon="fa-check-double" :title="'Tag 규격 유효성 검사 (Enterprise)'">
+    <PageTitle icon="fa-check-double" :title="'Tag 규격 유효성 검사 (Live Editor)'">
       <template #actions>
         <div class="d-flex align-items-center me-2">
           <div class="d-flex align-items-center px-2 border-end">
             <span class="fw-bold me-2 text-nowrap" style="font-size: 12px;">프로젝트</span>
-            <input 
-              list="projOptions"
-              class="form-control form-control-sm fw-bold" 
-              style="width: 160px;" 
-              v-model="selectedProjNo" 
-              @change="onProjectChange"
-              placeholder="프로젝트 검색/선택"
-            />
-            <datalist id="projOptions">
-              <option v-for="proj in projectList" :key="proj.PROJ_NO" :value="proj.PROJ_NO" />
-            </datalist>
+            <div class="dropdown">
+              <input 
+                type="text" 
+                class="form-control form-control-sm fw-bold dropdown-toggle" 
+                style="width: 180px;" 
+                v-model="selectedProjNo"
+                @input="filterProjects"
+                data-bs-toggle="dropdown"
+                placeholder="프로젝트 검색..."
+              />
+              <ul class="dropdown-menu shadow w-100" style="max-height: 300px; overflow-y: auto;">
+                <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO">
+                  <a class="dropdown-item small" href="javascript:;" @click="selectProject(proj.PROJ_NO)">
+                    {{ proj.PROJ_NO }}
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
 
           <div class="d-flex align-items-center px-2 border-end">
             <span class="fw-bold me-2 text-nowrap" style="font-size: 12px;">타입</span>
-            <input 
-              list="typeOptions"
-              class="form-control form-control-sm" 
-              style="width: 180px;" 
-              v-model="selectedTypeId" 
-              @change="applyTagTypeRules"
-              :disabled="!tagTypes.length"
-              placeholder="타입 검색/선택"
-            />
-            <datalist id="typeOptions">
-              <option v-for="type in tagTypes" :key="type.TYPE_ID" :value="type.TYPE_ID" />
-            </datalist>
+            <div class="dropdown">
+              <input 
+                type="text" 
+                class="form-control form-control-sm dropdown-toggle" 
+                style="width: 200px;" 
+                v-model="selectedTypeId"
+                @input="filterTypes"
+                :disabled="!tagTypes.length"
+                data-bs-toggle="dropdown"
+                placeholder="타입 검색..."
+              />
+              <ul class="dropdown-menu shadow w-100" style="max-height: 300px; overflow-y: auto;">
+                <li v-for="type in filteredTagTypes" :key="type.TYPE_ID">
+                  <a class="dropdown-item small" href="javascript:;" @click="selectType(type.TYPE_ID)">
+                    {{ type.TYPE_ID }}
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
 
           <div class="d-flex align-items-center px-2">
@@ -39,17 +53,10 @@
             <input
               type="text"
               class="form-control form-control-sm border-primary fw-bold font-monospace"
-              style="width: 280px;"
+              style="width: 300px;"
               v-model="tagNoForValidator"
-              placeholder="검증할 Tag No 입력..."
             />
           </div>
-        </div>
-
-        <div class="btn-group me-2">
-          <button class="btn btn-default btn-xs shadow-sm" @click="fetchTagTypes">
-            <i class="fa fa-sync me-1 text-primary"></i>갱신
-          </button>
         </div>
         <panel-toolbar />
       </template>
@@ -57,24 +64,26 @@
 
     <div class="panel-body m-0 p-0 flex-grow-1 overflow-hidden bg-light">
       <div class="row m-0 h-100">
-        <div class="col-md-5 p-0 h-100 border-end d-flex flex-column bg-white">
-          <div class="panel-heading bg-light border-bottom px-3 py-2 d-flex justify-content-between">
-            <span class="fw-bold text-dark small"><i class="fa fa-list-ol me-2"></i>적용 규격 (LNK_CODE)</span>
+        <div class="col-md-6 p-0 h-100 border-end d-flex flex-column bg-white">
+          <div class="panel-heading bg-light border-bottom px-3 py-2 d-flex justify-content-between align-items-center">
+            <span class="fw-bold text-dark small"><i class="fa fa-edit me-2"></i>규격 에디터 (수정 시 즉시 테스트)</span>
+            <span class="text-muted" style="font-size: 10px;">* 값을 클릭하여 직접 수정하세요</span>
           </div>
           <div class="flex-grow-1">
             <ag-grid-vue
               v-bind="leftGridOptions"
               class="ag-theme-custom w-100 h-100"
               @grid-ready="onLeftGridReady"
+              @cell-value-changed="onRuleChanged"
             />
           </div>
         </div>
 
-        <div class="col-md-7 p-0 h-100 d-flex flex-column bg-white">
-          <div class="panel-heading bg-light border-bottom px-3 py-2 d-flex justify-content-between">
-            <span class="fw-bold text-dark small"><i class="fa fa-vial me-2"></i>검증 결과 상세</span>
-            <span :class="['badge shadow-sm', isTagNoValid ? 'bg-success' : 'bg-danger']">
-              {{ isTagNoValid ? 'SUCCESS' : 'FAILED' }}
+        <div class="col-md-6 p-0 h-100 d-flex flex-column bg-white">
+          <div class="panel-heading bg-light border-bottom px-3 py-2 d-flex justify-content-between align-items-center">
+            <span class="fw-bold text-dark small"><i class="fa fa-chart-pie me-2"></i>실시간 분석 결과</span>
+            <span :class="['badge shadow-sm px-3', isTagNoValid ? 'bg-success' : 'bg-danger']" style="font-size: 12px;">
+              {{ isTagNoValid ? 'PASS' : 'FAIL' }}
             </span>
           </div>
           <div class="flex-grow-1">
@@ -95,46 +104,52 @@ import { ref, computed, onMounted, shallowRef } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import PageTitle from '@/components/toolBar/PageTitle.vue'
 import { AgGridVue } from 'ag-grid-vue3'
-
-// Enterprise 모듈 활성화
 import 'ag-grid-enterprise'
 
-/** 데이터 상태 **/
+/** 상태 관리 **/
 const projectList = ref([])
+const filteredProjectList = ref([])
 const selectedProjNo = ref('')
+
 const tagTypes = ref([])
+const filteredTagTypes = ref([])
 const selectedTypeId = ref('')
-const tagRules = ref([])
+
+const tagRules = ref([]) // 좌측 그리드 데이터
 const tagNoForValidator = ref('AA-1-BB-2222-C')
 
 const leftGridApi = shallowRef()
 const rightGridApi = shallowRef()
 
-/** API 호출 **/
-const fetchProjects = async () => {
-  try {
-    const res = await axiosWrapper.get('/api/Project/GetList')
-    projectList.value = res || []
-  } catch (e) { console.error(e) }
+/** UI 이벤트: 프로젝트/타입 선택기 **/
+const filterProjects = () => {
+  filteredProjectList.value = projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(selectedProjNo.value.toLowerCase()))
+}
+const selectProject = (projNo) => {
+  selectedProjNo.value = projNo
+  onProjectChange()
+}
+const filterTypes = () => {
+  filteredTagTypes.value = tagTypes.value.filter(t => t.TYPE_ID.toLowerCase().includes(selectedTypeId.value.toLowerCase()))
+}
+const selectType = (typeId) => {
+  selectedTypeId.value = typeId
+  applyTagTypeRules()
 }
 
-const onProjectChange = () => {
-  // 선택 로직 보정 (datalist 필터 대응)
-  if (!projectList.value.some(p => p.PROJ_NO === selectedProjNo.value)) return
+/** API 통신 **/
+const fetchProjects = async () => {
+  const res = await axiosWrapper.get('/api/Project/GetList')
+  projectList.value = res || []
+  filteredProjectList.value = [...projectList.value]
+}
+
+const onProjectChange = async () => {
   selectedTypeId.value = ''
   tagRules.value = []
-  fetchTagTypes()
-}
-
-const fetchTagTypes = async () => {
-  if (!selectedProjNo.value) return
-  try {
-    const res = await axiosWrapper.post('/api/TagType/Get', {
-      ProjectNo: selectedProjNo.value,
-      ContainDeleted: false
-    })
-    tagTypes.value = res || []
-  } catch (e) { console.error(e) }
+  const res = await axiosWrapper.post('/api/TagType/Get', { ProjectNo: selectedProjNo.value, ContainDeleted: false })
+  tagTypes.value = res || []
+  filteredTagTypes.value = [...tagTypes.value]
 }
 
 const applyTagTypeRules = () => {
@@ -148,19 +163,26 @@ const applyTagTypeRules = () => {
   }
 }
 
-/** 실시간 검증 계산 **/
+/** 에디터 수정 시 강제 갱신 **/
+const onRuleChanged = () => {
+  // 그리드의 수정된 데이터를 tagRules에 다시 동기화하여 computed(tagParts)가 작동하게 함
+  const updatedData = []
+  leftGridApi.value.forEachNode(node => updatedData.push(node.data))
+  tagRules.value = [...updatedData]
+}
+
+/** 분석 로직 **/
 const tagParts = computed(() => {
   const results = []
   let currentStr = tagNoForValidator.value || ''
   let cursor = 0
 
-  for (let i = 0; i < tagRules.value.length; i++) {
-    const rule = tagRules.value[i]
+  for (let rule of tagRules.value) {
     const delim = rule.delimiter
     const pureRegex = rule.regex.replace(/^\^|\$/g, '')
     let dOk = true, cOk = false, matchedVal = null
 
-    if (delim) {
+    if (delim && delim !== '') {
       if (currentStr.substring(cursor).startsWith(delim)) {
         cursor += delim.length
         dOk = true
@@ -176,17 +198,14 @@ const tagParts = computed(() => {
         cursor += matchedVal.length
         cOk = true
       } else if (new RegExp(`^(${pureRegex})$`).test('')) {
-        matchedVal = ''
-        cOk = true
+        matchedVal = ''; cOk = true
       }
     } catch { cOk = false }
 
     results.push({
       attId: rule.attId,
-      matchedValue: matchedVal,
-      delimiter: delim || '(None)',
-      isDelimiterValid: dOk,
-      isContentValid: cOk,
+      matchedValue: matchedVal || '',
+      delimiter: delim || '',
       isValid: dOk && cOk
     })
     if (!(dOk && cOk)) break
@@ -200,79 +219,62 @@ const isTagNoValid = computed(() => {
   if (!allPass) return false
   
   let totalLen = 0
-  tagParts.value.forEach((p, i) => {
-    if (p.delimiter !== '(None)' && p.isDelimiterValid) {
-       if (tagNoForValidator.value.substring(totalLen).startsWith(p.delimiter)) totalLen += p.delimiter.length
-    }
+  tagParts.value.forEach((p) => {
+    if (p.delimiter && tagNoForValidator.value.substring(totalLen).startsWith(p.delimiter)) totalLen += p.delimiter.length
     if (p.matchedValue) totalLen += p.matchedValue.length
   })
-  return totalLen === (tagNoForValidator.value || '').length
+  return totalLen === tagNoForValidator.value.length
 })
 
-/** AG Grid 설정 (속성 비교 화면 스타일 참조) **/
-const defaultColDef = {
-  sortable: true,
-  filter: true,
-  resizable: true,
-  floatingFilter: true, // 상단 필터 입력창 활성화
-}
-
+/** AG Grid 설정 **/
 const leftGridOptions = computed(() => ({
   columnDefs: [
-    { headerName: 'Attribute', field: 'attId', width: 120, pinned: 'left', filter: 'agSetColumnFilter' },
-    { headerName: 'Delim', field: 'delimiter', width: 100, cellStyle: { textAlign: 'center', color: '#007bff', fontWeight: 'bold' } },
-    { headerName: 'RegEx Pattern', field: 'regex', flex: 1, cellClass: 'font-monospace text-muted' }
+    { headerName: 'Attribute', field: 'attId', width: 120, pinned: 'left' },
+    { headerName: '구분자', field: 'delimiter', width: 90, editable: true, cellStyle: { backgroundColor: '#fffbe6', fontWeight: 'bold', textAlign: 'center' } },
+    { headerName: '정규식 (수정가능)', field: 'regex', flex: 1, editable: true, cellClass: 'font-monospace', cellStyle: { backgroundColor: '#fffbe6' } }
   ],
   rowData: tagRules.value,
-  defaultColDef,
-  enableRangeSelection: true,
-  sideBar: { toolPanels: ['filters'], defaultToolPanel: '' }
+  defaultColDef: { resizable: true, sortable: true },
+  sideBar: false, // 우측 필터창 제거
+  suppressMenuHide: true
 }))
 
 const rightGridOptions = computed(() => ({
   columnDefs: [
-    { headerName: 'Attribute', field: 'attId', width: 120 },
-    { headerName: 'Value', field: 'matchedValue', flex: 1, cellClass: 'fw-bold font-monospace text-dark' },
-    { headerName: 'D', field: 'isDelimiterValid', width: 60, cellRenderer: p => p.value ? '✅' : '❌' },
-    { headerName: 'P', field: 'isContentValid', width: 60, cellRenderer: p => p.value ? '✅' : '❌' },
-    { 
-      headerName: 'Status', 
-      field: 'isValid', 
-      width: 100,
-      cellRenderer: p => `<span class="badge ${p.value ? 'bg-success' : 'bg-danger'} w-100">${p.value ? 'PASS' : 'FAIL'}</span>`
-    }
+    { headerName: 'Attribute', field: 'attId', width: 110 },
+    { headerName: '추출값', field: 'matchedValue', flex: 1, cellClass: 'fw-bold font-monospace text-primary' },
+    { headerName: '결과', field: 'isValid', width: 90, cellRenderer: p => p.value ? '<span class="text-success">OK</span>' : '<span class="text-danger fw-bold">ERR</span>' }
   ],
   rowData: tagParts.value,
-  defaultColDef: { ...defaultColDef, floatingFilter: false },
+  defaultColDef: { resizable: true },
 }))
 
 const onLeftGridReady = p => { leftGridApi.value = p.api }
 const onRightGridReady = p => { rightGridApi.value = p.api }
 
 onMounted(fetchProjects)
-defineOptions({ name: 'TagValidatorFinalEnterprise' })
 </script>
 
 <style scoped lang="scss">
-/* 속성 비교 페이지의 스타일 커스텀 참조 */
+/* 속성 비교 페이지 스타일 테마 */
 ::v-deep(.ag-theme-custom) {
-  height: 100%;
-  --ag-header-background-color: #f8f9fa;
-  --ag-header-foreground-color: #495057;
-  --ag-border-color: #dee2e6;
+  --ag-header-background-color: #f1f3f5;
+  --ag-header-foreground-color: #333;
   --ag-font-size: 12px;
+  --ag-row-hover-color: #f8f9fa;
+  --ag-selected-row-background-color: #e7f5ff;
   
-  .ag-header-cell-label { justify-content: center; font-weight: 600; }
-  .font-monospace { font-family: 'Consolas', 'Monaco', monospace !important; }
+  .ag-header-cell-label { justify-content: center; }
 }
 
-/* 레이아웃 깨짐 방지 */
-.panel-body {
-  display: flex;
-  flex-direction: column;
-  min-height: 0; /* flex 자식의 overflow 방지 필수 */
+/* 검색 드롭다운 스타일 */
+.dropdown-menu {
+  border: 1px solid #ced4da;
+  .dropdown-item {
+    padding: 6px 12px;
+    &:hover { background-color: #007bff; color: white; }
+  }
 }
 
-.badge { font-size: 11px; font-weight: 500; }
-.form-select-sm, .form-control-sm { font-size: 12px; }
+.font-monospace { font-family: 'Consolas', monospace !important; }
 </style>
