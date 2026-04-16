@@ -1,7 +1,7 @@
 <template>
   <div class="panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
-    <PageTitle 
-      icon="fa-vials" 
+    <PageTitle
+      icon="fa-search-plus"
       :title="'Tag 규격 검증 및 실시간 분석' + (selectedProjNo ? ` [ ${selectedProjNo} ]` : '')"
     >
       <template #actions>
@@ -16,7 +16,7 @@
                 data-bs-toggle="dropdown"
                 data-bs-auto-close="outside"
               >
-                <span class="text-truncate">{{ selectedProjNo || '선택' }}</span>
+                <span class="text-truncate">{{ selectedProjNo || '선택하세요' }}</span>
               </button>
               <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 280px">
                 <li class="px-2 pb-2 border-bottom mb-1">
@@ -66,13 +66,13 @@
             <input
               type="text"
               class="form-control form-control-sm border-primary fw-bold font-monospace"
-              style="width: 280px;"
+              style="width: 250px;"
               v-model="tagNoForValidator"
               placeholder="분석할 Tag No 입력..."
             />
           </div>
 
-          <button class="btn btn-xs btn-default border" @click="resetFilters">
+          <button class="btn btn-xs btn-default border shadow-sm" @click="resetFilters" title="초기화">
             <i class="fa fa-sync text-muted"></i>
           </button>
         </div>
@@ -82,11 +82,17 @@
 
     <div class="panel-body m-0 p-0 flex-grow-1 overflow-hidden">
       <div class="row m-0 h-100">
-        <div class="col-md-6 p-0 h-100 border-end d-flex flex-column">
+        
+        <div class="col-md-6 p-0 h-100 border-end d-flex flex-column bg-white">
           <div class="grid-header bg-light border-bottom px-3 py-2 d-flex justify-content-between align-items-center">
-            <span class="fw-bold text-dark small"><i class="fa fa-edit me-2 text-primary"></i>LNK_CODE 규격 에디터</span>
-            <div class="d-flex gap-2">
-               <span v-if="selectedTypeId" class="badge bg-white text-dark border shadow-sm">Rule Count: {{ tagRules.length }}</span>
+            <span class="fw-bold text-dark small">
+              <i class="fa fa-edit me-2 text-primary"></i>LNK_CODE 규격 에디터
+            </span>
+            <div class="d-flex align-items-center gap-2">
+              <span v-if="selectedTypeId" class="badge bg-white text-primary border border-primary shadow-sm" style="font-size: 10px;">
+                {{ selectedTypeId }}
+              </span>
+              <small class="text-muted" style="font-size: 10px;">Double-click to Edit</small>
             </div>
           </div>
           <div class="flex-grow-1">
@@ -99,9 +105,11 @@
           </div>
         </div>
 
-        <div class="col-md-6 p-0 h-100 d-flex flex-column">
+        <div class="col-md-6 p-0 h-100 d-flex flex-column bg-white">
           <div class="grid-header bg-light border-bottom px-3 py-2 d-flex justify-content-between align-items-center">
-            <span class="fw-bold text-dark small"><i class="fa fa-search me-2 text-success"></i>실시간 분석 리포트</span>
+            <span class="fw-bold text-dark small">
+              <i class="fa fa-vials me-2 text-success"></i>실시간 분석 리포트
+            </span>
             <span :class="['badge shadow-sm px-3', isTagNoValid ? 'bg-success' : 'bg-danger']" style="font-size: 11px;">
               {{ isTagNoValid ? 'VALID' : 'INVALID' }}
             </span>
@@ -119,6 +127,174 @@
   </div>
 </template>
 
+<script setup>
+import { ref, computed, onMounted, shallowRef } from 'vue'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { AgGridVue } from 'ag-grid-vue3'
+import 'ag-grid-enterprise'
+import PageTitle from '@/components/toolBar/PageTitle.vue'
+
+// --- State ---
+const projectList = ref([])
+const projectSearchKeyword = ref('')
+const selectedProjNo = ref('')
+
+const tagTypes = ref([])
+const typeSearchKeyword = ref('')
+const selectedTypeId = ref('')
+
+const tagRules = ref([])
+const tagNoForValidator = ref('')
+
+const leftGridApi = shallowRef()
+const rightGridApi = shallowRef()
+
+// --- Filtering ---
+const filteredProjectList = computed(() => {
+  const kw = projectSearchKeyword.value.trim().toLowerCase()
+  return projectList.value.filter(p => 
+    p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw))
+  )
+})
+
+const filteredTagTypes = computed(() => {
+  const kw = typeSearchKeyword.value.trim().toLowerCase()
+  return tagTypes.value.filter(t => t.TYPE_ID.toLowerCase().includes(kw))
+})
+
+// --- Events ---
+const selectProject = (projNo) => {
+  selectedProjNo.value = projNo
+  onProjectChange()
+}
+
+const selectType = (typeId) => {
+  selectedTypeId.value = typeId
+  applyTagTypeRules()
+}
+
+const resetFilters = () => {
+  selectedProjNo.value = ''
+  selectedTypeId.value = ''
+  tagNoForValidator.value = ''
+  tagRules.value = []
+  tagTypes.value = []
+}
+
+// --- API Calls ---
+const fetchProjects = async () => {
+  const res = await axiosWrapper.get('/api/Project/GetList')
+  projectList.value = Array.isArray(res) ? res : []
+}
+
+const onProjectChange = async () => {
+  selectedTypeId.value = ''
+  tagRules.value = []
+  const res = await axiosWrapper.post('/api/TagType/Get', { 
+    ProjectNo: selectedProjNo.value, 
+    ContainDeleted: false 
+  })
+  tagTypes.value = Array.isArray(res) ? res : []
+}
+
+const applyTagTypeRules = () => {
+  const target = tagTypes.value.find(t => t.TYPE_ID === selectedTypeId.value)
+  if (target && target.LNK_CODE) {
+    tagRules.value = target.LNK_CODE.map(item => ({
+      attId: item.ATT_ID,
+      delimiter: item.DL_VAL || '',
+      regex: item.REG_EXPS || '^.*$'
+    }))
+  }
+}
+
+const onRuleChanged = () => {
+  const updatedData = []
+  leftGridApi.value.forEachNode(node => updatedData.push(node.data))
+  tagRules.value = [...updatedData]
+}
+
+// --- Analysis Engine ---
+const tagParts = computed(() => {
+  const results = []
+  let currentStr = tagNoForValidator.value || ''
+  let cursor = 0
+
+  for (let rule of tagRules.value) {
+    const delim = rule.delimiter
+    const pureRegex = rule.regex.replace(/^\^|\$/g, '')
+    let dOk = true, cOk = false, matchedVal = null
+
+    if (delim && delim !== '') {
+      if (currentStr.substring(cursor).startsWith(delim)) {
+        cursor += delim.length
+        dOk = true
+      } else {
+        dOk = new RegExp(`^(${pureRegex})$`).test('')
+      }
+    }
+
+    try {
+      const matcher = new RegExp(`^(${pureRegex})`).exec(currentStr.substring(cursor))
+      if (matcher) {
+        matchedVal = matcher[1]
+        cursor += matchedVal.length
+        cOk = true
+      } else if (new RegExp(`^(${pureRegex})$`).test('')) {
+        matchedVal = ''; cOk = true
+      }
+    } catch { cOk = false }
+
+    results.push({
+      attId: rule.attId,
+      matchedValue: matchedVal || '',
+      delimiter: delim || '',
+      isValid: dOk && cOk
+    })
+    if (!(dOk && cOk)) break
+  }
+  return results
+})
+
+const isTagNoValid = computed(() => {
+  if (tagRules.value.length === 0) return false
+  const allPass = tagParts.value.length === tagRules.value.length && tagParts.value.every(p => p.isValid)
+  if (!allPass) return false
+  let totalLen = 0
+  tagParts.value.forEach((p) => {
+    if (p.delimiter && tagNoForValidator.value.substring(totalLen).startsWith(p.delimiter)) totalLen += p.delimiter.length
+    if (p.matchedValue) totalLen += p.matchedValue.length
+  })
+  return totalLen === tagNoForValidator.value.length
+})
+
+// --- AG Grid Config ---
+const leftGridOptions = computed(() => ({
+  columnDefs: [
+    { headerName: 'Attribute', field: 'attId', width: 140, pinned: 'left' },
+    { headerName: 'Delim', field: 'delimiter', width: 90, editable: true, cellStyle: { textAlign: 'center', fontWeight: 'bold' } },
+    { headerName: 'RegEx (Pattern)', field: 'regex', flex: 1, editable: true, cellClass: 'font-monospace' }
+  ],
+  rowData: tagRules.value,
+  defaultColDef: { resizable: true, sortable: true },
+}))
+
+const rightGridOptions = computed(() => ({
+  columnDefs: [
+    { headerName: 'Attribute', field: 'attId', width: 140 },
+    { headerName: 'Extracted Value', field: 'matchedValue', flex: 1, cellClass: 'fw-bold font-monospace text-primary' },
+    { headerName: 'Result', field: 'isValid', width: 100, cellRenderer: p => p.value ? '<b class="text-success text-center d-block">OK</b>' : '<b class="text-danger text-center d-block">ERR</b>' }
+  ],
+  rowData: tagParts.value,
+  defaultColDef: { resizable: true },
+}))
+
+const onLeftGridReady = p => { leftGridApi.value = p.api }
+const onRightGridReady = p => { rightGridApi.value = p.api }
+
+onMounted(fetchProjects)
+</script>
+
 <style scoped lang="scss">
 .custom-header-input {
   width: 180px !important;
@@ -126,14 +302,33 @@
   height: 31px;
 }
 
-// AG Grid 및 기타 스타일은 이전과 동일하게 유지
 :deep(.ag-theme-custom) {
   --ag-header-background-color: #f8f9fa;
+  --ag-header-foreground-color: #495057;
   --ag-border-color: #dee2e6;
   --ag-font-size: 12px;
+  --ag-header-height: 38px;
+  
   .ag-header-cell-label { justify-content: center; font-weight: 600; }
+  .font-monospace { font-family: 'Consolas', 'Monaco', monospace !important; }
 }
 
-.grid-header { height: 40px; }
-.dropdown-menu { z-index: 1060; }
+.grid-header { 
+  height: 40px;
+  border-top: 1px solid #dee2e6;
+}
+
+.dropdown-menu {
+  z-index: 1060;
+  .dropdown-item {
+    font-size: 13px;
+    &:hover { background-color: #f1f3f5; }
+    .form-check-input { cursor: pointer; }
+  }
+}
+
+.badge { 
+  border-radius: 4px; 
+  font-weight: 500; 
+}
 </style>
