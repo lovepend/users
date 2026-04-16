@@ -1,141 +1,157 @@
 <template>
-  <div class="panel panel-expandable m-0 p-0 h-100">
-    <PageTitle icon="fa-check-double" :title="'Tag 규격 유효성 검사'">
+  <div class="panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
+    <PageTitle
+      icon="fa-search-plus"
+      :title="'Tag 통합 분석 및 속성 비교' + (selectedProjNo ? ` [ ${selectedProjNo} ]` : '')"
+    >
       <template #actions>
-        <div class="d-flex align-items-center me-2">
-          <div class="d-flex align-items-center px-2 border-end">
-            <span class="fw-bold me-2 text-nowrap" style="font-size: 12px;">프로젝트</span>
-            <select class="form-select form-select-sm fw-bold" style="width: 140px;" v-model="selectedProjNo" @change="fetchTagTypes">
-              <option v-for="proj in projectList" :key="proj.PROJ_NO" :value="proj.PROJ_NO">
-                {{ proj.PROJ_NO }}
-              </option>
-            </select>
+        <div class="d-flex align-items-center gap-3 ms-auto me-2">
+          <div class="d-flex align-items-center gap-2" style="min-width: 280px">
+            <span class="fw-bold text-dark text-nowrap">Project No</span>
+            <div class="flex-grow-1 dropdown custom-single-select">
+              <button
+                class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white shadow-sm"
+                type="button"
+                data-bs-toggle="dropdown"
+              >
+                <span class="text-truncate" style="max-width: 180px">
+                  {{ selectedProjNo || '프로젝트를 선택하세요' }}
+                </span>
+              </button>
+
+              <ul
+                class="dropdown-menu shadow-lg p-0"
+                style="max-height: 450px; min-width: 260px; overflow: hidden; margin-top: 5px"
+              >
+                <li class="p-2 bg-light border-bottom">
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    v-model="projSearchQuery"
+                    placeholder="프로젝트 검색..."
+                    @click.stop
+                  />
+                </li>
+
+                <div style="max-height: 350px; overflow-y: auto" class="py-1">
+                  <li v-for="proj in filteredProjectOptions" :key="proj.value">
+                    <div
+                      class="dropdown-item d-flex align-items-center gap-3 py-2 px-3 cursor-pointer"
+                      :class="{ 'active-proj': selectedProjNo === proj.value }"
+                      @click="selectProject(proj.value)"
+                    >
+                      <div class="custom-check-box">
+                        <input
+                          type="checkbox"
+                          class="form-check-input mt-0"
+                          :checked="selectedProjNo === proj.value"
+                          style="pointer-events: none"
+                        />
+                      </div>
+                      <span class="text-nowrap">{{ proj.text }}</span>
+                    </div>
+                  </li>
+                  <li v-if="filteredProjectOptions.length === 0" class="text-center py-3 text-muted">
+                    검색 결과가 없습니다.
+                  </li>
+                </div>
+              </ul>
+            </div>
           </div>
 
-          <div class="d-flex align-items-center px-2 border-end">
-            <span class="fw-bold me-2 text-nowrap" style="font-size: 12px;">타입</span>
-            <select class="form-select form-select-sm" style="width: 160px;" v-model="selectedTypeId" @change="applyTagTypeRules" :disabled="!tagTypes.length">
-              <option value="">타입 선택</option>
-              <option v-for="type in tagTypes" :key="type.TYPE_ID" :value="type.TYPE_ID">
-                {{ type.TYPE_ID }}
-              </option>
-            </select>
-          </div>
+          <label class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-nowrap">조회 키워드</span>
+            <textarea
+              class="form-control form-control-sm custom-input-width"
+              style="height: 31px; resize: none"
+              v-model="searchKeywordRef"
+              placeholder="Tag No (공백/엔터 구분)"
+            ></textarea>
+          </label>
+          <button class="btn btn-xs btn-primary shadow-sm px-3" @click="onSearch">
+            <i class="fa fa-search me-1"></i>조회
+          </button>
 
-          <div class="d-flex align-items-center px-2">
-            <span class="fw-bold me-2 text-nowrap text-primary" style="font-size: 12px;">Tag No</span>
+          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
+            <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter"></i> 결과 필터</span>
             <input
               type="text"
-              class="form-control form-control-sm border-primary fw-bold font-monospace"
-              style="width: 250px;"
-              v-model="tagNoForValidator"
-              placeholder="검증할 번호 입력"
+              class="form-control form-control-sm border-success custom-input-width"
+              v-model="localFilterQuery"
+              placeholder="결과 내 검색"
             />
           </div>
+          <div class="ms-1 d-flex align-items-center gap-2">
+            <span class="fw-bold text-primary text-nowrap"><i class="fa fa-columns"></i> 컬럼 필터</span>
+            <textarea
+              class="form-control form-control-sm border-primary custom-input-width"
+              style="height: 31px; resize: none"
+              v-model="columnFilterQuery"
+              placeholder="표시할 컬럼명"
+            ></textarea>
+          </div>
         </div>
-
-        <div class="btn-group me-2">
-          <button class="btn btn-default btn-xs shadow-sm" @click="fetchTagTypes">
-            <i class="fa fa-search me-1 text-primary"></i>조회
-          </button>
-          <button class="btn btn-default btn-xs shadow-sm" @click="showPasteModal = true">
-            <i class="fa fa-paste me-1 text-info"></i>엑셀 붙여넣기
-          </button>
-        </div>
-        
-        <panel-toolbar />
       </template>
     </PageTitle>
 
-    <div class="panel-body m-0 p-0 h-100 overflow-hidden">
-      <div class="row m-0 h-100">
-        <div class="col-md-5 p-0 border-end h-100 d-flex flex-column bg-white">
-          <div class="panel-heading bg-light border-bottom px-3 py-2">
-            <span class="fw-bold text-primary small"><i class="fa fa-cog me-2"></i>적용 규칙 상세 (LNK_CODE)</span>
+    <div class="panel-body flex-grow-1 overflow-hidden m-0 p-0 h-100 border-top">
+      <ag-grid-vue
+        v-bind="gridBindProps"
+        class="ag-theme-alpine w-100 h-100"
+        @grid-ready="onGridReady"
+        @cell-clicked="onCellClicked"
+      />
+    </div>
+
+    <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
+      <div class="custom-modal-window shadow-lg">
+        <div class="modal-header-dark">
+          <div class="d-flex align-items-center gap-2">
+            <span
+              class="badge shadow-sm"
+              :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }"
+              >{{ selectedRow?.Source }}</span
+            >
+            <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
           </div>
-          <div class="flex-grow-1 overflow-auto">
-            <table class="table table-sm table-hover mb-0 custom-table">
-              <thead class="table-light sticky-top">
-                <tr>
-                  <th class="text-center" width="80">ATT_ID</th>
-                  <th width="70" class="text-center">구분자</th>
-                  <th>정규식 (REG_EXPS)</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="(rule, index) in tagRules" :key="index">
-                  <td class="text-center align-middle font-monospace small bg-light text-secondary">{{ rule.attId }}</td>
-                  <td class="text-center align-middle fw-bold text-primary">{{ rule.delimiter || '(없음)' }}</td>
-                  <td class="align-middle font-monospace text-muted small" style="word-break: break-all;">{{ rule.regex }}</td>
-                </tr>
-                <tr v-if="tagRules.length === 0">
-                  <td colspan="3" class="text-center py-5 text-muted small">
-                    <i class="fa fa-info-circle me-1"></i> 프로젝트 선택 후 [조회]를 눌러 타입을 선택하세요.
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+          <div class="d-flex gap-2">
+            <button class="btn btn-xs btn-outline-light" @click="isJsonMode = !isJsonMode">
+              {{ isJsonMode ? 'Table View' : 'JSON View' }}
+            </button>
+            <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
           </div>
         </div>
-
-        <div class="col-md-7 p-0 h-100 d-flex flex-column bg-light border-start">
-          <div class="p-3 flex-grow-1 overflow-auto">
-            <div v-if="tagRules.length" :class="['alert d-flex align-items-center shadow-sm mb-3', isTagNoValid ? 'alert-success border-success' : 'alert-danger border-danger']">
-              <i :class="['fa fa-2x me-3', isTagNoValid ? 'fa-check-circle text-success' : 'fa-times-circle text-danger']"></i>
-              <div>
-                <h5 class="alert-heading mb-1 fw-bold">{{ isTagNoValid ? '정상 규격' : '규격 불일치' }}</h5>
-                <div class="small font-monospace opacity-75">Target: {{ tagNoForValidator }}</div>
-              </div>
-            </div>
-
-            <div class="card shadow-sm border-0" v-if="tagRules.length">
-              <div class="card-header bg-white py-2 fw-bold text-secondary small text-uppercase">Component Matching Details</div>
-              <div class="card-body p-0">
-                <table class="table table-sm mb-0">
-                  <thead class="bg-light small">
-                    <tr>
-                      <th class="ps-3" width="120">Attribute</th>
-                      <th>추출된 값</th>
-                      <th class="text-center" width="70">구분자</th>
-                      <th class="text-center" width="70">패턴</th>
-                      <th class="text-center" width="80">PASS</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    <tr v-for="(part, index) in tagParts" :key="index">
-                      <td class="ps-3 small text-muted font-monospace">{{ tagRules[index]?.attId }}</td>
-                      <td class="fw-bold font-monospace text-dark">{{ part.matchedValue === '' ? '(빈값)' : part.matchedValue || '-' }}</td>
-                      <td class="text-center">
-                        <i v-if="part.hasDelimiterRule" :class="part.isDelimiterValid ? 'fa fa-check text-success' : 'fa fa-times text-danger'"></i>
-                        <span v-else class="text-muted">-</span>
-                      </td>
-                      <td class="text-center">
-                        <span :class="part.isContentValid ? 'text-success fw-bold' : 'text-danger fw-bold'">{{ part.isContentValid ? 'OK' : 'ERR' }}</span>
-                      </td>
-                      <td class="text-center">
-                        <span :class="['badge w-100', part.isValid ? 'bg-success' : 'bg-danger']" style="font-size: 0.65rem;">{{ part.isValid ? 'PASS' : 'FAIL' }}</span>
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </div>
+        <div class="modal-body-content overflow-auto">
+          <div v-if="isJsonMode" class="json-wrapper">
+            <pre class="json-content"><code>{{ JSON.stringify(selectedRow, null, 2) }}</code></pre>
+          </div>
+          <div v-else class="modal-grid-container ag-theme-alpine h-100">
+            <ag-grid-vue v-bind="modalGridBindProps" class="w-100 h-100" />
           </div>
         </div>
       </div>
     </div>
 
-    <div v-if="showPasteModal" class="custom-modal-overlay" @click.self="showPasteModal = false">
-      <div class="custom-modal-window shadow-lg" style="width: 500px; height: 400px;">
-        <div class="modal-header bg-primary text-white p-2 px-3 d-flex justify-content-between">
-          <span class="fw-bold small">엑셀 규칙 붙여넣기</span>
-          <button @click="showPasteModal = false" class="btn btn-xs btn-link text-white text-decoration-none p-0">✕</button>
+    <div v-if="showClassModal" class="custom-modal-overlay" @click.self="closeClassModal">
+      <div class="custom-modal-window shadow-lg" style="width: 850px; height: 65%">
+        <div class="modal-header-dark" style="background: #334155">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fa fa-info-circle text-info"></i>
+            <span class="fw-bold text-white">Class Info: {{ clickedClassId }}</span>
+          </div>
+          <button @click="closeClassModal" class="btn btn-xs btn-danger">✕</button>
         </div>
-        <div class="p-3 d-flex flex-column h-100">
-          <textarea v-model="pasteData" class="form-control font-monospace flex-grow-1 mb-3 small" placeholder="구분자 [Tab] 정규식 순서로 붙여넣으세요..."></textarea>
-          <div class="d-flex justify-content-end gap-2">
-            <button @click="applyPasteData" class="btn btn-primary btn-sm px-3">적용</button>
-            <button @click="showPasteModal = false" class="btn btn-secondary btn-sm px-3">닫기</button>
+        <div class="modal-body-content p-3 h-100 overflow-hidden">
+          <div class="modal-grid-container ag-theme-alpine shadow-sm h-100">
+            <ag-grid-vue
+              style="width: 100%; height: 100%"
+              :columnDefs="classModalColDefs"
+              :rowData="classModalData"
+              :defaultColDef="{ resizable: true, sortable: true, filter: true }"
+              @cell-clicked="onClassGridCellClicked"
+              :headerHeight="40"
+              :rowHeight="38"
+            />
           </div>
         </div>
       </div>
@@ -144,164 +160,420 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import axios from 'axios'
-import PageTitle from '@/components/toolBar/PageTitle.vue'
+  import { ref, computed, shallowRef, onMounted } from 'vue'
+  import { useRouter } from 'vue-router'
+  import { storeToRefs } from 'pinia'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import { sortBy } from 'lodash-es'
+  import { useAppMenuStore } from '@/stores/app-menu'
+  import { sAlert } from '@/utils/messages/alert-common'
+  import PageTitle from '@/components/toolBar/PageTitle.vue'
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-/** 상태 데이터 **/
-const projectList = ref([{ PROJ_NO: 'TE1002' }, { PROJ_NO: 'PROJ-TEST' }]) // 프로젝트 목록 (실제 데이터 연동 필요)
-const selectedProjNo = ref('TE1002')
-const tagTypes = ref([]) // API 결과
-const selectedTypeId = ref('')
-const tagRules = ref([]) // 적용될 룰 세트 (LNK_CODE 매핑 결과)
-const tagNoForValidator = ref('AA-1-BB-2222-C')
-const showPasteModal = ref(false)
-const pasteData = ref('')
+  import 'ag-grid-enterprise'
+  import 'ag-grid-community/styles/ag-grid.css'
+  import 'ag-grid-community/styles/ag-theme-alpine.css'
 
-/** API 호출: Tag Type 목록 조회 (요구하신 페이로드 형식 적용) **/
-const fetchTagTypes = async () => {
-  if (!selectedProjNo.value) return
-  
-  try {
-    const payload = {
-      ProjectNo: selectedProjNo.value,
-      ContainDeleted: false
-    }
+  const router = useRouter()
+  const appMenu = useAppMenuStore()
+  const { currentProjNo } = storeToRefs(appMenu)
 
-    const response = await axios.post('/api/TagType/Get', payload)
-    tagTypes.value = response.data
-    selectedTypeId.value = '' 
-    tagRules.value = []
-  } catch (error) {
-    console.error("API Error (TagType/Get):", error)
-  }
-}
+  const gridApi = shallowRef()
+  const projectOptions = ref([])
+  const selectedProjNo = ref('')
+  const projSearchQuery = ref('')
 
-/** 선택된 Type의 LNK_CODE를 검증 규칙으로 변환 **/
-const applyTagTypeRules = () => {
-  const targetType = tagTypes.value.find(t => t.TYPE_ID === selectedTypeId.value)
-  if (targetType && targetType.LNK_CODE) {
-    // API의 LNK_CODE를 순회하며 NO(ATT_ID), 구분자(DL_VAL), 정규식(REG_EXPS) 추출
-    tagRules.value = targetType.LNK_CODE.map(item => ({
-      attId: item.ATT_ID,
-      delimiter: item.DL_VAL || '',
-      regex: item.REG_EXPS || '^.*$'
-    }))
-  } else {
-    tagRules.value = []
-  }
-}
+  const searchKeywordRef = ref('')
+  const localFilterQuery = ref('')
+  const columnFilterQuery = ref('')
+  const rawDataList = ref([])
+  const dynamicAttCols = ref([])
+  const dynamicRemainingCols = ref([])
 
-/** 정규식이 빈 값을 허용하는지 체크 **/
-const canBeEmpty = (regexStr) => {
-  try {
-    const r = regexStr.replace(/^\^|\$/g, '')
-    return new RegExp(`^(${r})$`).test('')
-  } catch { return false }
-}
+  const showModal = ref(false)
+  const selectedRow = ref(null)
+  const isJsonMode = ref(false)
+  const showClassModal = ref(false)
+  const classModalData = ref([])
+  const clickedClassId = ref('')
 
-/** 실시간 태그 분석 (Cursor 기반) **/
-const tagParts = computed(() => {
-  const results = []
-  let currentStr = tagNoForValidator.value || ''
-  let cursor = 0
-
-  for (let i = 0; i < tagRules.value.length; i++) {
-    const rule = tagRules.value[i]
-    const delim = rule.delimiter
-    const pureRegex = rule.regex.replace(/^\^|\$/g, '')
-    let dOk = true, cOk = false, matchedVal = null
-    const hasDelim = delim !== ''
-
-    // 1. 구분자 확인
-    if (hasDelim) {
-      if (currentStr.substring(cursor).startsWith(delim)) {
-        cursor += delim.length
-        dOk = true
-      } else {
-        dOk = canBeEmpty(rule.regex)
-      }
-    }
-
-    // 2. 정규식 매칭
+  /** 프로젝트 목록 및 선택 로직 **/
+  const fetchProjectList = async () => {
     try {
-      const matcher = new RegExp(`^(${pureRegex})`).exec(currentStr.substring(cursor))
-      if (matcher) {
-        matchedVal = matcher[1]
-        cursor += matchedVal.length
-        cOk = true
-      } else if (canBeEmpty(rule.regex)) {
-        matchedVal = ''
-        cOk = true
-      }
-    } catch { cOk = false }
-
-    results.push({
-      hasDelimiterRule: hasDelim,
-      isDelimiterValid: dOk,
-      isContentValid: cOk,
-      matchedValue: matchedVal,
-      isValid: dOk && cOk,
-    })
-    if (!(dOk && cOk)) break
+      const res = await axiosWrapper.get('/api/Project/Get')
+      projectOptions.value = res.map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
+      if (currentProjNo.value) selectedProjNo.value = currentProjNo.value
+    } catch (e) {
+      console.error('Project List Error', e)
+    }
   }
-  return results
-})
 
-/** 전체 검증 성공 여부 **/
-const isTagNoValid = computed(() => {
-  if (tagRules.value.length === 0) return false
-  const allPartsPass = tagParts.value.length === tagRules.value.length && tagParts.value.every(p => p.isValid)
-  if (!allPartsPass) return false
-  
-  let usedLen = 0
-  tagParts.value.forEach((p, i) => {
-    if (p.hasDelimiterRule && p.isDelimiterValid) {
-      if (tagNoForValidator.value.substring(usedLen).startsWith(tagRules.value[i].delimiter)) {
-        usedLen += tagRules.value[i].delimiter.length
+  const filteredProjectOptions = computed(() => {
+    if (!projSearchQuery.value.trim()) return projectOptions.value
+    const query = projSearchQuery.value.toLowerCase()
+    return projectOptions.value.filter(p => p.text.toLowerCase().includes(query))
+  })
+
+  const selectProject = val => {
+    selectedProjNo.value = val
+  }
+
+  /** 데이터 조회 로직 **/
+  const onSearch = () => getData()
+  const getData = async () => {
+    if (!selectedProjNo.value) return sAlert.Warning('Project No를 선택하세요.')
+    if (gridApi.value) gridApi.value.setGridOption('loading', true)
+
+    try {
+      const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
+      let combined = []
+
+      for (const key of searchKeys) {
+        const payload = { ProjectNo: selectedProjNo.value, Keyword: key }
+        const [p, w] = await Promise.allSettled([
+          axiosWrapper.post('/api/Data/SearchPublishData', payload),
+          axiosWrapper.post('/api/Data/SearchWorkingData', payload),
+        ])
+        if (p.status === 'fulfilled' && p.value) {
+          const data = Array.isArray(p.value) ? p.value : [p.value]
+          combined.push(...data.map(i => ({ ...i, Source: 'Published' })))
+        }
+        if (w.status === 'fulfilled' && w.value) {
+          const data = Array.isArray(w.value) ? w.value : [w.value]
+          combined.push(...data.map(i => ({ ...i, Source: 'Working' })))
+        }
+      }
+
+      const allAttIds = new Set()
+      const allKeys = new Set()
+      const fixedKeys = ['Source', 'DELETED', 'TAG_IDX', 'TAG_NO', 'EP_ID', 'CLS_ID', 'ATTRIBUTES', '_id']
+
+      combined.forEach(item => {
+        ;(item.ATTRIBUTES || []).forEach(a => {
+          if (a?.ATT_ID) allAttIds.add(a.ATT_ID)
+        })
+        Object.keys(item).forEach(k => {
+          if (!fixedKeys.includes(k) && typeof item[k] !== 'object') allKeys.add(k)
+        })
+      })
+
+      const processedData = combined.map(item => {
+        const flatItem = { ...item }
+        allAttIds.forEach(id => {
+          const target = (item.ATTRIBUTES || []).find(a => a?.ATT_ID === id)
+          flatItem[`ATT_${id}`] = target && target.VALUE !== null ? target.VALUE : 'null'
+        })
+        return flatItem
+      })
+
+      dynamicAttCols.value = Array.from(allAttIds)
+        .sort()
+        .map(id => ({
+          headerName: id,
+          field: `ATT_${id}`,
+          minWidth: 130,
+          headerClass: 'att-column-header',
+          cellRenderer: highlightRenderer,
+          cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000' }),
+        }))
+      dynamicRemainingCols.value = Array.from(allKeys)
+        .sort()
+        .map(k => ({ headerName: k, field: k, minWidth: 150, cellRenderer: highlightRenderer }))
+      rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
+    } catch (err) {
+      sAlert.Error('조회 실패')
+    } finally {
+      if (gridApi.value) gridApi.value.setGridOption('loading', false)
+    }
+  }
+
+  const highlightRenderer = p => {
+    const val = p.value === null || p.value === undefined ? '' : String(p.value)
+    if (!val || !localFilterQuery.value.trim()) return val
+    const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
+    let text = val
+    kws.forEach(kw => {
+      const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+      text = text.replace(new RegExp(`(${escapedKw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
+    })
+    return text
+  }
+
+  const mainColDefs = computed(() => {
+    const fixedCols = [
+      {
+        headerName: '',
+        width: 50,
+        pinned: 'left',
+        checkboxSelection: true,
+        headerCheckboxSelection: true,
+        sortable: false,
+        filter: false,
+        suppressMenu: true,
+        cellClass: 'text-center',
+      },
+      {
+        headerName: 'Source',
+        field: 'Source',
+        width: 120,
+        pinned: 'left',
+        cellRenderer: p =>
+          `<span class="badge shadow-sm" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;">${p.value}</span>`,
+      },
+      { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
+      {
+        field: 'CLS_ID',
+        headerName: 'Class',
+        width: 150,
+        pinned: 'left',
+        cellRenderer: highlightRenderer,
+        cellStyle: { cursor: 'pointer', textDecoration: 'underline', color: '#0d6efd', fontWeight: 'bold' },
+      },
+    ]
+    const colFilterKws = columnFilterQuery.value
+      .split(/[\s,\n]+/)
+      .filter(k => k)
+      .map(k => k.toLowerCase())
+    const filteredAtts = colFilterKws.length
+      ? dynamicAttCols.value.filter(c => colFilterKws.some(kw => c.headerName.toLowerCase().includes(kw)))
+      : dynamicAttCols.value
+    const filteredRems = colFilterKws.length
+      ? dynamicRemainingCols.value.filter(c => colFilterKws.some(kw => c.headerName.toLowerCase().includes(kw)))
+      : dynamicRemainingCols.value
+    return [...fixedCols, ...filteredAtts, ...filteredRems]
+  })
+
+  const gridBindProps = computed(() => ({
+    columnDefs: mainColDefs.value,
+    rowData: filteredData.value,
+    pagination: true,
+    paginationPageSize: 100,
+    rowSelection: 'multiple',
+    suppressRowClickSelection: true,
+    loadingOverlayComponent: AggridLoadingOverlay,
+    defaultColDef: { sortable: true, filter: true, resizable: true, enableRangeSelection: true },
+    sideBar: false,
+  }))
+
+  const filteredData = computed(() => {
+    if (!localFilterQuery.value.trim()) return rawDataList.value
+    const kws = localFilterQuery.value
+      .split(/[\s,\n]+/)
+      .filter(k => k)
+      .map(k => k.toLowerCase())
+    return rawDataList.value.filter(i => {
+      const target = `${i.TAG_NO || ''} ${i.CLS_ID || ''} ${i.Source || ''}`.toLowerCase()
+      return kws.some(kw => target.includes(kw))
+    })
+  })
+
+  const onCellClicked = async p => {
+    const colId = p.column.getColId()
+    if (colId === 'Source') {
+      selectedRow.value = p.data
+      showModal.value = true
+      isJsonMode.value = false
+    } else if (colId === 'CLS_ID' && p.value) {
+      clickedClassId.value = p.value
+      try {
+        if (gridApi.value) gridApi.value.setGridOption('loading', true)
+        const res = await axiosWrapper.post('/api/Register/GetByClassIDs', {
+          ContainDeleted: false,
+          ProjectNo: selectedProjNo.value,
+          ClassIDs: [p.value],
+        })
+        classModalData.value = Array.isArray(res) ? res : [res]
+        showClassModal.value = true
+      } catch (e) {
+        sAlert.Error('로드 실패')
+      } finally {
+        if (gridApi.value) gridApi.value.setGridOption('loading', false)
       }
     }
-    if (p.matchedValue) usedLen += p.matchedValue.length
-  })
-  return usedLen === (tagNoForValidator.value || '').length
-})
+  }
 
-/** 수동 엑셀 데이터 적용 **/
-const applyPasteData = () => {
-  if (!pasteData.value.trim()) return
-  const rows = pasteData.value.split('\n')
-  const newRules = rows.map((row, idx) => {
-    const cols = row.split('\t')
-    return { 
-      attId: `P_${idx+1}`, 
-      delimiter: cols[0]?.trim() || '', 
-      regex: cols[1]?.trim() || '^.*$' 
+  const classModalColDefs = [
+    {
+      headerName: 'Register No',
+      field: 'TYPE_ID',
+      flex: 1,
+      cellStyle: { fontWeight: 'bold', color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer' },
+    },
+    { headerName: 'Description', field: 'DESC', flex: 1.5 },
+    { headerName: 'EP ID', field: 'EP_ID', width: 120 },
+  ]
+
+  const onClassGridCellClicked = p => {
+    if (p.column.getColId() === 'TYPE_ID' && p.value) {
+      const routeData = router.resolve({
+        path: '/register-mapping-setup',
+        query: { reg_type_id: p.data.TYPE_ID, proj_no: selectedProjNo.value, ep_id: p.data.EP_ID },
+      })
+      window.open(routeData.href, '_blank')
     }
-  }).filter(r => r.delimiter || r.regex)
+  }
 
-  if (newRules.length) tagRules.value = newRules
-  showPasteModal.value = false
-  pasteData.value = ''
-}
+  const modalGridBindProps = computed(() => {
+    if (!selectedRow.value) return {}
+    const rows = []
+    Object.entries(selectedRow.value).forEach(([k, v]) => {
+      if (k !== 'ATTRIBUTES' && !k.startsWith('ATT_') && k !== 'Source')
+        rows.push({ category: 'System', key: k, value: v ?? '-' })
+    })
+    ;(selectedRow.value.ATTRIBUTES || []).forEach(a =>
+      rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' })
+    )
+    return {
+      columnDefs: [
+        {
+          headerName: 'Category',
+          field: 'category',
+          width: 120,
+          cellStyle: { fontWeight: 'bold', background: '#f8f9fa' },
+        },
+        { headerName: 'Property', field: 'key', width: 220 },
+        { headerName: 'Value', field: 'value', flex: 1 },
+      ],
+      rowData: rows,
+      headerHeight: 35,
+      rowHeight: 32,
+    }
+  })
 
-onMounted(() => {
-  fetchTagTypes()
-})
+  const onGridReady = p => {
+    gridApi.value = p.api
+  }
+  const closeModal = () => {
+    showModal.value = false
+    selectedRow.value = null
+  }
+  const closeClassModal = () => {
+    showClassModal.value = false
+    classModalData.value = []
+  }
 
-defineOptions({ name: 'TagTypeValidatorMaster' })
+  onMounted(fetchProjectList)
 </script>
 
 <style scoped lang="scss">
-.custom-table {
-  font-size: 0.82rem;
-  thead th { background-color: #f1f5f9; color: #475569; padding: 10px 5px; font-weight: 600; border-bottom: 2px solid #e2e8f0; }
-  tbody td { padding: 8px 5px; border-bottom: 1px solid #f1f5f9; }
-}
-.font-monospace { font-family: 'Consolas', 'Monaco', monospace !important; }
-.custom-modal-overlay {
-  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(0, 0, 0, 0.4); z-index: 9999;
-  display: flex; align-items: center; justify-content: center;
-}
-.custom-modal-window { background: #fff; border-radius: 4px; display: flex; flex-direction: column; overflow: hidden; }
+  .custom-input-width {
+    width: 160px !important;
+  }
+
+  /* 프로젝트 선택 (네모 체크박스) */
+  .custom-single-select {
+    .dropdown-toggle::after {
+      margin-left: auto;
+    }
+    .dropdown-menu {
+      border: 1px solid #cbd5e1;
+      left: 0 !important;
+    }
+    .dropdown-item {
+      transition: background 0.2s;
+      &.active-proj {
+        background-color: #f1f5f9;
+        font-weight: bold;
+      }
+    }
+    .custom-check-box {
+      display: flex;
+      align-items: center;
+      padding-left: 5px;
+    }
+    .form-check-input {
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+      border-radius: 3px;
+    } /* 네모 유지 */
+  }
+
+  /* 모달 스크롤 최적화 */
+  .modal-body-content {
+    flex-grow: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto !important; /* 바깥쪽에서만 스크롤 허용 */
+  }
+
+  .json-wrapper {
+    flex: 1;
+    background: #1e293b;
+    padding: 15px;
+  }
+
+  .json-content {
+    color: #f1f5f9;
+    font-size: 13px;
+    white-space: pre-wrap;
+    margin-bottom: 0;
+    overflow: visible !important; /* 내부 스크롤 제거 */
+  }
+
+  .modal-grid-container {
+    flex: 1;
+    min-height: 500px; /* 테이블 모드일 때 최소 높이 확보 */
+  }
+
+  /* 그리드 테마 */
+  :deep(.ag-theme-alpine) {
+    --ag-border-color: #dee2e6;
+    --ag-header-background-color: #f8f9fa;
+    --ag-font-size: 11px;
+    --ag-header-height: 40px;
+    .ag-cell {
+      border-right: 1px solid #f1f3f5 !important;
+    }
+    .ag-header-cell {
+      border-right: 1px solid #dee2e6 !important;
+    }
+    .text-center {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+  }
+
+  .custom-modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .custom-modal-window {
+    background: #fff;
+    width: 1000px;
+    height: 85%;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .modal-header-dark {
+    background: #0f172a;
+    color: #fff;
+    padding: 12px 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  ::v-deep(.filter-highlight) {
+    background-color: #ffeb3b !important;
+    color: #000 !important;
+    font-weight: bold;
+  }
+  ::v-deep(.att-column-header) {
+    background-color: #fff9db !important;
+    color: #856404 !important;
+    font-weight: bold !important;
+  }
 </style>
