@@ -3,30 +3,25 @@
     <div class="p-3 border-bottom shadow-sm bg-light">
       <div class="d-flex align-items-center justify-content-between">
         <div class="d-flex align-items-center gap-3">
-          <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap">Project</span>
+          <div class="d-flex align-items-center gap-2 border-end pe-3">
+            <span class="fw-bold text-dark text-nowrap"><i class="fa fa-project-diagram me-1 text-secondary"></i>Project</span>
             <div class="dropdown">
               <button
                 class="btn btn-sm btn-outline-secondary dropdown-toggle text-start d-flex justify-content-between align-items-center bg-white"
                 type="button"
                 data-bs-toggle="dropdown"
                 data-bs-auto-close="outside"
-                style="width: 250px"
+                style="width: 220px"
               >
-                <span class="text-truncate">{{ selectedProjNo || '프로젝트를 선택하세요' }}</span>
+                <span class="text-truncate">{{ selectedProjNo || '프로젝트 선택' }}</span>
               </button>
               <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 300px">
                 <li class="px-2 pb-2 border-bottom mb-1">
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    v-model="projectSearchKeyword"
-                    placeholder="프로젝트 검색..."
-                    @click.stop
-                  />
+                  <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="Search Project..." @click.stop />
                 </li>
                 <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
-                  <label class="d-flex align-items-center w-100" style="cursor: pointer" @click="selectProject(proj.PROJ_NO)">
+                  <label class="d-flex align-items-center w-100 mb-0" style="cursor: pointer" @click="selectProject(proj.PROJ_NO)">
+                    <input type="checkbox" class="form-check-input me-2 mt-0" :checked="selectedProjNo === proj.PROJ_NO" @click.stop="selectProject(proj.PROJ_NO)" />
                     <span class="text-truncate">
                       <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
                       <small class="text-muted ms-1">({{ proj.DESC }})</small>
@@ -37,31 +32,26 @@
             </div>
           </div>
 
-          <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap">Type</span>
+          <div class="d-flex align-items-center gap-2 border-end pe-3">
+            <span class="fw-bold text-dark text-nowrap"><i class="fa fa-tags me-1 text-secondary"></i>Tag Type</span>
             <div class="dropdown">
               <button
                 class="btn btn-sm btn-outline-secondary dropdown-toggle text-start d-flex justify-content-between align-items-center bg-white"
                 type="button"
                 data-bs-toggle="dropdown"
                 data-bs-auto-close="outside"
-                style="width: 250px"
+                style="width: 220px"
                 :disabled="!tagTypes.length"
               >
-                <span class="text-truncate">{{ selectedTypeId || '타입을 선택하세요' }}</span>
+                <span class="text-truncate">{{ selectedTypeId || '타입 선택' }}</span>
               </button>
               <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 300px">
                 <li class="px-2 pb-2 border-bottom mb-1">
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    v-model="typeSearchKeyword"
-                    placeholder="타입 검색..."
-                    @click.stop
-                  />
+                  <input type="text" class="form-control form-control-sm" v-model="typeSearchKeyword" placeholder="Search Type..." @click.stop />
                 </li>
                 <li v-for="type in filteredTagTypes" :key="type.TYPE_ID" class="dropdown-item px-2 py-1">
-                  <label class="d-flex align-items-center w-100" style="cursor: pointer" @click="selectType(type.TYPE_ID)">
+                  <label class="d-flex align-items-center w-100 mb-0" style="cursor: pointer" @click="selectType(type.TYPE_ID)">
+                    <input type="checkbox" class="form-check-input me-2 mt-0" :checked="selectedTypeId === type.TYPE_ID" @click.stop="selectType(type.TYPE_ID)" />
                     <span class="fw-bold">{{ type.TYPE_ID }}</span>
                   </label>
                 </li>
@@ -69,14 +59,14 @@
             </div>
           </div>
 
-          <div class="d-flex align-items-center gap-2 ms-2">
-            <span class="fw-bold text-primary text-nowrap">Tag No</span>
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-primary text-nowrap"><i class="fa fa-keyboard me-1"></i>Tag No</span>
             <input
               type="text"
               class="form-control form-control-sm border-primary fw-bold font-monospace"
-              style="width: 350px;"
+              style="width: 320px;"
               v-model="tagNoForValidator"
-              placeholder="검증할 Tag No 입력..."
+              placeholder="Enter Tag No for Validation..."
             />
           </div>
         </div>
@@ -84,12 +74,23 @@
       </div>
     </div>
 
+    <div class="px-3 py-1 bg-white border-bottom d-flex align-items-center justify-content-between" v-if="selectedTypeId">
+      <div class="d-flex align-items-center gap-4">
+        <div class="small"><span class="text-muted me-2">Selected Project:</span><span class="fw-bold">{{ selectedProjNo }}</span></div>
+        <div class="small"><span class="text-muted me-2">Selected Type:</span><span class="fw-bold text-success">{{ selectedTypeId }}</span></div>
+        <div class="small"><span class="text-muted me-2">Rules:</span><span class="badge bg-secondary">{{ tagRules.length }} Steps</span></div>
+      </div>
+      <div class="d-flex gap-2">
+         <button class="btn btn-xs btn-default border shadow-sm" @click="applyTagTypeRules"><i class="fa fa-sync me-1 text-info"></i>규격 초기화</button>
+      </div>
+    </div>
+
     <div class="panel-body m-0 p-0 flex-grow-1 overflow-hidden">
       <div class="row m-0 h-100">
         <div class="col-md-6 p-0 h-100 border-end d-flex flex-column bg-white">
           <div class="grid-header bg-light border-bottom px-3 py-2 d-flex justify-content-between align-items-center">
-            <span class="fw-bold text-dark small"><i class="fa fa-edit me-2 text-primary"></i>LNK_CODE 규격 에디터</span>
-            <small class="text-muted text-uppercase" style="font-size: 10px;">Editable Grid</small>
+            <span class="fw-bold text-dark small"><i class="fa fa-tasks me-2 text-primary"></i>Target Rules (LNK_CODE)</span>
+            <span class="text-muted" style="font-size: 10px;">수정 시 실시간 반영</span>
           </div>
           <div class="flex-grow-1">
             <ag-grid-vue
@@ -103,9 +104,9 @@
 
         <div class="col-md-6 p-0 h-100 d-flex flex-column bg-white">
           <div class="grid-header bg-light border-bottom px-3 py-2 d-flex justify-content-between align-items-center">
-            <span class="fw-bold text-dark small"><i class="fa fa-search me-2 text-success"></i>실시간 분석 리포트</span>
+            <span class="fw-bold text-dark small"><i class="fa fa-vials me-2 text-success"></i>Validation Analysis</span>
             <span :class="['badge shadow-sm px-3', isTagNoValid ? 'bg-success' : 'bg-danger']" style="font-size: 11px;">
-              {{ isTagNoValid ? 'VALID' : 'INVALID' }}
+              {{ isTagNoValid ? 'SUCCESS' : 'FAILED' }}
             </span>
           </div>
           <div class="flex-grow-1">
@@ -127,7 +128,7 @@ import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { AgGridVue } from 'ag-grid-vue3'
 import 'ag-grid-enterprise'
 
-// --- State ---
+// --- 상태 관리 ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjNo = ref('')
@@ -142,7 +143,7 @@ const tagNoForValidator = ref('AA-1-BB-2222-C')
 const leftGridApi = shallowRef()
 const rightGridApi = shallowRef()
 
-// --- 프로젝트/타입 필터링 및 선택 로직 (참조 코드 구조) ---
+// --- 필터링 및 선택 로직 ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
@@ -155,17 +156,15 @@ const filteredTagTypes = computed(() => {
 
 const selectProject = (projNo) => {
   selectedProjNo.value = projNo
-  projectSearchKeyword.value = '' 
   onProjectChange()
 }
 
 const selectType = (typeId) => {
   selectedTypeId.value = typeId
-  typeSearchKeyword.value = ''
   applyTagTypeRules()
 }
 
-// --- API ---
+// --- API 데이터 호출 ---
 const fetchProjects = async () => {
   const res = await axiosWrapper.get('/api/Project/GetList')
   projectList.value = Array.isArray(res) ? res : []
@@ -189,13 +188,14 @@ const applyTagTypeRules = () => {
   }
 }
 
-// --- 그리드 동기화 및 검증 로직 ---
+// --- 에디터 변경 감지 ---
 const onRuleChanged = () => {
   const updatedData = []
   leftGridApi.value.forEachNode(node => updatedData.push(node.data))
   tagRules.value = [...updatedData]
 }
 
+// --- 실시간 분석 로직 ---
 const tagParts = computed(() => {
   const results = []
   let currentStr = tagNoForValidator.value || ''
@@ -210,9 +210,7 @@ const tagParts = computed(() => {
       if (currentStr.substring(cursor).startsWith(delim)) {
         cursor += delim.length
         dOk = true
-      } else {
-        dOk = new RegExp(`^(${pureRegex})$`).test('')
-      }
+      } else { dOk = new RegExp(`^(${pureRegex})$`).test('') }
     }
 
     try {
@@ -249,12 +247,12 @@ const isTagNoValid = computed(() => {
   return totalLen === tagNoForValidator.value.length
 })
 
-// --- AG Grid Options ---
+// --- AG Grid 설정 ---
 const leftGridOptions = computed(() => ({
   columnDefs: [
-    { headerName: 'Attribute', field: 'attId', width: 130, pinned: 'left' },
-    { headerName: 'Delim', field: 'delimiter', width: 90, editable: true, cellStyle: { backgroundColor: '#fffbe6', textAlign: 'center', fontWeight: 'bold' } },
-    { headerName: 'RegEx (Edit)', field: 'regex', flex: 1, editable: true, cellClass: 'font-monospace', cellStyle: { backgroundColor: '#fffbe6' } }
+    { headerName: 'Attribute', field: 'attId', width: 140, pinned: 'left' },
+    { headerName: 'Delim', field: 'delimiter', width: 90, editable: true, cellStyle: { textAlign: 'center', fontWeight: 'bold' } },
+    { headerName: 'RegEx', field: 'regex', flex: 1, editable: true, cellClass: 'font-monospace' }
   ],
   rowData: tagRules.value,
   defaultColDef: { resizable: true, sortable: true },
@@ -263,8 +261,8 @@ const leftGridOptions = computed(() => ({
 
 const rightGridOptions = computed(() => ({
   columnDefs: [
-    { headerName: 'Attribute', field: 'attId', width: 130 },
-    { headerName: 'Value', field: 'matchedValue', flex: 1, cellClass: 'fw-bold font-monospace text-primary' },
+    { headerName: 'Attribute', field: 'attId', width: 140 },
+    { headerName: 'Extracted Value', field: 'matchedValue', flex: 1, cellClass: 'fw-bold font-monospace text-primary' },
     { headerName: 'Result', field: 'isValid', width: 100, cellRenderer: p => p.value ? '<b class="text-success">OK</b>' : '<b class="text-danger">ERR</b>' }
   ],
   rowData: tagParts.value,
@@ -278,33 +276,27 @@ onMounted(fetchProjects)
 </script>
 
 <style scoped lang="scss">
-/* AG Grid 커스텀 테마 (속성 비교 화면 스타일) */
 :deep(.ag-theme-custom) {
   --ag-header-background-color: #f8f9fa;
   --ag-header-foreground-color: #495057;
   --ag-border-color: #dee2e6;
   --ag-font-size: 12px;
-  --ag-row-height: 32px;
-  --ag-header-height: 36px;
+  --ag-header-height: 38px;
   
   .ag-header-cell-label { justify-content: center; font-weight: 600; }
   .font-monospace { font-family: 'Consolas', monospace !important; }
 }
 
-/* 그리드 상단 제목 줄 맞춤 */
-.grid-header {
-  height: 40px; 
-  border-top: 1px solid #dee2e6;
-}
+.grid-header { height: 42px; }
 
-/* Dropdown 검색창 스타일 */
 .dropdown-menu {
   z-index: 1060;
   .dropdown-item {
     font-size: 13px;
-    &:hover { background-color: #e7f5ff; }
+    &:hover { background-color: #f1f3f5; }
+    .form-check-input { cursor: pointer; }
   }
 }
 
-.font-monospace { font-family: 'Consolas', monospace !important; }
+.badge { border-radius: 4px; font-weight: 500; }
 </style>
