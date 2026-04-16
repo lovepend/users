@@ -1,26 +1,37 @@
 <template>
-  <div class="panel panel-expandable m-0 p-0 h-100">
+  <div class="panel panel-expandable m-0 p-0 h-100 d-flex flex-column">
     <PageTitle icon="fa-check-double" :title="'Tag 규격 유효성 검사 (Enterprise)'">
       <template #actions>
         <div class="d-flex align-items-center me-2">
           <div class="d-flex align-items-center px-2 border-end">
             <span class="fw-bold me-2 text-nowrap" style="font-size: 12px;">프로젝트</span>
-            <select class="form-select form-select-sm fw-bold" style="width: 160px;" v-model="selectedProjNo" @change="onProjectChange">
-              <option value="">프로젝트 선택 (전체)</option>
-              <option v-for="proj in projectList" :key="proj.PROJ_NO" :value="proj.PROJ_NO">
-                {{ proj.PROJ_NO }}
-              </option>
-            </select>
+            <input 
+              list="projOptions"
+              class="form-control form-control-sm fw-bold" 
+              style="width: 160px;" 
+              v-model="selectedProjNo" 
+              @change="onProjectChange"
+              placeholder="프로젝트 검색/선택"
+            />
+            <datalist id="projOptions">
+              <option v-for="proj in projectList" :key="proj.PROJ_NO" :value="proj.PROJ_NO" />
+            </datalist>
           </div>
 
           <div class="d-flex align-items-center px-2 border-end">
             <span class="fw-bold me-2 text-nowrap" style="font-size: 12px;">타입</span>
-            <select class="form-select form-select-sm" style="width: 180px;" v-model="selectedTypeId" @change="applyTagTypeRules" :disabled="!tagTypes.length">
-              <option value="">타입 선택</option>
-              <option v-for="type in tagTypes" :key="type.TYPE_ID" :value="type.TYPE_ID">
-                {{ type.TYPE_ID }}
-              </option>
-            </select>
+            <input 
+              list="typeOptions"
+              class="form-control form-control-sm" 
+              style="width: 180px;" 
+              v-model="selectedTypeId" 
+              @change="applyTagTypeRules"
+              :disabled="!tagTypes.length"
+              placeholder="타입 검색/선택"
+            />
+            <datalist id="typeOptions">
+              <option v-for="type in tagTypes" :key="type.TYPE_ID" :value="type.TYPE_ID" />
+            </datalist>
           </div>
 
           <div class="d-flex align-items-center px-2">
@@ -44,33 +55,32 @@
       </template>
     </PageTitle>
 
-    <div class="panel-body m-0 p-0 h-100 overflow-hidden">
+    <div class="panel-body m-0 p-0 flex-grow-1 overflow-hidden bg-light">
       <div class="row m-0 h-100">
-        <div class="col-md-5 p-0 border-end h-100 d-flex flex-column bg-white">
-          <div class="panel-heading bg-light border-bottom px-3 py-2 d-flex justify-content-between align-items-center">
-            <span class="fw-bold text-primary small"><i class="fa fa-list-ol me-2"></i>LNK_CODE 규칙 목록</span>
-            <span class="badge bg-primary">{{ tagRules.length }}개 규칙</span>
+        <div class="col-md-5 p-0 h-100 border-end d-flex flex-column bg-white">
+          <div class="panel-heading bg-light border-bottom px-3 py-2 d-flex justify-content-between">
+            <span class="fw-bold text-dark small"><i class="fa fa-list-ol me-2"></i>적용 규격 (LNK_CODE)</span>
           </div>
-          <div class="flex-grow-1 overflow-hidden">
+          <div class="flex-grow-1">
             <ag-grid-vue
               v-bind="leftGridOptions"
-              class="ag-theme-alpine w-100 h-100"
+              class="ag-theme-custom w-100 h-100"
               @grid-ready="onLeftGridReady"
             />
           </div>
         </div>
 
-        <div class="col-md-7 p-0 h-100 d-flex flex-column bg-light border-start">
-          <div class="panel-heading bg-white border-bottom px-3 py-2 d-flex justify-content-between align-items-center">
-            <span class="fw-bold text-secondary small"><i class="fa fa-vial me-2"></i>검증 상세 분석</span>
-            <span :class="['badge', isTagNoValid ? 'bg-success' : 'bg-danger']">
-              {{ isTagNoValid ? 'VALID' : 'INVALID' }}
+        <div class="col-md-7 p-0 h-100 d-flex flex-column bg-white">
+          <div class="panel-heading bg-light border-bottom px-3 py-2 d-flex justify-content-between">
+            <span class="fw-bold text-dark small"><i class="fa fa-vial me-2"></i>검증 결과 상세</span>
+            <span :class="['badge shadow-sm', isTagNoValid ? 'bg-success' : 'bg-danger']">
+              {{ isTagNoValid ? 'SUCCESS' : 'FAILED' }}
             </span>
           </div>
-          <div class="flex-grow-1 overflow-hidden">
+          <div class="flex-grow-1">
             <ag-grid-vue
               v-bind="rightGridOptions"
-              class="ag-theme-alpine w-100 h-100"
+              class="ag-theme-custom w-100 h-100"
               @grid-ready="onRightGridReady"
             />
           </div>
@@ -86,10 +96,10 @@ import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import PageTitle from '@/components/toolBar/PageTitle.vue'
 import { AgGridVue } from 'ag-grid-vue3'
 
-// Enterprise 전용 모듈 임포트 (프로젝트 환경에 따라 다를 수 있음)
+// Enterprise 모듈 활성화
 import 'ag-grid-enterprise'
 
-/** 상태 관리 **/
+/** 데이터 상태 **/
 const projectList = ref([])
 const selectedProjNo = ref('')
 const tagTypes = ref([])
@@ -100,7 +110,7 @@ const tagNoForValidator = ref('AA-1-BB-2222-C')
 const leftGridApi = shallowRef()
 const rightGridApi = shallowRef()
 
-/** 1. 데이터 로드 로직 **/
+/** API 호출 **/
 const fetchProjects = async () => {
   try {
     const res = await axiosWrapper.get('/api/Project/GetList')
@@ -109,6 +119,8 @@ const fetchProjects = async () => {
 }
 
 const onProjectChange = () => {
+  // 선택 로직 보정 (datalist 필터 대응)
+  if (!projectList.value.some(p => p.PROJ_NO === selectedProjNo.value)) return
   selectedTypeId.value = ''
   tagRules.value = []
   fetchTagTypes()
@@ -133,12 +145,10 @@ const applyTagTypeRules = () => {
       delimiter: item.DL_VAL || '',
       regex: item.REG_EXPS || '^.*$'
     }))
-  } else {
-    tagRules.value = []
   }
 }
 
-/** 2. 실시간 검증 엔진 (Computed) **/
+/** 실시간 검증 계산 **/
 const tagParts = computed(() => {
   const results = []
   let currentStr = tagNoForValidator.value || ''
@@ -150,17 +160,15 @@ const tagParts = computed(() => {
     const pureRegex = rule.regex.replace(/^\^|\$/g, '')
     let dOk = true, cOk = false, matchedVal = null
 
-    // 구분자 검사
     if (delim) {
       if (currentStr.substring(cursor).startsWith(delim)) {
         cursor += delim.length
         dOk = true
       } else {
-        dOk = new RegExp(`^(${pureRegex})$`).test('') // 정규식이 빈값 허용하면 패스
+        dOk = new RegExp(`^(${pureRegex})$`).test('')
       }
     }
 
-    // 값 매칭
     try {
       const matcher = new RegExp(`^(${pureRegex})`).exec(currentStr.substring(cursor))
       if (matcher) {
@@ -176,7 +184,7 @@ const tagParts = computed(() => {
     results.push({
       attId: rule.attId,
       matchedValue: matchedVal,
-      delimiter: delim,
+      delimiter: delim || '(None)',
       isDelimiterValid: dOk,
       isContentValid: cOk,
       isValid: dOk && cOk
@@ -191,10 +199,9 @@ const isTagNoValid = computed(() => {
   const allPass = tagParts.value.length === tagRules.value.length && tagParts.value.every(p => p.isValid)
   if (!allPass) return false
   
-  // 전체 문자열 소비 확인
   let totalLen = 0
   tagParts.value.forEach((p, i) => {
-    if (p.delimiter && p.isDelimiterValid) {
+    if (p.delimiter !== '(None)' && p.isDelimiterValid) {
        if (tagNoForValidator.value.substring(totalLen).startsWith(p.delimiter)) totalLen += p.delimiter.length
     }
     if (p.matchedValue) totalLen += p.matchedValue.length
@@ -202,29 +209,32 @@ const isTagNoValid = computed(() => {
   return totalLen === (tagNoForValidator.value || '').length
 })
 
-/** 3. AG Grid Enterprise 설정 (왼쪽: 규칙 목록) **/
+/** AG Grid 설정 (속성 비교 화면 스타일 참조) **/
+const defaultColDef = {
+  sortable: true,
+  filter: true,
+  resizable: true,
+  floatingFilter: true, // 상단 필터 입력창 활성화
+}
+
 const leftGridOptions = computed(() => ({
   columnDefs: [
-    { headerName: 'Attribute', field: 'attId', width: 110, pinned: 'left', filter: 'agSetColumnFilter' },
-    { headerName: 'Delim', field: 'delimiter', width: 80, cellStyle: { textAlign: 'center', fontWeight: 'bold', color: '#0d6efd' }, filter: 'agSetColumnFilter' },
-    { headerName: 'Regex Pattern', field: 'regex', flex: 1, cellClass: 'font-monospace text-muted small', filter: 'agTextColumnFilter' }
+    { headerName: 'Attribute', field: 'attId', width: 120, pinned: 'left', filter: 'agSetColumnFilter' },
+    { headerName: 'Delim', field: 'delimiter', width: 100, cellStyle: { textAlign: 'center', color: '#007bff', fontWeight: 'bold' } },
+    { headerName: 'RegEx Pattern', field: 'regex', flex: 1, cellClass: 'font-monospace text-muted' }
   ],
   rowData: tagRules.value,
-  defaultColDef: { sortable: true, resizable: true, floatingFilter: true },
-  enableRangeSelection: true, // Enterprise 기능
-  sideBar: 'filters' // 우측 필터 사이드바 활성화
+  defaultColDef,
+  enableRangeSelection: true,
+  sideBar: { toolPanels: ['filters'], defaultToolPanel: '' }
 }))
 
-/** 4. AG Grid Enterprise 설정 (오른쪽: 검증 결과) **/
 const rightGridOptions = computed(() => ({
   columnDefs: [
-    { headerName: 'Attribute', field: 'attId', width: 120, pinned: 'left' },
-    { headerName: 'Extracted Value', field: 'matchedValue', flex: 1, 
-      cellClass: 'fw-bold font-monospace',
-      valueFormatter: p => p.value === '' ? '(Empty)' : p.value 
-    },
-    { headerName: 'Delim', field: 'isDelimiterValid', width: 80, cellRenderer: p => p.value ? '✅' : '❌' },
-    { headerName: 'Pattern', field: 'isContentValid', width: 80, cellRenderer: p => p.value ? '✅' : '❌' },
+    { headerName: 'Attribute', field: 'attId', width: 120 },
+    { headerName: 'Value', field: 'matchedValue', flex: 1, cellClass: 'fw-bold font-monospace text-dark' },
+    { headerName: 'D', field: 'isDelimiterValid', width: 60, cellRenderer: p => p.value ? '✅' : '❌' },
+    { headerName: 'P', field: 'isContentValid', width: 60, cellRenderer: p => p.value ? '✅' : '❌' },
     { 
       headerName: 'Status', 
       field: 'isValid', 
@@ -233,39 +243,36 @@ const rightGridOptions = computed(() => ({
     }
   ],
   rowData: tagParts.value,
-  defaultColDef: { sortable: true, resizable: true },
-  statusBar: { // Enterprise 하단 상태바
-    statusPanels: [
-      { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'left' }
-    ]
-  }
+  defaultColDef: { ...defaultColDef, floatingFilter: false },
 }))
 
-/** Grid API Ready **/
 const onLeftGridReady = p => { leftGridApi.value = p.api }
 const onRightGridReady = p => { rightGridApi.value = p.api }
 
-onMounted(() => {
-  fetchProjects()
-})
-
-defineOptions({ name: 'TagValidatorEnterprise' })
+onMounted(fetchProjects)
+defineOptions({ name: 'TagValidatorFinalEnterprise' })
 </script>
 
 <style scoped lang="scss">
-// AG Grid 테마 오버라이드
-::v-deep(.ag-theme-alpine) {
+/* 속성 비교 페이지의 스타일 커스텀 참조 */
+::v-deep(.ag-theme-custom) {
+  height: 100%;
+  --ag-header-background-color: #f8f9fa;
+  --ag-header-foreground-color: #495057;
+  --ag-border-color: #dee2e6;
   --ag-font-size: 12px;
-  --ag-header-height: 32px;
-  --ag-row-height: 30px;
   
-  .ag-header-cell-label { justify-content: center; }
-  .font-monospace { font-family: 'Consolas', monospace !important; }
+  .ag-header-cell-label { justify-content: center; font-weight: 600; }
+  .font-monospace { font-family: 'Consolas', 'Monaco', monospace !important; }
 }
 
-.ag-theme-alpine {
-  border: none !important;
+/* 레이아웃 깨짐 방지 */
+.panel-body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* flex 자식의 overflow 방지 필수 */
 }
 
-.badge { font-size: 0.7rem; padding: 4px 8px; }
+.badge { font-size: 11px; font-weight: 500; }
+.form-select-sm, .form-control-sm { font-size: 12px; }
 </style>
