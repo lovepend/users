@@ -2,68 +2,62 @@
   <div class="template__stack">
     <div class="header-controls" style="margin-bottom: 10px; display: flex; gap: 10px;">
       <button @click="loadData" class="btn-primary">조회 (Load)</button>
-      <button @click="addRow" class="btn-secondary">행 추가 (Add)</button>
       <button @click="saveChanges" class="btn-success">저장 (Save)</button>
-      <button @click="deleteRow" class="btn-danger">삭제 (Delete)</button>
     </div>
 
-    <div ref="ssContainer" style="width: 100%; height: 600px; border: 1px solid #ddd;"></div>
+    <gc-spread-sheets-designer
+      :styleInfo="designerStyle"
+      @designerInitialized="onDesignerInitialized"
+    >
+    </gc-spread-sheets-designer>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref, onUnmounted } from 'vue';
-import GC from '@grapecity/spread-sheets';
-// 라이선스 키는 반드시 모듈 로드 직후 최상단에 위치해야 합니다.
-GC.Spread.Sheets.LicenseKey = "발급받으신_v18_라이선스_키";
-
-// CSS 로드 에러가 지속될 경우, 이 라인을 main.js로 옮기는 것을 권장합니다.
+import { ref } from 'vue';
+import '@grapecity/spread-sheets-designer-vue';
+import '@grapecity/spread-sheets-designer/styles/gc.spread.sheets.designer.min.css';
 import '@grapecity/spread-sheets/styles/gc.spread.sheets.excel2013white.css';
+import GC from '@grapecity/spread-sheets';
+import '@grapecity/spread-sheets-designer';
 
-const ssContainer = ref(null);
+// 라이선스 키는 실제 사용 시 최상단에 추가하세요.
+// GC.Spread.Sheets.LicenseKey = "YOUR_SPREAD_KEY";
+// GC.Spread.Sheets.Designer.LicenseKey = "YOUR_DESIGNER_KEY";
+
+const designerPtr = ref(null);
 const spreadPtr = ref(null);
+const designerStyle = { width: '100%', height: '700px' };
 const tableName = "MergedDataTable";
 
-onMounted(() => {
-  if (ssContainer.value) {
-    // v18에서는 초기화 옵션이 더 세분화되었습니다.
-    const spread = new GC.Spread.Sheets.Workbook(ssContainer.value, {
-      sheetCount: 1,
-      newTabVisible: false,
-      allowContextMenu: true // 유료 버전의 우클릭 메뉴 활성화
-    });
-    spreadPtr.value = spread;
-    
-    const sheet = spread.getActiveSheet();
-    sheet.name("Merged Data");
-  }
-});
+// 1. 디자이너 초기화 완료 후 실행
+const onDesignerInitialized = (designer) => {
+  designerPtr.value = designer;
+  // 디자이너 객체에서 실제 Spread(Workbook) 객체 추출
+  spreadPtr.value = designer.getWorkbook();
+  
+  const sheet = spreadPtr.value.getActiveSheet();
+  sheet.name("Merged Data");
+};
 
-onUnmounted(() => {
-  if (spreadPtr.value) {
-    spreadPtr.value.destroy();
-  }
-});
-
+// 2. 데이터 로드 및 뿌려주기
 const loadData = async () => {
   if (!spreadPtr.value) return;
   const sheet = spreadPtr.value.getActiveSheet();
 
-  const payload = {
-    "ProjectNo": "TE1002",
-    "REG_TYPE_ID": "101TEST",
-    "Type": "Merged",
-    "ContainDeleted": false
-  };
-
+  // 이전과 동일한 API 호출 로직
   try {
     const response = await fetch('/api/Data/GetMergedData', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Projectno': payload.ProjectNo
+        'Projectno': 'TE1002'
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        "ProjectNo": "TE1002",
+        "REG_TYPE_ID": "101TEST",
+        "Type": "Merged"
+      })
     });
 
     const resData = await response.json();
@@ -72,60 +66,40 @@ const loadData = async () => {
 
     sheet.suspendPaint();
     
-    // 초기화 및 테이블 재생성
+    // 초기화
     sheet.setDataSource(null);
     if (sheet.tables.findByName(tableName)) {
       sheet.tables.remove(tableName);
     }
-    sheet.clear(0, 0, sheet.getRowCount(), sheet.getColumnCount(), GC.Spread.Sheets.SheetArea.viewport, GC.Spread.Sheets.StorageType.data);
 
     if (listData.length > 0) {
+      // 데이터 테이블 생성
       const table = sheet.tables.addFromDataSource(tableName, 0, 0, listData, GC.Spread.Sheets.Tables.TableThemes.medium2);
+      
+      // 컬럼 매핑
       table.bindColumns([
         { name: "TAG_NO", displayName: "태그 번호", size: 150 },
         { name: "TAG_DESC", displayName: "설명", size: 250 },
-        { name: "CLS_ID", displayName: "클래스 ID", size: 120 },
-        { name: "TAG_NO_PASSED", displayName: "상태", size: 100 },
-        { name: "CHGE_DTM", displayName: "수정일", size: 180 }
+        { name: "CLS_ID", displayName: "클래스 ID", size: 120 }
       ]);
     }
 
     sheet.resumePaint();
+    console.log("Designer Data Bind Complete");
   } catch (error) {
-    console.error("Data Load Error:", error);
-    if (sheet) sheet.resumePaint();
-  }
-};
-
-// 행 추가/저장/삭제 로직은 이전과 동일 (안정성 유지)
-const addRow = () => {
-  const sheet = spreadPtr.value.getActiveSheet();
-  const table = sheet.tables.findByName(tableName);
-  if (table) {
-    sheet.suspendPaint();
-    sheet.addRows(table.range().row + table.range().rowCount, 1);
-    sheet.resumePaint();
+    console.error(error);
   }
 };
 
 const saveChanges = () => {
   const sheet = spreadPtr.value.getActiveSheet();
   const dirtyRows = sheet.getDirtyRows();
-  if (dirtyRows.length === 0) return alert("변경 사항 없음");
-  console.log("저장 데이터:", dirtyRows.map(r => sheet.getDataSource()[r.row]));
-};
-
-const deleteRow = () => {
-  const sheet = spreadPtr.value.getActiveSheet();
-  const selections = sheet.getSelections();
-  if (selections?.length > 0) {
-    sheet.deleteRows(selections[0].row, 1);
-  }
+  console.log("Modified Data:", dirtyRows.map(r => sheet.getDataSource()[r.row]));
 };
 </script>
 
 <style scoped>
 .template__stack { padding: 12px 14px; }
-.btn-primary { background: #007bff; color: #fff; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; }
-/* ... 나머지 버튼 스타일 동일 ... */
+.btn-primary { background: #007bff; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
+.btn-success { background: #28a745; color: white; border: none; padding: 8px 15px; border-radius: 4px; cursor: pointer; }
 </style>
