@@ -1,579 +1,513 @@
-<template>
-  <div class="panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
-    <PageTitle
-      icon="fa-search-plus"
-      :title="'Tag 통합 분석 및 속성 비교' + (selectedProjNo ? ` [ ${selectedProjNo} ]` : '')"
-    >
-      <template #actions>
-        <div class="d-flex align-items-center gap-3 ms-auto me-2">
-          <div class="d-flex align-items-center gap-2" style="min-width: 280px">
-            <span class="fw-bold text-dark text-nowrap">Project No</span>
-            <div class="flex-grow-1 dropdown custom-single-select">
-              <button
-                class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white shadow-sm"
-                type="button"
-                data-bs-toggle="dropdown"
-              >
-                <span class="text-truncate" style="max-width: 180px">
-                  {{ selectedProjNo || '프로젝트를 선택하세요' }}
-                </span>
-              </button>
+아래의 api 
+/api/Data/GetMergedData
 
-              <ul
-                class="dropdown-menu shadow-lg p-0"
-                style="max-height: 450px; min-width: 260px; overflow: hidden; margin-top: 5px"
-              >
-                <li class="p-2 bg-light border-bottom">
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    v-model="projSearchQuery"
-                    placeholder="프로젝트 검색..."
-                    @click.stop
-                  />
-                </li>
+사용해서 아래와 같이 페이로드 요청
 
-                <div style="max-height: 350px; overflow-y: auto" class="py-1">
-                  <li v-for="proj in filteredProjectOptions" :key="proj.value">
-                    <div
-                      class="dropdown-item d-flex align-items-center gap-3 py-2 px-3 cursor-pointer"
-                      :class="{ 'active-proj': selectedProjNo === proj.value }"
-                      @click="selectProject(proj.value)"
-                    >
-                      <div class="custom-check-box">
-                        <input
-                          type="checkbox"
-                          class="form-check-input mt-0"
-                          :checked="selectedProjNo === proj.value"
-                          style="pointer-events: none"
-                        />
-                      </div>
-                      <span class="text-nowrap">{{ proj.text }}</span>
-                    </div>
-                  </li>
-                  <li v-if="filteredProjectOptions.length === 0" class="text-center py-3 text-muted">
-                    검색 결과가 없습니다.
-                  </li>
-                </div>
-              </ul>
-            </div>
-          </div>
 
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-nowrap">조회 키워드</span>
-            <textarea
-              class="form-control form-control-sm custom-input-width"
-              style="height: 31px; resize: none"
-              v-model="searchKeywordRef"
-              placeholder="Tag No (공백/엔터 구분)"
-            ></textarea>
-          </label>
-          <button class="btn btn-xs btn-primary shadow-sm px-3" @click="onSearch">
-            <i class="fa fa-search me-1"></i>조회
-          </button>
+{
+    "ProjectNo": "TE1002",
+    "REG_TYPE_ID": "101TEST",
+    "Type": "Merged",
+    "ContainDeleted": false
+}
 
-          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter"></i> 결과 필터</span>
-            <input
-              type="text"
-              class="form-control form-control-sm border-success custom-input-width"
-              v-model="localFilterQuery"
-              placeholder="결과 내 검색"
-            />
-          </div>
-          <div class="ms-1 d-flex align-items-center gap-2">
-            <span class="fw-bold text-primary text-nowrap"><i class="fa fa-columns"></i> 컬럼 필터</span>
-            <textarea
-              class="form-control form-control-sm border-primary custom-input-width"
-              style="height: 31px; resize: none"
-              v-model="columnFilterQuery"
-              placeholder="표시할 컬럼명"
-            ></textarea>
-          </div>
-        </div>
-      </template>
-    </PageTitle>
 
-    <div class="panel-body flex-grow-1 overflow-hidden m-0 p-0 h-100 border-top">
-      <ag-grid-vue
-        v-bind="gridBindProps"
-        class="ag-theme-alpine w-100 h-100"
-        @grid-ready="onGridReady"
-        @cell-clicked="onCellClicked"
-      />
-    </div>
 
-    <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
-      <div class="custom-modal-window shadow-lg">
-        <div class="modal-header-dark">
-          <div class="d-flex align-items-center gap-2">
-            <span
-              class="badge shadow-sm"
-              :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }"
-              >{{ selectedRow?.Source }}</span
-            >
-            <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
-          </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-xs btn-outline-light" @click="isJsonMode = !isJsonMode">
-              {{ isJsonMode ? 'Table View' : 'JSON View' }}
-            </button>
-            <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
-          </div>
-        </div>
-        <div class="modal-body-content overflow-auto">
-          <div v-if="isJsonMode" class="json-wrapper">
-            <pre class="json-content"><code>{{ JSON.stringify(selectedRow, null, 2) }}</code></pre>
-          </div>
-          <div v-else class="modal-grid-container ag-theme-alpine h-100">
-            <ag-grid-vue v-bind="modalGridBindProps" class="w-100 h-100" />
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showClassModal" class="custom-modal-overlay" @click.self="closeClassModal">
-      <div class="custom-modal-window shadow-lg" style="width: 850px; height: 65%">
-        <div class="modal-header-dark" style="background: #334155">
-          <div class="d-flex align-items-center gap-2">
-            <i class="fa fa-info-circle text-info"></i>
-            <span class="fw-bold text-white">Class Info: {{ clickedClassId }}</span>
-          </div>
-          <button @click="closeClassModal" class="btn btn-xs btn-danger">✕</button>
-        </div>
-        <div class="modal-body-content p-3 h-100 overflow-hidden">
-          <div class="modal-grid-container ag-theme-alpine shadow-sm h-100">
-            <ag-grid-vue
-              style="width: 100%; height: 100%"
-              :columnDefs="classModalColDefs"
-              :rowData="classModalData"
-              :defaultColDef="{ resizable: true, sortable: true, filter: true }"
-              @cell-clicked="onClassGridCellClicked"
-              :headerHeight="40"
-              :rowHeight="38"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup>
-  import { ref, computed, shallowRef, onMounted } from 'vue'
-  import { useRouter } from 'vue-router'
-  import { storeToRefs } from 'pinia'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sortBy } from 'lodash-es'
-  import { useAppMenuStore } from '@/stores/app-menu'
-  import { sAlert } from '@/utils/messages/alert-common'
-  import PageTitle from '@/components/toolBar/PageTitle.vue'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-
-  import 'ag-grid-enterprise'
-  import 'ag-grid-community/styles/ag-grid.css'
-  import 'ag-grid-community/styles/ag-theme-alpine.css'
-
-  const router = useRouter()
-  const appMenu = useAppMenuStore()
-  const { currentProjNo } = storeToRefs(appMenu)
-
-  const gridApi = shallowRef()
-  const projectOptions = ref([])
-  const selectedProjNo = ref('')
-  const projSearchQuery = ref('')
-
-  const searchKeywordRef = ref('')
-  const localFilterQuery = ref('')
-  const columnFilterQuery = ref('')
-  const rawDataList = ref([])
-  const dynamicAttCols = ref([])
-  const dynamicRemainingCols = ref([])
-
-  const showModal = ref(false)
-  const selectedRow = ref(null)
-  const isJsonMode = ref(false)
-  const showClassModal = ref(false)
-  const classModalData = ref([])
-  const clickedClassId = ref('')
-
-  /** 프로젝트 목록 및 선택 로직 **/
-  const fetchProjectList = async () => {
-    try {
-      const res = await axiosWrapper.get('/api/Project/Get')
-      projectOptions.value = res.map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
-      if (currentProjNo.value) selectedProjNo.value = currentProjNo.value
-    } catch (e) {
-      console.error('Project List Error', e)
+리턴 되는 구조는 다음과 같아 
+{
+    "103TEST": {
+        "PubData": null,
+        "WrkData": [
+            {
+                "TAG_NO_PASSED": "Passed",
+                "NEW_YN": false,
+                "DEL_YN": false,
+                "EP_ID": "TeEP",
+                "EP_IC": "TeEP",
+                "DELETED": false,
+                "DEL_USER": null,
+                "DEL_DTM": null,
+                "PROJ_NO": "TE1002",
+                "TAG_IDX": "682bd90bd235c727377a29e2",
+                "TAG_NO": "TEST103_005",
+                "TAG_TYPE_ID": "",
+                "CLS_ID": "TEST103_CLS",
+                "TAG_DESC": "DESC_005",
+                "BF_TAG_NO": "",
+                "PIC_NO": "52593271",
+                "DSN_SKL": null,
+                "PRNT_TAG_IDX": null,
+                "ATTRIBUTES": [
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST010",
+                        "VALUE": "true"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "SYSTEM_NAME",
+                        "VALUE": "698a895bed2aff6e277a8371"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ASSEMBLY_NAME",
+                        "VALUE": null
+                    }
+                ],
+                "CRTER_NO": "52593271",
+                "CRTE_DTM": "2025-05-20T10:21:15+09:00",
+                "CHGER_NO": "52593271",
+                "CHGE_DTM": "2026-03-12T13:24:24.003+09:00",
+                "_id": "682bd90bd235c727377a29e3"
+            },
+            {
+                "TAG_NO_PASSED": "Passed",
+                "NEW_YN": false,
+                "DEL_YN": false,
+                "EP_ID": "TeEP",
+                "EP_IC": "TeEP",
+                "DELETED": false,
+                "DEL_USER": null,
+                "DEL_DTM": null,
+                "PROJ_NO": "TE1002",
+                "TAG_IDX": "682bd90bd235c727377a29e7",
+                "TAG_NO": "TEST103_004",
+                "TAG_TYPE_ID": "",
+                "CLS_ID": "TEST103_CLS",
+                "TAG_DESC": "DESC_004",
+                "BF_TAG_NO": "",
+                "PIC_NO": "52593271",
+                "DSN_SKL": null,
+                "PRNT_TAG_IDX": null,
+                "ATTRIBUTES": [
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST010",
+                        "VALUE": "true"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "SYSTEM_NAME",
+                        "VALUE": "698a895bed2aff6e277a8371"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ASSEMBLY_NAME",
+                        "VALUE": null
+                    }
+                ],
+                "CRTER_NO": "52593271",
+                "CRTE_DTM": "2025-05-20T10:21:15+09:00",
+                "CHGER_NO": "52593271",
+                "CHGE_DTM": "2026-03-12T13:24:24.003+09:00",
+                "_id": "682bd90bd235c727377a29e8"
+            },
+            {
+                "TAG_NO_PASSED": "Passed",
+                "NEW_YN": false,
+                "DEL_YN": false,
+                "EP_ID": "TeEP",
+                "EP_IC": "TeEP",
+                "DELETED": false,
+                "DEL_USER": null,
+                "DEL_DTM": null,
+                "PROJ_NO": "TE1002",
+                "TAG_IDX": "682bd90cd235c727377a29ed",
+                "TAG_NO": "TEST103_003",
+                "TAG_TYPE_ID": "",
+                "CLS_ID": "TEST103_CLS",
+                "TAG_DESC": "DESC_003",
+                "BF_TAG_NO": "",
+                "PIC_NO": "52593271",
+                "DSN_SKL": null,
+                "PRNT_TAG_IDX": null,
+                "ATTRIBUTES": [
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST010",
+                        "VALUE": "true"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "SYSTEM_NAME",
+                        "VALUE": "698a895bed2aff6e277a8371"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ASSEMBLY_NAME",
+                        "VALUE": null
+                    }
+                ],
+                "CRTER_NO": "52593271",
+                "CRTE_DTM": "2025-05-20T10:21:16+09:00",
+                "CHGER_NO": "52593271",
+                "CHGE_DTM": "2026-03-12T13:24:24.003+09:00",
+                "_id": "682bd90cd235c727377a29ee"
+            },
+            {
+                "TAG_NO_PASSED": "Passed",
+                "NEW_YN": false,
+                "DEL_YN": false,
+                "EP_ID": "TeEP",
+                "EP_IC": "TeEP",
+                "DELETED": false,
+                "DEL_USER": null,
+                "DEL_DTM": null,
+                "PROJ_NO": "TE1002",
+                "TAG_IDX": "682bd90cd235c727377a29f4",
+                "TAG_NO": "TEST103_002",
+                "TAG_TYPE_ID": "",
+                "CLS_ID": "TEST103_CLS",
+                "TAG_DESC": "DESC_002",
+                "BF_TAG_NO": "",
+                "PIC_NO": "52593271",
+                "DSN_SKL": null,
+                "PRNT_TAG_IDX": null,
+                "ATTRIBUTES": [
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST010",
+                        "VALUE": "true"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "SYSTEM_NAME",
+                        "VALUE": "698a895bed2aff6e277a8371"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ASSEMBLY_NAME",
+                        "VALUE": null
+                    }
+                ],
+                "CRTER_NO": "52593271",
+                "CRTE_DTM": "2025-05-20T10:21:16+09:00",
+                "CHGER_NO": "52593271",
+                "CHGE_DTM": "2026-03-12T13:24:24.003+09:00",
+                "_id": "682bd90cd235c727377a29f5"
+            },
+            {
+                "TAG_NO_PASSED": "Passed",
+                "NEW_YN": false,
+                "DEL_YN": false,
+                "EP_ID": "TeEP",
+                "EP_IC": "TeEP",
+                "DELETED": false,
+                "DEL_USER": null,
+                "DEL_DTM": null,
+                "PROJ_NO": "TE1002",
+                "TAG_IDX": "682bd90cd235c727377a29fc",
+                "TAG_NO": "TEST103_001",
+                "TAG_TYPE_ID": "",
+                "CLS_ID": "TEST103_CLS",
+                "TAG_DESC": "DESC_001",
+                "BF_TAG_NO": "TEST103_001",
+                "PIC_NO": "52593271",
+                "DSN_SKL": null,
+                "PRNT_TAG_IDX": null,
+                "ATTRIBUTES": [
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST010",
+                        "VALUE": "true"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ASSEMBLY_NAME",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "SYSTEM_NAME",
+                        "VALUE": "698a895bed2aff6e277a8371"
+                    }
+                ],
+                "CRTER_NO": "52593271",
+                "CRTE_DTM": "2025-05-20T10:21:16+09:00",
+                "CHGER_NO": "52593271",
+                "CHGE_DTM": "2026-03-31T10:27:07.111+09:00",
+                "_id": "682bd90cd235c727377a29fd"
+            },
+            {
+                "TAG_NO_PASSED": null,
+                "NEW_YN": false,
+                "DEL_YN": false,
+                "EP_ID": "TeEP",
+                "EP_IC": "TeEP",
+                "DELETED": false,
+                "DEL_USER": null,
+                "DEL_DTM": null,
+                "PROJ_NO": "TE1002",
+                "TAG_IDX": "69c31fc4d07dcf722bad1d69",
+                "TAG_NO": "M_Class",
+                "TAG_TYPE_ID": "",
+                "CLS_ID": "TEST103_CLS",
+                "TAG_DESC": null,
+                "BF_TAG_NO": "M_Class",
+                "PIC_NO": "52593274",
+                "DSN_SKL": null,
+                "PRNT_TAG_IDX": null,
+                "ATTRIBUTES": [
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ASSEMBLY_NAME",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "SYSTEM_NAME",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST003",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST004",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST005",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST006",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST007",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST008",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST009",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST010",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST001",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "TEST002",
+                        "VALUE": null
+                    }
+                ],
+                "CRTER_NO": "52593274",
+                "CRTE_DTM": "2026-03-25T08:35:32.542+09:00",
+                "CHGER_NO": "52593271",
+                "CHGE_DTM": "2026-03-31T11:12:05.755+09:00",
+                "_id": "69c31fc4d07dcf722bad1d6a"
+            },
+            {
+                "TAG_NO_PASSED": null,
+                "NEW_YN": false,
+                "DEL_YN": false,
+                "EP_ID": "TeEP",
+                "EP_IC": "TeEP",
+                "DELETED": false,
+                "DEL_USER": null,
+                "DEL_DTM": null,
+                "PROJ_NO": "TE1002",
+                "TAG_IDX": "69c32569d07dcf722bad1d8e",
+                "TAG_NO": "AUTO TAG",
+                "TAG_TYPE_ID": "",
+                "CLS_ID": "TEST103_CLS",
+                "TAG_DESC": null,
+                "BF_TAG_NO": null,
+                "PIC_NO": "52593274",
+                "DSN_SKL": null,
+                "PRNT_TAG_IDX": null,
+                "ATTRIBUTES": [
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "ASSEMBLY_NAME",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "SYSTEM_NAME",
+                        "VALUE": null
+                    }
+                ],
+                "CRTER_NO": "52593274",
+                "CRTE_DTM": "2026-03-25T08:59:37.538+09:00",
+                "CHGER_NO": "52593274",
+                "CHGE_DTM": "2026-03-25T08:59:37.538+09:00",
+                "_id": "69c32569d07dcf722bad1d8f"
+            }
+        ],
+        "DiffData": [
+            {
+                "TAG_IDX": "682bd90cd235c727377a29f4",
+                "EP_ID": "TeEP",
+                "Status": "",
+                "EditType": "",
+                "Property": []
+            },
+            {
+                "TAG_IDX": "69c31fd7d07dcf722bad1d6c",
+                "EP_ID": "TeEP",
+                "Status": "",
+                "EditType": "P",
+                "Property": [
+                    {
+                        "PROP_ID": "PIC_NO",
+                        "PUB_VALUE": "52593274",
+                        "WRK_VALUE": null
+                    },
+                    {
+                        "PROP_ID": "CLS_ID",
+                        "PUB_VALUE": "TEST103_CLS",
+                        "WRK_VALUE": null
+                    },
+                    {
+                        "PROP_ID": "EP_ID",
+                        "PUB_VALUE": "TeEP",
+                        "WRK_VALUE": null
+                    },
+                    {
+                        "PROP_ID": "TAG_NO",
+                        "PUB_VALUE": "AUTO TAG",
+                        "WRK_VALUE": null
+                    }
+                ]
+            },
+            {
+                "TAG_IDX": "682bd90cd235c727377a29fc",
+                "EP_ID": "TeEP",
+                "Status": "",
+                "EditType": "",
+                "Property": []
+            },
+            {
+                "TAG_IDX": "682bd90bd235c727377a29e2",
+                "EP_ID": "TeEP",
+                "Status": "",
+                "EditType": "",
+                "Property": []
+            },
+            {
+                "TAG_IDX": "69c32569d07dcf722bad1d8e",
+                "EP_ID": "TeEP",
+                "Status": "A",
+                "EditType": "",
+                "Property": [
+                    {
+                        "PROP_ID": "PIC_NO",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "52593274"
+                    },
+                    {
+                        "PROP_ID": "CLS_ID",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "TEST103_CLS"
+                    },
+                    {
+                        "PROP_ID": "EP_ID",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "TeEP"
+                    },
+                    {
+                        "PROP_ID": "TAG_NO",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "AUTO TAG"
+                    }
+                ]
+            },
+            {
+                "TAG_IDX": "682bd90bd235c727377a29e7",
+                "EP_ID": "TeEP",
+                "Status": "",
+                "EditType": "",
+                "Property": []
+            },
+            {
+                "TAG_IDX": "69c31fc4d07dcf722bad1d69",
+                "EP_ID": "TeEP",
+                "Status": "A",
+                "EditType": "",
+                "Property": [
+                    {
+                        "PROP_ID": "BF_TAG_NO",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "M_Class"
+                    },
+                    {
+                        "PROP_ID": "PIC_NO",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "52593274"
+                    },
+                    {
+                        "PROP_ID": "CLS_ID",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "TEST103_CLS"
+                    },
+                    {
+                        "PROP_ID": "EP_ID",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "TeEP"
+                    },
+                    {
+                        "PROP_ID": "TAG_NO",
+                        "PUB_VALUE": null,
+                        "WRK_VALUE": "M_Class"
+                    }
+                ]
+            },
+            {
+                "TAG_IDX": "682bd90cd235c727377a29ed",
+                "EP_ID": "TeEP",
+                "Status": "",
+                "EditType": "",
+                "Property": []
+            }
+        ],
+        "MergeData": null
     }
-  }
-
-  const filteredProjectOptions = computed(() => {
-    if (!projSearchQuery.value.trim()) return projectOptions.value
-    const query = projSearchQuery.value.toLowerCase()
-    return projectOptions.value.filter(p => p.text.toLowerCase().includes(query))
-  })
-
-  const selectProject = val => {
-    selectedProjNo.value = val
-  }
-
-  /** 데이터 조회 로직 **/
-  const onSearch = () => getData()
-  const getData = async () => {
-    if (!selectedProjNo.value) return sAlert.Warning('Project No를 선택하세요.')
-    if (gridApi.value) gridApi.value.setGridOption('loading', true)
-
-    try {
-      const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
-      let combined = []
-
-      for (const key of searchKeys) {
-        const payload = { ProjectNo: selectedProjNo.value, Keyword: key }
-        const [p, w] = await Promise.allSettled([
-          axiosWrapper.post('/api/Data/SearchPublishData', payload),
-          axiosWrapper.post('/api/Data/SearchWorkingData', payload),
-        ])
-        if (p.status === 'fulfilled' && p.value) {
-          const data = Array.isArray(p.value) ? p.value : [p.value]
-          combined.push(...data.map(i => ({ ...i, Source: 'Published' })))
-        }
-        if (w.status === 'fulfilled' && w.value) {
-          const data = Array.isArray(w.value) ? w.value : [w.value]
-          combined.push(...data.map(i => ({ ...i, Source: 'Working' })))
-        }
-      }
-
-      const allAttIds = new Set()
-      const allKeys = new Set()
-      const fixedKeys = ['Source', 'DELETED', 'TAG_IDX', 'TAG_NO', 'EP_ID', 'CLS_ID', 'ATTRIBUTES', '_id']
-
-      combined.forEach(item => {
-        ;(item.ATTRIBUTES || []).forEach(a => {
-          if (a?.ATT_ID) allAttIds.add(a.ATT_ID)
-        })
-        Object.keys(item).forEach(k => {
-          if (!fixedKeys.includes(k) && typeof item[k] !== 'object') allKeys.add(k)
-        })
-      })
-
-      const processedData = combined.map(item => {
-        const flatItem = { ...item }
-        allAttIds.forEach(id => {
-          const target = (item.ATTRIBUTES || []).find(a => a?.ATT_ID === id)
-          flatItem[`ATT_${id}`] = target && target.VALUE !== null ? target.VALUE : 'null'
-        })
-        return flatItem
-      })
-
-      dynamicAttCols.value = Array.from(allAttIds)
-        .sort()
-        .map(id => ({
-          headerName: id,
-          field: `ATT_${id}`,
-          minWidth: 130,
-          headerClass: 'att-column-header',
-          cellRenderer: highlightRenderer,
-          cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000' }),
-        }))
-      dynamicRemainingCols.value = Array.from(allKeys)
-        .sort()
-        .map(k => ({ headerName: k, field: k, minWidth: 150, cellRenderer: highlightRenderer }))
-      rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
-    } catch (err) {
-      sAlert.Error('조회 실패')
-    } finally {
-      if (gridApi.value) gridApi.value.setGridOption('loading', false)
-    }
-  }
-
-  const highlightRenderer = p => {
-    const val = p.value === null || p.value === undefined ? '' : String(p.value)
-    if (!val || !localFilterQuery.value.trim()) return val
-    const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
-    let text = val
-    kws.forEach(kw => {
-      const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      text = text.replace(new RegExp(`(${escapedKw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
-    })
-    return text
-  }
-
-  const mainColDefs = computed(() => {
-    const fixedCols = [
-      {
-        headerName: '',
-        width: 50,
-        pinned: 'left',
-        checkboxSelection: true,
-        headerCheckboxSelection: true,
-        sortable: false,
-        filter: false,
-        suppressMenu: true,
-        cellClass: 'text-center',
-      },
-      {
-        headerName: 'Source',
-        field: 'Source',
-        width: 120,
-        pinned: 'left',
-        cellRenderer: p =>
-          `<span class="badge shadow-sm" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;">${p.value}</span>`,
-      },
-      { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-      {
-        field: 'CLS_ID',
-        headerName: 'Class',
-        width: 150,
-        pinned: 'left',
-        cellRenderer: highlightRenderer,
-        cellStyle: { cursor: 'pointer', textDecoration: 'underline', color: '#0d6efd', fontWeight: 'bold' },
-      },
-    ]
-    const colFilterKws = columnFilterQuery.value
-      .split(/[\s,\n]+/)
-      .filter(k => k)
-      .map(k => k.toLowerCase())
-    const filteredAtts = colFilterKws.length
-      ? dynamicAttCols.value.filter(c => colFilterKws.some(kw => c.headerName.toLowerCase().includes(kw)))
-      : dynamicAttCols.value
-    const filteredRems = colFilterKws.length
-      ? dynamicRemainingCols.value.filter(c => colFilterKws.some(kw => c.headerName.toLowerCase().includes(kw)))
-      : dynamicRemainingCols.value
-    return [...fixedCols, ...filteredAtts, ...filteredRems]
-  })
-
-  const gridBindProps = computed(() => ({
-    columnDefs: mainColDefs.value,
-    rowData: filteredData.value,
-    pagination: true,
-    paginationPageSize: 100,
-    rowSelection: 'multiple',
-    suppressRowClickSelection: true,
-    loadingOverlayComponent: AggridLoadingOverlay,
-    defaultColDef: { sortable: true, filter: true, resizable: true, enableRangeSelection: true },
-    sideBar: false,
-  }))
-
-  const filteredData = computed(() => {
-    if (!localFilterQuery.value.trim()) return rawDataList.value
-    const kws = localFilterQuery.value
-      .split(/[\s,\n]+/)
-      .filter(k => k)
-      .map(k => k.toLowerCase())
-    return rawDataList.value.filter(i => {
-      const target = `${i.TAG_NO || ''} ${i.CLS_ID || ''} ${i.Source || ''}`.toLowerCase()
-      return kws.some(kw => target.includes(kw))
-    })
-  })
-
-  const onCellClicked = async p => {
-    const colId = p.column.getColId()
-    if (colId === 'Source') {
-      selectedRow.value = p.data
-      showModal.value = true
-      isJsonMode.value = false
-    } else if (colId === 'CLS_ID' && p.value) {
-      clickedClassId.value = p.value
-      try {
-        if (gridApi.value) gridApi.value.setGridOption('loading', true)
-        const res = await axiosWrapper.post('/api/Register/GetByClassIDs', {
-          ContainDeleted: false,
-          ProjectNo: selectedProjNo.value,
-          ClassIDs: [p.value],
-        })
-        classModalData.value = Array.isArray(res) ? res : [res]
-        showClassModal.value = true
-      } catch (e) {
-        sAlert.Error('로드 실패')
-      } finally {
-        if (gridApi.value) gridApi.value.setGridOption('loading', false)
-      }
-    }
-  }
-
-  const classModalColDefs = [
-    {
-      headerName: 'Register No',
-      field: 'TYPE_ID',
-      flex: 1,
-      cellStyle: { fontWeight: 'bold', color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer' },
-    },
-    { headerName: 'Description', field: 'DESC', flex: 1.5 },
-    { headerName: 'EP ID', field: 'EP_ID', width: 120 },
-  ]
-
-  const onClassGridCellClicked = p => {
-    if (p.column.getColId() === 'TYPE_ID' && p.value) {
-      const routeData = router.resolve({
-        path: '/register-mapping-setup',
-        query: { reg_type_id: p.data.TYPE_ID, proj_no: selectedProjNo.value, ep_id: p.data.EP_ID },
-      })
-      window.open(routeData.href, '_blank')
-    }
-  }
-
-  const modalGridBindProps = computed(() => {
-    if (!selectedRow.value) return {}
-    const rows = []
-    Object.entries(selectedRow.value).forEach(([k, v]) => {
-      if (k !== 'ATTRIBUTES' && !k.startsWith('ATT_') && k !== 'Source')
-        rows.push({ category: 'System', key: k, value: v ?? '-' })
-    })
-    ;(selectedRow.value.ATTRIBUTES || []).forEach(a =>
-      rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' })
-    )
-    return {
-      columnDefs: [
-        {
-          headerName: 'Category',
-          field: 'category',
-          width: 120,
-          cellStyle: { fontWeight: 'bold', background: '#f8f9fa' },
-        },
-        { headerName: 'Property', field: 'key', width: 220 },
-        { headerName: 'Value', field: 'value', flex: 1 },
-      ],
-      rowData: rows,
-      headerHeight: 35,
-      rowHeight: 32,
-    }
-  })
-
-  const onGridReady = p => {
-    gridApi.value = p.api
-  }
-  const closeModal = () => {
-    showModal.value = false
-    selectedRow.value = null
-  }
-  const closeClassModal = () => {
-    showClassModal.value = false
-    classModalData.value = []
-  }
-
-  onMounted(fetchProjectList)
-</script>
-
-<style scoped lang="scss">
-  .custom-input-width {
-    width: 160px !important;
-  }
-
-  /* 프로젝트 선택 (네모 체크박스) */
-  .custom-single-select {
-    .dropdown-toggle::after {
-      margin-left: auto;
-    }
-    .dropdown-menu {
-      border: 1px solid #cbd5e1;
-      left: 0 !important;
-    }
-    .dropdown-item {
-      transition: background 0.2s;
-      &.active-proj {
-        background-color: #f1f5f9;
-        font-weight: bold;
-      }
-    }
-    .custom-check-box {
-      display: flex;
-      align-items: center;
-      padding-left: 5px;
-    }
-    .form-check-input {
-      width: 16px;
-      height: 16px;
-      cursor: pointer;
-      border-radius: 3px;
-    } /* 네모 유지 */
-  }
-
-  /* 모달 스크롤 최적화 */
-  .modal-body-content {
-    flex-grow: 1;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    overflow-y: auto !important; /* 바깥쪽에서만 스크롤 허용 */
-  }
-
-  .json-wrapper {
-    flex: 1;
-    background: #1e293b;
-    padding: 15px;
-  }
-
-  .json-content {
-    color: #f1f5f9;
-    font-size: 13px;
-    white-space: pre-wrap;
-    margin-bottom: 0;
-    overflow: visible !important; /* 내부 스크롤 제거 */
-  }
-
-  .modal-grid-container {
-    flex: 1;
-    min-height: 500px; /* 테이블 모드일 때 최소 높이 확보 */
-  }
-
-  /* 그리드 테마 */
-  :deep(.ag-theme-alpine) {
-    --ag-border-color: #dee2e6;
-    --ag-header-background-color: #f8f9fa;
-    --ag-font-size: 11px;
-    --ag-header-height: 40px;
-    .ag-cell {
-      border-right: 1px solid #f1f3f5 !important;
-    }
-    .ag-header-cell {
-      border-right: 1px solid #dee2e6 !important;
-    }
-    .text-center {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-  }
-
-  .custom-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 9999;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
-  .custom-modal-window {
-    background: #fff;
-    width: 1000px;
-    height: 85%;
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-  .modal-header-dark {
-    background: #0f172a;
-    color: #fff;
-    padding: 12px 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  ::v-deep(.filter-highlight) {
-    background-color: #ffeb3b !important;
-    color: #000 !important;
-    font-weight: bold;
-  }
-  ::v-deep(.att-column-header) {
-    background-color: #fff9db !important;
-    color: #856404 !important;
-    font-weight: bold !important;
-  }
-</style>
+}
