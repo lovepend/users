@@ -1,11 +1,13 @@
-<div class="col-xl-4 align-self-center">
-                      <label class="form-check-label fw-bold me-2"> Bypass : </label>
-                      <input class="form-check-input" type="checkbox" v-model="selectedBypassRef" />
-                      <label v-if="selectedBypassRef" class="form-check-label fw-bold ms-3 me-2"> Pub Bypass : </label>
-                      <input
-                        v-if="selectedBypassRef"
-                        class="form-check-input"
-                        type="checkbox"
-                        v-model="selectedBypassPublishRef"
-                      />
-                    </div>
+const getMapDatas = async itemAdapterDataMapping => {
+    gridApi_MapAttr.value.setGridOption('loading', true)
+    gridApi_MapClass.value.setGridOption('loading', true)
+    gridApi_MapTmpl.value.setGridOption('loading', true)
+    gridApi_MapRel.value.setGridOption('loading', true)
+
+    try {
+      let dataMessage = ''
+
+      selectedBypassRef.value = itemAdapterDataMapping.BYPASS ? itemAdapterDataMapping.BYPASS : false
+      selectedBypassPublishRef.value = itemAdapterDataMapping.BYPASS_PUBLISH
+        ? itemAdapterDataMapping.BYPASS_PUBLISH
+        : false
