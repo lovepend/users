@@ -1,3 +1,55 @@
-=IFERROR(INDEX(SORTBY(Table1[Tag No], Table1[선택순서], 1), 1), "")
+{ 
+  field: 'TOOL_SOURCE', 
+  headerName: 'Tool Source', 
+  minWidth: 100, 
+  flex: 1,
+  editable: true, // 편집 가능하도록 설정
+  cellEditor: 'agSelectCellEditor', // ag-Grid 내장 선택 박스 사용
+  cellEditorParams: {
+    values: [], // 초기값은 빈 배열, API 호출 후 업데이트 예정
+  }
+}
 
-=IFERROR(INDEX(SORTBY(Table1[Tag No], Table1[선택순서], 1), 1), "")
+
+
+import { onMounted, ref } from 'vue';
+import axios from 'axios'; // axios 또는 사용하시는 fetch 라이브러리
+
+// ... 생략 ...
+
+setup() {
+  const gridApi = ref(null);
+
+  const fetchToolSources = async () => {
+    try {
+      const response = await axios.post('/api/Dictionary/GetByKey', {
+        Key: "ADAPTER_TOOLS",
+        ProjectNo: "TE1002"
+      });
+
+      // API로 받은 데이터: ["EB", "eVCP", "S3D", ...]
+      const toolList = response.data;
+
+      // 특정 컬럼의 에디터 파라미터(values)만 업데이트
+      const columnDefs = gridApi.value.getColumnDefs();
+      const col = columnDefs.find(c => c.field === 'TOOL_SOURCE');
+      
+      if (col) {
+        col.cellEditorParams = { values: toolList };
+        gridApi.value.setColumnDefs(columnDefs); // 변경된 설정 적용
+      }
+    } catch (error) {
+      console.error("데이터 로드 실패:", error);
+    }
+  };
+
+  const onGridReady = (params) => {
+    gridApi.value = params.api;
+    fetchToolSources(); // 그리드 준비 완료 후 API 호출
+  };
+
+  return {
+    onGridReady,
+    // ...
+  };
+}
