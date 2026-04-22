@@ -1,3 +1,15 @@
+/api/Register/Get으로 아래 리턴 받아
+
+내가 방금 보내준 코드 기억나지? 그건 프로젝트별로 Attribute를 비교였는데 이건
+프로젝트 내에 Attribute의 속성값 UOM_ID와 아래 Register List에서 "LNK_ATT"에 있는 Attribute와
+Attirubte 호출해서 리턴되어진 Attribute를 매칭해서 UOM이 다를경우 표현해주는거야
+
+1. 우선 프로젝트 선택이 이건 싱글로 선택이 되어야 할거 같아 / 기존 UI는 유지
+2. 프로젝트의 /api/Register/Get으로 리턴되어진 TYPE_ID이 아래 조회 리스트에 보여야 할거 같아
+3. 그안에 LNK_ATT안에 배열값들과 Attribute 의 UOM 값을 비교해서 틀리면 TYPE_ID 클릭해서 모달을 띄워서 ATT_ID 랑 UOM_ID를 비교해서 보여주는거야
+
+이해했으면 코드 작성해줘봐
+
 [
   {
     "PROJ_NO": "TE1002",
