@@ -22,3 +22,1210 @@ payload 이고
   "SPEL",
   "VDCS"
 ]
+
+
+<template>
+  <Splitter style="height: 100vh">
+    <SplitterPanel class="flex" :size="60">
+      <div class="panel bg-white mb-0" style="height: 100%">
+        <PageTitle icon="fa-chalkboard-user" :title="$t('AdapterCustomSetup_vue.AdapterCustom_title')"></PageTitle>
+        <!-- Begin 메뉴 툴바 버튼 구역-->
+        <div
+          v-if="
+            userInfo.IsDeveloper ||
+            (projectPermissions.some(el => el.Role === 'Manager' || el.Role === 'User') && currentEPRole !== 'User')
+          "
+          class="panel-body p-0 m-0"
+        >
+          <BasicToolBar
+            @create-data="createData_Custom"
+            @delete-data="deleteSelected_Custom"
+            @save-data="preSave_Custom"
+            :showCreate="isShowCreateBtn"
+            :showMultiCreate="isShowMultiCreateBtn"
+            :showDelete="isShowDeleteBtn"
+            :isDisabledDeleteBtn="isDisabledDeleteBtn"
+            :showSave="isShowSaveBtn"
+            :isDisabledSaveBtn="isDisabledSaveBtn"
+            createTooltip="After creating data, click the Save button."
+            deleteTooltip="It will be deleted immediately."
+          />
+        </div>
+        <span v-else class="just-view">{{ $t('DataSettingNavBar_vue.justViewPermission') }}</span>
+        <!-- End 메뉴 툴바 버튼 구역-->
+        <!-- 테이블 구역 -->
+        <div class="panel-body overflow-hidden p-0 m-0 h-100">
+          <div class="p-0" style="height: 100%">
+            <ag-grid-vue v-bind="gridBindCustomProps" v-on="gridOnCommonProps('custom')"> </ag-grid-vue>
+          </div>
+        </div>
+      </div>
+    </SplitterPanel>
+    <SplitterPanel class="flex" :size="40">
+      <Splitter style="height: calc(100vh - 140px)" layout="vertical">
+        <SplitterPanel class="flex" :size="30">
+          <div class="panel bg-white mb-0" style="height: 100%">
+            <PageTitle
+              icon="fa-bars"
+              :title="
+                $t('AdapterCustomSetup_vue.source_value_list_title') +
+                (selectedSourceHeader ? ` [ ${selectedSourceHeader} ]` : '')
+              "
+            ></PageTitle>
+            <!-- Begin 메뉴 툴바 버튼 구역-->
+            <div
+              v-if="
+                userInfo.IsDeveloper ||
+                (projectPermissions.some(el => el.Role === 'Manager' || el.Role === 'User') && currentEPRole !== 'User')
+              "
+              class="panel-body p-0 m-0"
+            >
+              <BasicToolBar
+                @create-data="createData_Source"
+                @delete-data="deleteSelected_Source"
+                :showMultiCreate="false"
+                :showCreate="showCreateSource"
+                :showDelete="showDeleteSource"
+                createTooltip="After creating data, click the Save button."
+                deleteTooltip="After deleteing data, click the Save button."
+              />
+            </div>
+            <span v-else class="just-view">{{ $t('DataSettingNavBar_vue.justViewPermission') }}</span>
+            <!-- End 메뉴 툴바 버튼 구역-->
+            <!-- 테이블 구역 -->
+            <div class="panel-body overflow-hidden p-0 m-0 h-100">
+              <div class="p-0" style="height: 100%">
+                <ag-grid-vue v-bind="gridBindSourceProps" v-on="gridOnCommonProps('source')"> </ag-grid-vue>
+              </div>
+            </div>
+          </div>
+        </SplitterPanel>
+        <SplitterPanel class="flex" :size="70">
+          <div class="panel bg-white mb-0" style="height: 100%">
+            <PageTitle
+              icon="fa-bars"
+              :title="
+                $t('AdapterCustomSetup_vue.att_value_list_title') +
+                (selectedAttHeader ? ` [ ${selectedAttHeader} ]` : '')
+              "
+            ></PageTitle>
+            <!-- Begin 메뉴 툴바 버튼 구역-->
+            <div
+              v-if="
+                userInfo.IsDeveloper ||
+                (projectPermissions.some(el => el.Role === 'Manager' || el.Role === 'User') && currentEPRole !== 'User')
+              "
+              class="panel-body p-0 m-0"
+            >
+              <BasicToolBar
+                @create-data="createData_Att"
+                @delete-data="deleteSelected_Att"
+                :showMultiCreate="false"
+                :showCreate="showCreateAtt"
+                :showDelete="showDeleteAtt"
+                createTooltip="After creating data, click the Save button."
+                deleteTooltip="After deleteing data, click the Save button."
+              />
+            </div>
+            <span v-else class="just-view">{{ $t('DataSettingNavBar_vue.justViewPermission') }}</span>
+            <!-- End 메뉴 툴바 버튼 구역-->
+            <!-- 테이블 구역 -->
+            <div class="panel-body overflow-hidden p-0 m-0 h-100">
+              <div class="p-0" style="height: 100%">
+                <ag-grid-vue v-bind="gridBindAttProps" v-on="gridOnCommonProps('att')"> </ag-grid-vue>
+              </div>
+            </div>
+          </div>
+        </SplitterPanel>
+      </Splitter>
+    </SplitterPanel>
+  </Splitter>
+</template>
+<script setup>
+  // Library - Common
+  import { ref, watch, inject, shallowRef, toRaw } from 'vue'
+  import { storeToRefs } from 'pinia'
+
+  // Library - Layout
+  import Splitter from 'primevue/splitter'
+  import SplitterPanel from 'primevue/splitterpanel'
+
+  // Library - Data
+  import axios from 'axios'
+  import * as _ from 'lodash-es'
+  import { el } from 'date-fns/locale'
+  import { se } from 'date-fns/locale'
+
+  // Library - AG Grid
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+
+  // Store
+  import { useAppAuthenticationStore } from '@/stores/app-authentication'
+  import { useAppPermissionStore } from '@/stores/app-permission'
+
+  // Custom Component
+  import AgDetailStatusBar from '@/components/aggrid/AgDetailStatusBar.vue'
+  import agDropBoxEditor from '@/components/aggrid/AgDropBoxEditor.vue'
+  import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
+  import PageTitle from '@/components/toolBar/PageTitle.vue'
+
+  // Modal
+  import SettingModal from '@/components/modals/common/SettingModal.vue'
+
+  // Helpers
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import { sAlert, sToast } from '@/utils/messages/alert-common'
+
+  const appPermission = useAppPermissionStore()
+
+  const { userInfo } = storeToRefs(useAppAuthenticationStore())
+  const { projectPermissions, currentEPRole } = storeToRefs(appPermission)
+
+  // Basic Toolbar 버튼 숨김여부 동적 설정용
+  const isShowCreateBtn = ref(true)
+  const isShowMultiCreateBtn = ref(false)
+  const isShowDeleteBtn = ref(true)
+  const isDisabledDeleteBtn = ref(true)
+  const isShowSaveBtn = ref(true)
+  const isDisabledSaveBtn = ref(true)
+
+  /*			AG GRID 정의 				*/
+  const gridApi_Custom = shallowRef()
+  const gridApi_Source = shallowRef()
+  const gridApi_Att = shallowRef()
+
+  const themeClass = 'ag-theme-custom'
+
+  const getRowId = params => {
+    return params.data._id
+  }
+
+  const selectedSourceHeader = ref('')
+  const selectedAttHeader = ref('')
+
+  let showCreateSource = false
+  let showDeleteSource = false
+
+  let showCreateAtt = false
+  let showDeleteAtt = false
+
+  const defaultColDef = ref({
+    editable: false,
+    filter: 'agMultiColumnFilter',
+    filterParams: {
+      maxNumConditions: 2,
+      numAlwaysVisibleConditions: 2,
+      defaultJoinOperator: 'OR',
+    },
+    floatingFilter: true,
+    wrapHeaderText: true,
+    autoHeaderHeight: true,
+    cellClass: params => checkClassType(params, customListOrigin.value, '_id'),
+  })
+  const defaultColDef2 = ref({
+    editable: false,
+    filter: 'agMultiColumnFilter',
+    filterParams: {
+      maxNumConditions: 2,
+      numAlwaysVisibleConditions: 2,
+      defaultJoinOperator: 'OR',
+    },
+    floatingFilter: true,
+    wrapHeaderText: true,
+    autoHeaderHeight: true,
+    cellClass: params => checkClassType(params, sourceListOrigin.value, 'SRC_NM'),
+  })
+  const defaultColDef3 = ref({
+    editable: false,
+    filter: 'agMultiColumnFilter',
+    filterParams: {
+      maxNumConditions: 2,
+      numAlwaysVisibleConditions: 2,
+      defaultJoinOperator: 'OR',
+    },
+    floatingFilter: true,
+    wrapHeaderText: true,
+    autoHeaderHeight: true,
+    cellClass: params => checkClassType(params, attListOrigin.value, 'ATT_NM'),
+  })
+
+  const statusBar = {
+    statusPanels: [
+      { statusPanel: 'agTotalRowCountComponent' },
+      { statusPanel: 'agFilteredRowCountComponent' },
+      { statusPanel: 'agSelectedRowCountComponent' },
+    ],
+  }
+  const statusBar_Detail = ref({
+    statusPanels: [
+      { statusPanel: 'agTotalRowCountComponent' },
+      { statusPanel: 'agFilteredRowCountComponent' },
+      { statusPanel: 'agSelectedRowCountComponent' },
+      {
+        statusPanel: 'AgDetailStatusBar',
+        statusPanelParams: { customStyle: { 'background-color': '#e4dbe9' } },
+        align: 'left',
+      },
+    ],
+  })
+
+  const checkClassType = (params, originData, standColumn) => {
+    if (originData) {
+      let v = originData.find(elem => elem[standColumn] == params.data[standColumn])
+      if (v) {
+        if (params.colDef.field) {
+          if (Array.isArray(v[params.colDef.field])) {
+            if (Array.isArray(params.value)) {
+              if (v[params.colDef.field].join(',') === params.value.join(',')) {
+                return null
+              } else {
+                return 'hasWork'
+              }
+            } else {
+              if (params.value) {
+                return 'hasWork'
+              } else {
+                return 'hasWorkEmpty'
+              }
+            }
+          } else {
+            if (params.value == v[params.colDef.field]) {
+              return null
+            } else {
+              return 'hasWork'
+            }
+          }
+        }
+      } else {
+        return 'hasWorkEmpty'
+      }
+    } else {
+      return null
+    }
+  }
+
+  const dateFormatter = params => {
+    let fmt = ''
+    if (params.value) fmt = new Date(params.value).toLocaleString()
+    else fmt = ''
+    return fmt
+  }
+  const dateFilterParams = {
+    minValidDate: '2008-01-08',
+    maxValidDate: new Date(new Date().getTime() + 24 * 60 * 60 * 1000),
+    comparator: (filterLocalDateAtMidnight, cellValue) => {
+      var dateAsString = cellValue.substring(0, 10)
+      if (dateAsString == null) return -1
+      var dateParts = dateAsString.split('-')
+      var cellDate = new Date(Number(dateParts[0]), Number(dateParts[1]) - 1, Number(dateParts[2]))
+
+      if (filterLocalDateAtMidnight.getTime() === cellDate.getTime()) {
+        return 0
+      }
+
+      if (cellDate < filterLocalDateAtMidnight) {
+        return -1
+      }
+
+      if (cellDate > filterLocalDateAtMidnight) {
+        return 1
+      }
+      return 0
+    },
+  }
+  const fetchToolSources = async () => {
+    const response = await axios.post('/api/Dictionary/GetByKey', {
+      Key: 'ADAPTER_TOOLS',
+      ProjectNo: 'TE1002',
+    })
+
+    const dictionary = response.data // ["EB", "eVCP", ...]
+
+    // 2. 반응형 데이터의 특정 컬럼 values 업데이트
+    const targetCol = columnDefs.value.find(col => col.field === 'TOOL_SOURCE')
+    if (targetCol) {
+      targetCol.cellEditorParams.values = dictionary
+    }
+  } //
+
+  // ag-grid는 헤더 옵션 버튼 (filter, sorting) 때문에 가운데 정렬을 디폴트로 제공하지 않기 때문에 따로 지정이 필요함
+  // cell type이  rightAligned , numericColumn( type: 'rightAligned' )일 경우에는 헤더와 셀 동시에 오른쪽 정렬
+  const colDefs_Custom = ref([
+    {
+      checkboxSelection: true,
+      suppressHeaderMenuButton: true,
+      filter: false,
+      flex: 1,
+      minWidth: 30,
+      maxWidth: 30,
+    },
+    {
+      headerName: 'NAME',
+      headerClass: 'text-left', // 헤더도 가운데 정렬 하려면 필요함
+      field: 'CUS_ID',
+      editable: true,
+      minWidth: 140,
+      flex: 2,
+
+      valueSetter: params => (params.data.CUS_ID = params.newValue ? params.newValue.toUpperCase() : ''),
+      valueFormatter: params => (params.value ? params.value.toUpperCase() : ''),
+      cellRenderer: params =>
+        `<i class="fa fa-compass text-blue-400 fa-md me-1"></i>${params.value ? params.value.toUpperCase() : ''}`,
+    },
+    { field: 'DESC', headerName: 'Description', minWidth: 100, editable: true, flex: 3 },
+    {
+      field: 'TYPE',
+      headerName: 'TYPE',
+      minWidth: 100,
+      flex: 1,
+      cellEditor: 'agSelectCellEditor',
+      cellEditorParams: { values: ['Inhouse', 'CustomPage'] },
+      editable: true,
+      hide: false,
+    },
+    { field: 'URL', headerName: 'URL', minWidth: 200, editable: true, flex: 3 },
+    { field: 'MGR', headerName: 'Manager', minWidth: 100, flex: 1 },
+    { field: 'TOOL_SOURCE', headerName: 'Tool Source', minWidth: 100, flex: 1, editable: true },
+    { field: 'CRTER_NO', headerName: 'CRTER NO', editable: false, cellClass: 'agReadOnly', hide: true },
+    {
+      field: 'CRTE_DTM',
+      headerName: 'CRTE DTM',
+      cellDataType: 'date',
+      valueFormatter: parm => dateFormatter(parm),
+      filter: 'agDateColumnFilter',
+      filterParams: dateFilterParams,
+      editable: false,
+      cellClass: 'agReadOnly',
+      hide: true,
+    },
+    { field: 'CHGER_NO', headerName: 'CHGER NO', editable: false, cellClass: 'agReadOnly', hide: true },
+    {
+      field: 'CHGE_DTM',
+      headerName: 'CHGE DTM',
+      cellDataType: 'date',
+      valueFormatter: parm => dateFormatter(parm),
+      filter: 'agDateColumnFilter',
+      filterParams: dateFilterParams,
+      editable: false,
+      cellClass: 'agReadOnly',
+      hide: true,
+    },
+    { field: '_id', headerName: 'id', editable: false, hide: true },
+    { field: 'STATUS', editable: false, hide: true },
+  ])
+
+  const colDefs_Source = ref([
+    {
+      checkboxSelection: true,
+      suppressHeaderMenuButton: true,
+      filter: false,
+      flex: 1,
+      minWidth: 30,
+      maxWidth: 30,
+    },
+    {
+      field: 'SRC_NM',
+      headerName: 'Source Name',
+      headerClass: 'text-left', // 헤더도 가운데 정렬 하려면 필요함
+      editable: true,
+      rowDrag: true,
+      minWidth: 140,
+      flex: 1,
+      valueSetter: params => (params.data.SRC_NM = params.newValue ? params.newValue.toUpperCase() : ''),
+      valueFormatter: params => (params.value ? params.value.toUpperCase() : ''),
+      cellRenderer: params =>
+        `<i class="fa fa-compass text-blue-400 fa-md me-1"></i>${params.value ? params.value.toUpperCase() : ''}`,
+    },
+    { field: 'SRC_DESC', headerName: 'Description', minWidth: 100, editable: true, flex: 3 },
+  ])
+
+  const colDefs_Att = ref([
+    {
+      checkboxSelection: true,
+      suppressHeaderMenuButton: true,
+      filter: false,
+      flex: 1,
+      minWidth: 30,
+      maxWidth: 30,
+    },
+    {
+      field: 'ATT_NM',
+      headerName: 'Attribute Name',
+      headerClass: 'text-left',
+      editable: true,
+      flex: 1,
+      minWidth: 140,
+      valueSetter: params => (params.data.ATT_NM = params.newValue ? params.newValue.toUpperCase() : ''),
+      valueFormatter: params => (params.value ? params.value.toUpperCase() : ''),
+      cellRenderer: params =>
+        `<i class="fa fa-compass text-blue-400 fa-md me-1"></i>${params.value ? params.value.toUpperCase() : ''}`,
+    },
+    { field: 'ATT_DESC', headerName: 'Description', minWidth: 100, editable: true, flex: 3 },
+    {
+      headerName: 'ESS_YN',
+      headerClass: 'text-center',
+      field: 'ESS_YN',
+      minWidth: 80,
+      flex: 1,
+      cellClass: 'checkbox-center',
+      editable: true,
+    },
+  ])
+
+  const loadingOverlayComponentParams = {
+    loadingMessage: 'Loading...',
+  }
+  /***************			API 통신 			**************/
+  const customListOrigin = ref(null)
+  const customListRef = ref(null)
+
+  const selectedCustom = ref()
+  const selectedCustomId = ref('')
+
+  const sourceListOrigin = ref(null)
+  const sourceListRef = ref()
+
+  const selectedSource = ref()
+  const selectedSourceName = ref('')
+
+  const selectedAtt = ref()
+
+  const attListOrigin = ref(null)
+  const attListRef = ref([])
+
+  let changedCustomCells = []
+
+  /************************************
+   * 	GET DATA
+   * ***********************************/
+
+  //  Custom  List를 불러온다.
+  const getCustomList = async () => {
+    gridApi_Custom.value.setGridOption('loading', true)
+
+    let url = `/api/AdapterCustom/Get`
+    try {
+      const jsonData = await axiosWrapper.get(url)
+
+      sourceListRef.value = []
+      sourceListOrigin.value = null
+      showCreateSource = false
+      showDeleteSource = false
+      attListRef.value = []
+      attListOrigin.value = null
+      showCreateAtt = false
+      showDeleteAtt = false
+      selectedSourceHeader.value = null
+      selectedAttHeader.value = null
+
+      if (_.isEmpty(jsonData)) {
+        customListRef.value = []
+        customListOrigin.value = null
+        changedCustomCells = []
+        gridApi_Custom.value.setGridOption('loading', false)
+        gridApi_Source.value.setGridOption('loading', false)
+        gridApi_Att.value.setGridOption('loading', false)
+        return
+      }
+
+      customListRef.value = jsonData
+      customListOrigin.value = _.cloneDeep(customListRef.value)
+
+      gridApi_Custom.value.setGridOption('loading', false)
+      gridApi_Source.value.setGridOption('loading', false)
+      gridApi_Att.value.setGridOption('loading', false)
+    } catch (error) {
+      gridApi_Custom.value.setGridOption('loading', false)
+      gridApi_Source.value.setGridOption('loading', false)
+      gridApi_Att.value.setGridOption('loading', false)
+
+      customListRef.value = []
+      customListOrigin.value = null
+      changedCustomCells = []
+
+      if (!(error instanceof axios.AxiosError)) {
+        sAlert.Error('Failed to get Code : ' + error.message)
+      }
+    }
+  }
+
+  const checkDuplicate = (data = null, fieldName = null, event = null) => {
+    if (!data || !fieldName || !event) {
+      sAlert.Warning("'checkDuplicate' Data Not Found.")
+      return false
+    }
+    // index != event.rowIndex
+    let tic = data.find(
+      (elem, index) => compareTwoCase(elem[fieldName], event.newValue) && elem['_id'] !== event.data._id
+    )
+    if (tic) {
+      event.data[event.colDef.field] = event.oldValue
+      event.api.stopEditing()
+      event.api.redrawRows()
+      sAlert.Warning('This is the use of duplicate names.')
+      return false
+    }
+
+    return true
+  }
+
+  const upCase = str => {
+    return str.toUpperCase()
+  }
+
+  const compareTwoCase = (str1, str2) => {
+    let word1 = upCase(str1.trim())
+    let word2 = upCase(str2.trim())
+    if (word1 == word2) {
+      return true
+    } else {
+      return false
+    }
+  }
+
+  /************************************
+   * 	GRID EVENT
+   * ***********************************/
+  const onFirstDataRendered_Custom = event => {
+    //console.log("First Data Rendered");
+  }
+
+  const onCellValueChanged_Custom = event => {
+    if (event.colDef.field === 'CUS_ID') {
+      if (!checkDuplicate(customListRef.value, 'CUS_ID', event)) {
+        //필요내용 데이터팩, 필드네임, 이벤트
+        return
+      }
+    }
+
+    const excludedFields = [''] // 제외할 필드 목록
+
+    // 모든 필드에 대해 trim 적용
+    if (event.data) {
+      Object.keys(event.data).forEach(key => {
+        if (typeof event.data[key] === 'string' && !excludedFields.includes(key)) {
+          event.data[key] = event.data[key].trim()
+        }
+      })
+    }
+    gridApi_Custom.value.refreshCells(refreshParams)
+  }
+
+  const onRowSelected_Custom = event => {
+    let selectedRows = gridApi_Custom.value.getSelectedRows()
+
+    if (selectedRows.length > 0) {
+      isDisabledDeleteBtn.value = false
+      isDisabledSaveBtn.value = false
+    } else {
+      isDisabledDeleteBtn.value = true
+      isDisabledSaveBtn.value = true
+    }
+
+    let node = event.node
+    if (node.isSelected()) {
+      selectedCustom.value = event.data
+
+      if (event.data.SOURCES) {
+        sourceListRef.value = event.data.SOURCES
+        sourceListOrigin.value = _.cloneDeep(sourceListRef.value)
+        showCreateSource = true
+        showDeleteSource = true
+        selectedSourceHeader.value = selectedCustom.value.CUS_ID
+
+        _.delay(function () {
+          const firstRowNode = gridApi_Source.value.getDisplayedRowAtIndex(0)
+          if (firstRowNode) {
+            // console.log(firstRowNode);
+
+            firstRowNode.setSelected(true)
+          }
+        }, 50)
+      } else {
+        sourceListRef.value = []
+        sourceListOrigin.value = null
+        showCreateSource = false
+        showDeleteSource = false
+        selectedSourceHeader.value = null
+      }
+
+      attListRef.value = []
+      attListOrigin.value = null
+      showCreateAtt = false
+      showDeleteAtt = false
+      selectedAttHeader.value = null
+    }
+  }
+
+  const onFirstDataRendered_Source = event => {
+    //console.log("First Data Rendered");
+  }
+
+  const onRowSelected_Source = event => {
+    let node = event.node
+    if (node.isSelected()) {
+      selectedSource.value = event.data
+
+      if (event.data.ATTS) {
+        attListRef.value = event.data.ATTS
+        attListOrigin.value = _.cloneDeep(attListRef.value)
+        showCreateAtt = true
+        showDeleteAtt = true
+        selectedAttHeader.value = selectedSource.value.SRC_NM // desc?
+      } else {
+        attListRef.value = []
+        attListOrigin.value = null
+        showCreateAtt = false
+        showDeleteAtt = false
+        selectedAttHeader.value = null
+      }
+    }
+  }
+
+  const onCellValueChanged_Source = event => {
+    // if (!checkDuplicate(selectedCustom.value.SOURCES, 'SRC_NM', event)) { //필요내용 데이터팩, 필드네임, 이벤트
+    //   return;
+    // }
+
+    const excludedFields = [''] // 제외할 필드 목록
+
+    // 모든 필드에 대해 trim 적용
+    if (event.data) {
+      Object.keys(event.data).forEach(key => {
+        if (typeof event.data[key] === 'string' && !excludedFields.includes(key)) {
+          event.data[key] = event.data[key].trim()
+        }
+      })
+    }
+
+    selectedCustom.value.SOURCES[event.rowIndex] = event.data
+    gridApi_Source.value.refreshCells(refreshParams)
+  }
+
+  const onFirstDataRendered_Att = event => {
+    //console.log("First Data Rendered");
+  }
+
+  const onRowSelected_Att = event => {
+    let node = event.node
+    if (node.isSelected()) {
+      selectedAtt.value = event.data
+    }
+  }
+
+  const onCellValueChanged_Att = event => {
+    // if (!checkDuplicate(selectedSource.value.ATTS, 'ATT_NM', event)) { //필요내용 데이터팩, 필드네임, 이벤트
+    //   return;
+    // }
+
+    const excludedFields = [''] // 제외할 필드 목록
+
+    // 모든 필드에 대해 trim 적용
+    if (event.data) {
+      Object.keys(event.data).forEach(key => {
+        if (typeof event.data[key] === 'string' && !excludedFields.includes(key)) {
+          event.data[key] = event.data[key].trim()
+        }
+      })
+    }
+
+    selectedSource.value.ATTS[event.rowIndex] = event.data
+    gridApi_Att.value.refreshCells(refreshParams)
+  }
+
+  const onGridReady_Custom = params => {
+    // console.log("CustomGR");
+    gridApi_Custom.value = params.api
+    getCustomList()
+  }
+
+  const onGridReady_Source = params => {
+    // console.log("SourceGR");
+    gridApi_Source.value = params.api
+
+    const firstRowNode = params.api.getDisplayedRowAtIndex(0)
+    if (firstRowNode) {
+      firstRowNode.setSelected(true)
+    }
+  }
+
+  const onGridReady_Att = params => {
+    // console.log("AttGR");
+    gridApi_Att.value = params.api
+  }
+
+  // refresh Cell Options
+  const refreshParams = {
+    force: true,
+    suppressFlash: true,
+  }
+
+  const createGridRow = (grid, params) => {
+    grid.stopEditing()
+    //  grid.deselectAll();
+    let randomKey = Math.random().toString(36).substring(2, 12)
+    let newID = 'new_' + randomKey
+    if (params.createID) {
+      if (params.rowID) {
+        Object.assign(params.newRow, { [params.rowID]: newID })
+      } else {
+        Object.assign(params.newRow, { _id: newID })
+      }
+    }
+    let lastIdx = grid.getDisplayedRowCount()
+    grid.applyTransaction({
+      add: [params.newRow],
+      addIndex: lastIdx,
+    })
+    grid.refreshCells(refreshParams)
+    grid.ensureIndexVisible(lastIdx, 'bottom')
+    grid.forEachNode((rowNode, index) => {
+      if (index == lastIdx) {
+        rowNode.setSelected(true)
+      }
+    })
+
+    // if (params.createID) {
+    //   let newRowNode = grid.getRowNode(newID);
+    //   if (newRowNode) {
+    //     newRowNode.setSelected(true);
+    //   }
+    //   else {
+    //     grid.forEachNode((rowNode, index) => {
+    //       if (index == lastIdx) {
+    //         rowNode.setSelected(true);
+    //       }
+    //     });
+    //   }
+    // } else {
+    //   grid.forEachNode((rowNode, index) => {
+    //     if (index == lastIdx) {
+    //       rowNode.setSelected(true);
+    //     }
+    //   });
+    // }
+  }
+  /***************		CRUD 			**************/
+  const checkValidation_Custom = selectedData => {
+    /*******
+     * NULL CHECK
+     * 1. CUSTOM ID
+     * 2. TYPE
+     */
+    let failCount = 0
+    let failMsg = []
+    selectedData.forEach(elem => {
+      if (_.isNil(elem.CUS_ID) || _.isEmpty(elem.CUS_ID)) {
+        failMsg.push("'CUSTOM ID' is Required.")
+        failCount++
+      }
+      if (_.isNil(elem.TYPE) || _.isEmpty(elem.TYPE)) {
+        failMsg.push("'Type' is Required.")
+        failCount++
+      }
+    })
+
+    if (failCount > 0) {
+      sAlert.Error(failMsg ? _.uniq(failMsg).join('<br/>') : 'fail')
+      return false
+    } else return true
+  }
+
+  const checkValidation_Source = selectedData => {
+    /*******
+     * NULL CHECK
+     * 1. Name
+     */
+    let failCount = 0
+    let failMsg = []
+    selectedData.forEach(elem => {
+      if (_.isNil(elem.SRC_NM) || _.isEmpty(elem.SRC_NM)) {
+        failMsg.push("'Name' is Required.")
+        failCount++
+      }
+    })
+
+    if (failCount > 0) {
+      sAlert.Error(failMsg ? _.uniq(failMsg).join('<br/>') : 'fail')
+      return false
+    } else return true
+  }
+
+  const checkValidation_Att = selectedData => {
+    /*******
+     * NULL CHECK
+     * 1. Name
+     */
+    let failCount = 0
+    let failMsg = []
+    selectedData.forEach(elem => {
+      if (_.isNil(elem.ATT_NM) || _.isEmpty(elem.ATT_NM)) {
+        failMsg.push("'Name' is Required.")
+        failCount++
+      }
+    })
+
+    if (failCount > 0) {
+      sAlert.Error(failMsg ? _.uniq(failMsg).join('<br/>') : 'fail')
+      return false
+    } else return true
+  }
+
+  function invertNumber(num) {
+    const invertedString = num.toString().split('').reverse().join('')
+    return parseInt(invertedString, 10)
+  }
+
+  const createData_Custom = () => {
+    let params = {}
+    params.newRow = {
+      CUS_ID: null,
+      TYPE: 'Inhouse',
+      STATUS: 'A',
+      MGR: userInfo.value?.UserID,
+      CRTER_NO: userInfo.value?.UserID,
+      URL: '/grid-template',
+      SOURCES: [],
+    }
+    params.createID = true
+
+    createGridRow(gridApi_Custom.value, params)
+  }
+
+  const createData_Source = () => {
+    let counter = 0
+    let target = '0'
+    gridApi_Source.value.forEachNode(elem => {
+      if (elem.data.SRC_NM.includes('SOURCE_NAME_')) {
+        target = elem.data.SRC_NM.replace('SOURCE_NAME_', '')
+        // counter++;
+      }
+    })
+    counter = invertNumber(target)
+    counter++
+
+    let params = {}
+    params.newRow = { SRC_NM: `SOURCE_NAME_${counter}`, ATTS: [] }
+    params.createID = true
+
+    createGridRow(gridApi_Source.value, params)
+
+    selectedCustom.value.SOURCES.push({ SRC_NM: `SOURCE_NAME_${counter}`, ATTS: [] })
+  }
+
+  const createData_Att = () => {
+    let counter = 0
+    let target = '0'
+    gridApi_Att.value.forEachNode(elem => {
+      if (elem.data.ATT_NM.includes('ATT_NAME_')) {
+        target = elem.data.ATT_NM.replace('ATT_NAME_', '')
+        // counter++;
+      }
+    })
+    counter = invertNumber(target)
+    counter++
+
+    let params = {}
+    params.newRow = { ATT_NM: `ATT_NAME_${counter}`, ATT_DESC: null }
+    params.createID = true
+
+    createGridRow(gridApi_Att.value, params)
+
+    selectedSource.value.ATTS.push({ ATT_NM: `ATT_NAME_${counter}`, ATT_DESC: null })
+  }
+
+  const deleteSelected_Custom = async () => {
+    let successCount = 0
+    let failCount = 0
+    let failTagCode = []
+    let selectedRows = gridApi_Custom.value.getSelectedRows()
+    if (_.isEmpty(selectedRows)) {
+      sAlert.Warning(`Please select the data you want to delete.`)
+      return
+    }
+    let confirmResult = await sAlert.Confirm('It will be deleted immediately. Are you sure you want to delete?')
+    if (!confirmResult.isConfirmed) {
+      return
+    }
+
+    for (let i = 0; i < selectedRows.length; i++) {
+      let url = `/api/AdapterCustom/Delete`
+      let bodyData = {
+        id: selectedRows[i]._id,
+      }
+
+      try {
+        await axiosWrapper.post(url, bodyData)
+        successCount++
+      } catch (error) {
+        failCount++
+        failTagCode.push(selectedRows[i].CUS_ID)
+      }
+    }
+    let failinfo = failCount > 0 ? `failed to delete ${failCount} item.( TYPE ID : ${failTagCode.join(',')})` : ''
+
+    if (successCount > 0) {
+      sAlert.Success(`Successfully deleted ${successCount} Custom.<br> ${failinfo}`)
+    } else {
+      sAlert.Error(`Error occurred during delete Custom.<br> ${failinfo}`)
+    }
+
+    getCustomList()
+  }
+
+  const deleteSelected_Source = () => {
+    let selectedData = gridApi_Source.value.getSelectedRows()
+    if (_.isEmpty(selectedData)) {
+      sAlert.Warning(`Please select the data you want to delete.`)
+      return
+    }
+    const filteredSourceList = sourceListRef.value.filter(
+      item => !selectedData.some(selected => selected.SRC_NM === item.SRC_NM)
+    )
+    sourceListRef.value = filteredSourceList
+    gridApi_Source.value.applyTransaction({ remove: selectedData })
+    gridApi_Source.value.refreshCells()
+    selectedCustom.value.SOURCES = sourceListRef.value
+
+    attListRef.value = []
+    attListOrigin.value = null
+    showCreateAtt = false
+    showDeleteAtt = false
+  }
+
+  const deleteSelected_Att = () => {
+    let selectedData = gridApi_Att.value.getSelectedRows()
+    if (_.isEmpty(selectedData)) {
+      sAlert.Warning(`Please select the data you want to delete.`)
+      return
+    }
+
+    const filteredSourceList = attListRef.value.filter(
+      item => !selectedData.some(selected => selected.ATT_NM === item.ATT_NM)
+    )
+    attListRef.value = filteredSourceList
+    gridApi_Att.value.applyTransaction({ remove: selectedData })
+    gridApi_Att.value.refreshCells()
+    selectedSource.value.ATTS = attListRef.value
+    selectedCustom.value.SOURCES = sourceListRef.value
+  }
+
+  const preSave_Custom = () => {
+    gridApi_Att.value.stopEditing()
+    gridApi_Source.value.stopEditing()
+    gridApi_Custom.value.stopEditing()
+    _.delay(saveData_Custom, 50)
+  }
+
+  const saveData_Custom = async () => {
+    await gridApi_Att.value.refreshCells(refreshParams)
+    await gridApi_Source.value.refreshCells(refreshParams)
+    await gridApi_Custom.value.refreshCells(refreshParams)
+
+    let selectedAttRows = gridApi_Att.value.getSelectedRows()
+    let selectedSourceRows = gridApi_Source.value.getSelectedRows()
+    let selectedRows = gridApi_Custom.value.getSelectedRows()
+
+    if (selectedRows && selectedRows.length > 0) {
+      let url = `/api/AdapterCustom`
+      let createData = []
+      let updateData = []
+      let createCount = 0
+      let updateCount = 0
+      let updateIdData = []
+
+      const data = selectedRows
+      const data2 = selectedSourceRows
+      const data3 = selectedAttRows
+
+      selectedRows.forEach(elem => {
+        //1
+        if (elem.STATUS == 'A') {
+          createCount++
+
+          let { CRTE_DTM, _id, ...rest } = elem
+
+          createData.push({ _id: null, ...rest })
+        } else {
+          updateCount++
+
+          let { CHGER_NO, CHGE_DTM, ...rest } = elem
+          updateData.push({ CHGER_NO: userInfo.value?.UserID, ...rest })
+        }
+      })
+
+      if (!checkValidation_Custom(selectedRows)) return
+
+      try {
+        let successMessage = 'CustomList is  Saved. '
+        if (createCount > 0) {
+          await axiosWrapper.post(url + '/Create', createData)
+          successMessage = successMessage + `Created :${createCount} `
+        }
+        if (updateCount > 0) {
+          await axiosWrapper.put(url + '/Update', updateData)
+          successMessage = successMessage + `Updated :${updateCount} `
+        }
+
+        sAlert.Success(successMessage)
+        gridApi_Att.value.deselectAll()
+        gridApi_Source.value.deselectAll()
+        gridApi_Custom.value.deselectAll()
+
+        await getCustomList()
+
+        setTimeout(() => {
+          gridApi_Custom.value.forEachNode(function (rowNode, index) {
+            if (rowNode.data.CUS_ID === data[0].CUS_ID) {
+              rowNode.setSelected(true)
+            }
+          })
+        }, 0)
+      } catch (error) {
+        console.error('saveData', error)
+        getCustomList()
+
+        if (!(error instanceof axios.AxiosError)) {
+          sAlert.Error('Error occurred during Custom save : ' + error.message)
+        }
+      }
+    } else {
+      sAlert.Warning('Select a row from the Custom list')
+    }
+  }
+
+  // Keydown 단축키 Ctrl + S 저장 단축키
+  const onKeyDown_Custom = event => {
+    if (event.ctrlKey && event.key === 's') {
+      event.preventDefault() //브라우저 기본 저장 동작 방지
+      preSave_Custom()
+    }
+  }
+
+  const agGridRefresh = async function (gridApi) {
+    await gridApi.redrawRows()
+    await gridApi.refreshCells()
+  }
+
+  const rowDragEventSource = event => {
+    // console.log('Row drag ended', event);
+    const updatedRowData = []
+    event.api.forEachNodeAfterFilterAndSort(node => {
+      updatedRowData.push(node.data)
+    })
+
+    sourceListRef.value = updatedRowData
+    selectedCustom.value.SOURCES = sourceListRef.value
+  }
+
+  const gridBindCommonProps = ref({
+    style: 'width: 100%; height: 100%',
+    class: themeClass,
+    suppressLastEmptyLineOnPaste: true,
+    undoRedoCellEditing: true,
+    undoRedoCellEditingLimit: 20,
+    enableFillHandle: true,
+    pagination: false,
+    suppressRowClickSelection: false,
+    columnHoverHighlight: true,
+    loadingOverlayComponent: AggridLoadingOverlay,
+    loadingOverlayComponentParams: loadingOverlayComponentParams,
+  })
+
+  const gridBindCustomProps = ref({
+    statusBar: statusBar,
+    getRowId: getRowId,
+    rowSelection: 'single',
+    rowMultiSelectWithClick: false,
+    defaultColDef: defaultColDef,
+    columnDefs: colDefs_Custom,
+    rowData: customListRef,
+    ...gridBindCommonProps.value,
+  })
+  const gridBindSourceProps = ref({
+    rowDragManaged: true,
+    suppressMoveWhenRowDragging: true,
+    onRowDragEnd: rowDragEventSource,
+    statusBar: statusBar_Detail,
+    rowSelection: 'single',
+    rowMultiSelectWithClick: true,
+    defaultColDef: defaultColDef2,
+    columnDefs: colDefs_Source,
+    rowData: sourceListRef,
+    ...gridBindCommonProps.value,
+  })
+  const gridBindAttProps = ref({
+    statusBar: statusBar,
+    rowSelection: 'multiple',
+    rowMultiSelectWithClick: true,
+    defaultColDef: defaultColDef3,
+    columnDefs: colDefs_Att,
+    rowData: attListRef,
+    ...gridBindCommonProps.value,
+  })
+
+  const gridOnCommonProps = index => {
+    switch (index) {
+      case 'custom':
+        return {
+          firstDataRendered: onFirstDataRendered_Custom,
+          rowSelected: onRowSelected_Custom,
+          cellValueChanged: onCellValueChanged_Custom,
+          gridReady: onGridReady_Custom,
+          keydown: onKeyDown_Custom,
+        }
+      case 'source':
+        return {
+          firstDataRendered: onFirstDataRendered_Source,
+          rowSelected: onRowSelected_Source,
+          cellValueChanged: onCellValueChanged_Source,
+          gridReady: onGridReady_Source, // 행 드래그 종료 이벤트 핸들러
+        }
+      case 'att':
+        return {
+          firstDataRendered: onFirstDataRendered_Att,
+          rowSelected: onRowSelected_Att,
+          cellValueChanged: onCellValueChanged_Att,
+          gridReady: onGridReady_Att,
+        }
+      default:
+        return {
+          firstDataRendered: onFirstDataRendered_Custom,
+          rowSelected: onRowSelected_Custom,
+          cellValueChanged: onCellValueChanged_Custom,
+          gridReady: onGridReady_Custom,
+          keydown: onKeyDown_Custom,
+        }
+    }
+  }
+  defineOptions({
+    name: `AdapterCustomSetup`,
+    components: { agDropBoxEditor, AgDetailStatusBar },
+  })
+</script>
+
+<style scoped lang="scss">
+  .just-view {
+    color: var(--txt03);
+    background-color: var(--bg11);
+    padding: 6px 8px 6px 8px;
+    width: 100%;
+    text-align: center;
+    font-weight: 500;
+  }
+
+  /* Splitter 거터(구분선) 색상 변경 */
+  ::v-deep(.p-splitter-gutter) {
+    background-color: #555555; /* 원하는 색상으로 변경 (예: 빨간색) */
+  }
+
+  /* 만약 거터 핸들(드래그하는 부분) 색상도 바꾸고 싶다면 */
+  ::v-deep(.p-splitter-gutter-handle) {
+    background-color: #ff5555; /* 원하는 색상으로 변경 (예: 초록색) */
+  }
+
+  /* 패널 자체의 배경색을 바꾸고 싶다면 */
+  ::v-deep(.p-splitter-panel) {
+    background-color: #ffffff; /* 원하는 색상으로 변경 (예: 연한 회색) */
+  }
+</style>
