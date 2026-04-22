@@ -1,10 +1,50 @@
-  const getSystemAttributeInfo = async function () {
+const getSystemAttributeInfo = async function () {
+  // 1. 요청 전 상태 확인 로그
+  console.log('--- [Dictionary API Request Start] ---');
+  console.log('Target Key:', 'ADAPTER_TOOLS');
+  console.log('ProjectNo (Ref):', currProjNoRef.value);
+  console.log('User ID (Ep_id):', userInfo.value?.UserID);
 
-      try {
-        const key = 'DFLT_ATTS'
-        const res = await ApiCommon.postDictionaryGetByKey({
-          Key: key,
-          ProjectNo: currProjNoRef.value,
-        })
+  try {
+    const key = 'ADAPTER_TOOLS';
+    const projectNo = currProjNoRef.value;
+    const epId = userInfo.value?.UserID;
 
-      }}
+    const res = await ApiCommon.postDictionaryGetByKey(
+      {
+        Key: key,
+        ProjectNo: projectNo,
+      },
+      {
+        headers: {
+          'Projectno': projectNo,
+          'Ep_id': epId
+        }
+      }
+    );
+
+    // 2. 응답 성공 로그
+    console.log('--- [Dictionary API Response Success] ---');
+    console.log('Full Response Object:', res);
+    
+    // 만약 ApiCommon이 axios를 래핑한 형태라면 res.data에 데이터가 있습니다.
+    const dictionaryData = res.data || res; 
+    console.log('Received Data List:', dictionaryData);
+
+    if (dictionaryData && Array.isArray(dictionaryData)) {
+      toolSourceList.value = dictionaryData;
+      console.log('toolSourceList updated successfully. Count:', toolSourceList.value.length);
+    } else {
+      console.warn('Data received but it is not an array or is empty:', dictionaryData);
+    }
+
+  } catch (error) {
+    // 3. 에러 발생 로그
+    console.error('--- [Dictionary API Response Error] ---');
+    console.error('Error Status:', error.response?.status);
+    console.error('Error Message:', error.message);
+    console.error('Error Details:', error.response?.data);
+  } finally {
+    console.log('--- [Dictionary API Request Finished] ---');
+  }
+};
