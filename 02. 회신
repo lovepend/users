@@ -1,45 +1,28 @@
-// ... 기존 변수 선언부
-const toolSourceList = ref([]) // API로부터 받을 콤보박스 리스트
-
-
-
-
-{ 
-  field: 'TOOL_SOURCE', 
-  headerName: 'Tool Source', 
-  minWidth: 100, 
-  flex: 1, 
-  editable: true,
-  cellEditor: 'agSelectCellEditor',
-  cellEditorParams: () => {
-    return {
-      values: toolSourceList.value // 위에서 선언한 ref를 참조
-    }
-  }
-},
-
-
-
-
-
 const fetchToolSources = async () => {
   try {
-    const response = await axios.post('/api/Dictionary/GetByKey', {
-      Key: 'ADAPTER_TOOLS',
-      ProjectNo: 'TE1002',
-    })
+    // 1. 헤더에 필요한 정보 준비 (인증 스토어에서 가져오기)
+    const projectNo = 'TE1002' // 혹은 현재 프로젝트 번호 변수 사용
+    const epId = userInfo.value?.UserID // storeToRefs로 선언된 userInfo 사용
+
+    const response = await axios.post('/api/Dictionary/GetByKey', 
+      {
+        Key: 'ADAPTER_TOOLS',
+        ProjectNo: projectNo,
+      },
+      {
+        // 2. 이 부분이 핵심입니다! 프로젝트 공통 헤더 설정
+        headers: {
+          'Projectno': projectNo,
+          'Ep_id': epId,
+          // 'Authorization': `Bearer ${accessToken}` // 필요 시 토큰 추가
+        }
+      }
+    )
     
     // API 결과를 반응형 변수에 저장
     toolSourceList.value = response.data 
+    console.log('Tool Source List Loaded:', toolSourceList.value)
   } catch (error) {
     console.error('Failed to fetch tool sources:', error)
   }
-}
-
-
-
-const onGridReady_Custom = params => {
-  gridApi_Custom.value = params.api
-  fetchToolSources() // 여기서 호출
-  getCustomList()
 }
