@@ -1,13 +1,24 @@
-const getMapDatas = async itemAdapterDataMapping => {
-    gridApi_MapAttr.value.setGridOption('loading', true)
-    gridApi_MapClass.value.setGridOption('loading', true)
-    gridApi_MapTmpl.value.setGridOption('loading', true)
-    gridApi_MapRel.value.setGridOption('loading', true)
+{ field: 'TOOL_SOURCE', headerName: 'Tool Source', minWidth: 100, flex: 1 },
 
-    try {
-      let dataMessage = ''
+여기에 콤보리스트로 값을 보여주고 값을 반환해주면 될꺼같아 
 
-      selectedBypassRef.value = itemAdapterDataMapping.BYPASS ? itemAdapterDataMapping.BYPASS : false
-      selectedBypassPublishRef.value = itemAdapterDataMapping.BYPASS_PUBLISH
-        ? itemAdapterDataMapping.BYPASS_PUBLISH
-        : false
+api 이고 
+/api/Dictionary/GetByKey
+
+payload 이고
+{
+  "Key": "ADAPTER_TOOLS",
+  "ProjectNo": "TE1002"
+}
+
+리턴받는 데이터야
+[
+  "EB",
+  "eVCP",
+  "S3D",
+  "AM",
+  "SPPID",
+  "SPI",
+  "SPEL",
+  "VDCS"
+]
