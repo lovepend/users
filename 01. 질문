@@ -1,50 +1,1256 @@
-const getSystemAttributeInfo = async function () {
-  // 1. 요청 전 상태 확인 로그
-  console.log('--- [Dictionary API Request Start] ---');
-  console.log('Target Key:', 'ADAPTER_TOOLS');
-  console.log('ProjectNo (Ref):', currProjNoRef.value);
-  console.log('User ID (Ep_id):', userInfo.value?.UserID);
+<template>
+  <Splitter style="height: 100vh" layout="vertical">
+    <SplitterPanel class="flex" :size="60">
+      <Splitter style="height: 100%">
+        <SplitterPanel :size="70">
+          <div class="panel bg-white mb-0" style="height: 100%">
+            <PageTitle icon="fa-database" :title="$t('AdapterBrokerSetup_vue.AdapterBroker_title')"></PageTitle>
+            <!-- Begin 메뉴 툴바 버튼 구역-->
+            <div
+              v-if="
+                userInfo.IsDeveloper ||
+                (projectPermissions.some(el => el.Role === 'Manager' || el.Role === 'User') && currentEPRole !== 'User')
+              "
+              class="panel-body p-0 m-0"
+            >
+              <BasicToolBar
+                @create-data="createData"
+                @delete-data="deleteSelectedData"
+                @save-data="preSave"
+                :showCreate="isShowCreateBtn"
+                :showMultiCreate="isShowMultiCreateBtn"
+                :showDelete="isShowDeleteBtn"
+                :isDisabledDeleteBtn="isDisabledDeleteBtn"
+                :showSave="isShowSaveBtn"
+                :isDisabledSaveBtn="isDisabledSaveBtn"
+                createTooltip="After creating data, click the Save button."
+                deleteTooltip="It will be deleted immediately."
+              />
+            </div>
+            <span v-else class="just-view">{{ $t('DataSettingNavBar_vue.justViewPermission') }}</span>
+            <!-- End 메뉴 툴바 버튼 구역-->
+            <!-- 테이블 구역 -->
+            <div class="panel-body overflow-hidden p-0 m-0 h-100">
+              <div class="p-0" style="height: 100%">
+                <ag-grid-vue
+                  v-bind="gridBindProps"
+                  v-on="gridOnProps"
+                  :columnDefs="colDefs"
+                  :rowData="adapterBrokerListRef"
+                ></ag-grid-vue>
+              </div>
+            </div>
+          </div>
+        </SplitterPanel>
+        <SplitterPanel :size="30">
+          <div class="panel bg-white mb-0" style="height: 100%">
+            <PageTitle icon="fa-bars" :title="$t('AdapterBrokerSetup_vue.AdapterBrokerSchema_title')"></PageTitle>
+            <!-- Begin 메뉴 툴바 버튼 구역-->
+            <div class="panel-body p-0 m-0">
+              <BasicToolBar />
+            </div>
+            <!-- End 메뉴 툴바 버튼 구역-->
+            <!-- 테이블 구역 -->
+            <div class="panel-body overflow-hidden p-0 m-0 h-100">
+              <div class="p-0" style="height: 100%">
+                <ag-grid-vue
+                  v-bind="gridBindPropsSchema"
+                  v-on="gridOnPropsSchema"
+                  :columnDefs="colDefsSchema"
+                  :rowData="adapterBrokerSchemaListRef"
+                ></ag-grid-vue>
+              </div>
+            </div>
+          </div>
+        </SplitterPanel>
+      </Splitter>
+    </SplitterPanel>
+    <SplitterPanel :size="40">
+      <div class="panel bg-white mb-0" style="height: 100%">
+        <PageTitle
+          icon="fa-bars"
+          :title="
+            $t('AdapterBrokerSetup_vue.AdapterBrokerProcess_title') +
+            ' TEST (Grid의 필터에 조회조건 값을 입력 후 조회해보세요.)'
+          "
+        ></PageTitle>
+        <!-- 테이블 구역 -->
+        <div class="panel-heading overflow-hidden p-2 m-0" style="background-color: var(--bg13); color: var(--txt03)">
+          <div class="row">
+            <div class="col-auto">
+              Project No :
+              <InputText
+                v-model="searchProjectNo"
+                type="text"
+                size="small"
+                placeholder="Project No"
+                style="width: 80px"
+              />
+            </div>
+            <div class="col-auto">
+              Register ID :
+              <InputText
+                v-model="searchRegisterId"
+                type="text"
+                size="small"
+                placeholder="Register ID"
+                style="width: 180px"
+              />
+            </div>
+            <div class="col-auto">
+              EP ID :
+              <InputText v-model="searchEPId" type="text" size="small" placeholder="EP ID" style="width: 80px" />
+            </div>
+            <div class="col-auto">
+              Tool ID :
+              <InputText v-model="searchToolId" type="text" size="small" placeholder="Tool ID" style="width: 120px" />
+            </div>
+            <div class="col-auto">
+              Tool Type :
+              <InputText
+                v-model="searchToolType"
+                type="text"
+                size="small"
+                placeholder="Tool Type"
+                style="width: 180px"
+              />
+            </div>
+            <div class="col-auto">
+              User ID :
+              <InputText v-model="searchUserId" type="text" size="small" placeholder="User ID" style="width: 180px" />
+            </div>
+            <div class="col-auto">
+              <button class="btn btn-xs btn-primary" @click="searchBrokerData">Search</button>
+            </div>
+          </div>
+        </div>
+        <!-- 테이블 구역 -->
+        <div class="panel-body overflow-hidden p-0 m-0 h-100">
+          <div class="p-0" style="height: 100%">
+            <ag-grid-vue v-bind="gridBindPropsProcess" v-on="gridOnPropsProcess"></ag-grid-vue>
+          </div>
+        </div>
+      </div>
+    </SplitterPanel>
+  </Splitter>
+</template>
+<script setup>
+  // Library - Common
+  import { ref, watch, onMounted, onBeforeMount, inject, shallowRef, computed, toRaw } from 'vue'
+  import { useRoute } from 'vue-router'
+  import { storeToRefs } from 'pinia'
 
-  try {
-    const key = 'ADAPTER_TOOLS';
-    const projectNo = currProjNoRef.value;
-    const epId = userInfo.value?.UserID;
+  // Library - Layout
+  import Splitter from 'primevue/splitter'
+  import SplitterPanel from 'primevue/splitterpanel'
+  import InputText from 'primevue/inputtext'
 
-    const res = await ApiCommon.postDictionaryGetByKey(
-      {
-        Key: key,
-        ProjectNo: projectNo,
-      },
-      {
-        headers: {
-          'Projectno': projectNo,
-          'Ep_id': epId
-        }
+  // Library - Data
+  import axios from 'axios'
+  import * as _ from 'lodash-es'
+  import { el } from 'date-fns/locale'
+
+  // Library - AG Grid
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+
+  // Store
+  import { useAppPermissionStore } from '@/stores/app-permission'
+  import { useAppAuthenticationStore } from '@/stores/app-authentication'
+
+  // Custom Component
+  import AgDetailStatusBar from '@/components/aggrid/AgDetailStatusBar.vue'
+  import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
+  import agDropBoxEditor from '@/components/aggrid/AgDropBoxEditor.vue'
+  import PageTitle from '@/components/toolBar/PageTitle.vue'
+
+  // Modal
+  import SettingModal from '@/components/modals/common/SettingModal.vue'
+
+  // Helpers
+  import { sAlert, sToast } from '@/utils/messages/alert-common'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import global from '@/constants/enums/global'
+  import { ApiCommon } from '@/utils/axios/api-common'
+
+  const appPermission = useAppPermissionStore()
+
+  const { userInfo } = storeToRefs(useAppAuthenticationStore())
+  const { projectPermissions, currentEPRole } = storeToRefs(appPermission)
+
+  // Basic Toolbar 버튼 숨김여부 동적 설정용
+  const isShowCreateBtn = ref(true)
+  const isShowMultiCreateBtn = ref(false)
+  const isShowDeleteBtn = ref(true)
+  const isDisabledDeleteBtn = ref(true)
+  const isShowSaveBtn = ref(true)
+  const isDisabledSaveBtn = ref(true)
+
+  // Broker Data 조회용 파라메터
+  const searchProjectNo = ref()
+  const searchRegisterId = ref()
+  const searchEPId = ref()
+  const searchToolId = ref()
+  const searchToolType = ref()
+  const searchUserId = ref()
+
+  const route = useRoute()
+
+  onBeforeMount(() => {
+    if (sAlert?.isVisible()) {
+      sAlert.close()
+    }
+  })
+
+  onMounted(() => {
+    searchProjectNo.value = currProjNoRef.value
+    searchUserId.value = userInfo.value?.UserID
+  })
+
+  //#region Received
+  const currProjNoRef = computed({
+    get() {
+      return route?.query.proj_no
+    },
+  })
+  const currRegTypeIdRef = computed({
+    get() {
+      return route?.query.reg_type_id
+    },
+  })
+  const currTagIdxRef = computed({
+    get() {
+      return route?.query.tag_idx
+    },
+  })
+  const currToolTypeRef = computed({
+    get() {
+      return route?.query.tool_type
+    },
+  })
+
+  /*			AG GRID 정의 				*/
+  const gridApi = shallowRef()
+  const gridApiSchema = shallowRef()
+
+  const gridRef_Process = shallowRef()
+  const dataListRef_Process = ref([])
+  const colDefsRef_Process = ref([])
+
+  /*
+   * set var
+   */
+  const themeClass = 'ag-theme-custom'
+
+  const defaultColDef = ref({
+    editable: false,
+    filter: 'agMultiColumnFilter',
+    filterParams: {
+      maxNumConditions: 2,
+      numAlwaysVisibleConditions: 2,
+      defaultJoinOperator: 'OR',
+    },
+    floatingFilter: true,
+    wrapHeaderText: true,
+    // autoHeaderHeight: true,
+    cellClass: params => checkClassType(params, adapterBrokerListOrigin.value, '_id'),
+  })
+  const defaultColDefSchema = ref({
+    editable: false,
+    filter: 'agMultiColumnFilter',
+    filterParams: {
+      maxNumConditions: 2,
+      numAlwaysVisibleConditions: 2,
+      defaultJoinOperator: 'OR',
+    },
+    floatingFilter: true,
+    wrapHeaderText: true,
+    // autoHeaderHeight: true,
+    // cellClass: (params) => checkClassType(params, adapterBrokerListOrigin.value, "_id")
+  })
+  const defaultColDefProcess = ref({
+    editable: false,
+    filter: 'agMultiColumnFilter',
+    filterParams: {
+      maxNumConditions: 2,
+      numAlwaysVisibleConditions: 2,
+      defaultJoinOperator: 'OR',
+    },
+    floatingFilter: true,
+    wrapHeaderText: true,
+    // autoHeaderHeight: true,
+    // cellClass: (params) => checkClassType(params, adapterBrokerListOrigin.value, "_id")
+  })
+
+  const statusBar = {
+    statusPanels: [
+      { statusPanel: 'agTotalRowCountComponent' },
+      { statusPanel: 'agFilteredRowCountComponent' },
+      { statusPanel: 'agSelectedRowCountComponent' },
+    ],
+  }
+  const dateFilterParams = {
+    minValidDate: '2008-01-08',
+    maxValidDate: new Date(new Date().getTime() + 24 * 60 * 60 * 1000),
+    comparator: (filterLocalDateAtMidnight, cellValue) => {
+      var dateAsString = cellValue.substring(0, 10)
+      if (dateAsString == null) return -1
+      var dateParts = dateAsString.split('-')
+      var cellDate = new Date(Number(dateParts[0]), Number(dateParts[1]) - 1, Number(dateParts[2]))
+
+      if (filterLocalDateAtMidnight.getTime() === cellDate.getTime()) {
+        return 0
       }
-    );
 
-    // 2. 응답 성공 로그
-    console.log('--- [Dictionary API Response Success] ---');
-    console.log('Full Response Object:', res);
-    
-    // 만약 ApiCommon이 axios를 래핑한 형태라면 res.data에 데이터가 있습니다.
-    const dictionaryData = res.data || res; 
-    console.log('Received Data List:', dictionaryData);
+      if (cellDate < filterLocalDateAtMidnight) {
+        return -1
+      }
 
-    if (dictionaryData && Array.isArray(dictionaryData)) {
-      toolSourceList.value = dictionaryData;
-      console.log('toolSourceList updated successfully. Count:', toolSourceList.value.length);
+      if (cellDate > filterLocalDateAtMidnight) {
+        return 1
+      }
+      return 0
+    },
+  }
+  const loadingOverlayComponentParams = {
+    loadingMessage: 'Loading...',
+  }
+
+  // ag-grid는 헤더 옵션 버튼 (filter, sorting) 때문에 가운데 정렬을 디폴트로 제공하지 않기 때문에 따로 지정이 필요함
+  // cell type이  rightAligned , numericColumn( type: 'rightAligned' )일 경우에는 헤더와 셀 동시에 오른쪽 정렬
+  const colDefs = ref([
+    {
+      checkboxSelection: true,
+      suppressHeaderMenuButton: true,
+      filter: false,
+      flex: 1,
+      minWidth: 30,
+      maxWidth: 30,
+      pinned: 'left',
+    },
+    { field: 'GROUP', headerName: 'GROUP', minWidth: 100, initialWidth: 200, flex: 1, editable: true },
+    { field: 'NAME', headerName: 'NAME', minWidth: 100, initialWidth: 200, flex: 1, editable: true },
+    { field: 'DLL_NAME', headerName: 'DLL_NAME', minWidth: 100, initialWidth: 200, flex: 1, editable: true },
+    { field: 'CLASS_NAME', headerName: 'CLASS_NAME', minWidth: 100, initialWidth: 200, flex: 2, editable: true },
+    {
+      field: 'URL',
+      headerName: 'EDIT_URL_PAGE',
+      minWidth: 100,
+      initialWidth: 200,
+      flex: 2,
+      editable: true,
+      refData: Object.keys(global.brokerUrl).reduce((a, c) => {
+        a[c] = global.brokerUrl[c].EXPR
+        return a
+      }, {}),
+      cellEditor: 'agSelectCellEditor',
+      cellEditorParams: {
+        values: Object.keys(global.brokerUrl),
+      },
+    },
+    //User(WorkSheet)화면에서 Broker Menu Display 옵션(즉 상단 메뉴 Broker 마우스 호버 했을때 안뜨게 설정 하는 메뉴 // True : 표현 // False : 숨김)
+    {
+      field: 'MENU_VISIBLE_YN',
+      headerName: 'MENU_VISIBLE_YN',
+      minWidth: 100,
+      initialWidth: 200,
+      flex: 1,
+      editable: true,
+    },
+    //User(WorkSheet)화면에서 Broker 실행시 백앤드 전송 "Single 및 Multi 실행" 옵션 (True : Single 실행 // False : Multi 실행)
+    {
+      field: 'ROW_BASED_YN',
+      headerName: 'ROW_BASED_YN',
+      minWidth: 100,
+      initialWidth: 200,
+      flex: 1,
+      editable: true,
+    },
+    {
+      field: 'TOOL_SOURCE',
+      headerName: 'Tool Source',
+      minWidth: 100,
+      initialWidth: 200,
+      flex: 2,
+      editable: true,
+      cellEditor: 'agSelectCellEditor',
+         cellEditorParams: {
+        values: dictionaryData,
+      },
+    },
+    { field: 'CRTER_NO', headerName: 'CRTER NO', flex: 1, editable: false, cellClass: 'agReadOnly', hide: true },
+    {
+      field: 'CRTE_DTM',
+      headerName: 'CRTE DTM',
+      flex: 1,
+      cellDataType: 'date',
+      valueFormatter: parm => dateFormatter(parm),
+      filter: 'agDateColumnFilter',
+      filterParams: dateFilterParams,
+      editable: false,
+      cellClass: 'agReadOnly',
+      hide: true,
+    },
+    { field: 'CHGER_NO', headerName: 'CHGER NO', flex: 1, editable: false, cellClass: 'agReadOnly', hide: true },
+    {
+      field: 'CHGE_DTM',
+      headerName: 'CHGE DTM',
+      flex: 1,
+      cellDataType: 'date',
+      valueFormatter: parm => dateFormatter(parm),
+      filter: 'agDateColumnFilter',
+      filterParams: dateFilterParams,
+      editable: false,
+      cellClass: 'agReadOnly',
+      hide: true,
+    },
+    { field: '_id', headerName: 'id', flex: 1, editable: false, hide: true },
+    { field: 'STATUS', flex: 1, editable: false, hide: true },
+  ])
+  const colDefsSchema = ref([
+    { field: 'SCHEMA', headerName: 'SCHEMA', minWidth: 100, initialWidth: 200, flex: 1, editable: false },
+  ])
+  /*
+   * set func
+   */
+  const getRowId = params => {
+    return params.data._id
+  }
+
+  const checkClassType = (params, originData, standColumn) => {
+    if (originData) {
+      let v = originData.find(elem => elem[standColumn] == params.data[standColumn])
+      if (v) {
+        if (params.colDef.field) {
+          if (Array.isArray(v[params.colDef.field])) {
+            if (Array.isArray(params.value)) {
+              if (v[params.colDef.field].join(',') === params.value.join(',')) {
+                return null
+              } else {
+                return 'hasWork'
+              }
+            } else {
+              if (params.value) {
+                return 'hasWork'
+              } else {
+                return 'hasWorkEmpty'
+              }
+            }
+          } else {
+            if (params.value == v[params.colDef.field]) {
+              return null
+            } else {
+              return 'hasWork'
+            }
+          }
+        }
+      } else {
+        return 'hasWorkEmpty'
+      }
     } else {
-      console.warn('Data received but it is not an array or is empty:', dictionaryData);
+      return null
+    }
+  }
+
+  const dateFormatter = params => {
+    let fmt = ''
+    if (params.value) fmt = new Date(params.value).toLocaleString()
+    else fmt = ''
+    return fmt
+  }
+
+  const checkRefEmpty = obj => {
+    if (typeof obj === 'number') {
+      if (!obj) return false
+      else return true
+    } else {
+      if (!obj) return false
+      else if (_.isNil(obj)) return false
+      else if (_.isEmpty(obj)) return false
+      else if (obj.length == 1 && _.isEmpty(obj[0])) {
+        return false
+      } else return true
+    }
+  }
+
+  /***************			API 통신 			**************/
+  const adapterBrokerListOrigin = ref(null)
+  const adapterBrokerListRef = ref(null)
+  const adapterBrokerSchemaListRef = ref(null)
+
+  const selectedAdapterBroker = ref()
+  const selectedAdapterBrokerId = ref('')
+
+  let changedCustomCells = []
+
+  /************************************
+   * 	GET DATA
+   * ***********************************/
+
+  //  AdapterBroker  List를 불러온다.
+  const getAdapterBrokerList = async () => {
+    gridApi.value.setGridOption('loading', true)
+    let resultJson = {}
+    let url = `/api/AdapterBroker/Get`
+    try {
+      const jsonData = await axiosWrapper.get(url)
+
+      if (_.isEmpty(jsonData)) {
+        adapterBrokerListRef.value = []
+        adapterBrokerListOrigin.value = null
+        changedCustomCells = []
+        gridApi.value.setGridOption('loading', false)
+        return
+      } else {
+        resultJson = jsonData.map(item => {
+          //각 파라미터 하위 초기화
+
+          return {
+            ...item,
+          }
+        })
+      }
+
+      adapterBrokerListRef.value = resultJson
+      adapterBrokerListOrigin.value = _.cloneDeep(adapterBrokerListRef.value)
+
+      gridApi.value.setGridOption('loading', false)
+    } catch (error) {
+      gridApi.value.setGridOption('loading', false)
+
+      adapterBrokerListRef.value = []
+      adapterBrokerListOrigin.value = null
+      changedCustomCells = []
+
+      if (!(error instanceof axios.AxiosError)) {
+        sAlert.Error('Failed to get Code : ' + error.message)
+      }
+    }
+  }
+
+  const getAdapterBrokerSchemaList = async selectNode => {
+    searchToolId.value = selectNode.GROUP
+    searchToolType.value = selectNode.NAME
+
+    gridApiSchema.value.setGridOption('loading', true)
+    let resultJson = {}
+    let url = `/api/AdapterBroker/GetSchema`
+    try {
+      const jsonData = await axiosWrapper.post(url, {
+        Group: selectNode.GROUP,
+        Name: selectNode.NAME,
+      })
+
+      if (_.isEmpty(jsonData)) {
+        adapterBrokerSchemaListRef.value = []
+        gridApiSchema.value.setGridOption('loading', false)
+        sAlert.Warning('Failed to get Schema List')
+        return
+      } else {
+        resultJson = jsonData.map(item => {
+          //각 파라미터 하위 초기화
+
+          return {
+            SCHEMA: item,
+          }
+        })
+      }
+
+      adapterBrokerSchemaListRef.value = resultJson
+
+      colDefsRef_Process.value = []
+
+      if (jsonData.length > 0) {
+        jsonData.forEach(element => {
+          let colDef = {}
+
+          colDef = {
+            field: element,
+            headerName: element,
+          }
+
+          colDefsRef_Process.value.push(colDef)
+        })
+      }
+
+      gridApiSchema.value.setGridOption('loading', false)
+    } catch (error) {
+      gridApiSchema.value.setGridOption('loading', false)
+
+      adapterBrokerSchemaListRef.value = []
+
+      colDefsRef_Process.value = []
+
+      if (!(error instanceof axios.AxiosError)) {
+        sAlert.Error('Failed to get Code : ' + error.message)
+      }
+    }
+  }
+  /************************************
+   * 	GRID EVENT
+   * ***********************************/
+  const onFirstDataRendered = event => {
+    //console.log("First Data Rendered");
+  }
+
+  const onCellValueChanged = event => {
+    if (event.colDef.field === 'GROUP' || event.colDef.field === 'NAME') {
+      if (!checkDuplicate(adapterBrokerListRef.value, 'GROUP', 'NAME', event)) {
+        //필요내용 데이터팩, 필드네임, 이벤트
+        return
+      }
     }
 
-  } catch (error) {
-    // 3. 에러 발생 로그
-    console.error('--- [Dictionary API Response Error] ---');
-    console.error('Error Status:', error.response?.status);
-    console.error('Error Message:', error.message);
-    console.error('Error Details:', error.response?.data);
-  } finally {
-    console.log('--- [Dictionary API Request Finished] ---');
+    const excludedFields = [''] // 제외할 필드 목록
+
+    // 모든 필드에 대해 trim 적용
+    if (event.data) {
+      Object.keys(event.data).forEach(key => {
+        if (typeof event.data[key] === 'string' && !excludedFields.includes(key)) {
+          event.data[key] = event.data[key].trim()
+        }
+      })
+    }
   }
-};
+
+  const onSelectionChanged = event => {
+    const selectedRows = event.api.getSelectedRows() // 선택된 행 가져오기
+    // console.log(selectedRows);
+    // console.log(event);
+  }
+
+  const onCellClicked = event => {
+    // console.log(event);
+    // if(event.column.instanceId>4){
+    //   setRowTarget(event);
+    // }
+  }
+
+  const onRowSelected = event => {
+    let selectedRows = gridApi.value.getSelectedRows()
+
+    if (selectedRows.length > 0) {
+      isDisabledDeleteBtn.value = false
+      isDisabledSaveBtn.value = false
+    } else {
+      isDisabledDeleteBtn.value = true
+      isDisabledSaveBtn.value = true
+    }
+
+    let node = event.node
+    if (node.isSelected() && node.data.STATUS != 'A') {
+      selectedAdapterBroker.value = event.data
+      getAdapterBrokerSchemaList(selectedAdapterBroker.value)
+
+      getAdapterBrokerProcessList(selectedAdapterBroker.value)
+    }
+  }
+
+  const onGridReady = params => {
+    gridApi.value = params.api
+    getAdapterBrokerList()
+    getDictionaryList()
+  }
+
+  const onGridReadySchema = params => {
+    gridApiSchema.value = params.api
+    gridApiSchema.value.setGridOption('loading', false)
+  }
+  /***************		CRUD 			**************/
+  const checkValidation = selectedData => {
+    /*******
+     * NULL CHECK
+     * 1. CUSTOM ID
+     * 2. TYPE
+     */
+    let failCount = 0
+    let failMsg = []
+    selectedData.forEach(elem => {
+      if (_.isNil(elem.GROUP) || _.isEmpty(elem.GROUP)) {
+        failMsg.push("'GROUP' is Required.")
+        failCount++
+      }
+    })
+
+    if (failCount > 0) {
+      sAlert.Error(failMsg ? _.uniq(failMsg).join('<br/>') : 'fail')
+      return false
+    } else return true
+  }
+  // refresh Cell Options
+  const refreshParams = {
+    force: true,
+    suppressFlash: true,
+  }
+
+  const createGridRow = (grid, params) => {
+    grid.stopEditing()
+    //  grid.deselectAll();
+    let randomKey = Math.random().toString(36).substring(2, 12)
+    let newID = 'new_' + randomKey
+    if (params.createID) {
+      if (params.rowID) {
+        Object.assign(params.newRow, { [params.rowID]: newID })
+      } else {
+        Object.assign(params.newRow, { _id: newID })
+      }
+    }
+    let lastIdx = grid.getDisplayedRowCount()
+    grid.applyTransaction({
+      add: [params.newRow],
+      addIndex: lastIdx,
+    })
+    grid.refreshCells(refreshParams)
+    grid.ensureIndexVisible(lastIdx, 'bottom')
+    grid.forEachNode((rowNode, index) => {
+      if (index == lastIdx) {
+        rowNode.setSelected(true)
+      }
+    })
+    // if (params.createID) {
+    //   let newRowNode = grid.getRowNode(newID);
+    //   newRowNode.setSelected(true);
+    // } else {
+    //   grid.forEachNode((rowNode, index) => {
+    //     if (index == lastIdx) {
+    //       rowNode.setSelected(true);
+    //     }
+    //   });
+    // }
+  }
+  const createData = () => {
+    let params = {}
+    params.newRow = {
+      GROUP: null,
+      NAME: null,
+      DLL_NAME: null,
+      CLASS_NAME: null,
+      STATUS: 'A',
+      CRTER_NO: userInfo.value?.UserID,
+    }
+
+    params.createID = true
+
+    createGridRow(gridApi.value, params)
+  }
+
+  const deleteSelectedData = async () => {
+    let successCount = 0
+    let failCount = 0
+    let failTagCode = []
+    let selectedRows = gridApi.value.getSelectedRows()
+    if (_.isEmpty(selectedRows)) {
+      sAlert.Warning(`Please select the data you want to delete.`)
+      return
+    }
+    let confirmResult = await sAlert.Confirm('It will be deleted immediately. Are you sure you want to delete?')
+    if (!confirmResult.isConfirmed) return
+
+    for (let i = 0; i < selectedRows.length; i++) {
+      let url = `/api/AdapterBroker/Delete`
+      let bodyData = {
+        id: selectedRows[i]._id,
+      }
+
+      try {
+        await axiosWrapper.post(url, bodyData)
+        successCount++
+      } catch (error) {
+        failCount++
+        failTagCode.push(selectedRows[i].CUS_ID)
+      }
+    }
+    let failinfo = failCount > 0 ? `failed to delete ${failCount} item.( TYPE ID : ${failTagCode.join(',')})` : ''
+
+    if (successCount > 0) {
+      sAlert.Success(`Successfully deleted ${successCount} AdapterBroker.<br> ${failinfo}`)
+    } else {
+      sAlert.Error(`Error occurred during delete AdapterBroker.<br> ${failinfo}`)
+    }
+
+    getAdapterBrokerList()
+  }
+
+  const preSave = () => {
+    gridApi.value.stopEditing()
+    _.delay(saveData, 50)
+  }
+
+  const saveData = async () => {
+    let selectedRows = gridApi.value.getSelectedRows()
+    if (selectedRows && selectedRows.length > 0) {
+      let url = `/api/AdapterBroker`
+      let createData = []
+      let updateData = []
+      let createCount = 0
+      let updateCount = 0
+      let updateIdData = []
+
+      const data = selectedRows
+      selectedRows.forEach(elem => {
+        //1
+        if (elem.STATUS == 'A') {
+          createCount++
+
+          let { CRTE_DTM, _id, ...rest } = elem
+
+          createData.push({ _id: null, ...rest })
+        } else {
+          updateCount++
+
+          let { CHGER_NO, CHGE_DTM, ...rest } = elem
+          updateData.push({ CHGER_NO: userInfo.value?.UserID, ...rest })
+        }
+      })
+
+      if (!checkValidation(selectedRows)) return
+
+      try {
+        let successMessage = 'AdapterBroker is  Saved. '
+        if (createCount > 0) {
+          await axiosWrapper.post(url + '/Create', createData)
+          successMessage = successMessage + `Created :${createCount} `
+        }
+        if (updateCount > 0) {
+          await axiosWrapper.put(url + '/Update', updateData)
+          // for (let item in updateData) {
+
+          // }
+          // await axiosWrapper.put(url + '/Update', updateData)
+          successMessage = successMessage + `Updated :${updateCount} `
+        }
+
+        sAlert.Success(successMessage)
+        gridApi.value.deselectAll()
+
+        getAdapterBrokerList()
+      } catch (error) {
+        console.error('saveData', error)
+        getAdapterBrokerList()
+
+        if (!(error instanceof axios.AxiosError)) {
+          sAlert.Error('Error occurred during AdapterBroker save : ' + error.message)
+        }
+      }
+    } else {
+      sAlert.Warning(`Select a row from the AdapterBroker list`)
+    }
+  }
+
+  // Keydown 단축키 Ctrl + S 저장 단축키
+  const onKeyDown = event => {
+    if (event.ctrlKey && event.key === 's') {
+      event.preventDefault() //브라우저 기본 저장 동작 방지
+      preSave()
+    }
+  }
+
+  const checkDuplicate = (data = null, fieldName1 = null, fieldName2 = null, event = null) => {
+    if (!data || !fieldName1 || !fieldName2 || !event) {
+      sAlert.Warning("'checkDuplicate' Data Not Found.")
+      return false
+    }
+    // index != event.rowIndex
+    let tic = data.find(
+      (elem, index) =>
+        compareTwoCase(elem[fieldName1] + elem[fieldName2], event.data[fieldName1] + event.data[fieldName2]) &&
+        elem['_id'] !== event.data._id
+    )
+    if (tic) {
+      event.data[event.colDef.field] = event.oldValue
+      event.api.stopEditing()
+      event.api.redrawRows()
+      sAlert.Warning('This is the use of duplicate names.')
+      return false
+    }
+
+    return true
+  }
+
+  const upCase = str => {
+    return str.toUpperCase()
+  }
+
+  const compareTwoCase = (str1, str2) => {
+    let word1 = upCase(str1.trim())
+    let word2 = upCase(str2.trim())
+    if (word1 == word2) {
+      return true
+    } else {
+      return false
+    }
+  }
+
+  const agGridRefresh = async function (gridApi) {
+    await gridApi.redrawRows()
+    await gridApi.refreshCells()
+  }
+
+  const getDictionaryList = async function () {
+    try {
+      const key = 'ADAPTER_TOOLS'
+      const projectNo = currProjNoRef.value
+      const epId = userInfo.value?.UserID
+
+      const res = await ApiCommon.postDictionaryGetByKey(
+        {
+          Key: key,
+          ProjectNo: projectNo,
+        },
+        {
+          headers: {
+            Projectno: projectNo,
+            Ep_id: epId,
+          },
+        }
+      )
+      // 만약 ApiCommon이 axios를 래핑한 형태라면 res.data에 데이터가 있습니다.
+      const dictionaryData = res.data || res
+      console.log('Received Data List:', dictionaryData)
+
+      if (dictionaryData && Array.isArray(dictionaryData)) {
+        toolSourceList.value = dictionaryData
+        console.log('toolSourceList updated successfully. Count:', toolSourceList.value.length)
+      } else {
+        console.warn('Data received but it is not an array or is empty:', dictionaryData)
+      }
+    } catch (error) {
+      // 3. 에러 발생 로그
+      console.error('--- [Dictionary API Response Error] ---')
+    } finally {
+      console.log('--- [Dictionary API Request Finished] ---')
+    }
+  }
+
+  const gridBindProps = ref({
+    style: 'width: 100%; height: 100%;',
+    class: themeClass,
+    undoRedoCellEditing: true,
+    undoRedoCellEditingLimit: 20,
+    enableFillHandle: true,
+    defaultColDef: defaultColDef,
+    suppressLastEmptyLineOnPaste: true,
+    pagination: false,
+    statusBar: statusBar,
+    rowSelection: 'single',
+    rowMultiSelectWithClick: false,
+    suppressRowClickSelection: false,
+    columnHoverHighlight: true,
+    getRowId: getRowId,
+    loadingOverlayComponent: AggridLoadingOverlay,
+    loadingOverlayComponentParams: loadingOverlayComponentParams,
+  })
+  const gridOnProps = {
+    firstDataRendered: onFirstDataRendered,
+    rowSelected: onRowSelected,
+    cellValueChanged: onCellValueChanged,
+    gridReady: onGridReady,
+    keydown: onKeyDown,
+    cellClicked: onCellClicked,
+    selectionChanged: onSelectionChanged,
+  }
+
+  const gridBindPropsSchema = ref({
+    style: 'width: 100%; height: 100%;',
+    class: themeClass,
+    undoRedoCellEditing: true,
+    undoRedoCellEditingLimit: 20,
+    enableFillHandle: true,
+    defaultColDef: defaultColDefSchema,
+    pagination: false,
+    statusBar: statusBar,
+    rowSelection: 'single',
+    rowMultiSelectWithClick: false,
+    suppressRowClickSelection: false,
+    columnHoverHighlight: true,
+    loadingOverlayComponent: AggridLoadingOverlay,
+    loadingOverlayComponentParams: loadingOverlayComponentParams,
+  })
+  const gridOnPropsSchema = {
+    firstDataRendered: onFirstDataRendered,
+    gridReady: onGridReadySchema,
+  }
+
+  const gridBindPropsProcess = ref({
+    style: 'width: 100%; height: 100%;',
+    // class: 'ag-theme-custom' + themeClass,
+    class: themeClass,
+    columnDefs: colDefsRef_Process,
+    rowData: dataListRef_Process,
+    getRowId: params => {
+      return params.data?._id
+    },
+    statusBar: {
+      statusPanels: [
+        { statusPanel: 'agTotalRowCountComponent' },
+        { statusPanel: 'agFilteredRowCountComponent' },
+        { statusPanel: 'agSelectedRowCountComponent' },
+      ],
+    },
+    rowSelection: 'single',
+    defaultColDef: {
+      hide: false,
+      cellClass: 'agReadOnly',
+      editable: false,
+      minWidth: 80,
+      filter: 'agMultiColumnFilter',
+      floatingFilter: true,
+    },
+    autoSizeStrategy: {
+      type: 'fitCellContents',
+    },
+    pagination: false,
+    rowDragManaged: true,
+    rowMultiSelectWithClick: false,
+    columnHoverHighlight: true,
+    suppressRowClickSelection: true,
+    suppressLastEmptyLineOnPaste: true,
+    undoRedoCellEditing: true,
+    undoRedoCellEditingLimit: 20,
+  })
+  const gridOnPropsProcess = {
+    gridReady: params => {
+      gridRef_Process.value = params.api
+    },
+  }
+
+  const getAdapterBrokerProcessList = async selectNode => {
+    try {
+      // showOverlay();
+
+      const tool_id = selectNode.GROUP
+      const tool_type = selectNode.NAME
+
+      if (!tool_id) {
+        sAlert.Warning(`The specified '${toolType}' does not exist.`)
+        return
+      }
+
+      if (tool_id && tool_type) {
+        getBrokerProcessData(tool_id, tool_type)
+      }
+    } catch (error) {
+      sAlert.Error(`Failed to getAdapterBrokerProcessList : ${error.message}`)
+    } finally {
+      // hideOverlay();
+    }
+  }
+
+  const getBrokerProcessData = async function (tool_id, tool_type) {
+    gridRef_Process.value.setGridOption('loading', true)
+
+    const currentFilters = gridRef_Process.value.getFilterModel()
+
+    console.log(currentFilters)
+
+    // currentFilters 객체의 키(컬럼 이름) 배열을 가져와서 map 메서드 적용
+    const attributes = Object.keys(currentFilters)
+      .map(columnName => {
+        const columnFilter = currentFilters[columnName]
+
+        // filterModels 배열이 있고, 첫 번째 요소에 실제 필터 정보가 있는지 안전하게 확인
+        // 옵셔널 체이닝 (?.)과 널 병합 연산자 (??)를 사용해서 안전하게 값 추출
+        const filterValue = columnFilter?.filterModels?.[0]?.filter ?? null
+
+        // filterValue가 유효하면 원하는 객체 형태로 반환
+        if (filterValue !== null && filterValue !== undefined) {
+          return {
+            NAME: columnName,
+            VALUE: filterValue,
+          }
+        }
+
+        // filterValue가 유효하지 않으면 null 또는 undefined 반환 (나중에 filter로 걸러낼 것임)
+        return null
+      })
+      .filter(item => item !== null && item !== undefined)
+
+    dataListRef_Process.value = []
+
+    let urlProcess = `/api/AdapterBroker/Process`
+
+    try {
+      // API 미확정으로 임시 하드 코딩
+      const bodyDataProcess = {
+        Group: tool_id,
+        Name: tool_type,
+        ProjectNo: 'string',
+        EP_ID: 'string',
+        REG_TYPE_ID: 'string',
+        UserID: searchUserId.value,
+        MappedAtts: [
+          {
+            ATTRIBUTES: attributes,
+          },
+        ],
+      }
+
+      // proj_no 값이 null도 아니고 빈 문자열도 아닐 때만 ProjectNo 속성 추가
+      if (searchProjectNo.value !== null && searchProjectNo.value !== undefined && searchProjectNo.value !== '') {
+        bodyDataProcess.ProjectNo = searchProjectNo.value
+      } else {
+        delete bodyDataProcess.ProjectNo
+      }
+
+      if (searchEPId.value !== null && searchEPId.value !== undefined && searchEPId.value !== '') {
+        bodyDataProcess.EP_ID = searchEPId.value
+      } else {
+        delete bodyDataProcess.EP_ID
+      }
+
+      if (searchRegisterId.value !== null && searchRegisterId.value !== undefined && searchRegisterId.value !== '') {
+        bodyDataProcess.REG_TYPE_ID = searchRegisterId.value
+      } else {
+        delete bodyDataProcess.REG_TYPE_ID
+      }
+
+      if (isSearchButtonClicked.value) {
+        let confirmResult = await sAlert.Confirm(
+          `아래의 파라메터로 테스트를 진행하시겠습니까?` +
+            `<br>` +
+            `<small class="text-primary">` +
+            JSON.stringify(bodyDataProcess) +
+            `</small>`
+        )
+
+        if (!confirmResult.isConfirmed) return
+
+        let jsonDataProcess = await axiosWrapper.post(urlProcess, bodyDataProcess)
+        let dtProcess = jsonDataProcess
+
+        if (dtProcess.length > 0) {
+          const transformedData = dtProcess.map(item => {
+            const newItem = {}
+            // 각 ATTRIBUTES 배열을 순회하며 새 객체에 속성을 추가합니다.
+            item.ATTRIBUTES.forEach(attr => {
+              newItem[attr.NAME] = attr.VALUE
+            })
+            return newItem
+          })
+
+          dataListRef_Process.value = transformedData
+        }
+      }
+    } catch (error) {
+      dataListRef_Process.value = []
+
+      if (!(error instanceof axios.AxiosError)) {
+        sAlert.Error('Failed to getBrokerProcessData : ' + error.message)
+      }
+    }
+
+    gridRef_Process.value.setGridOption('loading', false)
+  }
+  //#endregion Functions
+
+  const isSearchButtonClicked = ref(false)
+
+  //#region Event
+  const searchBrokerData = async event => {
+    isSearchButtonClicked.value = true
+
+    const tool_id = searchToolId.value
+    const tool_type = searchToolType.value
+
+    if (tool_id && tool_type) {
+      getBrokerProcessData(tool_id, tool_type)
+    }
+
+    isSearchButtonClicked.value = false
+  }
+  defineOptions({
+    name: `AdapterBrokerSetup`,
+    components: { agDropBoxEditor, AgDetailStatusBar },
+  })
+</script>
+
+<style scoped lang="scss">
+  .just-view {
+    color: var(--txt03);
+    background-color: var(--bg11);
+    padding: 6px 8px 6px 8px;
+    width: 100%;
+    text-align: center;
+    font-weight: 500;
+  }
+
+  .vue-splitter :deep(.top-pane) {
+    background-color: white;
+  }
+
+  :root {
+    --p-list-option-padding: 0.1rem 0.75rem; /* 리스트끼리의 간격 */
+    --p-list-header-padding: 0.5rem 1rem 0.25rem 0.98rem; /*상 우 하 좌*/
+    --p-form-field-padding-x: 0.75rem;
+    --p-form-field-padding-y: 0.4rem;
+    --p-primary-color: #4475e0; /* 체크박스 색상 */
+    --p-primary-hover-color: #4475e0; /* 체크박스 on-mouse 색상 */
+  }
+
+  .p-component {
+    font-family: var(--font-family);
+    font-feature-settings: var(--font-feature-settings, normal);
+    font-size: 0.74rem; /* 전체 폰트 크기 */
+    font-weight: normal;
+  }
+
+  .p-inputtext {
+    height: 26px;
+    width: 100%; /* 원하는 너비 */
+    --p-inputtext-padding-y: 0.1rem;
+    font-family: inherit;
+    font-feature-settings: inherit;
+    font-size: 0.74rem !important;
+  }
+
+  .p-multiselect,
+  .p-select {
+    height: 26px;
+    width: 100%; /* 원하는 너비 */
+  }
+
+  .p-multiselect-label,
+  .p-select-label {
+    --p-multiselect-padding-y: 0.1rem;
+    --p-multiselect-padding-x: 0.3rem;
+    --p-select-padding-y: 0.3rem;
+    --p-select-padding-x: 0.5rem;
+  }
+
+  .p-multiselect-dropdown {
+    --p-multiselect-dropdown-width: 1.2rem;
+  }
+
+  .p-select-dropdown {
+    --p-select-dropdown-width: 1.2rem;
+  }
+
+  .p-icon {
+    --p-icon-size: 0.7rem;
+  }
+
+  .p-checkbox {
+    --p-checkbox-width: 1.05rem; /* 원하는 너비 */
+    --p-checkbox-height: 1.05rem; /* 원하는 높이 */
+    --p-checkbox-icon-size: 0.7rem; /* 원하는 아이콘 크기 */
+
+    position: relative;
+    display: inline-flex;
+    user-select: none;
+    vertical-align: bottom;
+  }
+
+  /* Splitter 거터(구분선) 색상 변경 */
+  ::v-deep(.p-splitter-gutter) {
+    background-color: #555555; /* 원하는 색상으로 변경 (예: 빨간색) */
+  }
+
+  /* 만약 거터 핸들(드래그하는 부분) 색상도 바꾸고 싶다면 */
+  ::v-deep(.p-splitter-gutter-handle) {
+    background-color: #ff5555; /* 원하는 색상으로 변경 (예: 초록색) */
+  }
+
+  /* 패널 자체의 배경색을 바꾸고 싶다면 */
+  ::v-deep(.p-splitter-panel) {
+    background-color: #ffffff; /* 원하는 색상으로 변경 (예: 연한 회색) */
+  }
+</style>
