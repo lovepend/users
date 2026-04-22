@@ -1,32 +1,45 @@
-setup() {
-  // 1. 컬럼 정의를 ref로 선언
-  const columnDefs = ref([
-    // ... 다른 컬럼들
-    { 
-      field: 'TOOL_SOURCE', 
-      headerName: 'Tool Source', 
-      editable: true,
-      cellEditor: 'agSelectCellEditor',
-      cellEditorParams: { values: [] } // 초기값은 빈 배열
-    },
-  ]);
+// ... 기존 변수 선언부
+const toolSourceList = ref([]) // API로부터 받을 콤보박스 리스트
 
-  const fetchToolSources = async () => {
-    const response = await axios.post('/api/Dictionary/GetByKey', {
-      Key: "ADAPTER_TOOLS",
-      ProjectNo: "TE1002"
-    });
-    
-    const dictionary = response.data; // ["EB", "eVCP", ...]
 
-    // 2. 반응형 데이터의 특정 컬럼 values 업데이트
-    const targetCol = columnDefs.value.find(col => col.field === 'TOOL_SOURCE');
-    if (targetCol) {
-      targetCol.cellEditorParams.values = dictionary;
+
+
+{ 
+  field: 'TOOL_SOURCE', 
+  headerName: 'Tool Source', 
+  minWidth: 100, 
+  flex: 1, 
+  editable: true,
+  cellEditor: 'agSelectCellEditor',
+  cellEditorParams: () => {
+    return {
+      values: toolSourceList.value // 위에서 선언한 ref를 참조
     }
-  };
+  }
+},
 
-  onMounted(fetchToolSources);
 
-  return { columnDefs };
+
+
+
+const fetchToolSources = async () => {
+  try {
+    const response = await axios.post('/api/Dictionary/GetByKey', {
+      Key: 'ADAPTER_TOOLS',
+      ProjectNo: 'TE1002',
+    })
+    
+    // API 결과를 반응형 변수에 저장
+    toolSourceList.value = response.data 
+  } catch (error) {
+    console.error('Failed to fetch tool sources:', error)
+  }
+}
+
+
+
+const onGridReady_Custom = params => {
+  gridApi_Custom.value = params.api
+  fetchToolSources() // 여기서 호출
+  getCustomList()
 }
