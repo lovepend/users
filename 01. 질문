@@ -1,3 +1,5 @@
+그리드 칼럼 TOOL_SOURCE에 getDictionaryList에서 리턴 받은 데이터를 리스트로 선택되게 해줬으면 좋겠어
+
 <template>
   <Splitter style="height: 100vh" layout="vertical">
     <SplitterPanel class="flex" :size="60">
