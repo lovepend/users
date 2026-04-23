@@ -115,7 +115,7 @@ const route = useRoute()
 // --- State ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
-const selectedProjects = ref([]) // 다중 선택을 위해 배열로 유지
+const selectedProjects = ref([])
 const attributeFilter = ref('')
 const viewMode = ref('simple')
 const loading = ref(false)
@@ -125,7 +125,7 @@ const gridRowData = ref([])
 
 const urlEpId = computed(() => route.query.ep_id || 'TeEP')
 
-// --- 프로젝트 다중 선택 로직 (참고 코드와 동일하게 구현) ---
+// --- 프로젝트 선택 로직 ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   return projectList.value.filter(
@@ -160,14 +160,14 @@ onMounted(async () => {
   } catch (e) { console.error(e) }
 })
 
-// --- 데이터 조회 및 비교 로직 (기존 만족하셨던 로직 유지) ---
+// --- 데이터 조회 및 변경된 비교 로직 ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   loading.value = true
   gridApi.value?.setGridOption('loading', true)
 
   try {
-    // 다중 프로젝트 대응을 위한 첫 번째 선택 프로젝트 기준 처리 (또는 기획에 맞는 로직)
+    // 첫 번째 선택 프로젝트 기준으로 로직 수행
     const targetProj = selectedProjects.value[0]; 
     const config = { headers: { Projectno: targetProj, Ep_id: urlEpId.value } }
     
@@ -185,8 +185,11 @@ const onSearch = async () => {
 
       lnkAtts.forEach(lnk => {
         const mst = masterMap.get(lnk.ATT_ID)
-        if (mst && (mst.UOM_ID && mst.UOM_ID.trim() !== '')) {
+        
+        // [조건 추가]: 마스터의 VAL_TYPE이 "NUMBER"일 때만 UOM 체크 수행
+        if (mst && mst.VAL_TYPE === 'NUMBER' && (mst.UOM_ID && mst.UOM_ID.trim() !== '')) {
           const registerUom = lnk.UOM_ID || ''
+          
           if (registerUom.trim() === '') {
             diffIds.push(lnk.ATT_ID)
             diffDetails.push(`${lnk.ATT_ID}(마스터:${mst.UOM_ID} → 레지스터:비어있음)`)
@@ -255,7 +258,6 @@ watch(attributeFilter, () => gridApi.value?.onFilterChanged())
 <style scoped>
 .main-container { height: 100vh; width: 100%; }
 
-/* [UI 통일] 프로젝트 다중 선택 드롭다운 스타일 */
 .custom-project-dropdown {
   width: 300px !important;
   font-size: 0.85rem;
@@ -275,7 +277,6 @@ watch(attributeFilter, () => gridApi.value?.onFilterChanged())
   resize: none;
 }
 
-/* [UI 통일] 슬라이딩 토글 */
 .view-mode-toggle-container .btn-group {
   background-color: rgba(0, 0, 0, 0.05);
 }
@@ -294,7 +295,6 @@ watch(attributeFilter, () => gridApi.value?.onFilterChanged())
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* [UI 통일] AG-Grid 스타일 보정 */
 :deep(.ag-theme-alpine) {
   --ag-header-background-color: #f8f9fa;
   --ag-border-color: #dee2e6;
