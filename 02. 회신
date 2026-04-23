@@ -40,7 +40,7 @@
           </div>
 
           <button class="btn btn-sm btn-primary px-3 shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0 || loading">
-            <i class="fa" :class="loading ? 'fa-spinner fa-spin' : 'fa-search me-1'"></i> UOM 비교 조회
+            <i class="fa" :class="loading ? 'fa-spinner fa-spin' : 'fa-search me-1'"></i> 비교 조회
           </button>
 
           <div class="view-mode-toggle-container ms-3">
@@ -55,7 +55,7 @@
 
         <div class="d-flex align-items-center gap-2">
           <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>멀티 필터</span>
-          <textarea class="form-control form-control-sm border-success custom-textarea-filter" v-model="attributeFilter" rows="1" placeholder="TYPE_ID 입력 (엔터/쉼표 구분)"></textarea>
+          <textarea class="form-control form-control-sm border-success custom-textarea-filter" v-model="attributeFilter" rows="1" placeholder="ATT_ID 입력 (엔터/쉼표 구분)"></textarea>
         </div>
       </div>
     </div>
@@ -83,7 +83,7 @@ const attributeFilter = ref('')
 const viewMode = ref('simple')
 const loading = ref(false)
 
-const gridApi = shallowRef()
+const gridApi = shallowRef(null)
 const gridRowData = ref([])
 const dynamicCols = ref([])
 
@@ -117,33 +117,23 @@ onMounted(async () => {
   } catch (error) { console.error(error) }
 })
 
-// --- 데이터 조회 및 비교 로직 (Payload 추가 버전) ---
+// --- 데이터 조회 및 비교 로직 (POST + Payload 적용) ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   
   loading.value = true
-  if (gridApi.value) gridApi.value.setGridOption('loading', true)
+  // onGridReady 에러 방지: gridApi가 있을 때만 로딩 상태 조절
+  if (gridApi.value) gridApi.value.showLoadingOverlay()
 
   try {
     const fetchPromises = selectedProjects.value.flatMap(projNo => {
-      // 헤더 설정
-      const config = { 
-        headers: { 
-          'Projectno': projNo, 
-          'Ep_id': urlEpId.value 
-        } 
-      }
+      const config = { headers: { 'Projectno': projNo, 'Ep_id': urlEpId.value } }
+      const payload = { ProjectNo: projNo, ContainDeleted: false }
 
-      // [핵심] 페이로드 구성 (ContainDeleted 등 프로젝트 필수 필드 포함)
-      const payload = { 
-        ProjectNo: projNo,
-        ContainDeleted: false 
-      }
-
-      // GET 대신 POST를 사용하여 페이로드와 헤더를 함께 전송
+      // 엔드포인트: /api/Attributes/Get (복수형 확인)
       return [
         axiosWrapper.post('/api/Register/Get', payload, config).then(data => ({ projNo, type: 'REG', data })),
-        axiosWrapper.post('/api/Attribute/Get', payload, config).then(data => ({ projNo, type: 'MST', data }))
+        axiosWrapper.post('/api/Attributes/Get', payload, config).then(data => ({ projNo, type: 'MST', data }))
       ]
     })
 
@@ -201,10 +191,11 @@ const onSearch = async () => {
     gridRowData.value = processedData
 
   } catch (e) {
-    sAlert.Error('데이터를 가져오지 못했습니다. 페이로드와 헤더 설정을 확인하세요.')
+    console.error(e)
+    sAlert.Error('조회 실패: 페이로드나 엔드포인트를 확인하세요.')
   } finally {
     loading.value = false
-    if (gridApi.value) gridApi.value.setGridOption('loading', false)
+    if (gridApi.value) gridApi.value.hideOverlay()
   }
 }
 
@@ -250,7 +241,9 @@ const gridOptions = computed(() => ({
     const targetId = String(node.data.TYPE_ID || '').toLowerCase()
     return inputIds.some(id => targetId.includes(id))
   },
-  onGridReady: p => { gridApi.value = p.api }
+  onGridReady: p => { 
+    gridApi.value = p.api 
+  }
 }))
 
 watch([attributeFilter, viewMode], () => { if (gridApi.value) gridApi.value.onFilterChanged() })
