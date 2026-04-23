@@ -4,9 +4,9 @@
       <div class="d-flex align-items-center justify-content-between">
         <div class="d-flex align-items-center gap-3">
           <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap">Project Selection</span>
+            <span class="fw-bold text-dark text-nowrap">Project</span>
             <select class="form-select form-select-sm" v-model="selectedProjectNo" style="width: 250px">
-              <option value="">-- 프로젝트를 선택하세요 --</option>
+              <option value="">-- 프로젝트 선택 --</option>
               <option v-for="proj in projectList" :key="proj.PROJ_NO" :value="proj.PROJ_NO">
                 {{ proj.PROJ_NO }} {{ proj.DESC ? `(${proj.DESC})` : '' }}
               </option>
@@ -15,21 +15,21 @@
 
           <button 
             class="btn btn-sm btn-primary px-3 shadow-sm" 
-            @click="fetchComparisonData" 
+            @click="onSearch" 
             :disabled="!selectedProjectNo || loading"
           >
-            <i class="fa" :class="loading ? 'fa-spinner fa-spin' : 'fa-search'"></i> UOM 비교 조회
+            <i class="fa" :class="loading ? 'fa-spinner fa-spin' : 'fa-search'"></i> UOM 비교 실행
           </button>
         </div>
 
         <div class="d-flex align-items-center gap-2">
-          <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>TYPE 필터</span>
+          <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>TYPE 검색</span>
           <input 
             type="text" 
             class="form-control form-control-sm border-success" 
             v-model="typeFilter" 
             style="width: 200px" 
-            placeholder="TYPE_ID 입력..." 
+            placeholder="TYPE_ID 입력" 
           />
         </div>
       </div>
@@ -46,37 +46,35 @@
 
     <div class="modal fade" id="uomDetailModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-lg modal-dialog-centered">
-        <div class="modal-content border-0 shadow">
-          <div class="modal-header bg-dark text-white">
+        <div class="modal-content shadow-lg border-0">
+          <div class="modal-header bg-primary text-white">
             <h5 class="modal-title fw-bold">
-              UOM Mismatch Detail <small class="text-info ms-2">[{{ currentTypeId }}]</small>
+              UOM 상세 비교 결과 <small class="text-warning ms-2">[{{ currentTypeId }}]</small>
             </h5>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
           </div>
           <div class="modal-body p-0">
-            <div class="table-responsive">
-              <table class="table table-hover table-striped mb-0 text-center">
-                <thead class="table-secondary">
-                  <tr>
-                    <th class="text-start ps-4">Attribute ID</th>
-                    <th>Register UOM</th>
-                    <th>Master Attribute UOM</th>
-                    <th>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="item in diffDetails" :key="item.ATT_ID">
-                    <td class="text-start ps-4 fw-bold text-secondary">{{ item.ATT_ID }}</td>
-                    <td><span class="badge bg-light text-dark border">{{ item.REG_UOM || 'N/A' }}</span></td>
-                    <td><span class="badge bg-light text-primary border">{{ item.MST_UOM || 'N/A' }}</span></td>
-                    <td><span class="text-danger fw-bold"><i class="fa fa-times-circle me-1"></i>Different</span></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+            <table class="table table-hover mb-0 text-center">
+              <thead class="table-light">
+                <tr>
+                  <th class="text-start ps-4">Attribute ID</th>
+                  <th>Register UOM (LNK_ATT)</th>
+                  <th>Master UOM (Attribute)</th>
+                  <th>비고</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="att in diffDetails" :key="att.ATT_ID">
+                  <td class="text-start ps-4 fw-bold">{{ att.ATT_ID }}</td>
+                  <td><span class="badge bg-outline-secondary border text-dark px-3">{{ att.REG_UOM || 'Empty' }}</span></td>
+                  <td><span class="badge bg-info-subtle text-primary border border-info px-3">{{ att.MST_UOM || 'Empty' }}</span></td>
+                  <td class="text-danger fw-bold">불일치</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
           <div class="modal-footer bg-light">
-            <button type="button" class="btn btn-secondary shadow-sm" data-bs-dismiss="modal">닫기</button>
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
           </div>
         </div>
       </div>
@@ -91,16 +89,9 @@ import { axiosWrapper } from '@/utils/axios/axios-wrapper';
 import { sAlert } from '@/utils/messages/alert-common';
 import * as bootstrap from 'bootstrap';
 
-/**
- * [Project] 프로젝트 내 Attribute UOM 비교 화면
- * 1. 프로젝트 단일 선택
- * 2. /api/Register/Get (LNK_ATT) vs /api/Attribute/Get (Master UOM) 대조
- * 3. 불일치 시 TYPE_ID 클릭하여 상세 모달 오픈
- */
-
 const route = useRoute();
 
-// --- 상태 관리 ---
+// --- 상태 변수 ---
 const projectList = ref([]);
 const selectedProjectNo = ref('');
 const typeFilter = ref('');
@@ -113,38 +104,45 @@ const currentTypeId = ref('');
 const diffDetails = ref([]);
 let modalInstance = null;
 
-// URL 쿼리에서 ep_id 추출
+// 공통 사용 헤더 정보
 const urlEpId = computed(() => route.query.ep_id || 'TeEP');
 
 onMounted(async () => {
   modalInstance = new bootstrap.Modal(document.getElementById('uomDetailModal'));
   await fetchProjectList();
   
-  // URL에 project_no가 넘어온 경우 자동 세팅
+  // URL 파라미터 우선 적용
   if (route.query.project_no) {
     selectedProjectNo.value = route.query.project_no;
   }
 });
 
-// 프로젝트 리스트 조회
+/**
+ * 1. 프로젝트 목록 조회
+ */
 const fetchProjectList = async () => {
   try {
     const res = await axiosWrapper.get('/api/Project/Get');
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN !== false) : [];
   } catch (e) {
-    console.error('Project Load Error:', e);
+    console.error('Project API Error:', e);
   }
 };
 
-// 핵심 로직: 데이터 조회 및 UOM 비교
-const fetchComparisonData = async () => {
-  if (!selectedProjectNo.value) return;
-  
+/**
+ * 2. 데이터 조회 및 UOM 비교 실행 (핵심)
+ */
+const onSearch = async () => {
+  if (!selectedProjectNo.value) {
+    sAlert.Info('조회할 프로젝트를 선택해주세요.');
+    return;
+  }
+
   loading.value = true;
   if (gridApi.value) gridApi.value.setGridOption('loading', true);
 
   try {
-    // API 호출 시 헤더 정보 구성 (Projectno, Ep_id 필수로 포함)
+    // API 호출 설정 (헤더 주입 방식 강화)
     const apiConfig = {
       headers: {
         'Projectno': selectedProjectNo.value,
@@ -152,32 +150,40 @@ const fetchComparisonData = async () => {
       }
     };
 
-    // 1. Register 목록 조회
-    const registerList = await axiosWrapper.get('/api/Register/Get', apiConfig);
-    
-    // 2. Attribute 마스터 목록 조회
-    const masterAttributes = await axiosWrapper.get('/api/Attribute/Get', apiConfig);
-    
-    // 3. 비교 효율을 위한 Master Map 생성
-    const attMasterMap = new Map();
-    if (Array.isArray(masterAttributes)) {
-      masterAttributes.forEach(att => attMasterMap.set(att.ATT_ID, att));
-    }
+    console.log('[API Request] Headers:', apiConfig.headers);
 
-    // 4. 데이터 대조 및 가공
-    const result = registerList.map(reg => {
+    // Register 목록과 Attribute 마스터 목록 동시 호출
+    const [regRes, mstRes] = await Promise.all([
+      axiosWrapper.get('/api/Register/Get', apiConfig),
+      axiosWrapper.get('/api/Attribute/Get', apiConfig)
+    ]);
+
+    const registerList = Array.isArray(regRes) ? regRes : [];
+    const masterAttributes = Array.isArray(mstRes) ? mstRes : [];
+
+    // Master Attribute 데이터를 Map으로 가공 (성능 최적화)
+    const masterMap = new Map();
+    masterAttributes.forEach(a => {
+      if (a.ATT_ID) masterMap.set(a.ATT_ID, a);
+    });
+
+    // 데이터 대조 로직
+    const comparisonResult = registerList.map(reg => {
       const lnkAtts = reg.LNK_ATT || [];
       const mismatches = [];
 
       lnkAtts.forEach(lnk => {
-        const master = attMasterMap.get(lnk.ATT_ID);
-        // Master에 존재하는데 UOM_ID가 다른 경우 추출
-        if (master && lnk.UOM_ID !== master.UOM_ID) {
-          mismatches.push({
-            ATT_ID: lnk.ATT_ID,
-            REG_UOM: lnk.UOM_ID,
-            MST_UOM: master.UOM_ID
-          });
+        const master = masterMap.get(lnk.ATT_ID);
+        
+        if (master) {
+          // 양쪽 UOM_ID 값 비교 (둘 다 존재할 때 혹은 한쪽이 없을 때)
+          if (lnk.UOM_ID !== master.UOM_ID) {
+            mismatches.push({
+              ATT_ID: lnk.ATT_ID,
+              REG_UOM: lnk.UOM_ID,
+              MST_UOM: master.UOM_ID
+            });
+          }
         }
       });
 
@@ -185,42 +191,41 @@ const fetchComparisonData = async () => {
         ...reg,
         MISMATCH_COUNT: mismatches.length,
         MISMATCH_LIST: mismatches,
-        STATUS: mismatches.length > 0 ? 'Mismatch' : 'Match'
+        CONDITION_TEXT: mismatches.length > 0 ? 'Mismatch' : 'Match'
       };
     });
 
-    gridRowData.value = result;
+    gridRowData.value = comparisonResult;
 
   } catch (e) {
-    console.error('Fetch Error:', e);
-    sAlert.Error('데이터를 가져오는 중 오류가 발생했습니다. 헤더 정보를 확인하세요.');
+    console.error('Comparison Error:', e);
+    sAlert.Error('데이터 매칭 중 오류가 발생했습니다. 헤더와 API 상태를 확인하세요.');
   } finally {
     loading.value = false;
     if (gridApi.value) gridApi.value.setGridOption('loading', false);
   }
 };
 
-// 상세 모달 오픈
-const openUomModal = (data) => {
-  if (data.MISMATCH_COUNT === 0) {
-    sAlert.Info('불일치하는 Attribute가 없습니다.');
-    return;
-  }
+/**
+ * 3. 상세 모달 열기
+ */
+const openDetailModal = (data) => {
+  if (data.MISMATCH_COUNT === 0) return;
   currentTypeId.value = data.TYPE_ID;
   diffDetails.value = data.MISMATCH_LIST;
   modalInstance.show();
 };
 
-// AG Grid 설정
+// --- AG-Grid 옵션 설정 ---
 const gridOptions = computed(() => ({
   columnDefs: [
     { 
       headerName: '상태', 
-      field: 'STATUS', 
-      width: 120,
+      field: 'CONDITION_TEXT', 
+      width: 110,
       cellRenderer: (p) => {
-        const isError = p.value === 'Mismatch';
-        return `<span class="badge ${isError ? 'bg-danger' : 'bg-success'}">${p.value}</span>`;
+        const color = p.value === 'Mismatch' ? 'danger' : 'success';
+        return `<span class="badge bg-${color}">${p.value}</span>`;
       },
       cellStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center' }
     },
@@ -229,40 +234,34 @@ const gridOptions = computed(() => ({
       field: 'TYPE_ID', 
       flex: 1,
       cellClass: 'text-primary fw-bold text-decoration-underline pointer-cursor',
-      onCellClicked: (p) => openUomModal(p.data)
+      onCellClicked: (p) => openDetailModal(p.data)
     },
     { headerName: 'Description', field: 'DESC', flex: 1.5 },
     { 
-      headerName: '불일치 개수', 
+      headerName: '불일치 Attribute', 
       field: 'MISMATCH_COUNT', 
-      width: 120,
+      width: 140,
       cellStyle: p => ({ 
         textAlign: 'center', 
-        color: p.value > 0 ? '#dc3545' : '#6c757d',
-        fontWeight: p.value > 0 ? 'bold' : 'normal'
+        color: p.value > 0 ? '#dc3545' : '#198754',
+        fontWeight: 'bold',
+        backgroundColor: p.value > 0 ? '#fff8f8' : 'transparent'
       })
     },
-    { headerName: '최종 변경일', field: 'CHGE_DTM', width: 180, valueFormatter: (p) => p.value?.substring(0, 10) || '-' }
+    { headerName: '최종 변경일', field: 'CHGE_DTM', width: 130, valueFormatter: p => p.value?.substring(0, 10) || '-' }
   ],
   rowData: gridRowData.value,
-  defaultColDef: {
-    sortable: true,
-    filter: true,
-    resizable: true
-  },
-  onGridReady: (params) => {
-    gridApi.value = params.api;
-  },
-  // 외부 필터 (TYPE 검색용)
+  defaultColDef: { sortable: true, filter: true, resizable: true },
+  onGridReady: (p) => { gridApi.value = p.api },
+  // 외부 필터
   isExternalFilterPresent: () => typeFilter.value !== '',
   doesExternalFilterPass: (node) => node.data.TYPE_ID.toLowerCase().includes(typeFilter.value.toLowerCase())
 }));
 
-// 필터 검색 와치
+// 필터 감시
 watch(typeFilter, () => {
   if (gridApi.value) gridApi.value.onFilterChanged();
 });
-
 </script>
 
 <style scoped>
@@ -270,10 +269,13 @@ watch(typeFilter, () => {
   cursor: pointer;
 }
 :deep(.ag-theme-alpine) {
-  --ag-header-background-color: #f1f3f5;
-  --ag-selected-row-background-color: #e9ecef;
+  --ag-header-background-color: #f8f9fa;
+  --ag-header-foreground-color: #333;
 }
 .modal-header .btn-close-white {
   filter: invert(1) grayscale(100%) brightness(200%);
+}
+.table > thead {
+  font-size: 0.9rem;
 }
 </style>
