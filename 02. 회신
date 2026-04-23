@@ -18,34 +18,17 @@
               </button>
               <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 350px">
                 <li class="px-2 pb-2 border-bottom mb-1">
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    v-model="projectSearchKeyword"
-                    placeholder="프로젝트 번호/명 검색..."
-                    @click.stop
-                  />
+                  <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="프로젝트 번호/명 검색..." @click.stop />
                 </li>
                 <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
                   <label class="form-check-label d-flex align-items-center w-100 fw-bold" style="cursor: pointer">
-                    <input
-                      class="form-check-input me-2 mt-0"
-                      type="checkbox"
-                      :checked="isAllSelected"
-                      :indeterminate="isIndeterminate"
-                      @change="toggleAllSelection"
-                    />
+                    <input class="form-check-input me-2 mt-0" type="checkbox" :checked="isAllSelected" :indeterminate="isIndeterminate" @change="toggleAllSelection" />
                     <span>전체 선택 / 해제</span>
                   </label>
                 </li>
                 <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
                   <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
-                    <input
-                      class="form-check-input me-2 mt-0"
-                      type="checkbox"
-                      :value="proj.PROJ_NO"
-                      v-model="selectedProjects"
-                    />
+                    <input class="form-check-input me-2 mt-0" type="checkbox" :value="proj.PROJ_NO" v-model="selectedProjects" />
                     <span class="text-truncate">
                       <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
                       <small class="text-muted ms-1">({{ proj.DESC }})</small>
@@ -56,20 +39,15 @@
             </div>
           </div>
 
-          <button
-            class="btn btn-sm btn-primary px-3 shadow-sm"
-            @click="onSearch"
-            :disabled="selectedProjects.length === 0 || loading"
-          >
+          <button class="btn btn-sm btn-primary px-3 shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0 || loading">
             <i class="fa" :class="loading ? 'fa-spinner fa-spin' : 'fa-search me-1'"></i> UOM 비교 조회
           </button>
 
           <div class="view-mode-toggle-container ms-3">
             <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
-              <input type="radio" class="btn-check" name="viewMode" id="modeSimple" value="simple" v-model="viewMode" autocomplete="off" />
+              <input type="radio" class="btn-check" name="viewMode" id="modeSimple" value="simple" v-model="viewMode" />
               <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeSimple">간편 조회</label>
-
-              <input type="radio" class="btn-check" name="viewMode" id="modeDetail" value="detail" v-model="viewMode" autocomplete="off" />
+              <input type="radio" class="btn-check" name="viewMode" id="modeDetail" value="detail" v-model="viewMode" />
               <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeDetail">상세 조회</label>
             </div>
           </div>
@@ -77,12 +55,7 @@
 
         <div class="d-flex align-items-center gap-2">
           <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>멀티 필터</span>
-          <textarea
-            class="form-control form-control-sm border-success custom-textarea-filter"
-            v-model="attributeFilter"
-            rows="1"
-            placeholder="TYPE_ID 입력 (엔터/쉼표 구분)"
-          ></textarea>
+          <textarea class="form-control form-control-sm border-success custom-textarea-filter" v-model="attributeFilter" rows="1" placeholder="TYPE_ID 입력 (엔터/쉼표 구분)"></textarea>
         </div>
       </div>
     </div>
@@ -121,15 +94,10 @@ const urlProjNo = computed(() => route.query.project_no || '')
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   if (!kw) return projectList.value
-  return projectList.value.filter(
-    p => (p.PROJ_NO && p.PROJ_NO.toLowerCase().includes(kw)) || (p.DESC && p.DESC.toLowerCase().includes(kw))
-  )
+  return projectList.value.filter(p => (p.PROJ_NO && p.PROJ_NO.toLowerCase().includes(kw)) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
 })
 
-const isAllSelected = computed(() => 
-  filteredProjectList.value.length > 0 && filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
-)
-
+const isAllSelected = computed(() => filteredProjectList.value.length > 0 && filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO)))
 const isIndeterminate = computed(() => {
   const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
   return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
@@ -138,9 +106,7 @@ const isIndeterminate = computed(() => {
 const toggleAllSelection = e => {
   const checked = e.target.checked
   const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
-  selectedProjects.value = checked
-    ? [...new Set([...selectedProjects.value, ...filteredIds])]
-    : selectedProjects.value.filter(id => !filteredIds.includes(id))
+  selectedProjects.value = checked ? [...new Set([...selectedProjects.value, ...filteredIds])] : selectedProjects.value.filter(id => !filteredIds.includes(id))
 }
 
 onMounted(async () => {
@@ -148,12 +114,10 @@ onMounted(async () => {
     const res = await axiosWrapper.get('/api/Project/Get')
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
     if (urlProjNo.value) selectedProjects.value = [urlProjNo.value]
-  } catch (error) {
-    console.error('Project Load Error:', error)
-  }
+  } catch (error) { console.error(error) }
 })
 
-// --- 핵심 데이터 조회 및 비교 로직 ---
+// --- 데이터 조회 및 비교 로직 (Payload 추가 버전) ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   
@@ -161,27 +125,38 @@ const onSearch = async () => {
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
 
   try {
-    // 1. 선택된 프로젝트별로 Register와 Attribute 데이터를 병렬 호출
     const fetchPromises = selectedProjects.value.flatMap(projNo => {
-      const config = { headers: { 'Projectno': projNo, 'Ep_id': urlEpId.value } }
+      // 헤더 설정
+      const config = { 
+        headers: { 
+          'Projectno': projNo, 
+          'Ep_id': urlEpId.value 
+        } 
+      }
+
+      // [핵심] 페이로드 구성 (ContainDeleted 등 프로젝트 필수 필드 포함)
+      const payload = { 
+        ProjectNo: projNo,
+        ContainDeleted: false 
+      }
+
+      // GET 대신 POST를 사용하여 페이로드와 헤더를 함께 전송
       return [
-        axiosWrapper.get('/api/Register/Get', null, config).then(data => ({ projNo, type: 'REG', data })),
-        axiosWrapper.get('/api/Attribute/Get', null, config).then(data => ({ projNo, type: 'MST', data }))
+        axiosWrapper.post('/api/Register/Get', payload, config).then(data => ({ projNo, type: 'REG', data })),
+        axiosWrapper.post('/api/Attribute/Get', payload, config).then(data => ({ projNo, type: 'MST', data }))
       ]
     })
 
     const allResults = await Promise.all(fetchPromises)
     
-    // 2. 데이터를 프로젝트별/유형별로 정리
-    const rawDataMap = new Map() // Key: ProjectNo, Value: { reg: [], mst: [] }
+    const rawDataMap = new Map()
     allResults.forEach(res => {
       if (!rawDataMap.has(res.projNo)) rawDataMap.set(res.projNo, { reg: [], mst: [] })
       if (res.type === 'REG') rawDataMap.get(res.projNo).reg = res.data || []
       else rawDataMap.get(res.projNo).mst = res.data || []
     })
 
-    // 3. 전체 TYPE_ID(또는 ATT_ID)를 수집하여 행(Row) 생성 준비
-    const typeIdMap = new Map() // Key: TYPE_ID, Value: { projects: { PROJ_NO: { status, mismatches: [] } } }
+    const typeIdMap = new Map()
 
     selectedProjects.value.forEach(projNo => {
       const { reg, mst } = rawDataMap.get(projNo)
@@ -210,19 +185,15 @@ const onSearch = async () => {
       })
     })
 
-    // 4. 그리드 데이터 가공
     const processedData = Array.from(typeIdMap.values()).map(row => {
       let totalMismatches = 0
       const resultRow = { TYPE_ID: row.TYPE_ID }
-
       selectedProjects.value.forEach(projNo => {
         const pData = row.projects[projNo] || { EXIST: false, MISMATCH_COUNT: 0, MISMATCHES: [], DESC: '' }
         resultRow[projNo] = pData
         totalMismatches += pData.MISMATCH_COUNT
       })
-
       resultRow.CONDITION = totalMismatches > 0 ? 'Mismatch' : 'Match'
-      resultRow.TOTAL_COUNT = totalMismatches
       return resultRow
     })
 
@@ -230,32 +201,22 @@ const onSearch = async () => {
     gridRowData.value = processedData
 
   } catch (e) {
-    console.error(e)
-    sAlert.Error('조회 중 오류가 발생했습니다.')
+    sAlert.Error('데이터를 가져오지 못했습니다. 페이로드와 헤더 설정을 확인하세요.')
   } finally {
     loading.value = false
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-// --- AG-Grid 컬럼 설정 ---
+// --- AG-Grid 설정 ---
 const columnDefs = computed(() => {
   const baseCols = [
     {
-      headerName: '상태',
-      field: 'CONDITION',
-      width: 100,
-      pinned: 'left',
+      headerName: '상태', field: 'CONDITION', width: 100, pinned: 'left',
       cellRenderer: p => `<span class="badge bg-${p.value === 'Mismatch' ? 'danger' : 'success'}">${p.value}</span>`,
       cellStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center' }
     },
-    {
-      headerName: 'TYPE_ID',
-      field: 'TYPE_ID',
-      width: 180,
-      pinned: 'left',
-      filter: 'agTextColumnFilter',
-    }
+    { headerName: 'TYPE_ID', field: 'TYPE_ID', width: 180, pinned: 'left', filter: 'agTextColumnFilter' }
   ]
 
   const projectCols = dynamicCols.value.map(proj => ({
@@ -266,28 +227,14 @@ const columnDefs = computed(() => {
         headerName: 'UOM 결과',
         valueGetter: p => p.data[proj]?.EXIST ? (p.data[proj].MISMATCH_COUNT > 0 ? 'Diff' : 'OK') : '-',
         width: 100,
-        cellStyle: p => ({
-          textAlign: 'center',
-          fontWeight: 'bold',
-          color: p.value === 'Diff' ? '#dc3545' : (p.value === 'OK' ? '#198754' : '#ccc')
-        })
+        cellStyle: p => ({ textAlign: 'center', fontWeight: 'bold', color: p.value === 'Diff' ? '#dc3545' : (p.value === 'OK' ? '#198754' : '#ccc') })
       },
       ...(viewMode.value === 'detail' ? [
-        {
-          headerName: '불일치 수',
-          valueGetter: p => p.data[proj]?.MISMATCH_COUNT || 0,
-          width: 90,
-          cellStyle: { textAlign: 'right' }
-        },
-        {
-          headerName: 'Description',
-          valueGetter: p => p.data[proj]?.DESC || '',
-          width: 200
-        }
+        { headerName: '불일치 수', valueGetter: p => p.data[proj]?.MISMATCH_COUNT || 0, width: 90, cellStyle: { textAlign: 'right' } },
+        { headerName: 'Description', valueGetter: p => p.data[proj]?.DESC || '', width: 200 }
       ] : [])
     ]
   }))
-
   return [...baseCols, ...projectCols]
 })
 
@@ -306,9 +253,7 @@ const gridOptions = computed(() => ({
   onGridReady: p => { gridApi.value = p.api }
 }))
 
-watch([attributeFilter, viewMode], () => {
-  if (gridApi.value) gridApi.value.onFilterChanged()
-})
+watch([attributeFilter, viewMode], () => { if (gridApi.value) gridApi.value.onFilterChanged() })
 </script>
 
 <style scoped>
