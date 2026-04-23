@@ -1,13 +1,6 @@
-지금까지 로직은 만족해 
-근데 지금 내가 가장 불만족 스러운건 UI인데 아래의 코드를 참고해서 UI를 통일시켜줘야해
-
-1. 프로젝트 선택했을때 아래의 참고 코드처럼 체크박스가 나오고 라벨에는 선택되어져 있는 값이 표현되어져야해
-2. 아래 데이터 뿌리는 그리드 화면이 이전꺼와 달라... 눈으로 보이는게 이것도 통일시켜줘야해
-
-
 <template>
-  <div class="d-flex flex-column h-100 bg-white">
-    <div class="p-3 border-bottom shadow-sm bg-light">
+  <div class="d-flex flex-column h-100 bg-white main-container">
+    <div class="p-3 border-bottom shadow-sm bg-light flex-shrink-0">
       <div class="d-flex align-items-center justify-content-between">
         <div class="d-flex align-items-center gap-3">
           <div class="d-flex align-items-center gap-2">
@@ -23,7 +16,7 @@
                   {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}
                 </span>
               </button>
-              <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 350px">
+              <ul class="dropdown-menu p-2 shadow-sm project-menu-list">
                 <li class="px-2 pb-2 border-bottom mb-1">
                   <input
                     type="text"
@@ -45,20 +38,22 @@
                     <span>전체 선택 / 해제</span>
                   </label>
                 </li>
-                <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
-                  <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
-                    <input
-                      class="form-check-input me-2 mt-0"
-                      type="checkbox"
-                      :value="proj.PROJ_NO"
-                      v-model="selectedProjects"
-                    />
-                    <span class="text-truncate">
-                      <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
-                      <small class="text-muted ms-1">({{ proj.DESC }})</small>
-                    </span>
-                  </label>
-                </li>
+                <div class="project-scroll-area">
+                  <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
+                    <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
+                      <input
+                        class="form-check-input me-2 mt-0"
+                        type="checkbox"
+                        :value="proj.PROJ_NO"
+                        v-model="selectedProjects"
+                      />
+                      <span class="text-truncate">
+                        <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
+                        <small class="text-muted ms-1">({{ proj.DESC }})</small>
+                      </span>
+                    </label>
+                  </li>
+                </div>
               </ul>
             </div>
           </div>
@@ -66,33 +61,17 @@
           <button
             class="btn btn-sm btn-primary px-3 shadow-sm"
             @click="onSearch"
-            :disabled="selectedProjects.length === 0"
+            :disabled="selectedProjects.length === 0 || loading"
           >
-            <i class="fa fa-search me-1"></i>비교 조회
+            <i class="fa me-1" :class="loading ? 'fa-spinner fa-spin' : 'fa-search'"></i>비교 조회
           </button>
 
           <div class="view-mode-toggle-container ms-3">
             <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
-              <input
-                type="radio"
-                class="btn-check"
-                name="viewMode"
-                id="modeSimple"
-                value="simple"
-                v-model="viewMode"
-                autocomplete="off"
-              />
+              <input type="radio" class="btn-check" id="modeSimple" value="simple" v-model="viewMode" />
               <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeSimple">간편 조회</label>
 
-              <input
-                type="radio"
-                class="btn-check"
-                name="viewMode"
-                id="modeDetail"
-                value="detail"
-                v-model="viewMode"
-                autocomplete="off"
-              />
+              <input type="radio" class="btn-check" id="modeDetail" value="detail" v-model="viewMode" />
               <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeDetail">상세 조회</label>
             </div>
           </div>
@@ -104,7 +83,7 @@
             class="form-control form-control-sm border-success custom-textarea-filter"
             v-model="attributeFilter"
             rows="1"
-            placeholder="ATT_ID 입력 (엔터/쉼표 구분)"
+            placeholder="TYPE_ID 입력 (엔터/쉼표 구분)"
           ></textarea>
         </div>
       </div>
@@ -122,325 +101,208 @@
 </template>
 
 <script setup>
-  import { ref, computed, shallowRef, onMounted, watch } from 'vue'
-  import { useRoute } from 'vue-router'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sAlert } from '@/utils/messages/alert-common'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+import 'ag-grid-community/styles/ag-grid.css';
+import 'ag-grid-community/styles/ag-theme-alpine.css';
 
-  const route = useRoute()
+import { ref, computed, shallowRef, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
+import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-  // --- State ---
-  const projectList = ref([])
-  const projectSearchKeyword = ref('')
-  const selectedProjects = ref([])
-  const attributeFilter = ref('')
-  const viewMode = ref('simple') // 간편 조회가 기본값
+const route = useRoute()
 
-  const gridApi = shallowRef()
-  const gridRowData = ref([])
-  const dynamicCols = ref([])
+// --- State ---
+const projectList = ref([])
+const projectSearchKeyword = ref('')
+const selectedProjects = ref([]) // 다중 선택을 위해 배열로 유지
+const attributeFilter = ref('')
+const viewMode = ref('simple')
+const loading = ref(false)
 
-  const urlEpId = computed(() => route.query.ep_id || '')
-  const urlProjNo = computed(() => route.query.project_no || '')
+const gridApi = shallowRef()
+const gridRowData = ref([])
 
-  const COMPARE_FIELDS = ['DESC', 'VAL_TYPE', 'CL_ID']
+const urlEpId = computed(() => route.query.ep_id || 'TeEP')
 
-  // --- 프로젝트 선택 관련 로직 ---
-  const filteredProjectList = computed(() => {
-    const kw = projectSearchKeyword.value.trim().toLowerCase()
-    if (!kw) return projectList.value
-    return projectList.value.filter(
-      p => (p.PROJ_NO && p.PROJ_NO.toLowerCase().includes(kw)) || (p.DESC && p.DESC.toLowerCase().includes(kw))
-    )
-  })
-
-  const isAllSelected = computed(
-    () =>
-      filteredProjectList.value.length > 0 &&
-      filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+// --- 프로젝트 다중 선택 로직 (참고 코드와 동일하게 구현) ---
+const filteredProjectList = computed(() => {
+  const kw = projectSearchKeyword.value.trim().toLowerCase()
+  return projectList.value.filter(
+    p => !kw || p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw))
   )
+})
 
-  const isIndeterminate = computed(() => {
-    const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
-    return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
-  })
+const isAllSelected = computed(() =>
+  filteredProjectList.value.length > 0 &&
+  filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+)
 
-  const toggleAllSelection = e => {
-    const checked = e.target.checked
-    const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
-    selectedProjects.value = checked
-      ? [...new Set([...selectedProjects.value, ...filteredIds])]
-      : selectedProjects.value.filter(id => !filteredIds.includes(id))
+const isIndeterminate = computed(() => {
+  const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
+  return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
+})
+
+const toggleAllSelection = (e) => {
+  const checked = e.target.checked
+  const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
+  if (checked) {
+    selectedProjects.value = [...new Set([...selectedProjects.value, ...filteredIds])]
+  } else {
+    selectedProjects.value = selectedProjects.value.filter(id => !filteredIds.includes(id))
   }
+}
 
-  onMounted(async () => {
-    try {
-      const res = await axiosWrapper.get('/api/Project/Get', {
-        headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value },
-      })
-      projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
-    } catch (error) {
-      console.error(error)
-    }
-  })
+onMounted(async () => {
+  try {
+    const res = await axiosWrapper.get('/api/Project/Get')
+    projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
+  } catch (e) { console.error(e) }
+})
 
-  // --- 데이터 조회 로직 (Attribute) ---
-  const onSearch = async () => {
-    if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
-    if (gridApi.value) gridApi.value.setGridOption('loading', true)
+// --- 데이터 조회 및 비교 로직 (기존 만족하셨던 로직 유지) ---
+const onSearch = async () => {
+  if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
+  loading.value = true
+  gridApi.value?.setGridOption('loading', true)
 
-    try {
-      const fetchPromises = selectedProjects.value.map(projNo =>
-        axiosWrapper
-          .post(
-            '/api/Attributes/Get',
-            { ContainDeleted: false, ProjectNo: projNo },
-            { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
-          )
-          .catch(() => [])
-      )
+  try {
+    // 다중 프로젝트 대응을 위한 첫 번째 선택 프로젝트 기준 처리 (또는 기획에 맞는 로직)
+    const targetProj = selectedProjects.value[0]; 
+    const config = { headers: { Projectno: targetProj, Ep_id: urlEpId.value } }
+    
+    const [regRes, attrRes] = await Promise.all([
+      axiosWrapper.post('/api/Register/Get', { ProjectNo: targetProj }, config),
+      axiosWrapper.post('/api/Attributes/Get', { ProjectNo: targetProj }, config),
+    ])
 
-      const results = await Promise.all(fetchPromises)
-      const attrMap = new Map()
+    const masterMap = new Map((attrRes || []).map(a => [a.ATT_ID, a]))
 
-      results.forEach((projectData, index) => {
-        const currentProjNo = selectedProjects.value[index]
-        if (!Array.isArray(projectData)) return
+    const processed = (regRes || []).map(reg => {
+      const lnkAtts = reg.LNK_ATT || []
+      let diffIds = []
+      let diffDetails = []
 
-        projectData.forEach(item => {
-          if (!attrMap.has(item.ATT_ID)) {
-            attrMap.set(item.ATT_ID, { ATT_ID: item.ATT_ID, projects: {} })
+      lnkAtts.forEach(lnk => {
+        const mst = masterMap.get(lnk.ATT_ID)
+        if (mst && (mst.UOM_ID && mst.UOM_ID.trim() !== '')) {
+          const registerUom = lnk.UOM_ID || ''
+          if (registerUom.trim() === '') {
+            diffIds.push(lnk.ATT_ID)
+            diffDetails.push(`${lnk.ATT_ID}(마스터:${mst.UOM_ID} → 레지스터:비어있음)`)
           }
-          attrMap.get(item.ATT_ID).projects[currentProjNo] = {
-            EXIST: true,
-            DESC: item.DESC || '',
-            VAL_TYPE: item.VAL_TYPE || '',
-            CL_ID: item.CL_ID || '',
-          }
-        })
-      })
-
-      const processedData = Array.from(attrMap.values()).map(row => {
-        let isDiff = false
-        let diffDetails = []
-
-        if (Object.keys(row.projects).length !== selectedProjects.value.length) {
-          isDiff = true
-          diffDetails.push('Exist')
         }
-
-        COMPARE_FIELDS.forEach(field => {
-          const values = selectedProjects.value.filter(p => row.projects[p]).map(p => row.projects[p][field])
-          if (new Set(values).size > 1) {
-            isDiff = true
-            diffDetails.push(field)
-          }
-        })
-
-        const resultRow = {
-          ATT_ID: row.ATT_ID,
-          CONDITION: isDiff ? 'Diff' : 'Pass',
-          DIFF_INFO: diffDetails.join(', '),
-        }
-
-        selectedProjects.value.forEach(p => {
-          resultRow[p] = row.projects[p] || { EXIST: false, DESC: '', VAL_TYPE: '', CL_ID: '' }
-        })
-
-        return resultRow
       })
 
-      dynamicCols.value = [...selectedProjects.value]
-      gridRowData.value = processedData
-    } catch (e) {
-      sAlert.Error('조회 실패')
-    } finally {
-      if (gridApi.value) gridApi.value.setGridOption('loading', false)
-    }
-  }
-
-  // --- 그리드 컬럼 설정 (상세/간편 모드 동적 반영) ---
-  const columnDefs = computed(() => {
-    const multiFilterParams = {
-      filters: [{ filter: 'agTextColumnFilter' }, { filter: 'agSetColumnFilter' }],
-    }
-
-    const cols = [
-      {
-        headerName: 'Condition',
-        field: 'CONDITION',
-        width: 110,
-        pinned: 'left',
-        filter: 'agMultiColumnFilter',
-        filterParams: multiFilterParams,
-        cellStyle: p => ({
-          color: p.value === 'Diff' ? '#dc3545' : '#198754',
-          fontWeight: 'bold',
-          textAlign: 'center',
-          backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8',
-        }),
-      },
-      {
-        headerName: 'Diff Info',
-        field: 'DIFF_INFO',
-        width: 140,
-        pinned: 'left',
-        filter: 'agMultiColumnFilter',
-        filterParams: multiFilterParams,
-        cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' },
-      },
-      {
-        headerName: 'Attribute ID',
-        field: 'ATT_ID',
-        width: 180,
-        pinned: 'left',
-        filter: 'agMultiColumnFilter',
-        filterParams: multiFilterParams,
-      },
-    ]
-
-    dynamicCols.value.forEach(proj => {
-      const children = [
-        {
-          headerName: 'Exist',
-          valueGetter: p => (p.data[proj]?.EXIST ? 'Alive' : '-'),
-          width: 80,
-          filter: 'agMultiColumnFilter',
-          filterParams: multiFilterParams,
-          cellStyle: { textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-          cellRenderer: p =>
-            p.value === 'Alive'
-              ? `<i class="fa fa-check-circle" style="color: #198754; font-size: 1rem;"></i>`
-              : `<span class="text-muted">-</span>`,
-          cellClassRules: { 'bg-danger-light': p => !p.data[proj]?.EXIST },
-        },
-      ]
-
-      // 상세 조회 모드일 때만 추가
-      if (viewMode.value === 'detail') {
-        children.push(
-          {
-            headerName: 'Description',
-            valueGetter: p => p.data[proj]?.DESC,
-            width: 200,
-            filter: 'agMultiColumnFilter',
-            filterParams: multiFilterParams,
-          },
-          {
-            headerName: 'Format',
-            valueGetter: p => p.data[proj]?.VAL_TYPE,
-            width: 110,
-            filter: 'agMultiColumnFilter',
-            filterParams: multiFilterParams,
-          },
-          {
-            headerName: 'Length',
-            valueGetter: p => p.data[proj]?.CL_ID,
-            width: 90,
-            filter: 'agMultiColumnFilter',
-            filterParams: multiFilterParams,
-            cellStyle: { textAlign: 'right' },
-          }
-        )
+      return {
+        ...reg,
+        CONDITION: diffIds.length > 0 ? 'Diff' : 'Pass',
+        DIFF_LIST: diffIds.join(', '),
+        DIFF_DETAIL: diffDetails.join(' | '),
       }
-
-      cols.push({
-        headerName: `${proj}`,
-        marryChildren: true,
-        children: children,
-      })
     })
 
-    return cols
-  })
-
-  const gridOptions = computed(() => ({
-    columnDefs: columnDefs.value,
-    rowData: gridRowData.value,
-    style: 'width: 100%; height: 100%',
-    class: 'ag-theme-custom',
-    loadingOverlayComponent: AggridLoadingOverlay,
-    sideBar: false,
-    statusBar: {
-      statusPanels: [
-        { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'right' },
-        { statusPanel: 'agSelectedRowCountComponent', align: 'right' },
-      ],
-    },
-    defaultColDef: {
-      sortable: true,
-      resizable: true,
-      filter: true,
-      floatingFilter: true,
-    },
-    popupParent: document.body,
-    enableRangeSelection: true,
-    copyHeadersToClipboard: true,
-    suppressRowClickSelection: true,
-    isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
-    doesExternalFilterPass: node => {
-      const inputIds = attributeFilter.value
-        .split(/[\s,\n]+/)
-        .filter(id => id.trim() !== '')
-        .map(id => id.toLowerCase())
-      if (inputIds.length === 0) return true
-      const targetId = String(node.data.ATT_ID || '').toLowerCase()
-      return inputIds.some(id => targetId.includes(id))
-    },
-  }))
-
-  const onGridReady = p => {
-    gridApi.value = p.api
+    gridRowData.value = processed
+  } catch (e) { sAlert.Error('조회 실패') }
+  finally {
+    loading.value = false
+    gridApi.value?.setGridOption('loading', false)
   }
+}
 
-  watch([attributeFilter, viewMode], () => {
-    if (gridApi.value) gridApi.value.onFilterChanged()
-  })
+// --- 그리드 설정 ---
+const columnDefs = computed(() => [
+  {
+    headerName: 'Condition', field: 'CONDITION', width: 110, pinned: 'left',
+    cellStyle: p => ({
+      color: p.value === 'Diff' ? '#dc3545' : '#198754',
+      fontWeight: 'bold', textAlign: 'center',
+      backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8',
+    }),
+  },
+  { headerName: 'TYPE_ID', field: 'TYPE_ID', width: 180, pinned: 'left' },
+  { headerName: 'Description', field: 'DESC', width: 250 },
+  {
+    headerName: 'UOM 누락 목록', 
+    field: 'DIFF_LIST', width: 180,
+    cellStyle: { color: '#dc3545', fontWeight: 'bold', fontSize: '11px' },
+  },
+  {
+    headerName: '누락 상세 정보',
+    field: 'DIFF_DETAIL', flex: 1, minWidth: 350,
+    cellStyle: { fontSize: '12px', color: '#0d6efd' },
+    hide: viewMode.value === 'simple'
+  },
+])
+
+const gridOptions = computed(() => ({
+  columnDefs: columnDefs.value,
+  rowData: gridRowData.value,
+  loadingOverlayComponent: AggridLoadingOverlay,
+  defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true },
+  isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
+  doesExternalFilterPass: node => {
+    const kws = attributeFilter.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
+    const target = String(node.data.TYPE_ID || '').toLowerCase()
+    return kws.length === 0 || kws.some(kw => target.includes(kw))
+  },
+}))
+
+const onGridReady = p => { gridApi.value = p.api }
+watch(attributeFilter, () => gridApi.value?.onFilterChanged())
 </script>
 
 <style scoped>
-  .custom-project-dropdown {
-    width: 300px !important;
-  }
-  .custom-textarea-filter {
-    width: 300px !important;
-    font-size: 0.8rem;
-    resize: none;
-  }
+.main-container { height: 100vh; width: 100%; }
 
-  /* 슬라이딩 토글 버튼 스타일 */
-  .view-mode-toggle-container .btn-group {
-    background-color: rgba(0, 0, 0, 0.05);
-  }
+/* [UI 통일] 프로젝트 다중 선택 드롭다운 스타일 */
+.custom-project-dropdown {
+  width: 300px !important;
+  font-size: 0.85rem;
+}
+.project-menu-list {
+  width: 350px !important;
+  max-height: 500px;
+}
+.project-scroll-area {
+  max-height: 350px;
+  overflow-y: auto;
+}
 
-  .toggle-label {
-    border: none !important;
-    color: #6c757d;
-    font-weight: 600;
-    transition: all 0.2s ease;
-    font-size: 0.82rem;
-    padding-top: 4px;
-    padding-bottom: 4px;
-  }
+.custom-textarea-filter {
+  width: 300px !important;
+  font-size: 0.8rem;
+  resize: none;
+}
 
-  .btn-check:checked + .toggle-label {
-    background-color: #ffffff !important;
-    color: #0d6efd !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
+/* [UI 통일] 슬라이딩 토글 */
+.view-mode-toggle-container .btn-group {
+  background-color: rgba(0, 0, 0, 0.05);
+}
+.toggle-label {
+  border: none !important;
+  color: #6c757d;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  font-size: 0.82rem;
+  padding: 4px 16px;
+  cursor: pointer;
+}
+.btn-check:checked + .toggle-label {
+  background-color: #ffffff !important;
+  color: #0d6efd !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
 
-  :deep(.ag-header-group-cell) {
-    background-color: #f8f9fa !important;
-    font-weight: bold;
-    border-right: 1px solid #dee2e6 !important;
-  }
-
-  :deep(.bg-danger-light) {
-    background-color: #fff5f5 !important;
-  }
-
-  :deep(.ag-floating-filter-input) {
-    background-color: #fff !important;
-  }
+/* [UI 통일] AG-Grid 스타일 보정 */
+:deep(.ag-theme-alpine) {
+  --ag-header-background-color: #f8f9fa;
+  --ag-border-color: #dee2e6;
+}
+:deep(.ag-header-cell-label) {
+  justify-content: center;
+}
+:deep(.ag-header) {
+  font-weight: bold;
+}
 </style>
