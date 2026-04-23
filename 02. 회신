@@ -10,8 +10,9 @@
                 class="btn btn-sm btn-outline-secondary dropdown-toggle text-start d-flex justify-content-between align-items-center bg-white project-btn"
                 type="button"
                 data-bs-toggle="dropdown"
+                data-bs-auto-close="outside"
               >
-                <span class="text-truncate">
+                <span class="text-truncate me-2">
                   {{ selectedProject ? selectedProject : '프로젝트를 선택하세요' }}
                 </span>
               </button>
@@ -27,7 +28,7 @@
                 </li>
                 <div class="project-list-scroll">
                   <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO">
-                    <button class="dropdown-item rounded-2 py-2" @click="selectedProject = proj.PROJ_NO">
+                    <button class="dropdown-item rounded-2 py-2" @click="onProjectSelect(proj.PROJ_NO)">
                       <div class="d-flex flex-column">
                         <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
                         <small class="text-muted text-truncate">{{ proj.DESC }}</small>
@@ -44,7 +45,7 @@
             @click="onSearch" 
             :disabled="!selectedProject || loading"
           >
-            <i class="fa" :class="loading ? 'fa-spinner fa-spin' : 'fa-search me-1'"></i> 비교 분석 실행
+            <i class="fa" :class="loading ? 'fa-spinner fa-spin' : 'fa-search me-1'"></i> UOM 비교 분석
           </button>
 
           <div class="view-mode-toggle-container ms-2">
@@ -57,7 +58,7 @@
           </div>
         </div>
 
-        <div class="d-flex align-items-center gap-2 filter-box">
+        <div class="d-flex align-items-center gap-2">
           <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>멀티 필터</span>
           <textarea 
             class="form-control form-control-sm border-success custom-textarea-filter" 
@@ -101,12 +102,9 @@ const gridRowData = ref([])
 
 const urlEpId = computed(() => route.query.ep_id || 'TeEP')
 
-// --- 프로젝트 리스트 필터링 ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
-  return projectList.value.filter(p => 
-    !kw || p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw))
-  )
+  return projectList.value.filter(p => !kw || p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
 })
 
 onMounted(async () => {
@@ -117,10 +115,13 @@ onMounted(async () => {
   } catch (e) { console.error(e) }
 })
 
-// --- 핵심 조회 및 상세 비교 로직 ---
+const onProjectSelect = (projNo) => {
+  selectedProject.value = projNo
+}
+
+// --- 핵심: 레지스터 UOM vs 마스터 UOM 비교 로직 ---
 const onSearch = async () => {
   if (!selectedProject.value) return sAlert.Warning('프로젝트를 선택하세요.')
-  
   loading.value = true
   gridApi.value?.showLoadingOverlay()
 
@@ -128,12 +129,12 @@ const onSearch = async () => {
     const config = { headers: { 'Projectno': selectedProject.value, 'Ep_id': urlEpId.value } }
     const payload = { ProjectNo: selectedProject.value, ContainDeleted: false }
 
-    // 마스터(Attributes)와 해당 프로젝트 데이터(Register) 동시 호출
     const [regRes, attrRes] = await Promise.all([
-      axiosWrapper.post('/api/Register/Get', payload, config),
-      axiosWrapper.post('/api/Attributes/Get', payload, config)
+      axiosWrapper.post('/api/Register/Get', payload, config), // 레지스터 정보
+      axiosWrapper.post('/api/Attributes/Get', payload, config)  // 마스터 기준 정보
     ])
 
+    // 마스터 Attributes 정보를 Map으로 변환 (빠른 조회용)
     const masterMap = new Map((attrRes || []).map(a => [a.ATT_ID, a]))
 
     const processed = (regRes || []).map(reg => {
@@ -143,10 +144,10 @@ const onSearch = async () => {
       
       lnkAtts.forEach(lnk => {
         const mst = masterMap.get(lnk.ATT_ID)
-        // UOM_ID 비교: 마스터와 다를 경우 기록
+        // 1. 마스터에 해당 속성이 있고, 2. 레지스터의 UOM_ID가 마스터의 UOM_ID와 다를 경우
         if (mst && lnk.UOM_ID !== mst.UOM_ID) {
           diffIds.push(lnk.ATT_ID)
-          // 형식: ATT001 (마스터ID, 레지스터ID)
+          // "속성ID (마스터UOM, 레지스터UOM)" 형식으로 상세 데이터 생성
           diffDetails.push(`${lnk.ATT_ID} (${mst.UOM_ID || '-'}, ${lnk.UOM_ID || '-'})`)
         }
       })
@@ -155,75 +156,60 @@ const onSearch = async () => {
         ...reg,
         CONDITION: diffIds.length > 0 ? 'Diff' : 'Pass',
         DIFF_LIST: diffIds.join(', '),
-        DIFF_DETAIL: diffDetails.join(' | ')
+        DIFF_DETAIL: diffDetails.join(' | ') // 그리드에 상세히 보여줄 필드
       }
     })
 
     gridRowData.value = processed
   } catch (e) {
-    console.error(e)
-    sAlert.Error('데이터 조회 중 오류가 발생했습니다.')
+    sAlert.Error('조회 중 오류 발생')
   } finally {
     loading.value = false
     gridApi.value?.hideOverlay()
   }
 }
 
-// --- AG-Grid 설정 ---
+// --- 그리드 정의 ---
 const columnDefs = computed(() => {
-  const cols = [
+  const baseCols = [
     { 
-      headerName: 'Condition', field: 'CONDITION', width: 110, pinned: 'left',
+      headerName: 'Condition', field: 'CONDITION', width: 100, pinned: 'left',
       cellRenderer: p => `<span class="badge bg-${p.value === 'Diff' ? 'danger' : 'success'}">${p.value}</span>`,
       cellStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center' }
     },
     { headerName: 'TYPE_ID', field: 'TYPE_ID', width: 200, pinned: 'left' },
-    { headerName: 'Description', field: 'DESC', width: 300 },
+    { headerName: 'Description', field: 'DESC', width: 250 },
     { 
-      headerName: '다른값 속성 목록', field: 'DIFF_LIST', width: 220,
+      headerName: '다른값 속성 목록', field: 'DIFF_LIST', width: 200,
       cellStyle: { color: '#dc3545', fontWeight: 'bold' } 
     },
     { 
-      headerName: '다른값 상세 보기 (Master, Register)', field: 'DIFF_DETAIL', flex: 1, minWidth: 350,
+      headerName: '다른값 상세 보기(Master, Register)', field: 'DIFF_DETAIL', flex: 1, minWidth: 350,
       cellStyle: p => ({ color: p.value ? '#0d6efd' : '#6c757d', fontSize: '12px' })
     }
   ]
-  
-  // 상세 모드일 때 추가 정보를 보고 싶다면 여기에 컬럼을 push 할 수 있습니다.
-  return cols
+  return baseCols
 })
 
 const gridOptions = computed(() => ({
   columnDefs: columnDefs.value,
   rowData: gridRowData.value,
   loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { 
-    sortable: true, 
-    filter: true, 
-    resizable: true, 
-    floatingFilter: true,
-    filterParams: { buttons: ['reset', 'apply'], closeOnApply: true }
-  },
-  rowSelection: 'single',
-  // 외부 필터 로직
+  defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true },
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: node => {
     const kw = attributeFilter.value.toLowerCase()
     return (node.data.TYPE_ID || '').toLowerCase().includes(kw) || 
            (node.data.DIFF_LIST || '').toLowerCase().includes(kw)
-  }
+  },
+  onGridReady: params => { gridApi.value = params.api }
 }))
-
-const onGridReady = (params) => {
-  gridApi.value = params.api
-  params.api.sizeColumnsToFit()
-}
 
 watch(attributeFilter, () => gridApi.value?.onFilterChanged())
 </script>
 
 <style scoped>
-/* 전체 레이아웃 */
+/* 전체 레이아웃 고정 */
 .main-container {
   height: 100vh;
   overflow: hidden;
@@ -233,31 +219,32 @@ watch(attributeFilter, () => gridApi.value?.onFilterChanged())
   flex-shrink: 0;
 }
 
-/* 프로젝트 드롭다운 스타일 */
+/* 프로젝트 드롭다운 UI 보정 */
 .project-btn {
-  width: 320px !important;
+  width: 300px !important;
   height: 35px;
-  border-radius: 6px;
+  overflow: hidden;
 }
 
 .project-menu {
-  width: 380px !important;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+  width: 350px !important;
+  z-index: 1050;
 }
 
 .project-list-scroll {
-  max-height: 400px;
+  max-height: 350px;
   overflow-y: auto;
 }
 
-/* 필터 및 토글 버튼 */
+/* 필터 텍스트 영역 */
 .custom-textarea-filter {
-  width: 320px !important;
+  width: 300px !important;
   font-size: 0.85rem;
   resize: none;
   min-height: 35px;
 }
 
+/* 토글 버튼 */
 .view-mode-toggle-container .btn-group {
   background-color: rgba(0, 0, 0, 0.05);
 }
@@ -276,7 +263,7 @@ watch(attributeFilter, () => gridApi.value?.onFilterChanged())
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-/* 그리드 래퍼 */
+/* 그리드 레이아웃 */
 .grid-wrapper {
   position: relative;
   width: 100%;
@@ -284,8 +271,6 @@ watch(attributeFilter, () => gridApi.value?.onFilterChanged())
 
 :deep(.ag-theme-alpine) {
   --ag-header-background-color: #f8f9fa;
-  --ag-border-color: #dee2e6;
-  --ag-font-size: 13px;
 }
 
 :deep(.ag-cell) {
