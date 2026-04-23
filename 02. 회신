@@ -1,55 +1,77 @@
 <template>
-  <div class="d-flex flex-column h-100 bg-white">
-    <div class="p-3 border-bottom shadow-sm bg-light">
-      <div class="d-flex align-items-center justify-content-between">
+  <div class="d-flex flex-column h-100 bg-white main-container">
+    <div class="p-3 border-bottom shadow-sm bg-light control-header">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
         <div class="d-flex align-items-center gap-3">
           <div class="d-flex align-items-center gap-2">
             <span class="fw-bold text-dark text-nowrap">Project</span>
-            <div class="dropdown">
+            <div class="dropdown custom-dropdown-container">
               <button
-                class="btn btn-sm btn-outline-secondary dropdown-toggle custom-project-dropdown text-start d-flex justify-content-between align-items-center bg-white"
+                class="btn btn-sm btn-outline-secondary dropdown-toggle text-start d-flex justify-content-between align-items-center bg-white project-btn"
                 type="button"
                 data-bs-toggle="dropdown"
+                aria-expanded="false"
               >
-                <span class="text-truncate me-2">
+                <span class="text-truncate">
                   {{ selectedProject ? selectedProject : '프로젝트를 선택하세요' }}
                 </span>
               </button>
-              <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 350px">
-                <li class="px-2 pb-2 border-bottom mb-1">
-                  <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="검색..." @click.stop />
+              <ul class="dropdown-menu p-2 shadow-lg project-menu">
+                <li class="px-2 pb-2 border-bottom mb-2">
+                  <input 
+                    type="text" 
+                    class="form-control form-control-sm" 
+                    v-model="projectSearchKeyword" 
+                    placeholder="프로젝트 검색..." 
+                    @click.stop 
+                  />
                 </li>
-                <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1" @click="selectedProject = proj.PROJ_NO">
-                  <div class="d-flex flex-column" style="cursor: pointer">
-                    <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
-                    <small class="text-muted">{{ proj.DESC }}</small>
-                  </div>
-                </li>
+                <div class="project-list-scroll">
+                  <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO">
+                    <button class="dropdown-item rounded-2 py-2" @click="selectedProject = proj.PROJ_NO">
+                      <div class="d-flex flex-column">
+                        <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
+                        <small class="text-muted text-truncate">{{ proj.DESC }}</small>
+                      </div>
+                    </button>
+                  </li>
+                  <li v-if="filteredProjectList.length === 0" class="text-center py-3 text-muted">
+                    검색 결과가 없습니다.
+                  </li>
+                </div>
               </ul>
             </div>
           </div>
 
-          <button class="btn btn-sm btn-primary px-3 shadow-sm" @click="onSearch" :disabled="!selectedProject || loading">
+          <button 
+            class="btn btn-sm btn-primary px-3 shadow-sm btn-search" 
+            @click="onSearch" 
+            :disabled="!selectedProject || loading"
+          >
             <i class="fa" :class="loading ? 'fa-spinner fa-spin' : 'fa-search me-1'"></i> 비교 분석 실행
           </button>
         </div>
 
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-2 filter-box">
           <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>멀티 필터</span>
-          <textarea class="form-control form-control-sm border-success custom-textarea-filter" v-model="attributeFilter" rows="1" placeholder="TYPE_ID 입력"></textarea>
+          <textarea 
+            class="form-control form-control-sm border-success custom-textarea-filter" 
+            v-model="attributeFilter" 
+            rows="1" 
+            placeholder="TYPE_ID 입력 (엔터/쉼표)"
+          ></textarea>
         </div>
       </div>
     </div>
 
-    <div class="flex-grow-1 overflow-hidden">
+    <div class="flex-grow-1 grid-wrapper">
       <ag-grid-vue
-        style="width: 100%; height: 100%;"
-        class="ag-theme-alpine"
+        class="ag-theme-alpine w-100 h-100"
         :columnDefs="columnDefs"
         :rowData="gridRowData"
         :defaultColDef="defaultColDef"
-        :loadingOverlayComponent="'AggridLoadingOverlay'"
         @grid-ready="onGridReady"
+        :loadingOverlayComponent="'AggridLoadingOverlay'"
         :isExternalFilterPresent="isExternalFilterPresent"
         :doesExternalFilterPass="doesExternalFilterPass"
       />
@@ -62,7 +84,6 @@ import { ref, computed, shallowRef, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { sAlert } from '@/utils/messages/alert-common'
-import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
 const route = useRoute()
 
@@ -72,13 +93,11 @@ const projectSearchKeyword = ref('')
 const selectedProject = ref('')
 const attributeFilter = ref('')
 const loading = ref(false)
-
 const gridApi = shallowRef(null)
 const gridRowData = ref([])
 
 const urlEpId = computed(() => route.query.ep_id || 'TeEP')
 
-// --- 프로젝트 리스트 필터링 ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   return projectList.value.filter(p => !kw || p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
@@ -92,20 +111,15 @@ onMounted(async () => {
   } catch (e) { console.error(e) }
 })
 
-/**
- * [핵심 로직] 싱글 프로젝트 내 Register vs Attributes 비교
- */
 const onSearch = async () => {
   if (!selectedProject.value) return sAlert.Warning('프로젝트를 선택하세요.')
-  
   loading.value = true
-  if (gridApi.value) gridApi.value.showLoadingOverlay()
+  gridApi.value?.showLoadingOverlay()
 
   try {
     const config = { headers: { 'Projectno': selectedProject.value, 'Ep_id': urlEpId.value } }
     const payload = { ProjectNo: selectedProject.value, ContainDeleted: false }
 
-    // Register와 Attributes 동시 호출
     const [regRes, attrRes] = await Promise.all([
       axiosWrapper.post('/api/Register/Get', payload, config),
       axiosWrapper.post('/api/Attributes/Get', payload, config)
@@ -113,79 +127,116 @@ const onSearch = async () => {
 
     const masterMap = new Map((attrRes || []).map(a => [a.ATT_ID, a]))
 
-    // 대조 가공
     const processed = (regRes || []).map(reg => {
       const lnkAtts = reg.LNK_ATT || []
-      let mismatchInfo = []
-      
-      // 상세 속성들을 컬럼으로 펼치기 위한 준비
-      const attrDetails = {}
+      let mismatchIds = []
       
       lnkAtts.forEach(lnk => {
         const mst = masterMap.get(lnk.ATT_ID)
-        const isDiff = mst && lnk.UOM_ID !== mst.UOM_ID
-        
-        if (isDiff) mismatchInfo.push(lnk.ATT_ID)
-        
-        // 그리드에 표시할 각 속성 데이터
-        attrDetails[`ATT_${lnk.ATT_ID}`] = {
-          UOM: lnk.UOM_ID,
-          MST_UOM: mst?.UOM_ID || '-',
-          IS_DIFF: isDiff
+        if (mst && lnk.UOM_ID !== mst.UOM_ID) {
+          mismatchIds.push(lnk.ATT_ID)
         }
       })
 
       return {
         ...reg,
-        CONDITION: mismatchInfo.length > 0 ? 'Mismatch' : 'Match',
-        DIFF_LIST: mismatchInfo.join(', '),
-        ...attrDetails
+        CONDITION: mismatchIds.length > 0 ? 'Mismatch' : 'Match',
+        DIFF_LIST: mismatchIds.join(', ')
       }
     })
 
     gridRowData.value = processed
   } catch (e) {
-    console.error(e)
-    sAlert.Error('데이터 조회 중 오류가 발생했습니다.')
+    sAlert.Error('데이터 조회 중 오류 발생')
   } finally {
     loading.value = false
-    if (gridApi.value) gridApi.value.hideOverlay()
+    gridApi.value?.hideOverlay()
   }
 }
 
 // --- 그리드 정의 ---
 const defaultColDef = { sortable: true, filter: true, resizable: true, floatingFilter: true }
-
 const columnDefs = computed(() => [
   { 
-    headerName: '상태', field: 'CONDITION', width: 100, pinned: 'left',
+    headerName: '상태', field: 'CONDITION', width: 110, pinned: 'left',
     cellRenderer: p => `<span class="badge bg-${p.value === 'Mismatch' ? 'danger' : 'success'}">${p.value}</span>`,
     cellStyle: { display: 'flex', alignItems: 'center', justifyContent: 'center' }
   },
-  { headerName: 'TYPE_ID', field: 'TYPE_ID', width: 180, pinned: 'left' },
-  { headerName: '다른값 유무', field: 'DIFF_LIST', width: 200, cellStyle: { color: '#dc3545', fontWeight: 'bold' } },
-  { headerName: 'Description', field: 'DESC', width: 250 },
-  // 여기에 필요 시 dynamic하게 속성 컬럼을 추가할 수 있습니다.
+  { headerName: 'TYPE_ID', field: 'TYPE_ID', width: 200, pinned: 'left', filter: 'agTextColumnFilter' },
+  { headerName: '다른값 속성 목록', field: 'DIFF_LIST', flex: 1, minWidth: 200, cellStyle: { color: '#dc3545', fontWeight: 'bold' } },
+  { headerName: 'Description', field: 'DESC', flex: 1.5, minWidth: 250 },
 ])
 
 const onGridReady = (params) => {
   gridApi.value = params.api
-  // 데이터가 이미 로드된 상태에서 그리드가 늦게 준비된 경우 대비
-  if (gridRowData.value.length > 0) params.api.setGridOption('rowData', gridRowData.value)
+  params.api.sizeColumnsToFit()
 }
 
-// --- 필터 로직 ---
+// --- 필터링 로직 ---
 const isExternalFilterPresent = () => attributeFilter.value.trim() !== ''
 const doesExternalFilterPass = (node) => {
   const kw = attributeFilter.value.toLowerCase()
-  return node.data.TYPE_ID?.toLowerCase().includes(kw) || node.data.DIFF_LIST?.toLowerCase().includes(kw)
+  return (node.data.TYPE_ID || '').toLowerCase().includes(kw) || (node.data.DIFF_LIST || '').toLowerCase().includes(kw)
 }
 
 watch(attributeFilter, () => gridApi.value?.onFilterChanged())
 </script>
 
 <style scoped>
-.custom-project-dropdown { width: 300px !important; }
-.custom-textarea-filter { width: 300px !important; font-size: 0.8rem; resize: none; }
-:deep(.ag-theme-alpine) { --ag-header-background-color: #f8f9fa; }
+/* 전체 레이아웃 고정 */
+.main-container {
+  height: 100vh;
+  overflow: hidden;
+}
+
+.control-header {
+  flex-shrink: 0; /* 헤더 영역 높이 고정 */
+}
+
+/* 프로젝트 드롭다운 UI 보정 */
+.custom-dropdown-container {
+  position: relative;
+}
+
+.project-btn {
+  width: 320px !important;
+  height: 35px;
+  overflow: hidden;
+}
+
+.project-menu {
+  width: 350px !important;
+  z-index: 1050;
+}
+
+.project-list-scroll {
+  max-height: 350px;
+  overflow-y: auto;
+}
+
+/* 필터 텍스트 영역 보정 */
+.custom-textarea-filter {
+  width: 320px !important;
+  font-size: 0.85rem;
+  resize: none;
+  min-height: 35px;
+}
+
+/* 그리드 래퍼 */
+.grid-wrapper {
+  position: relative;
+  width: 100%;
+}
+
+/* AG-Grid 테마 보정 */
+:deep(.ag-theme-alpine) {
+  --ag-header-background-color: #f8f9fa;
+  --ag-border-color: #dee2e6;
+}
+
+/* 뱃지 스타일 중앙 정렬 */
+:deep(.ag-cell) {
+  display: flex;
+  align-items: center;
+}
 </style>
