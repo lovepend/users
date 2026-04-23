@@ -1,3 +1,13 @@
+음 머가 많이 안되는 모양이야.. 
+
+기본 베이스인 아래의 로직을 넣어서 반영해보자.
+왜냐하면 너가 마지막으로 준 코드는 .. 유아이가 깨지고 다른 화면으로 갔을때 영향이 있어.
+아래의 조건에서 api 호출 register 하나더 해서 내부적으로 테이블 만들어서 grid에 뿌려주기만 하면 문제 없을꺼 같아.
+할수 있겠어?
+1. 프로젝트의 attribute와 register의 attribute의 uom_id 비교
+2. attribute의 uom_id 존재하나 register에 uom_id없을때 diff 표현 및 attribute , 로 다른값 표현 칼럼 / 추가적으로 상세 표현 칼럼까지.
+
+
 <template>
   <div class="d-flex flex-column h-100 bg-white">
     <div class="p-3 border-bottom shadow-sm bg-light">
