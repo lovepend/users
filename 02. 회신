@@ -1,1 +1,59 @@
 /api/AdapterDataMapping/Get
+
+
+[
+    {
+        "PROJ_NO": "TE1002",
+        "MAP_ID": "NEW_MAP_ID_",
+        "DESC": "Test101",
+        "CATEGORY": "BROKER",
+        "BYPASS": true,
+        "BYPASS_PUBLISH": false,
+        "REG_TYPE_ID": "101TEST",
+        "TOOL_ID": "SHIECMDB01",
+        "TOOL_TYPE": "APMS",
+        "SCOPES": [],
+        "MAP_CLS": {
+            "TOOL_ATT_NAME": "TOOLID",
+            "ITEMS": [
+                {
+                    "SEDP_OBJ_CLS_ID": "TEST101_CLS",
+                    "TOOL_VALS": "",
+                    "ISDEFALUT": true
+                },
+                {
+                    "SEDP_OBJ_CLS_ID": "TEST103_CLS",
+                    "TOOL_VALS": "",
+                    "ISDEFALUT": false
+                }
+            ]
+        },
+        "MAP_ATT": [
+            {
+                "SEDP_ATT_ID": "TAG_IDX",
+                "TOOL_ATT_NAME": "",
+                "KEY_YN": true,
+                "INOUT": null,
+                "DUE_DATE": null,
+                "OUT_DFLT_VAL": "",
+                "WRITE_EMPTY_ONLY": false
+            },
+            {
+                "SEDP_ATT_ID": "TAG_TYPE_ID",
+                "TOOL_ATT_NAME": "ID",
+                "KEY_YN": false,
+                "INOUT": null,
+                "DUE_DATE": null,
+                "OUT_DFLT_VAL": "",
+                "WRITE_EMPTY_ONLY": false
+            }
+        ],
+        "MAP_TMPLS": [],
+        "MAP_RELS": [],
+        "CRTER_NO": "52593271",
+        "CRTE_DTM": "2026-03-18T09:08:47.465+09:00",
+        "CHGER_NO": "52593279",
+        "CHGE_DTM": "2026-04-02T09:30:17.084+09:00",
+        "_id": "69b9ed0f704e77e06995c824"
+    }
+]
