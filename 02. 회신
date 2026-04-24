@@ -116,26 +116,25 @@ const dynamicCols = ref([])
 const urlEpId = computed(() => route.query.ep_id || '')
 const urlProjNo = computed(() => route.query.project_no || '')
 
+// 비교 대상 필드 (일반 문자열 및 배열/객체 포함)
 const COMPARE_FIELDS = [
   'DESC', 'REG_TYPE_ID', 'CATEGORY', 'TOOL_ID', 'TOOL_TYPE', 
   'MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS'
 ]
 
-// --- 유틸리티 ---
-const areEqual = (val1, val2) => {
-  if (typeof val1 === 'object' && val1 !== null && typeof val2 === 'object' && val2 !== null) {
-    return JSON.stringify(val1) === JSON.stringify(val2)
-  }
-  return String(val1 || '') === String(val2 || '')
-}
-
 // --- 프로젝트 선택 로직 ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
-  return projectList.value.filter(p => !kw || p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
+  return projectList.value.filter(
+    p => !kw || p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw))
+  )
 })
 
-const isAllSelected = computed(() => filteredProjectList.value.length > 0 && filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO)))
+const isAllSelected = computed(() =>
+  filteredProjectList.value.length > 0 &&
+  filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+)
+
 const isIndeterminate = computed(() => {
   const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
   return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
@@ -144,24 +143,43 @@ const isIndeterminate = computed(() => {
 const toggleAllSelection = e => {
   const checked = e.target.checked
   const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
-  selectedProjects.value = checked ? [...new Set([...selectedProjects.value, ...filteredIds])] : selectedProjects.value.filter(id => !filteredIds.includes(id))
+  selectedProjects.value = checked
+    ? [...new Set([...selectedProjects.value, ...filteredIds])]
+    : selectedProjects.value.filter(id => !filteredIds.includes(id))
 }
 
 onMounted(async () => {
   try {
-    const res = await axiosWrapper.get('/api/Project/Get', { headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value } })
+    const res = await axiosWrapper.get('/api/Project/Get', {
+      headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value },
+    })
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
   } catch (e) { console.error(e) }
 })
 
-// --- 데이터 조회 로직 ---
+/**
+ * 객체/배열 비교를 위한 유틸리티
+ * 순서에 상관없이 비교하려면 정렬이 필요할 수 있으나, 보통 API 결과의 일관성을 위해 단순 stringify 비교를 우선 사용합니다.
+ */
+const areEqual = (val1, val2) => {
+  if (typeof val1 === 'object' && val1 !== null && typeof val2 === 'object' && val2 !== null) {
+    return JSON.stringify(val1) === JSON.stringify(val2)
+  }
+  return String(val1 || '') === String(val2 || '')
+}
+
+// --- 데이터 조회 로직 (AdapterDataMapping 비교) ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
 
   try {
     const fetchPromises = selectedProjects.value.map(projNo =>
-      axiosWrapper.post('/api/AdapterDataMapping/Get', { ProjectNo: projNo }, { headers: { Projectno: projNo, Ep_id: urlEpId.value } }).catch(() => [])
+      axiosWrapper.post(
+        '/api/AdapterDataMapping/Get',
+        { ProjectNo: projNo },
+        { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
+      ).catch(() => [])
     )
 
     const results = await Promise.all(fetchPromises)
@@ -170,11 +188,19 @@ const onSearch = async () => {
     results.forEach((projectData, index) => {
       const currentProjNo = selectedProjects.value[index]
       if (!Array.isArray(projectData)) return
+
       projectData.forEach(item => {
-        if (!dataMap.has(item.MAP_ID)) dataMap.set(item.MAP_ID, { MAP_ID: item.MAP_ID, projects: {} })
+        if (!dataMap.has(item.MAP_ID)) {
+          dataMap.set(item.MAP_ID, { MAP_ID: item.MAP_ID, projects: {} })
+        }
+        
+        // 데이터 저장
         const projData = {}
-        COMPARE_FIELDS.forEach(field => { projData[field] = item[field] })
+        COMPARE_FIELDS.forEach(field => {
+          projData[field] = item[field]
+        })
         projData.EXIST = true
+        
         dataMap.get(item.MAP_ID).projects[currentProjNo] = projData
       })
     })
@@ -182,86 +208,110 @@ const onSearch = async () => {
     const processedData = Array.from(dataMap.values()).map(row => {
       let isDiff = false
       let diffDetails = []
-      if (Object.keys(row.projects).length !== selectedProjects.value.length) { isDiff = true; diffDetails.push('Exist') }
 
+      // 1. 존재 여부 비교
+      if (Object.keys(row.projects).length !== selectedProjects.value.length) {
+        isDiff = true
+        diffDetails.push('Exist')
+      }
+
+      // 2. 필드 값 비교 (배열/객체 포함)
       COMPARE_FIELDS.forEach(field => {
         const activeProjects = selectedProjects.value.filter(p => row.projects[p])
         if (activeProjects.length > 1) {
           const firstVal = row.projects[activeProjects[0]][field]
           const isFieldDiff = activeProjects.some(p => !areEqual(firstVal, row.projects[p][field]))
-          if (isFieldDiff) { isDiff = true; diffDetails.push(field) }
+          
+          if (isFieldDiff) {
+            isDiff = true
+            diffDetails.push(field)
+          }
         }
       })
 
-      const resultRow = { MAP_ID: row.MAP_ID, CONDITION: isDiff ? 'Diff' : 'Pass', DIFF_INFO: diffDetails.join(', ') }
-      selectedProjects.value.forEach(p => { resultRow[p] = row.projects[p] || { EXIST: false } })
+      const resultRow = {
+        MAP_ID: row.MAP_ID,
+        CONDITION: isDiff ? 'Diff' : 'Pass',
+        DIFF_INFO: diffDetails.join(', '),
+      }
+
+      selectedProjects.value.forEach(p => {
+        resultRow[p] = row.projects[p] || { EXIST: false }
+      })
+
       return resultRow
     })
 
     dynamicCols.value = [...selectedProjects.value]
     gridRowData.value = processedData
-  } catch (e) { sAlert.Error('조회 실패') }
-  finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
-}
-
-// --- 상세 조회 시 "틀린 항목만 추출" 하는 로직 ---
-const getDiffItemsOnly = (projNo, allProjs, rowData, field) => {
-  const currentVal = rowData[projNo]?.[field]
-  const otherProjs = allProjs.filter(p => p !== projNo && rowData[p]?.EXIST)
-  if (otherProjs.length === 0 || currentVal === undefined || currentVal === null) return ''
-
-  // 1. 배열인 경우 (MAP_ATT, MAP_TMPLS, MAP_RELS 등)
-  if (Array.isArray(currentVal)) {
-    // 배열 안의 객체들 중 다른 프로젝트들과 비교했을 때 하나라도 내용이 다른 것만 필터링
-    const diffOnlyArray = currentVal.filter(item => {
-      return otherProjs.some(op => {
-        const otherArray = rowData[op]?.[field] || []
-        // JSON 문자열 비교를 통해 완전히 일치하는 객체가 다른 프로젝트 배열에 있는지 확인
-        const itemStr = JSON.stringify(item)
-        return !otherArray.some(oi => JSON.stringify(oi) === itemStr)
-      })
-    })
-    return diffOnlyArray.length > 0 ? JSON.stringify(diffOnlyArray) : ''
+  } catch (e) {
+    sAlert.Error('조회 실패')
+  } finally {
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
-
-  // 2. 객체인 경우 (MAP_CLS 등)
-  if (typeof currentVal === 'object') {
-    const isObjDiff = otherProjs.some(op => JSON.stringify(rowData[op]?.[field]) !== JSON.stringify(currentVal))
-    return isObjDiff ? JSON.stringify(currentVal) : ''
-  }
-
-  // 3. 일반 문자열/기본 타입
-  const isStrDiff = otherProjs.some(op => String(rowData[op]?.[field] || '') !== String(currentVal))
-  return isStrDiff ? currentVal : ''
 }
 
 // --- 그리드 컬럼 설정 ---
 const columnDefs = computed(() => {
+  const multiFilterParams = { filters: [{ filter: 'agTextColumnFilter' }, { filter: 'agSetColumnFilter' }] }
+
   const cols = [
-    { headerName: 'Condition', field: 'CONDITION', width: 110, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' }) },
-    { headerName: 'Diff Info', field: 'DIFF_INFO', width: 140, pinned: 'left', cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' } },
-    { headerName: 'Mapping ID', field: 'MAP_ID', width: 200, pinned: 'left', filter: 'agMultiColumnFilter' },
+    {
+      headerName: 'Condition', field: 'CONDITION', width: 110, pinned: 'left',
+      filter: 'agMultiColumnFilter',
+      cellStyle: p => ({
+        color: p.value === 'Diff' ? '#dc3545' : '#198754',
+        fontWeight: 'bold', textAlign: 'center',
+        backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8',
+      }),
+    },
+    {
+      headerName: 'Diff Info', field: 'DIFF_INFO', width: 140, pinned: 'left',
+      filter: 'agMultiColumnFilter',
+      cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' },
+    },
+    {
+      headerName: 'Mapping ID', field: 'MAP_ID', width: 200, pinned: 'left',
+      filter: 'agMultiColumnFilter', filterParams: multiFilterParams,
+    },
   ]
 
   dynamicCols.value.forEach(proj => {
     const children = [
-      { headerName: 'Exist', valueGetter: p => (p.data[proj]?.EXIST ? 'Alive' : '-'), width: 80, cellStyle: { textAlign: 'center' }, cellRenderer: p => p.value === 'Alive' ? `<i class="fa fa-check-circle text-success"></i>` : `<span class="text-muted">-</span>` }
+      {
+        headerName: 'Exist',
+        valueGetter: p => (p.data[proj]?.EXIST ? 'Alive' : '-'),
+        width: 80,
+        cellStyle: { textAlign: 'center' },
+        cellRenderer: p => p.value === 'Alive' 
+          ? `<i class="fa fa-check-circle text-success"></i>` 
+          : `<span class="text-muted">-</span>`
+      }
     ]
 
     if (viewMode.value === 'detail') {
       COMPARE_FIELDS.forEach(field => {
         children.push({
           headerName: field,
-          valueGetter: p => getDiffItemsOnly(proj, dynamicCols.value, p.data, field),
+          valueGetter: p => {
+            const val = p.data[proj]?.[field]
+            if (val === undefined || val === null) return ''
+            return typeof val === 'object' ? JSON.stringify(val) : val
+          },
           width: 150,
           filter: 'agTextColumnFilter',
-          cellStyle: { color: '#dc3545' }, // 차이점은 붉은색 계열로 표시
-          tooltipValueGetter: p => p.value 
+          tooltipValueGetter: p => p.value // 긴 데이터 툴팁 표시
         })
       })
     }
-    cols.push({ headerName: `${proj}`, marryChildren: true, children: children })
+
+    cols.push({
+      headerName: `${proj}`,
+      marryChildren: true,
+      children: children,
+    })
   })
+
   return cols
 })
 
@@ -281,15 +331,20 @@ const gridOptions = computed(() => ({
 }))
 
 const onGridReady = p => { gridApi.value = p.api }
-watch([attributeFilter, viewMode], () => { if (gridApi.value) gridApi.value.onFilterChanged() })
+
+watch([attributeFilter, viewMode], () => {
+  if (gridApi.value) gridApi.value.onFilterChanged()
+})
 </script>
 
 <style scoped>
 .custom-project-dropdown { width: 300px !important; }
 .custom-textarea-filter { width: 300px !important; font-size: 0.8rem; resize: none; }
+
 .view-mode-toggle-container .btn-group { background-color: rgba(0, 0, 0, 0.05); }
 .toggle-label { border: none !important; color: #6c757d; font-weight: 600; transition: all 0.2s ease; font-size: 0.82rem; padding: 4px 16px; cursor: pointer; }
 .btn-check:checked + .toggle-label { background-color: #ffffff !important; color: #0d6efd !important; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
+
 :deep(.ag-header-group-cell) { background-color: #f8f9fa !important; font-weight: bold; border-right: 1px solid #dee2e6 !important; }
 :deep(.ag-theme-custom) { --ag-header-background-color: #f8f9fa; }
 </style>
