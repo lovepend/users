@@ -1,312 +1,386 @@
 <template>
-  <div class="main-layout">
-    <header class="main-header">
-      <div class="header-content">
-        <h1 class="header-title">컴포넌트 라이브러리 가이드</h1>
-        <div class="header-badges">
-          <span class="badge primary">Vue 3</span>
-          <span class="badge outline">Standard UI</span>
+  <div class="d-flex flex-column h-100 bg-white">
+    <div class="p-3 border-bottom shadow-sm bg-light">
+      <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-dark text-nowrap">Project No</span>
+            <div class="dropdown">
+              <button
+                class="btn btn-sm btn-outline-secondary dropdown-toggle custom-project-dropdown text-start d-flex justify-content-between align-items-center bg-white"
+                type="button"
+                data-bs-toggle="dropdown"
+                data-bs-auto-close="outside"
+              >
+                <span class="text-truncate me-2" style="max-width: 180px">
+                  {{ selectedProjNo || '프로젝트를 선택하세요' }}
+                </span>
+              </button>
+              <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 300px">
+                <li class="px-2 pb-2 border-bottom mb-1">
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    v-model="projSearchQuery"
+                    placeholder="검색..."
+                    @click.stop
+                  />
+                </li>
+                <li v-for="proj in filteredProjectOptions" :key="proj.value" class="dropdown-item px-2 py-1">
+                  <label class="form-check-label d-flex align-items-center w-100 cursor-pointer" @click="selectProject(proj.value)">
+                    <input
+                      type="radio"
+                      class="form-check-input me-2 mt-0"
+                      :checked="selectedProjNo === proj.value"
+                    />
+                    <span class="text-truncate fw-bold text-primary">{{ proj.text }}</span>
+                  </label>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-dark text-nowrap">조회 키워드</span>
+            <textarea
+              class="form-control form-control-sm custom-textarea-filter"
+              rows="1"
+              v-model="searchKeywordRef"
+              placeholder="Tag No... (공백/엔터 구분)"
+            ></textarea>
+          </div>
+          <button class="btn btn-sm btn-primary px-3 shadow-sm" @click="onSearch">
+            <i class="fa fa-search me-1"></i>조회
+          </button>
+        </div>
+
+        <div class="d-flex align-items-center gap-3">
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-success text-nowrap small"><i class="fa fa-filter"></i> 결과 내 검색</span>
+            <input
+              type="text"
+              class="form-control form-control-sm border-success"
+              style="width: 150px"
+              v-model="localFilterQuery"
+              placeholder="검색어 입력..."
+            />
+          </div>
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-primary text-nowrap small"><i class="fa fa-columns"></i> 컬럼 필터</span>
+            <input
+              type="text"
+              class="form-control form-control-sm border-primary"
+              style="width: 120px"
+              v-model="columnFilterQuery"
+              placeholder="컬럼명..."
+            />
+          </div>
         </div>
       </div>
-      
-      <nav class="quick-nav">
-        <a href="#section-title" class="nav-item">PageTitle</a>
-        <a href="#section-card" class="nav-item">Cards</a>
-        <a href="#section-form" class="nav-item">Forms</a>
-        <a href="#section-action" class="nav-item">Actions</a>
-      </nav>
-    </header>
+    </div>
 
-    <main class="content-body">
-      <div class="content-inner">
-        
-        <section id="section-title" class="content-section">
-          <div class="section-header">
-            <h2 class="section-label">PageTitle & Global Actions</h2>
-          </div>
-          <div class="demo-card">
-            <PageTitle icon="fa-lock" title="시스템 설정" style="width: 100%">
-              <template #sub-content>
-                <CheckBox
-                  id="cb-edit-mode"
-                  label="편집 활성화"
-                  v-model:value="checkDemo.agree"
-                />
-              </template>
-              <template #actions>
-                <div class="action-group">
-                  <InputBox
-                    id="in-search"
-                    placeholder="검색어를 입력하세요..."
-                    v-model:value="formDemo.inputText"
-                    icon="fa-search"
-                  />
-                  <SelectBox
-                    :list="formDemo.selectList"
-                    v-model:value="formDemo.selectId"
-                    placeholder="필터 선택"
-                  />
-                  <ButtonsComponent :buttons="buttonData0" @button-click="handleButtonClick" />
-                </div>
-              </template>
-            </PageTitle>
-          </div>
-        </section>
+    <div class="flex-grow-1 overflow-hidden">
+      <ag-grid-vue
+        v-bind="gridBindProps"
+        class="ag-theme-custom w-100 h-100"
+        @grid-ready="onGridReady"
+        @cell-clicked="onCellClicked"
+      />
+    </div>
 
-        <section id="section-card" class="content-section">
-          <div class="section-header">
-            <h2 class="section-label">Card View Examples</h2>
+    <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
+      <div class="custom-modal-window shadow-lg">
+        <div class="modal-header-dark">
+          <div class="d-flex align-items-center gap-2">
+            <span class="badge shadow-sm" :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }">
+              {{ selectedRow?.Source }}
+            </span>
+            <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
           </div>
-          <div class="card-grid">
-            <DefaultCard
-              :title="example1.title"
-              :tabs="example1.tabs"
-              v-model:active-tab="activeTab1"
-              @tab-change="onTabChange('재고', $event)"
-            >
-              <div class="card-content-box">
-                <div class="mini-table">
-                  <div class="mini-table-head">
-                    <span>코드</span><span>품목명</span><span>수량</span><span>상태</span>
-                  </div>
-                  <div v-for="row in miniRows" :key="row.code" class="mini-table-row">
-                    <span class="txt-code">{{ row.code }}</span>
-                    <span class="txt-name">{{ row.name }}</span>
-                    <span class="txt-num">{{ row.qty }}</span>
-                    <span :class="['status-pill', row.status === '정상' ? 'success' : 'warn']">
-                      {{ row.status }}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            </DefaultCard>
-
-            <DefaultCard title="데이터 요약" class="summary-card">
-              <template #header-right>
-                <SwitchBox :list="formDemo.switchListDisabled" v-model:value="formDemo.switchId2" />
-              </template>
-              <div class="placeholder-content">
-                <i class="fa fa-chart-line"></i>
-                <p>데이터 분석을 위해 탭을 선택해주세요.</p>
-              </div>
-            </DefaultCard>
+          <div class="d-flex gap-2">
+            <button class="btn btn-xs btn-outline-light" @click="isJsonMode = !isJsonMode">
+              {{ isJsonMode ? 'Table View' : 'JSON View' }}
+            </button>
+            <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
           </div>
-        </section>
-
-        <section id="section-form" class="content-section">
-          <div class="section-header">
-            <h2 class="section-label">Form Controls</h2>
+        </div>
+        <div class="modal-body-content overflow-hidden d-flex flex-column h-100">
+          <div v-if="isJsonMode" class="json-wrapper p-3 overflow-auto flex-grow-1">
+            <pre class="json-content"><code>{{ JSON.stringify(selectedRow, null, 2) }}</code></pre>
           </div>
-          <div class="form-row-grid">
-            <div class="input-field">
-              <label>텍스트 입력</label>
-              <InputBox v-model:value="formDemo.inputMemo" placeholder="메모를 남겨주세요." />
-            </div>
-            <div class="input-field">
-              <label>상태 선택</label>
-              <SelectBox :list="formDemo.selectList" v-model:value="formDemo.selectId" />
-            </div>
-            <div class="input-field">
-              <label>알림 설정</label>
-              <SwitchBox :list="formDemo.switchList" v-model:value="formDemo.switchId" />
-            </div>
+          <div v-else class="ag-theme-custom flex-grow-1 p-2">
+            <ag-grid-vue
+              style="width: 100%; height: 100%"
+              v-bind="modalGridBindProps"
+              :defaultColDef="{ resizable: true, sortable: true }"
+            />
           </div>
-        </section>
-
+        </div>
       </div>
-    </main>
+    </div>
   </div>
 </template>
 
 <script setup>
-/* 기존에 쓰시던 script 로직 그대로 붙여넣으시면 됩니다 */
-import { reactive, ref } from 'vue'
-import PageTitle from '@/components/toolBar/PageTitle.vue'
-import ButtonsComponent from '@/components/editors/button/ButtonsComponent.vue'
-import DefaultCard from '@/components/default/DefaultCard.vue'
-import CheckBox from '@/components/default/editors/CheckBox.vue'
-import SelectBox from '@/components/default/editors/SelectBox.vue'
-import InputBox from '@/components/default/editors/InputBox.vue'
-import SwitchBox from '@/components/default/editors/SwitchBox.vue'
+import { ref, computed, shallowRef, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sortBy } from 'lodash-es'
+import { useAppMenuStore } from '@/stores/app-menu'
+import { sAlert } from '@/utils/messages/alert-common'
+import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-// 데이터 및 이벤트 로직 (생략 - 기존 코드 유지)
-const activeTab1 = ref('list')
-const checkDemo = reactive({ agree: true })
-const formDemo = reactive({
-  inputText: '',
-  selectId: 'opt-1',
-  selectList: [{ id: 'opt-1', label: '옵션 01' }, { id: 'opt-2', label: '옵션 02' }],
-  switchList: [{ id: 'on', label: 'ON' }, { id: 'off', label: 'OFF' }],
-  switchListDisabled: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }]
+// AG Grid 스타일 임포트 (전역 오염 방지를 위해 최소화)
+import 'ag-grid-enterprise'
+import 'ag-grid-community/styles/ag-grid.css'
+
+const router = useRouter()
+const appMenu = useAppMenuStore()
+const { currentProjNo } = storeToRefs(appMenu)
+
+// --- 상태 관리 (A코드 로직 유지) ---
+const gridApi = shallowRef()
+const projectOptions = ref([])
+const selectedProjNo = ref('')
+const projSearchQuery = ref('')
+const searchKeywordRef = ref('')
+const localFilterQuery = ref('')
+const columnFilterQuery = ref('')
+const rawDataList = ref([])
+const dynamicAttCols = ref([])
+const dynamicRemainingCols = ref([])
+
+const showModal = ref(false)
+const selectedRow = ref(null)
+const isJsonMode = ref(false)
+
+// --- 데이터 페칭 및 처리 (A코드 로직 유지) ---
+const fetchProjectList = async () => {
+  try {
+    const res = await axiosWrapper.get('/api/Project/Get')
+    projectOptions.value = (res || []).map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
+    if (currentProjNo.value) selectedProjNo.value = currentProjNo.value
+  } catch (e) { console.error(e) }
+}
+
+const filteredProjectOptions = computed(() => {
+  if (!projSearchQuery.value.trim()) return projectOptions.value
+  return projectOptions.value.filter(p => p.text.toLowerCase().includes(projSearchQuery.value.toLowerCase()))
 })
-const buttonData0 = ref([{ id: 'save', text: '저장', color: 'var(--btn03)', icon: 'fa-save' }])
-const miniRows = [
-  { code: 'A01', name: '아이템 1', qty: 10, status: '정상' },
-  { code: 'A02', name: '아이템 2', qty: 0, status: '품절' }
-]
 
-const handleButtonClick = (e, id) => console.log(id)
-const onTabChange = (n, id) => console.log(n, id)
+const selectProject = val => { selectedProjNo.value = val }
+
+const onSearch = async () => {
+  if (!selectedProjNo.value) return sAlert.Warning('Project No를 선택하세요.')
+  gridApi.value?.setGridOption('loading', true)
+
+  try {
+    const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
+    let combined = []
+
+    for (const key of searchKeys) {
+      const payload = { ProjectNo: selectedProjNo.value, Keyword: key }
+      const [p, w] = await Promise.allSettled([
+        axiosWrapper.post('/api/Data/SearchPublishData', payload),
+        axiosWrapper.post('/api/Data/SearchWorkingData', payload),
+      ])
+      if (p.status === 'fulfilled' && p.value) {
+        const data = Array.isArray(p.value) ? p.value : [p.value]
+        combined.push(...data.map(i => ({ ...i, Source: 'Published' })))
+      }
+      if (w.status === 'fulfilled' && w.value) {
+        const data = Array.isArray(w.value) ? w.value : [w.value]
+        combined.push(...data.map(i => ({ ...i, Source: 'Working' })))
+      }
+    }
+
+    const allAttIds = new Set()
+    const allKeys = new Set()
+    const fixedKeys = ['Source', 'DELETED', 'TAG_IDX', 'TAG_NO', 'EP_ID', 'CLS_ID', 'ATTRIBUTES', '_id']
+
+    combined.forEach(item => {
+      ;(item.ATTRIBUTES || []).forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
+      Object.keys(item).forEach(k => { if (!fixedKeys.includes(k) && typeof item[k] !== 'object') allKeys.add(k) })
+    })
+
+    const processedData = combined.map(item => {
+      const flatItem = { ...item }
+      allAttIds.forEach(id => {
+        const target = (item.ATTRIBUTES || []).find(a => a?.ATT_ID === id)
+        flatItem[`ATT_${id}`] = target && target.VALUE !== null ? target.VALUE : 'null'
+      })
+      return flatItem
+    })
+
+    dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
+      headerName: id, field: `ATT_${id}`, minWidth: 130,
+      headerClass: 'att-column-header',
+      cellRenderer: highlightRenderer,
+      cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000' }),
+    }))
+
+    dynamicRemainingCols.value = Array.from(allKeys).sort().map(k => ({
+      headerName: k, field: k, minWidth: 150, cellRenderer: highlightRenderer
+    }))
+
+    rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
+  } catch (err) { sAlert.Error('조회 실패') }
+  finally { gridApi.value?.setGridOption('loading', false) }
+}
+
+const highlightRenderer = p => {
+  const val = p.value === null || p.value === undefined ? '' : String(p.value)
+  if (!val || !localFilterQuery.value.trim()) return val
+  const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
+  let text = val
+  kws.forEach(kw => {
+    const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    text = text.replace(new RegExp(`(${escapedKw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
+  })
+  return text
+}
+
+// --- 그리드 설정 (B코드의 UI 옵션 반영) ---
+const mainColDefs = computed(() => {
+  const baseCols = [
+    { headerName: '', width: 50, pinned: 'left', checkboxSelection: true, headerCheckboxSelection: true, sortable: false, filter: false },
+    { headerName: 'Source', field: 'Source', width: 110, pinned: 'left', 
+      cellRenderer: p => `<span class="badge shadow-sm" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;">${p.value}</span>`
+    },
+    { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
+    { field: 'TAG_IDX', headerName: 'Tag Idx', width: 220, pinned: 'left', cellRenderer: highlightRenderer },
+    { field: 'CLS_ID', headerName: 'Class', width: 140, pinned: 'left', cellRenderer: highlightRenderer,
+      cellStyle: { cursor: 'pointer', textDecoration: 'underline', color: '#0d6efd', fontWeight: 'bold' }
+    },
+    ...dynamicAttCols.value,
+    ...dynamicRemainingCols.value,
+  ]
+  return baseCols.filter(c => {
+    if (!columnFilterQuery.value.trim()) return true
+    if (!c.headerName || c.pinned) return true
+    return columnFilterQuery.value.toLowerCase().split(/[\s,\n]+/).filter(k=>k).some(kw => c.headerName.toLowerCase().includes(kw))
+  })
+})
+
+const gridBindProps = computed(() => ({
+  columnDefs: mainColDefs.value,
+  rowData: filteredData.value,
+  pagination: true,
+  paginationPageSize: 100,
+  rowSelection: 'multiple',
+  loadingOverlayComponent: AggridLoadingOverlay,
+  defaultColDef: {
+    sortable: true, filter: 'agTextColumnFilter', floatingFilter: true, resizable: true,
+    suppressFloatingFilterButton: true // B코드 스타일
+  },
+}))
+
+const filteredData = computed(() => {
+  if (!localFilterQuery.value.trim()) return rawDataList.value
+  const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
+  return rawDataList.value.filter(i => {
+    const target = `${i.TAG_NO || ''} ${i.TAG_IDX || ''} ${i.CLS_ID || ''} ${i.Source || ''}`.toLowerCase()
+    return kws.some(kw => target.includes(kw))
+  })
+})
+
+const onGridReady = p => { gridApi.value = p.api }
+
+const onCellClicked = async p => {
+  const colId = p.column.getColId()
+  if (colId === 'Source') {
+    selectedRow.value = p.data
+    showModal.value = true
+    isJsonMode.value = false
+  } else if (colId === 'CLS_ID' && p.value) {
+    // Class 정보 조회 로직 (A코드 유지)
+    sAlert.Info(`${p.value} 상세 정보를 조회합니다.`)
+  }
+}
+
+const modalGridBindProps = computed(() => {
+  if (!selectedRow.value) return { columnDefs: [], rowData: [] }
+  const rows = []
+  Object.entries(selectedRow.value).forEach(([k, v]) => {
+    if (k !== 'ATTRIBUTES' && !k.startsWith('ATT_') && k !== 'Source')
+      rows.push({ category: 'System', key: k, value: v ?? '-' })
+  })
+  if (Array.isArray(selectedRow.value.ATTRIBUTES)) {
+    selectedRow.value.ATTRIBUTES.forEach(a => rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' }))
+  }
+  return {
+    columnDefs: [
+      { headerName: 'Category', field: 'category', width: 120, pinned: 'left', cellStyle: { fontWeight: 'bold', background: '#f8f9fa' } },
+      { headerName: 'Property', field: 'key', width: 220 },
+      { headerName: 'Value', field: 'value', flex: 1 },
+    ],
+    rowData: rows,
+    headerHeight: 35, rowHeight: 32
+  }
+})
+
+const closeModal = () => { showModal.value = false; selectedRow.value = null; }
+
+onMounted(fetchProjectList)
 </script>
 
-<style scoped>
-/* 핵심 레이아웃 스타일 */
-.main-layout {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100vh;
-  background-color: #f4f7fa; /* 연한 배경색으로 컴포넌트 강조 */
-  color: #333;
+<style scoped lang="scss">
+/* B코드의 UI 철학을 담은 커스텀 테마 정의 */
+.ag-theme-custom {
+  --ag-header-background-color: #f1f5f9;
+  --ag-header-foreground-color: #334155;
+  --ag-border-color: #e2e8f0;
+  --ag-font-size: 12px;
+  --ag-row-hover-color: #f8fafc;
+  --ag-selected-row-background-color: #f1f5f9;
+
+  :deep(.ag-header-cell) { font-weight: 700; border-right: 1px solid #e2e8f0; }
+  :deep(.ag-cell) { border-right: 1px solid #f1f5f9; display: flex; align-items: center; }
+  
+  /* 필터 하이라이트 */
+  :deep(.filter-highlight) { background-color: #ffeb3b; color: #000; font-weight: bold; border-radius: 2px; }
+  
+  /* 동적 컬럼 헤더 스타일 */
+  :deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; }
+
+  /* B코드 스타일의 Floating Filter */
+  :deep(.ag-floating-filter-input) {
+    input { border: 1px solid #cbd5e1 !important; border-radius: 4px; padding: 2px 8px; font-size: 11px; }
+  }
 }
 
-.main-header {
-  background: #fff;
-  border-bottom: 1px solid #e1e4e8;
-  padding: 20px 40px 0;
-  z-index: 10;
+.custom-project-dropdown {
+  min-width: 200px;
+  border: 1px solid #cbd5e1;
+  &:hover { background-color: #f8fafc; }
 }
 
-.header-content {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 16px;
-}
-
-.header-title {
-  font-size: 20px;
-  font-weight: 700;
-  margin: 0;
-}
-
-.quick-nav {
-  display: flex;
-  gap: 24px;
-}
-
-.nav-item {
-  padding: 12px 4px;
-  font-size: 14px;
-  color: #666;
-  text-decoration: none;
-  border-bottom: 2px solid transparent;
+.custom-textarea-filter {
+  width: 200px;
+  resize: none;
+  border-radius: 4px;
+  border: 1px solid #cbd5e1;
   transition: all 0.2s;
+  &:focus { border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1); }
 }
 
-.nav-item:hover {
-  color: var(--primary-color, #4a90e2);
-  border-bottom-color: var(--primary-color, #4a90e2);
+/* 모달 레이아웃 (B코드 참조) */
+.custom-modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(15, 23, 42, 0.6); z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
 }
+.custom-modal-window {
+  background: #fff; width: 1100px; height: 85%; border-radius: 12px;
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.modal-header-dark {
+  background: #1e293b; color: #fff; padding: 14px 24px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.modal-body-content { flex: 1; background: #fff; }
+.json-wrapper { background: #f1f5f9; font-family: monospace; }
 
-.content-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 30px 40px;
-}
-
-.content-inner {
-  max-width: 1400px;
-  margin: 0 auto;
-}
-
-.content-section {
-  margin-bottom: 40px;
-}
-
-.section-label {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 16px;
-  color: #555;
-}
-
-.demo-card {
-  background: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-}
-
-/* 액션 그룹 (버튼, 인풋 등 나란히 배치) */
-.action-group {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* 카드 그리드 */
-.card-grid {
-  display: grid;
-  grid-template-columns: 1.5fr 1fr;
-  gap: 20px;
-}
-
-/* 미니 테이블 스타일 */
-.mini-table {
-  border: 1px solid #eee;
-  border-radius: 4px;
-}
-
-.mini-table-head {
-  display: grid;
-  grid-template-columns: 80px 1fr 60px 80px;
-  background: #f8f9fa;
-  padding: 10px;
-  font-weight: 600;
-  font-size: 13px;
-  border-bottom: 1px solid #eee;
-}
-
-.mini-table-row {
-  display: grid;
-  grid-template-columns: 80px 1fr 60px 80px;
-  padding: 10px;
-  border-bottom: 1px solid #f9f9f9;
-  font-size: 13px;
-  align-items: center;
-}
-
-.status-pill {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 10px;
-  text-align: center;
-}
-.status-pill.success { background: #e6f7ed; color: #1f8b4c; }
-.status-pill.warn { background: #fff4e5; color: #b76e00; }
-
-/* 폼 그리드 */
-.form-row-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 20px;
-  background: #fff;
-  padding: 24px;
-  border-radius: 8px;
-}
-
-.input-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.input-field label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #666;
-}
-
-.badge {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-.badge.primary { background: #4a90e2; color: #fff; }
-.badge.outline { border: 1px solid #4a90e2; color: #4a90e2; }
-
-@media (max-width: 1024px) {
-  .card-grid { grid-template-columns: 1fr; }
-}
+.cursor-pointer { cursor: pointer; }
 </style>
