@@ -1,325 +1,664 @@
+아래코드에서 Ag Gird 의 테이블에서 마우스 우클릭해서 Export 해서 엑셀로 다운로드 할때 화면에 보여주는 색상 폰트 그대로 내보내고 싶은데 
+확인해서 코드 수정해줘
+
+
 <template>
-  <div class="template__page panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
-    <PageTitle
-      class="template__page-head border-bottom shadow-sm bg-light"
-      icon="fa-search-plus"
-      :title="'Tag 통합 분석 및 속성 비교' + (selectedProjNo ? ` [ ${selectedProjNo} ]` : '')"
-    >
-      <template #actions>
-        <div class="d-flex align-items-center flex-wrap gap-3 ms-auto me-2">
-          <div class="d-flex align-items-center gap-2" style="min-width: 280px">
-            <span class="fw-bold text-dark text-nowrap">Project No</span>
-            <div class="flex-grow-1 dropdown custom-single-select">
-              <button
-                class="btn btn-sm btn-outline-secondary dropdown-toggle w-100 text-start d-flex justify-content-between align-items-center bg-white"
-                type="button"
-                data-bs-toggle="dropdown"
-              >
-                <span class="text-truncate" style="max-width: 180px">
-                  {{ selectedProjNo || '프로젝트를 선택하세요' }}
-                </span>
-              </button>
-              <ul class="dropdown-menu shadow-lg p-0" style="max-height: 450px; min-width: 260px; overflow: hidden; margin-top: 5px">
-                <li class="p-2 bg-light border-bottom">
-                  <input type="text" class="form-control form-control-sm" v-model="projSearchQuery" placeholder="검색..." @click.stop />
-                </li>
-                <div style="max-height: 350px; overflow-y: auto" class="py-1">
-                  <li v-for="proj in filteredProjectOptions" :key="proj.value">
-                    <div class="dropdown-item d-flex align-items-center gap-3 py-2 px-3 cursor-pointer" :class="{ 'active-proj': selectedProjNo === proj.value }" @click="selectProject(proj.value)">
-                      <input type="checkbox" class="form-check-input mt-0" :checked="selectedProjNo === proj.value" style="pointer-events: none" />
-                      <span class="text-nowrap">{{ proj.text }}</span>
-                    </div>
-                  </li>
-                </div>
-              </ul>
-            </div>
-          </div>
-
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-nowrap">조회 키워드</span>
-            <textarea class="form-control form-control-sm custom-input-width" style="height: 31px; resize: none" v-model="searchKeywordRef" placeholder="Tag No..."></textarea>
+  <div ref="_PageWrapperRef" class="panel panel-expandable m-0 p-0 h-100 position-relative">
+    <div class="panel-heading m-0 p-0">
+      <div class="w-100 h-100 d-block position-relative">
+        <div class="py-1 px-2 mb-1">
+          <label class="form-label m-0 text-blue cursor-pointer">
+            <input v-model="_IsChangesOnly" type="checkbox" class="form-check-input" />
+            Changes Only
           </label>
-          <button class="btn btn-xs btn-primary shadow-sm px-3" @click="onSearch">
-            <i class="fa fa-search me-1"></i>조회
-          </button>
-
-          <div class="ms-2 ps-3 border-start d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap small"><i class="fa fa-filter"></i> 결과</span>
-            <input type="text" class="form-control form-control-sm border-success custom-input-width" v-model="localFilterQuery" placeholder="결과 내 검색" />
-          </div>
-          <div class="ms-1 d-flex align-items-center gap-2">
-            <span class="fw-bold text-primary text-nowrap small"><i class="fa fa-columns"></i> 컬럼</span>
-            <textarea class="form-control form-control-sm border-primary custom-input-width" style="height: 31px; resize: none" v-model="columnFilterQuery" placeholder="컬럼명..."></textarea>
-          </div>
-        </div>
-      </template>
-    </PageTitle>
-
-    <div class="template__stack flex-grow-1 overflow-hidden m-0 p-0 h-100 border-top">
-      <ag-grid-vue
-        v-bind="gridBindProps"
-        class="ag-theme-alpine ag-theme-custom w-100 h-100"
-        @grid-ready="onGridReady"
-        @cell-clicked="onCellClicked"
-      />
-    </div>
-
-    <div v-if="showModal" class="custom-modal-overlay" @click.self="closeModal">
-      <div class="custom-modal-window shadow-lg">
-        <div class="modal-header-dark">
-          <div class="d-flex align-items-center gap-2">
-            <span class="badge shadow-sm" :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }">{{ selectedRow?.Source }}</span>
-            <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
-          </div>
-          <div class="d-flex gap-2">
-            <button class="btn btn-xs btn-outline-light" @click="isJsonMode = !isJsonMode">
-              {{ isJsonMode ? 'Table View' : 'JSON View' }}
-            </button>
-            <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
-          </div>
-        </div>
-        <div class="modal-body-content overflow-hidden d-flex flex-column h-100">
-          <div v-if="isJsonMode" class="json-wrapper p-3 overflow-auto flex-grow-1">
-            <pre class="json-content"><code>{{ JSON.stringify(selectedRow, null, 2) }}</code></pre>
-          </div>
-          <div v-else class="modal-grid-container ag-theme-alpine ag-theme-custom flex-grow-1 p-2">
-            <ag-grid-vue
-              style="width: 100%; height: 100%;"
-              :columnDefs="modalGridBindProps.columnDefs"
-              :rowData="modalGridBindProps.rowData"
-              :headerHeight="35"
-              :rowHeight="32"
-              :defaultColDef="{ resizable: true, sortable: true }"
-            />
-          </div>
         </div>
       </div>
     </div>
+    <div class="panel-body p-0 h-100">
+      <ag-grid-vue class="w-100 h-100" v-bind="_GridBindProps" v-on="_GridOnProps" />
+    </div>
   </div>
 </template>
-
 <script setup>
-  import { ref, computed, shallowRef, onMounted } from 'vue'
+  import { onMounted, watch, unref, shallowRef, ref, computed, getCurrentInstance } from 'vue'
+  import { format as fns_format } from 'date-fns'
+  import { useRoute } from 'vue-router'
   import { storeToRefs } from 'pinia'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sortBy } from 'lodash-es'
+
+  import { useAppAuthenticationStore } from '@/stores/app-authentication'
   import { useAppMenuStore } from '@/stores/app-menu'
+  import { useEmployees } from '@/stores/app-employees'
+
   import { sAlert } from '@/utils/messages/alert-common'
-  import PageTitle from '@/components/toolBar/PageTitle.vue'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+  import { ApiCommon } from '@/utils/axios/api-common'
+  import { useContentLoading } from '@/composables/useContentLoading'
+  import { createBaseInformation } from '@/utils/baseInformation/base-attribute'
+  import global from '@/constants/enums/global'
 
-  import 'ag-grid-enterprise'
-  import 'ag-grid-community/styles/ag-grid.css'
-  import 'ag-grid-community/styles/ag-theme-alpine.css'
+  const _Field = global.field
+  const { selectMenu } = storeToRefs(useAppMenuStore())
+  const { userInfo } = storeToRefs(useAppAuthenticationStore())
+  const { getEmployeeById, getNameDeptKey } = useEmployees()
+  const route = useRoute()
 
-  const appMenu = useAppMenuStore()
-  const { currentProjNo } = storeToRefs(appMenu)
+  ///////////////////////////////////////////////////////////////////////////////
+  //#region import Component, Modal 사용시 필수 설정
+  defineOptions({ name: 'CompareRevisions' })
+  // const _Attrs = useAttrs();
+  // const _Emits = defineEmits([]);
+  const _Props = defineProps({
+    title: { type: [String, Object], required: false, default: null },
+    proj_no: { type: [String, Object], required: false, default: null },
+    reg_type_id: { type: [String, Object], required: false, default: null },
+    revisions: { type: [Object], required: false, default: null },
 
-  const gridApi = shallowRef()
-  const projectOptions = ref([])
-  const selectedProjNo = ref('')
-  const projSearchQuery = ref('')
-  const searchKeywordRef = ref('')
-  const localFilterQuery = ref('')
-  const columnFilterQuery = ref('')
-  const rawDataList = ref([])
-  const dynamicAttCols = ref([])
-  const dynamicRemainingCols = ref([])
-
-  const showModal = ref(false)
-  const selectedRow = ref(null)
-  const isJsonMode = ref(false)
-
-  // --- 비즈니스 로직 유지 ---
-  const fetchProjectList = async () => {
-    try {
-      const res = await axiosWrapper.get('/api/Project/Get')
-      projectOptions.value = (res || []).map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
-      if (currentProjNo.value) selectedProjNo.value = currentProjNo.value
-    } catch (e) { console.error(e) }
-  }
-
-  const filteredProjectOptions = computed(() => {
-    const query = projSearchQuery.value.trim().toLowerCase()
-    return query ? projectOptions.value.filter(p => p.text.toLowerCase().includes(query)) : projectOptions.value
+    // Auto Created by Modal Wrapper
+    var_isModal: { type: [Boolean], required: false, default: null },
+    fn_onActionApply: { type: [Function], required: false, default: null },
+    fn_onActionClose: { type: [Function], required: false, default: null },
+    fn_onShowOverlay: { type: [Function], required: false, default: null },
+    fn_onHideOverlay: { type: [Function], required: false, default: null },
+    fn_onSetAutoHeight: { type: [Function], required: false, default: null },
   })
 
-  const selectProject = val => { selectedProjNo.value = val }
+  const _PageWrapperRef = shallowRef(null)
+  const _IsModalPage = _Props.var_isModal ?? false
+  const _IsOwnerPage = (() => {
+    const cur = getCurrentInstance()?.type
+    return !cur?.__prop && cur?.__name === useRoute().matched[0]?.components.default?.__name
+  })()
+  const onSetAutoHeight = function () {
+    const { fn_onSetAutoHeight: fn } = _Props
+    if (fn && typeof fn?.call === 'function') {
+      return fn.call(this)
+    }
+  }
+  const onShowOverlay = function () {
+    const { fn_onShowOverlay: fn } = _Props
+    if (fn && typeof fn?.call === 'function') {
+      return fn.call(this)
+    }
+    const pageWrapper = _PageWrapperRef.value
+    useContentLoading.startLoading(pageWrapper ? { target: pageWrapper } : null)
+  }
+  const onHideOverlay = function () {
+    const { fn_onHideOverlay: fn } = _Props
+    if (fn && typeof fn?.call === 'function') {
+      return fn.call(this)
+    }
+    useContentLoading.stopLoading()
+  }
+  const onActionClose = function () {
+    const { fn_onActionClose: fn } = _Props
+    if (fn && typeof fn?.call === 'function') {
+      return fn.call(this)
+    }
+    // if (_IsOwnerPage) { self.close(); }
+  }
+  const onActionApply = function (data) {
+    const { fn_onActionApply: fn } = _Props
+    if (fn && typeof fn?.call === 'function') {
+      return fn.call(this, data)
+    }
+    // if (_IsOwnerPage) { self.close(); }
+  }
+  const onClickClose = function () {
+    onActionClose()
+  }
+  const onClickApply = function () {
+    onActionClose()
+  }
+  defineExpose({ onClickApply, onClickClose }) //Modal Wrapper에서 사용
+  //#endregion import Component, Modal 사용시 필수 설정
+  ///////////////////////////////////////////////////////////////////////////////
 
-  const onSearch = async () => {
-    if (!selectedProjNo.value) return sAlert.Warning('Project No를 선택하세요.')
-    if (gridApi.value) gridApi.value.setGridOption('loading', true)
+  ///////////////////////////////////////////////////////////////////////////////
+  //#region Received - Props
+  const _CurrProjNoRef = computed(() => {
+    if (_IsModalPage || !_IsOwnerPage) {
+      return unref(_Props.proj_no)
+    }
+    return route.query?.proj_no
+  })
+  const _CurrRegTypeIdRef = computed(() => {
+    if (_IsModalPage || !_IsOwnerPage) {
+      return unref(_Props.reg_type_id)
+    }
+    return route.query?.reg_type_id
+  })
+  const _CurrRevisionsRef = computed(() => {
+    if (_IsModalPage || !_IsOwnerPage) {
+      return unref(_Props.revisions)
+    }
+    return route.query?.revisions
+  })
+  const _CurrTitleRef = computed(() => {
+    if (_IsModalPage || !_IsOwnerPage) {
+      return unref(_Props.title)
+    }
+    return selectMenu.value?.NAME
+  })
+  watch(_CurrProjNoRef, item => {
+    onInitialize()
+  })
+  watch(_CurrRegTypeIdRef, item => {
+    onInitialize()
+  })
+  watch(_CurrRevisionsRef, item => {
+    onInitialize(true)
+  })
+  //#endregion Received - Props
+  ///////////////////////////////////////////////////////////////////////////////
 
+  /************************************
+   * 	LIFECYCLE
+   * ***********************************/
+  onMounted(() => {
+    if (sAlert?.isVisible()) {
+      sAlert.close()
+    }
+
+    const projNo = _CurrProjNoRef.value
+    const regId = _CurrRegTypeIdRef.value
+    const empty = [!projNo && 'Project', !regId && 'Register'].filter(Boolean).join(' and ')
+    if (empty) {
+      // sAlert.Warning(`${empty} is Empty`);
+      // onActionClose();
+    } else {
+      onInitialize()
+    }
+  })
+
+  /************************************
+   * 	GLOBAL
+   * ***********************************/
+  const _Revision1Ref = computed(() => {
+    const revs = _CurrRevisionsRef.value
+    if (!revs) {
+      return null
+    }
     try {
-      const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
-      let combined = []
+      const revInfo = revs[0]
+      if (!revInfo.REV_NO || !revInfo.REV) {
+        return null
+      }
+      return revInfo
+    } catch {
+      return null
+    }
+  })
+  const _Revision2Ref = computed(() => {
+    const revs = _CurrRevisionsRef.value
+    if (!revs) {
+      return null
+    }
+    try {
+      const revInfo = revs[1]
+      if (!revInfo.REV_NO || !revInfo.REV) {
+        return null
+      }
+      return revInfo
+    } catch {
+      return null
+    }
+  })
+  const _BaseColsRef = shallowRef([])
+  const _BaseAttrRef = shallowRef({})
 
-      for (const key of searchKeys) {
-        const payload = { ProjectNo: selectedProjNo.value, Keyword: key }
-        const [p, w] = await Promise.allSettled([
-          axiosWrapper.post('/api/Data/SearchPublishData', payload),
-          axiosWrapper.post('/api/Data/SearchWorkingData', payload),
-        ])
-        if (p.status === 'fulfilled' && p.value) {
-          const data = Array.isArray(p.value) ? p.value : [p.value]
-          combined.push(...data.map(i => ({ ...i, Source: 'Published' })))
+  const _Rev1DataIdxRef = shallowRef({})
+  const _Rev2DataIdxRef = shallowRef({})
+  const _OrgDataListRef = shallowRef([])
+  const _ModDataListRef = shallowRef([])
+  const _IsChangesOnly = shallowRef(true)
+  watch(_IsChangesOnly, item => {
+    onShowChangesData(item)
+  })
+
+  /************************************
+   * 	GRID PROPS
+   * ***********************************/
+  const _GridRef = shallowRef(null)
+  const _DataListRef = shallowRef([])
+  const _ColDefsRef = ref([])
+  const _DefaultCols = [
+    { field: '_CHG_STATUS', headerName: 'Changed' },
+    { field: _Field.REV_NO, headerName: 'Revision No' },
+    { field: _Field.REV, headerName: 'Revision', hide: true },
+    { field: _Field.VER, headerName: 'Version', hide: true },
+    { field: 'STAGE', headerName: 'Stage', hide: false },
+    { field: 'REASON', headerName: 'Reason', hide: false },
+  ]
+
+  /************************************
+   * 	GRID BIND OBJECT
+   * ***********************************/
+  const makeCellClass = function (params) {
+    const data = params.data
+    const value = params.value
+    const attId = params.column.colId
+    const classes = ['align-content-center', 'border-0']
+    const statId = '_CHG_STATUS'
+    const status = data?.[statId]
+    const empty = (value ?? '') == '' ? '_Empty' : ''
+    if (attId === statId) {
+      classes.push('text-center')
+      classes.push('sback_Status')
+      switch (status) {
+        case 'A':
+          classes.push(`sfore_A${empty}`)
+          break
+        case 'D':
+          classes.push(`sfore_D${empty}`)
+          break
+        case 'M':
+          classes.push(`sfore_M${empty}`)
+          break
+      }
+    } else {
+      // makeCellRenderer에서 진행
+      // switch (status) {
+      //   case 'A': classes.push(`sfore_A${empty}`, `sback_A${empty}`); break;
+      //   case 'D': classes.push(`sfore_D${empty}`, `sback_D${empty}`); break;
+      //   case 'M':
+      //     const tagIdx = data[_Field.TAG_IDX];
+      //     const data1  = _Rev1DataIdxRef.value?.[tagIdx];
+      //     const data2  = _Rev2DataIdxRef.value?.[tagIdx];
+      //     const val1   = data1?.[attId] ?? '';
+      //     const val2   = data2?.[attId] ?? '';
+      //     const isDiff = val1 !== val2;
+      //     if (isDiff) { classes.push(`sfore_M${empty}`, `sback_M${empty}`); }
+      //   break;
+      // }
+    }
+    return classes
+  }
+  const makeCellRenderer = function (params) {
+    const data = params.data
+    const value = params.value ?? ''
+    const attId = params.column.colId
+    const statId = '_CHG_STATUS'
+    const status = data?.[statId]
+    const tagIdx = data?.[_Field.TAG_IDX]
+    const empty = (value ?? '') == '' ? '_Empty' : ''
+    if (!data || !tagIdx) {
+      return value
+    }
+    if (attId === statId || attId === _Field.TAG_IDX) {
+      return value
+    }
+
+    //배경색 X
+    const exceptBackIds = [
+      _Field.REV_NO,
+      _Field.REV,
+      _Field.VER,
+      _Field.CRTE_DTM,
+      _Field.CHGE_DTM,
+      _Field.DEL_DTM,
+      'STAGE',
+      'REASON',
+    ]
+    const exceptForeIds = [_Field.CRTE_DTM, _Field.CHGE_DTM, _Field.DEL_DTM]
+    const isNotBg = exceptBackIds.includes(attId)
+    const isNotFc = exceptForeIds.includes(attId)
+    const data1 = _Rev1DataIdxRef.value?.[tagIdx]
+    const data2 = _Rev2DataIdxRef.value?.[tagIdx]
+    let val1 = data1?.[attId] ?? ''
+    let val2 = data2?.[attId] ?? ''
+    let isDiff = val1 !== val2
+    let fcClass = ''
+    let bgClass = ''
+    if (attId === _Field.PIC_NO || attId === _Field.CRTER_NO || attId === _Field.CHGER_NO) {
+      const keyInfo = getNameDeptKey(attId)
+      const name1 = data1?.[keyInfo.NAME] ?? ''
+      const dept1 = data1?.[keyInfo.DEPT] ?? ''
+      const name2 = data2?.[keyInfo.NAME] ?? ''
+      const dept2 = data2?.[keyInfo.DEPT] ?? ''
+      val1 = `${name1}(${dept1})`
+      val2 = `${name2}(${dept2})`
+      if (!data1) {
+        val1 = ''
+      }
+      if (!data2) {
+        val2 = ''
+      }
+    }
+
+    if (status === 'A' || status === 'D') {
+      fcClass = `sfore_${status}${empty}`
+      bgClass = `sback_${status}${empty}`
+    } else {
+      if (isDiff) {
+        if (!isNotFc) {
+          fcClass = `sfore_M${empty}`
         }
-        if (w.status === 'fulfilled' && w.value) {
-          const data = Array.isArray(w.value) ? w.value : [w.value]
-          combined.push(...data.map(i => ({ ...i, Source: 'Working' })))
+        if (!isNotBg) {
+          bgClass = `sback_M${empty}`
         }
       }
-
-      const allAttIds = new Set()
-      const allKeys = new Set()
-      const fixedKeys = ['Source', 'DELETED', 'TAG_IDX', 'TAG_NO', 'EP_ID', 'CLS_ID', 'ATTRIBUTES', '_id']
-
-      combined.forEach(item => {
-        ;(item.ATTRIBUTES || []).forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
-        Object.keys(item).forEach(k => { if (!fixedKeys.includes(k) && typeof item[k] !== 'object') allKeys.add(k) })
-      })
-
-      const processedData = combined.map(item => {
-        const flatItem = { ...item }
-        allAttIds.forEach(id => {
-          const target = (item.ATTRIBUTES || []).find(a => a?.ATT_ID === id)
-          flatItem[`ATT_${id}`] = target && target.VALUE !== null ? target.VALUE : 'null'
-        })
-        return flatItem
-      })
-
-      dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
-        headerName: id, field: `ATT_${id}`, minWidth: 130,
-        headerClass: 'att-column-header',
-        cellRenderer: highlightRenderer,
-        cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000' }),
-      }))
-
-      dynamicRemainingCols.value = Array.from(allKeys).sort().map(k => ({
-        headerName: k, field: k, minWidth: 150, cellRenderer: highlightRenderer,
-      }))
-
-      rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
-    } catch (err) { sAlert.Error('조회 실패') } finally {
-      if (gridApi.value) gridApi.value.setGridOption('loading', false)
     }
+    return `
+    <div class="position-absolute top-0 bottom-0 start-0 end-0">
+      <span class="d-block h-25px px-1 ${fcClass} ${bgClass}">${val1}</span>
+      <span class="d-block h-25px px-1">${val2}</span>
+    </div>
+  `
   }
-
-  const highlightRenderer = p => {
-    const val = String(p.value ?? '')
-    if (!val || !localFilterQuery.value.trim()) return val
-    const kws = localFilterQuery.value.split(/[\s,\n]+/).filter(k => k)
-    let text = val
-    kws.forEach(kw => {
-      const escapedKw = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-      text = text.replace(new RegExp(`(${escapedKw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
-    })
-    return text
-  }
-
-  const gridBindProps = computed(() => ({
-    columnDefs: [
-      { headerName: '', width: 50, pinned: 'left', checkboxSelection: true, headerCheckboxSelection: true, sortable: false, filter: false, floatingFilter: false },
-      { headerName: 'Source', field: 'Source', width: 110, pinned: 'left', cellRenderer: p => `<span class="badge shadow-sm" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;">${p.value}</span>` },
-      { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-      { field: 'CLS_ID', headerName: 'Class', width: 140, pinned: 'left', cellRenderer: highlightRenderer },
-      ...dynamicAttCols.value,
-      ...dynamicRemainingCols.value,
-    ].filter(c => {
-      if (!columnFilterQuery.value.trim() || c.pinned) return true
-      const kws = columnFilterQuery.value.toLowerCase().split(/[\s,\n]+/).filter(k => k)
-      return kws.some(kw => c.headerName?.toLowerCase().includes(kw))
-    }),
-    rowData: filteredData.value,
-    pagination: true,
-    paginationPageSize: 100,
-    loadingOverlayComponent: AggridLoadingOverlay,
-    defaultColDef: { sortable: true, filter: 'agTextColumnFilter', floatingFilter: true, resizable: true },
-  }))
-
-  const filteredData = computed(() => {
-    if (!localFilterQuery.value.trim()) return rawDataList.value
-    const kws = localFilterQuery.value.toLowerCase().split(/[\s,\n]+/).filter(k => k)
-    return rawDataList.value.filter(i => {
-      const target = `${i.TAG_NO || ''} ${i.CLS_ID || ''}`.toLowerCase()
-      return kws.some(kw => target.includes(kw))
-    })
-  })
-
-  const onGridReady = p => { gridApi.value = p.api }
-  const onCellClicked = p => { if (p.column.getColId() === 'Source') { selectedRow.value = p.data; showModal.value = true; } }
-
-  const modalGridBindProps = computed(() => {
-    if (!selectedRow.value) return { columnDefs: [], rowData: [] }
-    const rows = []
-    Object.entries(selectedRow.value).forEach(([k, v]) => {
-      if (k !== 'ATTRIBUTES' && !k.startsWith('ATT_') && k !== 'Source')
-        rows.push({ category: 'System', key: k, value: v ?? '-' })
-    })
-    if (Array.isArray(selectedRow.value.ATTRIBUTES)) {
-      selectedRow.value.ATTRIBUTES.forEach(a => rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' }))
-    }
-    return {
-      columnDefs: [
-        { headerName: 'Category', field: 'category', width: 120, pinned: 'left', cellStyle: { fontWeight: 'bold', background: '#f8f9fa' } },
-        { headerName: 'Property', field: 'key', width: 220 },
-        { headerName: 'Value', field: 'value', flex: 1 },
+  const _GridBindProps = ref({
+    columnDefs: _ColDefsRef,
+    rowData: _DataListRef,
+    getRowId: params => {
+      return params.data?.TAG_IDX
+    },
+    rowHeight: 50,
+    class: 'ag-theme-custom',
+    statusBar: {
+      statusPanels: [
+        { statusPanel: 'agTotalRowCountComponent' },
+        { statusPanel: 'agFilteredRowCountComponent' },
+        { statusPanel: 'agSelectedRowCountComponent' },
       ],
-      rowData: rows,
-    }
+    },
+    rowSelection: 'single',
+    defaultColDef: {
+      hide: false,
+      cellClass: makeCellClass,
+      cellRenderer: makeCellRenderer,
+      editable: false,
+      minWidth: 80,
+      filter: 'agMultiColumnFilter',
+      floatingFilter: true,
+      filterParams: {
+        maxNumConditions: 2,
+        numAlwaysVisibleConditions: 2,
+        defaultJoinOperator: 'OR',
+      },
+    },
+    autoSizeStrategy: {
+      type: 'fitCellContents',
+    },
+    suppressRowTransform: true,
+    pagination: false,
+    rowDragManaged: true,
+    rowMultiSelectWithClick: false,
+    columnHoverHighlight: true,
+    suppressRowClickSelection: true,
+    suppressLastEmptyLineOnPaste: true,
+    undoRedoCellEditing: true,
+    undoRedoCellEditingLimit: 20,
   })
+  const _GridOnProps = {
+    gridReady: params => {
+      _GridRef.value = params.api
+    },
+  }
 
-  const closeModal = () => { showModal.value = false; selectedRow.value = null; }
-  onMounted(fetchProjectList)
+  /************************************
+   * 	FUNCTIONS
+   * ***********************************/
+  const onInitialize = async function (DATA_UPDATE) {
+    try {
+      onShowOverlay()
+      const projNo = _CurrProjNoRef.value
+      const regId = _CurrRegTypeIdRef.value
+      const rev1Info = _Revision1Ref.value
+      const rev2Info = _Revision2Ref.value
+      const empty = [!projNo && 'Project', !regId && 'Register', (!rev1Info || !rev2Info) && 'Revision Information']
+        .filter(Boolean)
+        .join(' and ')
+      if (!projNo || !regId || !rev1Info || !rev2Info) {
+        throw new Error(`${empty} is Empty`)
+      }
+
+      _DataListRef.value = []
+      const colDefs = _ColDefsRef.value ?? []
+      if (!DATA_UPDATE || colDefs.length === 0) {
+        const baseMaster = await createBaseInformation(projNo, regId, false, false)
+        _BaseColsRef.value = baseMaster.getBaseColsByReg(projNo, regId)
+        _BaseAttrRef.value = baseMaster.getBaseAttrByReg(projNo, regId)
+        createColDefs()
+      }
+      await setRevisionData(1)
+      await setRevisionData(2)
+      await getCompareData()
+    } catch (error) {
+      _ColDefsRef.value = []
+      _BaseColsRef.value = []
+      _BaseAttrRef.value = {}
+      _DataListRef.value = []
+
+      _Rev1DataIdxRef.value = {}
+      _Rev2DataIdxRef.value = {}
+      _OrgDataListRef.value = []
+      _ModDataListRef.value = []
+      sAlert.Error(`Failed to Load - ${error.message}`)
+    } finally {
+      onHideOverlay()
+    }
+  }
+  const createColDefs = function () {
+    const baseCols = _BaseColsRef.value ?? []
+    const baseColDefs = baseCols.map(item => {
+      const attId = item.ATT_ID
+      const desc = item.DESC
+      const define = { field: attId, headerName: desc }
+      switch (attId) {
+        case _Field._ID:
+        case _Field.PROJ_NO:
+        case _Field.REG_TYPE_ID:
+          Object.assign(define, { hide: true })
+          break
+        case _Field.PIC_NO:
+        case _Field.CRTER_NO:
+        case _Field.CHGER_NO:
+          Object.assign(define, {
+            filterValueGetter: params => {
+              const data = params.data
+              const keyInfo = getNameDeptKey(attId)
+              const name = data[keyInfo.NAME] ?? ''
+              const dept = data[keyInfo.DEPT] ?? ''
+              return `${name}(${dept})`
+            },
+          })
+          break
+      }
+      return define
+    })
+
+    _ColDefsRef.value = _DefaultCols.concat(baseColDefs)
+  }
+  const setRevisionData = async function (REV_NUM) {
+    try {
+      const revNum = REV_NUM
+      if (revNum !== 1 && revNum !== 2) {
+        throw new Error(`Invalid Revision Sequence`)
+      }
+
+      const projNo = _CurrProjNoRef.value
+      const regId = _CurrRegTypeIdRef.value
+      const revInfo = revNum === 1 ? _Revision1Ref.value : _Revision2Ref.value
+      const empty = [!projNo && 'Project', !regId && 'Register', !revInfo && 'Revision Information']
+        .filter(Boolean)
+        .join(' and ')
+      if (!projNo || !regId || !revInfo) {
+        throw new Error(`${empty} is Empty`)
+      }
+
+      const revNo = revInfo.REV_NO
+      const rev = revInfo.REV
+      const ver = revInfo.VER ?? ''
+      const stage = revInfo.STAGE ?? ''
+      const reason = revInfo.REASON ?? ''
+
+      const baseAttr = _BaseAttrRef.value
+      const newDataIndex = {}
+      const response =
+        (await ApiCommon.postDataGetRevData({
+          ProjectNo: projNo,
+          REG_TYPE_ID: regId,
+          Revision: rev,
+          Version: ver,
+        })) ?? []
+      for (let i = 0, is = response.length; i < is; i++) {
+        const dataItem = response[i]
+        const tagIdx = dataItem.TAG_IDX
+        const newDataItem = {}
+        const dataIds = Object.keys(dataItem)
+        for (let j = 0, js = dataIds.length; j < js; j++) {
+          const dataId = dataIds[j]
+          const dataVal = dataItem[dataId]
+          if (dataId === _Field.ATTRIBUTES) {
+            ;(dataVal ?? []).forEach(attr => {
+              const attId = attr.ATT_ID
+              if (dataIds.includes(attId)) {
+                return
+              }
+              const attVal = attr.VALUE
+              const baseInfo = baseAttr[attId]
+              const isCaseOrg = baseInfo?.isCaseOrg
+              const valType = baseInfo?.VAL_TYPE
+              // const isBool    = valType === 'BOOL';
+              const isBool = false //BOOL(Check Box) 미사용
+              if (isCaseOrg) {
+                const caseInfo = baseInfo.CASE_INFO
+                const prntAttId = caseInfo?.PRNT_ATT_ID
+                const values = caseInfo?.CASELIST ?? []
+                const prntVal = dataItem[prntAttId]
+                let caseValue = null
+                try {
+                  caseValue = JSON.parse(attVal)
+                } catch {
+                  let dummyVar
+                }
+                if (prntAttId) {
+                  newDataItem[`${attId}[{${prntAttId}}]`] = caseValue?.[prntVal]
+                }
+                values.forEach(val => {
+                  newDataItem[`${attId}[${val}]`] = caseValue?.[val]
+                })
+              } else {
+                let newVal = null
+                if (isBool) {
+                  newVal =
+                    String(attVal ?? 'false')
+                      .trim()
+                      .toLowerCase() !== 'false'
+                } else {
+                  newVal = String(attVal ?? '').trim()
+                }
+                newDataItem[attId] = newVal
+              }
+            })
+            continue
+          } else if (dataId === _Field.PIC_NO || dataId === _Field.CRTER_NO || dataId === _Field.CHGER_NO) {
+            const keyInfo = getNameDeptKey(dataId)
+            const userInfo = await getEmployeeById(dataVal)
+            newDataItem[keyInfo.NAME] = userInfo.EMP_NM
+            newDataItem[keyInfo.DEPT] = userInfo.DEPT_NAME
+            newDataItem[dataId] = dataVal
+          } else if (dataId === _Field.CRTE_DTM || dataId === _Field.CHGE_DTM) {
+            newDataItem[dataId] = dataVal ? fns_format(dataVal, 'yyyy-MM-dd HH:mm:ss') : dataVal
+          } else if (dataId === _Field.REV_NO) {
+            newDataItem[dataId] = revNo
+            newDataItem[_Field.REV] = rev
+            newDataItem[_Field.VER] = ver
+            newDataItem['STAGE'] = stage
+            newDataItem['REASON'] = reason
+          } else {
+            newDataItem[dataId] = dataVal
+          }
+        }
+        newDataIndex[tagIdx] = newDataItem
+      }
+
+      if (revNum === 1) {
+        _Rev1DataIdxRef.value = newDataIndex
+      } else {
+        _Rev2DataIdxRef.value = newDataIndex
+      }
+    } catch (error) {
+      let dummyVar
+      throw error
+    }
+  }
+  const getCompareData = async function () {
+    try {
+      const projNo = _CurrProjNoRef.value
+      const regId = _CurrRegTypeIdRef.value
+      const rev1Info = _Revision1Ref.value
+      const rev2Info = _Revision2Ref.value
+      const empty = [!projNo && 'Project', !regId && 'Register', (!rev1Info || !rev2Info) && 'Revision Information']
+        .filter(Boolean)
+        .join(' and ')
+      if (!projNo || !regId || !rev1Info || !rev2Info) {
+        throw new Error(`${empty} is Empty`)
+      }
+
+      const rev1DataIdx = _Rev1DataIdxRef.value
+      const rev2DataIdx = _Rev2DataIdxRef.value
+      const tagIdxSet = new Set([...Object.keys(rev1DataIdx), ...Object.keys(rev2DataIdx)])
+      // Data Merge REV2 to REV1
+      // Object.keys(rev2DataIdx).forEach((tagIdx) => {
+      //   if (!rev1DataIdx[tagIdx]) {
+      //     rev1DataIdx[tagIdx] = Object.assign({}, rev2DataIdx[tagIdx]);
+      //     rev1DataIdx[tagIdx][_Field.REV_NO] = rev1Info?.REV_NO;
+      //     rev1DataIdx[tagIdx][_Field.REV]    = rev1Info?.REV;
+      //     rev1DataIdx[tagIdx][_Field.VER]    = rev1Info?.VER;
+      //   }
+      // });
+
+      const baseAttr = _BaseAttrRef.value ?? {}
+      const baseAttIds = Object.keys(baseAttr)
+      const exceptAttIds = [
+        _Field._ID,
+        _Field.REV,
+        _Field.VER,
+        _Field.CRTER_NO,
+        _Field.CRTE_DTM,
+        _Field.CHGER_NO,
+        _Field.CHGE_DTM,
+      ]
+      const modDataList = []
+      const orgDataList = []
+      tagIdxSet.values().forEach(tagIdx => {
+        const data1 = rev1DataIdx[tagIdx]
+        const data2 = rev2DataIdx[tagIdx]
+        const baseData = data1 ? data1 : data2
+        // let   status   = !data1 ? 'D' : !data2 ? 'A' : 'M';
+        let status = !data1 ? 'D' : !data2 ? 'A' : null
+        if (!status) {
+          const hasDiffVal = baseAttIds.some(attId => {
+            if (exceptAttIds.includes(attId)) {
+              return false
+            }
+            const val1 = data1[attId] ?? ''
+            const val2 = data2[attId] ?? ''
+            return val1 !== val2
+          })
+          status = hasDiffVal ? 'M' : null
+        }
+        const dataItem = Object.assign({}, baseData, {
+          TAG_IDX: tagIdx,
+          _CHG_STATUS: status,
+        })
+        orgDataList.push(dataItem)
+        // if (status === 'M') { modDataList.push(dataItem); }
+        if (status) {
+          modDataList.push(dataItem)
+        }
+      })
+
+      const isChanges = _IsChangesOnly.value
+      _OrgDataListRef.value = orgDataList
+      _ModDataListRef.value = modDataList
+      _DataListRef.value = isChanges ? modDataList : orgDataList
+    } catch (error) {
+      let dummyVar
+      throw error
+    }
+  }
+  const onShowChangesData = function (IS_MOD) {
+    _DataListRef.value = IS_MOD ? _ModDataListRef.value : _OrgDataListRef.value
+  }
 </script>
-
-<style scoped lang="scss">
-  .template__page { overflow: hidden; }
-  .custom-input-width { width: 160px !important; }
-
-  /* --- 참고 코드의 테마 스타일 반영 --- */
-  :deep(.ag-theme-custom) {
-    --ag-header-background-color: #f8f9fa !important;
-    --ag-border-color: #dee2e6 !important;
-    --ag-font-size: 11px;
-    --ag-header-height: 32px;
-    --ag-floating-filters-height: 32px;
-
-    /* 보더라인 가독성 증대 */
-    .ag-cell { border-right: 1px solid #f1f3f5 !important; }
-    .ag-header-cell { border-right: 1px solid #dee2e6 !important; }
-
-    /* 헤더 그룹 스타일 (참고 코드 반영) */
-    .ag-header-group-cell {
-      background-color: #f8f9fa !important;
-      font-weight: bold;
-      border-right: 1px solid #dee2e6 !important;
-    }
-
-    /* 플로팅 필터 스타일 */
-    .ag-floating-filter-input input {
-      background-color: #fff !important;
-      border-radius: 4px;
-      border: 1px solid #d1d5db;
-    }
-
-    /* 하이라이트 */
-    .filter-highlight { background-color: #ffeb3b !important; font-weight: bold; }
-    .att-column-header { background-color: #fff9db !important; color: #856404 !important; font-weight: bold !important; }
-  }
-
-  /* 모달 레이아웃 */
-  .custom-modal-overlay {
-    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-    background: rgba(0, 0, 0, 0.6); z-index: 9999;
-    display: flex; align-items: center; justify-content: center;
-  }
-  .custom-modal-window {
-    background: #fff; width: 1000px; height: 85%;
-    border-radius: 8px; display: flex; flex-direction: column; overflow: hidden;
-  }
-  .modal-header-dark {
-    background: #0f172a; color: #fff; padding: 12px 20px;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-</style>
+<style scoped></style>
