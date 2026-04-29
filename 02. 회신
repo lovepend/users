@@ -6,19 +6,12 @@
           <div class="d-flex align-items-center gap-2">
             <span class="fw-bold text-dark text-nowrap">Projects</span>
             <div class="dropdown">
-              <button
-                class="btn btn-sm btn-outline-secondary dropdown-toggle custom-project-dropdown text-start d-flex justify-content-between align-items-center bg-white"
-                type="button"
-                data-bs-toggle="dropdown"
-                data-bs-auto-close="outside"
-              >
-                <span class="text-truncate me-2">
-                  {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}
-                </span>
+              <button class="btn btn-sm btn-outline-secondary dropdown-toggle custom-project-dropdown text-start d-flex justify-content-between align-items-center bg-white" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                <span class="text-truncate me-2">{{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}</span>
               </button>
               <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 350px">
                 <li class="px-2 pb-2 border-bottom mb-1">
-                  <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="프로젝트 번호/명 검색..." @click.stop />
+                  <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="검색..." @click.stop />
                 </li>
                 <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
                   <label class="form-check-label d-flex align-items-center w-100 fw-bold" style="cursor: pointer">
@@ -29,22 +22,16 @@
                 <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
                   <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
                     <input class="form-check-input me-2 mt-0" type="checkbox" :value="proj.PROJ_NO" v-model="selectedProjects" />
-                    <span class="text-truncate">
-                      <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
-                      <small class="text-muted ms-1">({{ proj.DESC }})</small>
-                    </span>
+                    <span class="text-truncate fw-bold text-primary">{{ proj.PROJ_NO }} <small class="text-muted">({{ proj.DESC }})</small></span>
                   </label>
                 </li>
               </ul>
             </div>
           </div>
-
-          <button class="btn btn-sm btn-primary px-3 shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0">
-            <i class="fa fa-search me-1"></i> 비교 조회
-          </button>
-
+          <button class="btn btn-sm btn-primary px-3 shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0">비교 조회</button>
+          
           <div class="view-mode-toggle-container ms-3">
-            <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
+            <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border">
               <input type="radio" class="btn-check" id="mapModeSimple" value="simple" v-model="viewMode" />
               <label class="btn btn-sm rounded-pill px-3 toggle-label" for="mapModeSimple">간편 조회</label>
               <input type="radio" class="btn-check" id="mapModeDetail" value="detail" v-model="viewMode" />
@@ -52,33 +39,41 @@
             </div>
           </div>
         </div>
-
         <div class="d-flex align-items-center gap-2">
-          <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>멀티 필터</span>
-          <textarea class="form-control form-control-sm border-success custom-textarea-filter" v-model="attributeFilter" rows="1" placeholder="MAP_ID 입력 (엔터/쉼표 구분)"></textarea>
+          <span class="fw-bold text-success text-nowrap">멀티 필터</span>
+          <textarea class="form-control form-control-sm border-success custom-textarea-filter" v-model="attributeFilter" rows="1" placeholder="MAP_ID 입력"></textarea>
         </div>
       </div>
     </div>
 
     <div class="flex-grow-1 overflow-hidden">
-      <ag-grid-vue v-bind="gridOptions" @grid-ready="onGridReady" @cell-clicked="onCellClicked" />
+      <ag-grid-vue
+        style="width: 100%; height: 100%"
+        class="ag-theme-custom"
+        :columnDefs="mainColumnDefs"
+        :rowData="gridRowData"
+        :defaultColDef="defaultColDef"
+        :loadingOverlayComponent="AggridLoadingOverlay"
+        :isExternalFilterPresent="isExternalFilterPresent"
+        :doesExternalFilterPass="doesExternalFilterPass"
+        @grid-ready="onGridReady"
+        @cell-clicked="onCellClicked"
+      />
     </div>
 
     <div class="modal fade" id="arrayDiffModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-xl modal-dialog-centered">
         <div class="modal-content shadow-lg border-0">
           <div class="modal-header py-2 bg-dark text-white">
-            <h6 class="modal-title fw-bold">상세 데이터 비교 [<span class="text-warning">{{ selectedMapId }}</span>]</h6>
+            <h6 class="modal-title">상세 데이터 비교 [<span class="text-warning">{{ selectedMapId }}</span>]</h6>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
           </div>
-          <div class="modal-body p-0 d-flex flex-column" style="height: 75vh;">
+          <div class="modal-body p-0 d-flex flex-column" style="height: 70vh;">
             <div class="bg-light p-2 border-bottom d-flex gap-2">
               <button v-for="tab in ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']" :key="tab" 
-                      class="btn btn-sm px-3 shadow-sm transition-all"
-                      :class="activeTab === tab ? 'btn-primary fw-bold' : 'btn-white border text-muted'"
-                      @click="activeTab = tab">
-                {{ tab }}
-              </button>
+                      class="btn btn-sm px-3 shadow-sm"
+                      :class="activeTab === tab ? 'btn-primary' : 'btn-white border'"
+                      @click="activeTab = tab">{{ tab }}</button>
             </div>
             <div class="flex-grow-1">
               <ag-grid-vue 
@@ -86,12 +81,9 @@
                 class="ag-theme-custom"
                 :columnDefs="modalColumnDefs"
                 :rowData="modalRowData"
-                :defaultColDef="{ resizable: true, sortable: true, filter: true, floatingFilter: true }"
+                :defaultColDef="defaultColDef"
               />
             </div>
-          </div>
-          <div class="modal-footer py-1 bg-light">
-            <small class="text-muted">* <span class="text-danger fw-bold">Red</span> 표시된 행은 프로젝트 간 데이터가 서로 다름을 의미합니다.</small>
           </div>
         </div>
       </div>
@@ -116,24 +108,20 @@ const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
 const attributeFilter = ref('')
 const viewMode = ref('simple')
-
 const gridApi = shallowRef()
 const gridRowData = ref([])
 const dynamicCols = ref([])
 
-// --- 모달 전용 State ---
+// 모달 전용 State
 const selectedMapId = ref('')
 const activeTab = ref('MAP_ATT')
 const modalRowData = ref([])
 const clickedRow = ref(null)
 
-const urlEpId = computed(() => route.query.ep_id || '')
-const urlProjNo = computed(() => route.query.project_no || '')
-
 const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'CATEGORY', 'TOOL_ID', 'TOOL_TYPE', 'MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']
 const TAB_KEY_MAP = { 'MAP_ATT': 'ATT_ID', 'MAP_CLS': 'OBJ_CLS_ID', 'MAP_TMPLS': 'TMPL_ID', 'MAP_RELS': 'REL_ID' }
 
-// --- 프로젝트 선택/필터 로직 ---
+// --- 프로젝트 선택 필터 (기본 로직) ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   return projectList.value.filter(p => !kw || p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
@@ -144,33 +132,31 @@ const isIndeterminate = computed(() => {
   return selInFil > 0 && selInFil < filteredProjectList.value.length
 })
 const toggleAllSelection = e => {
-  const checked = e.target.checked
-  const fIds = filteredProjectList.value.map(p => p.PROJ_NO)
-  selectedProjects.value = checked ? [...new Set([...selectedProjects.value, ...fIds])] : selectedProjects.value.filter(id => !fIds.includes(id))
+  const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
+  selectedProjects.value = e.target.checked ? [...new Set([...selectedProjects.value, ...filteredIds])] : selectedProjects.value.filter(id => !filteredIds.includes(id))
 }
 
 onMounted(async () => {
   diffModal = new bootstrap.Modal(document.getElementById('arrayDiffModal'))
   try {
-    const res = await axiosWrapper.get('/api/Project/Get', { headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value } })
+    const res = await axiosWrapper.get('/api/Project/Get', { headers: { Projectno: route.query.project_no } })
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
   } catch (e) { console.error(e) }
 })
 
 const areEqual = (v1, v2) => JSON.stringify(v1 || '') === JSON.stringify(v2 || '')
 
-// --- 메인 조회 로직 ---
+// --- 메인 조회 로직 (복구) ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   gridApi.value?.setGridOption('loading', true)
   try {
     const results = await Promise.all(selectedProjects.value.map(p => 
-      axiosWrapper.post('/api/AdapterDataMapping/Get', { ProjectNo: p }, { headers: { Projectno: p, Ep_id: urlEpId.value } }).catch(() => [])
+      axiosWrapper.post('/api/AdapterDataMapping/Get', { ProjectNo: p }, { headers: { Projectno: p } }).catch(() => [])
     ))
     const dataMap = new Map()
     results.forEach((data, idx) => {
       const pNo = selectedProjects.value[idx]
-      if (!Array.isArray(data)) return
       data.forEach(item => {
         if (!dataMap.has(item.MAP_ID)) dataMap.set(item.MAP_ID, { MAP_ID: item.MAP_ID, projects: {} })
         const pData = { EXIST: true }; COMPARE_FIELDS.forEach(f => pData[f] = item[f])
@@ -192,91 +178,14 @@ const onSearch = async () => {
       return res
     })
     dynamicCols.value = [...selectedProjects.value]
-  } catch (e) { sAlert.Error('조회 실패') } finally { gridApi.value?.setGridOption('loading', false) }
+  } finally { gridApi.value?.setGridOption('loading', false) }
 }
 
-// --- [수정] 모달 전용 로직: 데이터 비교 및 디자인 통일 ---
-const onCellClicked = (p) => {
-  if (p.column.getColId() === 'DIFF_INFO' && p.value) {
-    clickedRow.value = p.data
-    selectedMapId.value = p.data.MAP_ID
-    diffModal.show()
-  }
-}
-
-watch([activeTab, clickedRow], () => {
-  if (!clickedRow.value) return
-  const keyField = TAB_KEY_MAP[activeTab.value]
-  const mergeMap = new Map()
-
-  // 데이터 병합
-  dynamicCols.value.forEach(pNo => {
-    const pRow = clickedRow.value[pNo]
-    if (!pRow || !pRow[activeTab.value]) return
-    let items = pRow[activeTab.value]
-    if (activeTab.value === 'MAP_CLS' && items.ITEMS) items = items.ITEMS
-    if (!Array.isArray(items)) return
-
-    items.forEach(item => {
-      const id = item[keyField]
-      if (!id) return
-      if (!mergeMap.has(id)) mergeMap.set(id, { [keyField]: id })
-      mergeMap.get(id)[pNo] = item
-    })
-  })
-
-  // [중요] 모달 내 프로젝트 간 값 비교하여 CONDITION(Pass/Diff) 생성
-  modalRowData.value = Array.from(mergeMap.values()).map(row => {
-    const activePs = dynamicCols.value.filter(p => row[p])
-    let isRowDiff = false
-    if (activePs.length !== dynamicCols.value.length) {
-      isRowDiff = true
-    } else if (activePs.length > 1) {
-      const base = JSON.stringify(row[activePs[0]])
-      isRowDiff = activePs.some(p => JSON.stringify(row[p]) !== base)
-    }
-    return { ...row, CONDITION: isRowDiff ? 'Diff' : 'Pass' }
-  })
-})
-
-const modalColumnDefs = computed(() => {
-  const keyField = TAB_KEY_MAP[activeTab.value]
-  const cols = [
-    { headerName: keyField, field: keyField, pinned: 'left', width: 180, cellClass: 'bg-light fw-bold' },
-    { 
-      headerName: 'Diff Info', 
-      field: 'CONDITION', 
-      pinned: 'left', 
-      width: 100,
-      cellStyle: p => ({
-        color: p.value === 'Diff' ? '#dc3545' : '#198754',
-        fontWeight: 'bold', textAlign: 'center',
-        backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8'
-      })
-    }
-  ]
-  
-  dynamicCols.value.forEach(pNo => {
-    cols.push({
-      headerName: pNo,
-      valueGetter: p => {
-        const v = p.data[pNo]; if (!v) return '-'
-        return Object.entries(v).filter(([k]) => k !== keyField).map(([k, val]) => `${k}:${val}`).join(' | ')
-      },
-      width: 350,
-      tooltipValueGetter: p => p.value,
-      // 값이 틀린 경우 텍스트를 레드로 강조
-      cellStyle: p => p.data.CONDITION === 'Diff' ? { color: '#dc3545', fontWeight: '500' } : null
-    })
-  })
-  return cols
-})
-
-// --- 메인 그리드 설정 ---
-const columnDefs = computed(() => {
+// --- 메인 그리드 컬럼 정의 ---
+const mainColumnDefs = computed(() => {
   const cols = [
     { headerName: 'Condition', field: 'CONDITION', width: 110, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' }) },
-    { headerName: 'Diff Info (Click)', field: 'DIFF_INFO', width: 150, pinned: 'left', cellStyle: { fontSize: '11px', color: '#0d6efd', fontWeight: 'bold', textDecoration: 'underline', cursor: 'pointer' } },
+    { headerName: 'Diff Info (Click)', field: 'DIFF_INFO', width: 150, pinned: 'left', cellStyle: { color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold' } },
     { headerName: 'Mapping ID', field: 'MAP_ID', width: 200, pinned: 'left' }
   ]
   dynamicCols.value.forEach(proj => {
@@ -286,50 +195,69 @@ const columnDefs = computed(() => {
         children.push({ headerName: f, valueGetter: p => { const v = p.data[proj]?.[f]; return typeof v === 'object' ? JSON.stringify(v) : (v ?? '') }, width: 150, tooltipValueGetter: p => p.value })
       })
     }
-    cols.push({ headerName: `${proj}`, marryChildren: true, children: children })
+    cols.push({ headerName: `${proj}`, children: children })
   })
   return cols
 })
 
-const gridOptions = computed(() => ({
-  columnDefs: columnDefs.value,
-  rowData: gridRowData.value,
-  class: 'ag-theme-custom',
-  loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, resizable: true, filter: true, floatingFilter: true },
-  isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
-  doesExternalFilterPass: n => {
-    const kws = attributeFilter.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
-    const target = String(n.data.MAP_ID || '').toLowerCase()
-    return kws.length === 0 || kws.some(kw => target.includes(kw))
+// --- 모달 로직 (신규 반영) ---
+const onCellClicked = (p) => {
+  if (p.column.getColId() === 'DIFF_INFO' && p.value) {
+    clickedRow.value = p.data; selectedMapId.value = p.data.MAP_ID; diffModal.show()
   }
-}))
+}
 
+watch([activeTab, clickedRow], () => {
+  if (!clickedRow.value) return
+  const keyField = TAB_KEY_MAP[activeTab.value]
+  const mergeMap = new Map()
+  dynamicCols.value.forEach(pNo => {
+    const pRow = clickedRow.value[pNo]; if (!pRow || !pRow[activeTab.value]) return
+    let items = pRow[activeTab.value]; if (activeTab.value === 'MAP_CLS' && items.ITEMS) items = items.ITEMS
+    if (Array.isArray(items)) items.forEach(item => {
+      const id = item[keyField]; if (id) { if (!mergeMap.has(id)) mergeMap.set(id, { [keyField]: id }); mergeMap.get(id)[pNo] = item }
+    })
+  })
+  modalRowData.value = Array.from(mergeMap.values()).map(row => {
+    const activePs = dynamicCols.value.filter(p => row[p])
+    let isRowDiff = activePs.length !== dynamicCols.value.length || (activePs.length > 1 && activePs.some(p => JSON.stringify(row[p]) !== JSON.stringify(row[activePs[0]])))
+    return { ...row, CONDITION: isRowDiff ? 'Diff' : 'Pass' }
+  })
+})
+
+const modalColumnDefs = computed(() => {
+  const keyField = TAB_KEY_MAP[activeTab.value]
+  const cols = [
+    { headerName: keyField, field: keyField, pinned: 'left', width: 180, cellClass: 'bg-light fw-bold' },
+    { headerName: 'Diff Info', field: 'CONDITION', pinned: 'left', width: 100, cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' }) }
+  ]
+  dynamicCols.value.forEach(pNo => {
+    cols.push({
+      headerName: pNo,
+      valueGetter: p => { const v = p.data[pNo]; return v ? Object.entries(v).filter(([k]) => k !== keyField).map(([k, val]) => `${k}:${val}`).join(' | ') : '-' },
+      width: 350, tooltipValueGetter: p => p.value,
+      cellStyle: p => p.data.CONDITION === 'Diff' ? { color: '#dc3545' } : null
+    })
+  })
+  return cols
+})
+
+// --- 공통 설정 ---
+const defaultColDef = { sortable: true, resizable: true, filter: true, floatingFilter: true }
 const onGridReady = p => { gridApi.value = p.api }
-watch([attributeFilter, viewMode], () => { if (gridApi.value) gridApi.value.onFilterChanged() })
+const isExternalFilterPresent = () => attributeFilter.value.trim() !== ''
+const doesExternalFilterPass = n => {
+  const kws = attributeFilter.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
+  return kws.length === 0 || kws.some(kw => String(n.data.MAP_ID || '').toLowerCase().includes(kw))
+}
+watch([attributeFilter, viewMode], () => gridApi.value?.onFilterChanged())
 </script>
 
 <style scoped>
 .custom-project-dropdown { width: 300px !important; }
 .custom-textarea-filter { width: 300px !important; font-size: 0.8rem; resize: none; }
-.view-mode-toggle-container .btn-group { background-color: rgba(0, 0, 0, 0.05); }
-.toggle-label { border: none !important; color: #6c757d; font-weight: 600; transition: all 0.2s ease; font-size: 0.82rem; padding: 4px 16px; cursor: pointer; }
-.btn-check:checked + .toggle-label { background-color: #ffffff !important; color: #0d6efd !important; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
-
-/* Ag-Grid 디자인 통일 (ag-theme-custom) */
-:deep(.ag-theme-custom) {
-  --ag-header-background-color: #f8f9fa;
-  --ag-header-foreground-color: #495057;
-  --ag-border-color: #dee2e6;
-  --ag-font-size: 12px;
-}
-:deep(.ag-header-group-cell) {
-  background-color: #f8f9fa !important;
-  font-weight: bold;
-  border-right: 1px solid #dee2e6 !important;
-}
-:deep(.ag-header-cell) {
-  background-color: #f8f9fa !important;
-}
-.transition-all { transition: all 0.2s ease; }
+.toggle-label { cursor: pointer; font-size: 0.82rem; padding: 4px 16px; }
+.btn-check:checked + .toggle-label { background-color: #fff !important; color: #0d6efd !important; }
+:deep(.ag-theme-custom) { --ag-header-background-color: #f8f9fa; --ag-font-size: 12px; }
+:deep(.ag-header-group-cell) { background-color: #f8f9fa !important; font-weight: bold; border-right: 1px solid #dee2e6 !important; }
 </style>
