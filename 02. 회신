@@ -16,22 +16,25 @@
                 <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
                   <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
                     <input class="form-check-input me-2 mt-0" type="checkbox" :value="proj.PROJ_NO" v-model="selectedProjects" />
-                    <span>{{ proj.PROJ_NO }} <small>({{ proj.DESC }})</small></span>
+                    <span><b class="text-primary">{{ proj.PROJ_NO }}</b> <small class="text-muted">({{ proj.DESC }})</small></span>
                   </label>
                 </li>
               </ul>
             </div>
           </div>
-          <button class="btn btn-sm btn-primary px-3 shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0">비교 조회</button>
+          <button class="btn btn-sm btn-primary px-3 shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0">데이터 매핑 비교</button>
           
-          <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border ms-3">
-            <input type="radio" class="btn-check" id="m1" value="simple" v-model="viewMode" /><label class="btn btn-sm rounded-pill px-3" for="m1">간편</label>
-            <input type="radio" class="btn-check" id="m2" value="detail" v-model="viewMode" /><label class="btn btn-sm rounded-pill px-3" for="m2">상세</label>
+          <div class="view-mode-toggle-container ms-3">
+            <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border">
+              <input type="radio" class="btn-check" id="mapModeSimple" value="simple" v-model="viewMode" />
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="mapModeSimple">간편 조회</label>
+              <input type="radio" class="btn-check" id="mapModeDetail" value="detail" v-model="viewMode" />
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="mapModeDetail">상세 조회</label>
+            </div>
           </div>
         </div>
-
         <div class="d-flex align-items-center gap-2">
-          <textarea class="form-control form-control-sm border-success custom-textarea-filter" v-model="attributeFilter" rows="1" placeholder="MAP_ID 입력"></textarea>
+          <textarea class="form-control form-control-sm border-success custom-textarea-filter" v-model="attributeFilter" rows="1" placeholder="MAP_ID 입력 (엔터/쉼표 구분)"></textarea>
         </div>
       </div>
     </div>
@@ -49,7 +52,7 @@
           </div>
           <div class="modal-body p-0 d-flex flex-column" style="height: 70vh;">
             <div class="bg-light p-2 border-bottom d-flex gap-2">
-              <button v-for="tab in ARRAY_FIELDS" :key="tab" 
+              <button v-for="tab in ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']" :key="tab" 
                       class="btn btn-sm border shadow-sm px-3"
                       :class="activeTab === tab ? 'btn-primary' : 'btn-white'"
                       @click="activeTab = tab">
@@ -82,33 +85,24 @@ import * as bootstrap from 'bootstrap'
 const route = useRoute()
 let detailModal = null
 
-// --- State ---
+// --- 기존 State ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
 const attributeFilter = ref('')
 const viewMode = ref('simple')
-
 const gridApi = shallowRef()
 const gridRowData = ref([])
 const dynamicCols = ref([])
 
-// 모달 관련 State
+// --- [추가] 모달 전용 State ---
 const selectedMapId = ref('')
 const activeTab = ref('MAP_ATT')
 const modalRowData = ref([])
-const fullRowData = ref(null) // 클릭된 시점의 행 전체 데이터
+const clickedRowData = ref(null)
 
-const ARRAY_FIELDS = ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']
-const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'CATEGORY', 'TOOL_ID', 'TOOL_TYPE', ...ARRAY_FIELDS]
-
-// 필드별 고유 키 매핑
-const KEY_MAP = {
-  'MAP_ATT': 'ATT_ID',
-  'MAP_CLS': 'OBJ_CLS_ID',
-  'MAP_TMPLS': 'TMPL_ID',
-  'MAP_RELS': 'REL_ID'
-}
+const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'CATEGORY', 'TOOL_ID', 'TOOL_TYPE', 'MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']
+const KEY_MAP = { 'MAP_ATT': 'ATT_ID', 'MAP_CLS': 'OBJ_CLS_ID', 'MAP_TMPLS': 'TMPL_ID', 'MAP_RELS': 'REL_ID' }
 
 onMounted(async () => {
   detailModal = new bootstrap.Modal(document.getElementById('diffDetailModal'))
@@ -118,27 +112,25 @@ onMounted(async () => {
   } catch (e) { console.error(e) }
 })
 
-// --- 데이터 가공 로직 ---
+// --- 기존 데이터 조회 로직 (areEqual 등 포함) ---
+const areEqual = (v1, v2) => JSON.stringify(v1 || '') === JSON.stringify(v2 || '')
+
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   gridApi.value?.setGridOption('loading', true)
-
   try {
     const results = await Promise.all(selectedProjects.value.map(p => 
       axiosWrapper.post('/api/AdapterDataMapping/Get', { ProjectNo: p }, { headers: { Projectno: p } }).catch(() => [])
     ))
-
     const dataMap = new Map()
-    results.forEach((projectData, idx) => {
+    results.forEach((data, idx) => {
       const pNo = selectedProjects.value[idx]
-      projectData.forEach(item => {
+      data.forEach(item => {
         if (!dataMap.has(item.MAP_ID)) dataMap.set(item.MAP_ID, { MAP_ID: item.MAP_ID, projects: {} })
-        const info = { EXIST: true }
-        COMPARE_FIELDS.forEach(f => info[f] = item[f])
+        const info = { EXIST: true }; COMPARE_FIELDS.forEach(f => info[f] = item[f])
         dataMap.get(item.MAP_ID).projects[pNo] = info
       })
     })
-
     gridRowData.value = Array.from(dataMap.values()).map(row => {
       let diffs = []
       COMPARE_FIELDS.forEach(f => {
@@ -153,81 +145,57 @@ const onSearch = async () => {
   } finally { gridApi.value?.setGridOption('loading', false) }
 }
 
-// --- 모달 로직 ---
+// --- [추가] 모달 연동 로직 ---
 const onCellClicked = (p) => {
   if (p.column.getColId() === 'DIFF_INFO' && p.value) {
-    fullRowData.value = p.data
+    clickedRowData.value = p.data
     selectedMapId.value = p.data.MAP_ID
     detailModal.show()
   }
 }
 
-// 탭 전환 시 모달 데이터 재구성
-watch([activeTab, fullRowData], () => {
-  if (!fullRowData.value) return
-  
+// 탭 클릭이나 행 클릭 시 모달 테이블 데이터 생성
+watch([activeTab, clickedRowData], () => {
+  if (!clickedRowData.value) return
   const keyField = KEY_MAP[activeTab.value]
-  const combinedItems = new Map()
+  const combined = new Map()
 
-  // 모든 프로젝트의 해당 배열 데이터를 순회하며 Key ID 기준으로 취합
   dynamicCols.value.forEach(pNo => {
-    let rawData = fullRowData.value[pNo]?.[activeTab.value]
-    if (!rawData) return
-
-    // MAP_CLS인 경우 ITEMS 내부를 참조하도록 예외처리
-    let list = activeTab.value === 'MAP_CLS' ? (rawData.ITEMS || []) : (Array.isArray(rawData) ? rawData : [])
-
+    let raw = clickedRowData.value[pNo]?.[activeTab.value]
+    if (!raw) return
+    let list = activeTab.value === 'MAP_CLS' ? (raw.ITEMS || []) : (Array.isArray(raw) ? raw : [])
     list.forEach(item => {
       const id = item[keyField]
-      if (!combinedItems.has(id)) combinedItems.set(id, { [keyField]: id })
-      combinedItems.get(id)[pNo] = item
+      if (!combined.has(id)) combined.set(id, { [keyField]: id })
+      combined.get(id)[pNo] = item
     })
   })
-
-  modalRowData.value = Array.from(combinedItems.values())
+  modalRowData.value = Array.from(combined.values())
 })
 
 const modalColumnDefs = computed(() => {
   const keyField = KEY_MAP[activeTab.value]
-  const cols = [{ headerName: keyField, field: keyField, pinned: 'left', width: 180, cellClass: 'bg-light fw-bold' }]
-
+  const cols = [{ headerName: keyField, field: keyField, pinned: 'left', width: 160, cellClass: 'bg-light fw-bold' }]
   dynamicCols.value.forEach(pNo => {
     cols.push({
       headerName: pNo,
-      marryChildren: true,
-      children: [
-        {
-          headerName: 'Detail Info',
-          valueGetter: p => {
-            const data = p.data[pNo]
-            if (!data) return '-'
-            // Key Field 제외한 나머지 정보를 문자열로 표현
-            return Object.entries(data)
-              .filter(([k]) => k !== keyField)
-              .map(([k, v]) => `${k}: ${v}`)
-              .join(' | ')
-          },
-          width: 400,
-          tooltipValueGetter: p => p.value,
-          cellStyle: p => {
-            // 다른 프로젝트와 값이 다르면 배경색 강조 (단순 로직)
-            const others = dynamicCols.value.filter(o => o !== pNo)
-            const isDiff = others.some(o => JSON.stringify(p.data[o]) !== JSON.stringify(p.data[pNo]))
-            return isDiff ? { backgroundColor: '#fff0f0' } : null
-          }
-        }
-      ]
+      valueGetter: p => {
+        const val = p.data[pNo]; if (!val) return '-'
+        return Object.entries(val).filter(([k]) => k !== keyField).map(([k, v]) => `${k}:${v}`).join(' | ')
+      },
+      width: 350,
+      tooltipValueGetter: p => p.value
     })
   })
   return cols
 })
 
-// --- 그리드 기본 설정 (메인) ---
+// --- 기존 그리드 설정 ---
 const gridOptions = computed(() => ({
   columnDefs: [
     { headerName: 'Condition', field: 'CONDITION', width: 100, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? 'red' : 'green', fontWeight: 'bold' }) },
-    { headerName: 'Diff Info (Click)', field: 'DIFF_INFO', width: 180, pinned: 'left', cellStyle: { cursor: 'pointer', textDecoration: 'underline', color: '#0d6efd' } },
-    { headerName: 'Mapping ID', field: 'MAP_ID', width: 220, pinned: 'left' },
+    { headerName: 'Diff Info', field: 'DIFF_INFO', width: 150, pinned: 'left', cellStyle: { cursor: 'pointer', textDecoration: 'underline', color: '#0d6efd' } },
+    { headerName: 'Mapping ID', field: 'MAP_ID', width: 200, pinned: 'left' },
     ...dynamicCols.value.map(p => ({
       headerName: p,
       children: [
@@ -252,11 +220,3 @@ const gridOptions = computed(() => ({
   }
 }))
 </script>
-
-<style scoped>
-.custom-project-dropdown { width: 300px; }
-.custom-textarea-filter { width: 300px; font-size: 0.8rem; }
-.toggle-label { font-size: 0.8rem; cursor: pointer; }
-:deep(.ag-theme-alpine) { --ag-header-background-color: #f8f9fa; }
-.modal-xl { max-width: 95%; }
-</style>
