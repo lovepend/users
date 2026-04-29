@@ -1,318 +1,262 @@
 <template>
-  <div ref="_PageWrapperRef" class="panel panel-expandable m-0 p-0 h-100 position-relative">
-    <div class="panel-heading m-0 p-0">
-      <div class="w-100 h-100 d-block position-relative">
-        <div class="py-1 px-2 mb-1">
-          <label class="form-label m-0 text-blue cursor-pointer">
-            <input v-model="_IsChangesOnly" type="checkbox" class="form-check-input" />
-            Changes Only
-          </label>
+  <div class="d-flex flex-column h-100 bg-white">
+    <div class="p-3 border-bottom shadow-sm bg-light">
+      <div class="d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-3">
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-dark text-nowrap">Projects</span>
+            <div class="dropdown">
+              <button class="btn btn-sm btn-outline-secondary dropdown-toggle custom-project-dropdown text-start d-flex justify-content-between align-items-center bg-white" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                <span class="text-truncate me-2">{{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}</span>
+              </button>
+              <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 350px">
+                <li class="px-2 pb-2 border-bottom mb-1">
+                  <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="검색..." @click.stop />
+                </li>
+                <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
+                  <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
+                    <input class="form-check-input me-2 mt-0" type="checkbox" :value="proj.PROJ_NO" v-model="selectedProjects" />
+                    <span>{{ proj.PROJ_NO }} <small>({{ proj.DESC }})</small></span>
+                  </label>
+                </li>
+              </ul>
+            </div>
+          </div>
+          <button class="btn btn-sm btn-primary px-3 shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0">비교 조회</button>
+          
+          <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border ms-3">
+            <input type="radio" class="btn-check" id="m1" value="simple" v-model="viewMode" /><label class="btn btn-sm rounded-pill px-3" for="m1">간편</label>
+            <input type="radio" class="btn-check" id="m2" value="detail" v-model="viewMode" /><label class="btn btn-sm rounded-pill px-3" for="m2">상세</label>
+          </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-2">
+          <textarea class="form-control form-control-sm border-success custom-textarea-filter" v-model="attributeFilter" rows="1" placeholder="MAP_ID 입력"></textarea>
         </div>
       </div>
     </div>
-    <div class="panel-body p-0 h-100">
-      <ag-grid-vue class="w-100 h-100" v-bind="_GridBindProps" v-on="_GridOnProps" />
+
+    <div class="flex-grow-1 overflow-hidden">
+      <ag-grid-vue v-bind="gridOptions" @grid-ready="onGridReady" @cell-clicked="onCellClicked" />
+    </div>
+
+    <div class="modal fade" id="diffDetailModal" tabindex="-1" aria-hidden="true">
+      <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content shadow-lg">
+          <div class="modal-header bg-dark text-white py-2">
+            <h6 class="modal-title">상세 데이터 비교 [<span class="text-warning">{{ selectedMapId }}</span>]</h6>
+            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body p-0 d-flex flex-column" style="height: 70vh;">
+            <div class="bg-light p-2 border-bottom d-flex gap-2">
+              <button v-for="tab in ARRAY_FIELDS" :key="tab" 
+                      class="btn btn-sm border shadow-sm px-3"
+                      :class="activeTab === tab ? 'btn-primary' : 'btn-white'"
+                      @click="activeTab = tab">
+                {{ tab }}
+              </button>
+            </div>
+            <div class="flex-grow-1">
+              <ag-grid-vue 
+                style="width: 100%; height: 100%;"
+                class="ag-theme-alpine"
+                :columnDefs="modalColumnDefs"
+                :rowData="modalRowData"
+                :defaultColDef="{ resizable: true, sortable: true, filter: true }"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, watch, unref, shallowRef, ref, computed, getCurrentInstance } from 'vue'
-import { format as fns_format } from 'date-fns'
+import { ref, computed, shallowRef, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
-import { storeToRefs } from 'pinia'
-
-import { useAppAuthenticationStore } from '@/stores/app-authentication'
-import { useAppMenuStore } from '@/stores/app-menu'
-import { useEmployees } from '@/stores/app-employees'
-
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { sAlert } from '@/utils/messages/alert-common'
-import { ApiCommon } from '@/utils/axios/api-common'
-import { useContentLoading } from '@/composables/useContentLoading'
-import { createBaseInformation } from '@/utils/baseInformation/base-attribute'
-import global from '@/constants/enums/global'
+import * as bootstrap from 'bootstrap'
 
-const _Field = global.field
-const { selectMenu } = storeToRefs(useAppMenuStore())
-const { userInfo } = storeToRefs(useAppAuthenticationStore())
-const { getEmployeeById, getNameDeptKey } = useEmployees()
 const route = useRoute()
+let detailModal = null
 
-defineOptions({ name: 'CompareRevisions' })
+// --- State ---
+const projectList = ref([])
+const projectSearchKeyword = ref('')
+const selectedProjects = ref([])
+const attributeFilter = ref('')
+const viewMode = ref('simple')
 
-const _Props = defineProps({
-  title: { type: [String, Object], required: false, default: null },
-  proj_no: { type: [String, Object], required: false, default: null },
-  reg_type_id: { type: [String, Object], required: false, default: null },
-  revisions: { type: [Object], required: false, default: null },
-  var_isModal: { type: [Boolean], required: false, default: null },
-  fn_onActionApply: { type: [Function], required: false, default: null },
-  fn_onActionClose: { type: [Function], required: false, default: null },
-  fn_onShowOverlay: { type: [Function], required: false, default: null },
-  fn_onHideOverlay: { type: [Function], required: false, default: null },
-  fn_onSetAutoHeight: { type: [Function], required: false, default: null },
-})
+const gridApi = shallowRef()
+const gridRowData = ref([])
+const dynamicCols = ref([])
 
-const _PageWrapperRef = shallowRef(null)
-const _IsModalPage = _Props.var_isModal ?? false
-const _IsOwnerPage = (() => {
-  const cur = getCurrentInstance()?.type
-  return !cur?.__prop && cur?.__name === useRoute().matched[0]?.components.default?.__name
-})()
+// 모달 관련 State
+const selectedMapId = ref('')
+const activeTab = ref('MAP_ATT')
+const modalRowData = ref([])
+const fullRowData = ref(null) // 클릭된 시점의 행 전체 데이터
 
-const onShowOverlay = function () {
-  const { fn_onShowOverlay: fn } = _Props
-  if (fn && typeof fn?.call === 'function') return fn.call(this)
-  const pageWrapper = _PageWrapperRef.value
-  useContentLoading.startLoading(pageWrapper ? { target: pageWrapper } : null)
-}
-const onHideOverlay = function () {
-  const { fn_onHideOverlay: fn } = _Props
-  if (fn && typeof fn?.call === 'function') return fn.call(this)
-  useContentLoading.stopLoading()
-}
-const onActionClose = function () {
-  const { fn_onActionClose: fn } = _Props
-  if (fn && typeof fn?.call === 'function') return fn.call(this)
-}
-defineExpose({ onClickApply: () => onActionClose(), onClickClose: () => onActionClose() })
+const ARRAY_FIELDS = ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']
+const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'CATEGORY', 'TOOL_ID', 'TOOL_TYPE', ...ARRAY_FIELDS]
 
-const _CurrProjNoRef = computed(() => (_IsModalPage || !_IsOwnerPage) ? unref(_Props.proj_no) : route.query?.proj_no)
-const _CurrRegTypeIdRef = computed(() => (_IsModalPage || !_IsOwnerPage) ? unref(_Props.reg_type_id) : route.query?.reg_type_id)
-const _CurrRevisionsRef = computed(() => (_IsModalPage || !_IsOwnerPage) ? unref(_Props.revisions) : route.query?.revisions)
-
-watch(_CurrProjNoRef, () => onInitialize())
-watch(_CurrRegTypeIdRef, () => onInitialize())
-watch(_CurrRevisionsRef, () => onInitialize(true))
-
-onMounted(() => {
-  if (sAlert?.isVisible()) sAlert.close()
-  onInitialize()
-})
-
-const _Revision1Ref = computed(() => {
-  const revs = _CurrRevisionsRef.value; if (!revs) return null
-  try { return (revs[0]?.REV_NO && revs[0]?.REV) ? revs[0] : null } catch { return null }
-})
-const _Revision2Ref = computed(() => {
-  const revs = _CurrRevisionsRef.value; if (!revs) return null
-  try { return (revs[1]?.REV_NO && revs[1]?.REV) ? revs[1] : null } catch { return null }
-})
-
-const _BaseColsRef = shallowRef([])
-const _BaseAttrRef = shallowRef({})
-const _Rev1DataIdxRef = shallowRef({})
-const _Rev2DataIdxRef = shallowRef({})
-const _OrgDataListRef = shallowRef([])
-const _ModDataListRef = shallowRef([])
-const _IsChangesOnly = shallowRef(true)
-watch(_IsChangesOnly, item => onShowChangesData(item))
-
-/************************************
- * EXCEL STYLES 정의 (색상 코드 추가)
- * ***********************************/
-const excelStyles = [
-  { id: 'sfore_A', font: { color: '#008000', bold: true } },
-  { id: 'sback_A', interior: { color: '#E8F5E9', pattern: 'Solid' } },
-  { id: 'sfore_D', font: { color: '#FF0000', strikeThrough: true } },
-  { id: 'sback_D', interior: { color: '#FFEBEE', pattern: 'Solid' } },
-  { id: 'sfore_M', font: { color: '#0000FF' } },
-  { id: 'sback_M', interior: { color: '#E3F2FD', pattern: 'Solid' } },
-  { id: 'sfore_A_Empty', font: { color: '#cccccc' } },
-  { id: 'sback_A_Empty', interior: { color: '#f0f0f0', pattern: 'Solid' } },
-  { id: 'text-center', alignment: { horizontal: 'Center' } },
-  { id: 'align-content-center', alignment: { vertical: 'Center' } }
-]
-
-const makeCellClass = function (params) {
-  const data = params.data; const value = params.value; const attId = params.column.colId
-  const classes = ['align-content-center', 'border-0']
-  const statId = '_CHG_STATUS'; const status = data?.[statId]
-  const empty = (value ?? '') == '' ? '_Empty' : ''
-
-  if (attId === statId) {
-    classes.push('text-center', 'sback_Status')
-    if (status === 'A') classes.push(`sfore_A${empty}`)
-    else if (status === 'D') classes.push(`sfore_D${empty}`)
-    else if (status === 'M') classes.push(`sfore_M${empty}`)
-  } else {
-    // 엑셀 스타일 적용을 위해 M 상태일 때 배경색 클래스 추가
-    if (status === 'A' || status === 'D') {
-      classes.push(`sfore_${status}${empty}`, `sback_${status}${empty}`)
-    } else if (status === 'M') {
-      const tagIdx = data?.[_Field.TAG_IDX]
-      const data1 = _Rev1DataIdxRef.value?.[tagIdx]; const data2 = _Rev2DataIdxRef.value?.[tagIdx]
-      if ((data1?.[attId] ?? '') !== (data2?.[attId] ?? '')) {
-        classes.push(`sfore_M${empty}`, `sback_M${empty}`)
-      }
-    }
-  }
-  return classes
+// 필드별 고유 키 매핑
+const KEY_MAP = {
+  'MAP_ATT': 'ATT_ID',
+  'MAP_CLS': 'OBJ_CLS_ID',
+  'MAP_TMPLS': 'TMPL_ID',
+  'MAP_RELS': 'REL_ID'
 }
 
-const makeCellRenderer = function (params) {
-  const data = params.data; const value = params.value ?? ''; const attId = params.column.colId
-  const statId = '_CHG_STATUS'; const status = data?.[statId]
-  const tagIdx = data?.[_Field.TAG_IDX]; const empty = (value ?? '') == '' ? '_Empty' : ''
-  if (!data || !tagIdx || attId === statId || attId === _Field.TAG_IDX) return value
-
-  const exceptBackIds = [_Field.REV_NO, _Field.REV, _Field.VER, _Field.CRTE_DTM, _Field.CHGE_DTM, _Field.DEL_DTM, 'STAGE', 'REASON']
-  const exceptForeIds = [_Field.CRTE_DTM, _Field.CHGE_DTM, _Field.DEL_DTM]
-  const data1 = _Rev1DataIdxRef.value?.[tagIdx]; const data2 = _Rev2DataIdxRef.value?.[tagIdx]
-  
-  let val1 = data1?.[attId] ?? ''; let val2 = data2?.[attId] ?? ''
-  if ([_Field.PIC_NO, _Field.CRTER_NO, _Field.CHGER_NO].includes(attId)) {
-    const keyInfo = getNameDeptKey(attId)
-    val1 = data1 ? `${data1[keyInfo.NAME] ?? ''}(${data1[keyInfo.DEPT] ?? ''})` : ''
-    val2 = data2 ? `${data2[keyInfo.NAME] ?? ''}(${data2[keyInfo.DEPT] ?? ''})` : ''
-  }
-
-  let fcClass = '', bgClass = ''
-  if (status === 'A' || status === 'D') {
-    fcClass = `sfore_${status}${empty}`; bgClass = `sback_${status}${empty}`
-  } else if (val1 !== val2) {
-    if (!exceptForeIds.includes(attId)) fcClass = `sfore_M${empty}`
-    if (!exceptBackIds.includes(attId)) bgClass = `sback_M${empty}`
-  }
-
-  return `<div class="position-absolute top-0 bottom-0 start-0 end-0">
-    <span class="d-block h-25px px-1 ${fcClass} ${bgClass}">${val1}</span>
-    <span class="d-block h-25px px-1">${val2}</span>
-  </div>`
-}
-
-const _ColDefsRef = ref([])
-const _DataListRef = shallowRef([])
-const _GridRef = shallowRef(null)
-const _GridBindProps = ref({
-  columnDefs: _ColDefsRef,
-  rowData: _DataListRef,
-  getRowId: params => params.data?.TAG_IDX,
-  rowHeight: 50,
-  class: 'ag-theme-custom',
-  excelStyles: excelStyles,
-  defaultColDef: {
-    cellClass: makeCellClass,
-    cellRenderer: makeCellRenderer,
-    filter: 'agMultiColumnFilter',
-    floatingFilter: true,
-    minWidth: 80,
-  },
-  defaultExcelExportParams: {
-    processCellCallback: (params) => params.value // HTML 제거
-  }
-})
-
-const _GridOnProps = { gridReady: params => { _GridRef.value = params.api } }
-
-const onInitialize = async function (DATA_UPDATE) {
+onMounted(async () => {
+  detailModal = new bootstrap.Modal(document.getElementById('diffDetailModal'))
   try {
-    onShowOverlay()
-    const projNo = _CurrProjNoRef.value; const regId = _CurrRegTypeIdRef.value
-    const rev1Info = _Revision1Ref.value; const rev2Info = _Revision2Ref.value
-    if (!projNo || !regId || !rev1Info || !rev2Info) return
+    const res = await axiosWrapper.get('/api/Project/Get', { headers: { Projectno: route.query.project_no } })
+    projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
+  } catch (e) { console.error(e) }
+})
 
-    if (!DATA_UPDATE || _ColDefsRef.value.length === 0) {
-      const baseMaster = await createBaseInformation(projNo, regId, false, false)
-      _BaseColsRef.value = baseMaster.getBaseColsByReg(projNo, regId)
-      _BaseAttrRef.value = baseMaster.getBaseAttrByReg(projNo, regId)
-      createColDefs()
-    }
-    await setRevisionData(1); await setRevisionData(2); await getCompareData()
-  } catch (error) {
-    sAlert.Error(`Failed to Load - ${error.message}`)
-  } finally { onHideOverlay() }
+// --- 데이터 가공 로직 ---
+const onSearch = async () => {
+  if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
+  gridApi.value?.setGridOption('loading', true)
+
+  try {
+    const results = await Promise.all(selectedProjects.value.map(p => 
+      axiosWrapper.post('/api/AdapterDataMapping/Get', { ProjectNo: p }, { headers: { Projectno: p } }).catch(() => [])
+    ))
+
+    const dataMap = new Map()
+    results.forEach((projectData, idx) => {
+      const pNo = selectedProjects.value[idx]
+      projectData.forEach(item => {
+        if (!dataMap.has(item.MAP_ID)) dataMap.set(item.MAP_ID, { MAP_ID: item.MAP_ID, projects: {} })
+        const info = { EXIST: true }
+        COMPARE_FIELDS.forEach(f => info[f] = item[f])
+        dataMap.get(item.MAP_ID).projects[pNo] = info
+      })
+    })
+
+    gridRowData.value = Array.from(dataMap.values()).map(row => {
+      let diffs = []
+      COMPARE_FIELDS.forEach(f => {
+        const vals = selectedProjects.value.map(p => JSON.stringify(row.projects[p]?.[f] || ''))
+        if (new Set(vals).size > 1) diffs.push(f)
+      })
+      const res = { MAP_ID: row.MAP_ID, CONDITION: diffs.length > 0 ? 'Diff' : 'Pass', DIFF_INFO: diffs.join(', ') }
+      selectedProjects.value.forEach(p => res[p] = row.projects[p] || { EXIST: false })
+      return res
+    })
+    dynamicCols.value = [...selectedProjects.value]
+  } finally { gridApi.value?.setGridOption('loading', false) }
 }
 
-const createColDefs = function () {
-  const baseCols = _BaseColsRef.value ?? []
-  const baseColDefs = baseCols.map(item => {
-    const attId = item.ATT_ID; const define = { field: attId, headerName: item.DESC }
-    if ([_Field._ID, _Field.PROJ_NO, _Field.REG_TYPE_ID].includes(attId)) define.hide = true
-    if ([_Field.PIC_NO, _Field.CRTER_NO, _Field.CHGER_NO].includes(attId)) {
-      define.filterValueGetter = params => {
-        const keyInfo = getNameDeptKey(attId); const d = params.data
-        return `${d[keyInfo.NAME] ?? ''}(${d[keyInfo.DEPT] ?? ''})`
-      }
-    }
-    return define
-  })
-  const _DefaultCols = [
-    { field: '_CHG_STATUS', headerName: 'Changed' },
-    { field: _Field.REV_NO, headerName: 'Revision No' },
-    { field: _Field.REV, headerName: 'Revision', hide: true },
-    { field: _Field.VER, headerName: 'Version', hide: true },
-    { field: 'STAGE', headerName: 'Stage' },
-    { field: 'REASON', headerName: 'Reason' },
-  ]
-  _ColDefsRef.value = _DefaultCols.concat(baseColDefs)
-}
-
-const setRevisionData = async function (REV_NUM) {
-  const projNo = _CurrProjNoRef.value; const regId = _CurrRegTypeIdRef.value
-  const revInfo = REV_NUM === 1 ? _Revision1Ref.value : _Revision2Ref.value
-  const baseAttr = _BaseAttrRef.value; const newDataIndex = {}
-  
-  const response = await ApiCommon.postDataGetRevData({
-    ProjectNo: projNo, REG_TYPE_ID: regId, Revision: revInfo.REV, Version: revInfo.VER ?? '',
-  }) || []
-
-  for (const dataItem of response) {
-    const tagIdx = dataItem.TAG_IDX; const newDataItem = {}
-    const dataIds = Object.keys(dataItem)
-    
-    for (const dataId of dataIds) {
-      const dataVal = dataItem[dataId]
-      if (dataId === _Field.ATTRIBUTES) {
-        (dataVal ?? []).forEach(attr => {
-          const attId = attr.ATT_ID; if (dataIds.includes(attId)) return
-          const baseInfo = baseAttr[attId]
-          if (baseInfo?.isCaseOrg) {
-            const caseInfo = baseInfo.CASE_INFO; const prntAttId = caseInfo?.PRNT_ATT_ID
-            let caseValue = null; try { caseValue = JSON.parse(attr.VALUE) } catch {}
-            if (prntAttId) newDataItem[`${attId}[{${prntAttId}}]`] = caseValue?.[dataItem[prntAttId]]
-            ;(caseInfo?.CASELIST ?? []).forEach(val => { newDataItem[`${attId}[${val}]`] = caseValue?.[val] })
-          } else {
-            newDataItem[attId] = String(attr.VALUE ?? '').trim()
-          }
-        })
-      } else if ([_Field.PIC_NO, _Field.CRTER_NO, _Field.CHGER_NO].includes(dataId)) {
-        const emp = await getEmployeeById(dataVal); const key = getNameDeptKey(dataId)
-        newDataItem[key.NAME] = emp.EMP_NM; newDataItem[key.DEPT] = emp.DEPT_NAME; newDataItem[dataId] = dataVal
-      } else if ([_Field.CRTE_DTM, _Field.CHGE_DTM].includes(dataId)) {
-        newDataItem[dataId] = dataVal ? fns_format(dataVal, 'yyyy-MM-dd HH:mm:ss') : dataVal
-      } else if (dataId === _Field.REV_NO) {
-        newDataItem[dataId] = revInfo.REV_NO; newDataItem[_Field.REV] = revInfo.REV
-        newDataItem[_Field.VER] = revInfo.VER; newDataItem['STAGE'] = revInfo.STAGE; newDataItem['REASON'] = revInfo.REASON
-      } else {
-        newDataItem[dataId] = dataVal
-      }
-    }
-    newDataIndex[tagIdx] = newDataItem
+// --- 모달 로직 ---
+const onCellClicked = (p) => {
+  if (p.column.getColId() === 'DIFF_INFO' && p.value) {
+    fullRowData.value = p.data
+    selectedMapId.value = p.data.MAP_ID
+    detailModal.show()
   }
-  if (REV_NUM === 1) _Rev1DataIdxRef.value = newDataIndex; else _Rev2DataIdxRef.value = newDataIndex
 }
 
-const getCompareData = async function () {
-  const rev1DataIdx = _Rev1DataIdxRef.value; const rev2DataIdx = _Rev2DataIdxRef.value
-  const tagIdxSet = new Set([...Object.keys(rev1DataIdx), ...Object.keys(rev2DataIdx)])
-  const baseAttIds = Object.keys(_BaseAttrRef.value); const exceptAttIds = [_Field._ID, _Field.REV, _Field.VER, _Field.CRTER_NO, _Field.CRTE_DTM, _Field.CHGER_NO, _Field.CHGE_DTM]
+// 탭 전환 시 모달 데이터 재구성
+watch([activeTab, fullRowData], () => {
+  if (!fullRowData.value) return
   
-  const modDataList = []; const orgDataList = []
-  tagIdxSet.forEach(tagIdx => {
-    const data1 = rev1DataIdx[tagIdx]; const data2 = rev2DataIdx[tagIdx]
-    let status = !data1 ? 'D' : !data2 ? 'A' : null
-    if (!status) {
-      const hasDiff = baseAttIds.some(id => !exceptAttIds.includes(id) && (data1[id] ?? '') !== (data2[id] ?? ''))
-      if (hasDiff) status = 'M'
-    }
-    const dataItem = Object.assign({}, data1 || data2, { TAG_IDX: tagIdx, _CHG_STATUS: status })
-    orgDataList.push(dataItem)
-    if (status) modDataList.push(dataItem)
-  })
-  _OrgDataListRef.value = orgDataList; _ModDataListRef.value = modDataList
-  _DataListRef.value = _IsChangesOnly.value ? modDataList : orgDataList
-}
+  const keyField = KEY_MAP[activeTab.value]
+  const combinedItems = new Map()
 
-const onShowChangesData = (IS_MOD) => { _DataListRef.value = IS_MOD ? _ModDataListRef.value : _OrgDataListRef.value }
+  // 모든 프로젝트의 해당 배열 데이터를 순회하며 Key ID 기준으로 취합
+  dynamicCols.value.forEach(pNo => {
+    let rawData = fullRowData.value[pNo]?.[activeTab.value]
+    if (!rawData) return
+
+    // MAP_CLS인 경우 ITEMS 내부를 참조하도록 예외처리
+    let list = activeTab.value === 'MAP_CLS' ? (rawData.ITEMS || []) : (Array.isArray(rawData) ? rawData : [])
+
+    list.forEach(item => {
+      const id = item[keyField]
+      if (!combinedItems.has(id)) combinedItems.set(id, { [keyField]: id })
+      combinedItems.get(id)[pNo] = item
+    })
+  })
+
+  modalRowData.value = Array.from(combinedItems.values())
+})
+
+const modalColumnDefs = computed(() => {
+  const keyField = KEY_MAP[activeTab.value]
+  const cols = [{ headerName: keyField, field: keyField, pinned: 'left', width: 180, cellClass: 'bg-light fw-bold' }]
+
+  dynamicCols.value.forEach(pNo => {
+    cols.push({
+      headerName: pNo,
+      marryChildren: true,
+      children: [
+        {
+          headerName: 'Detail Info',
+          valueGetter: p => {
+            const data = p.data[pNo]
+            if (!data) return '-'
+            // Key Field 제외한 나머지 정보를 문자열로 표현
+            return Object.entries(data)
+              .filter(([k]) => k !== keyField)
+              .map(([k, v]) => `${k}: ${v}`)
+              .join(' | ')
+          },
+          width: 400,
+          tooltipValueGetter: p => p.value,
+          cellStyle: p => {
+            // 다른 프로젝트와 값이 다르면 배경색 강조 (단순 로직)
+            const others = dynamicCols.value.filter(o => o !== pNo)
+            const isDiff = others.some(o => JSON.stringify(p.data[o]) !== JSON.stringify(p.data[pNo]))
+            return isDiff ? { backgroundColor: '#fff0f0' } : null
+          }
+        }
+      ]
+    })
+  })
+  return cols
+})
+
+// --- 그리드 기본 설정 (메인) ---
+const gridOptions = computed(() => ({
+  columnDefs: [
+    { headerName: 'Condition', field: 'CONDITION', width: 100, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? 'red' : 'green', fontWeight: 'bold' }) },
+    { headerName: 'Diff Info (Click)', field: 'DIFF_INFO', width: 180, pinned: 'left', cellStyle: { cursor: 'pointer', textDecoration: 'underline', color: '#0d6efd' } },
+    { headerName: 'Mapping ID', field: 'MAP_ID', width: 220, pinned: 'left' },
+    ...dynamicCols.value.map(p => ({
+      headerName: p,
+      children: [
+        { headerName: 'Exist', valueGetter: p2 => p2.data[p]?.EXIST ? 'Y' : 'N', width: 70 },
+        ...(viewMode.value === 'detail' ? COMPARE_FIELDS.map(f => ({
+          headerName: f,
+          valueGetter: p2 => {
+            const v = p2.data[p]?.[f]
+            return typeof v === 'object' ? JSON.stringify(v) : v
+          },
+          width: 150
+        })) : [])
+      ]
+    }))
+  ],
+  rowData: gridRowData.value,
+  onGridReady: p => gridApi.value = p.api,
+  isExternalFilterPresent: () => attributeFilter.value !== '',
+  doesExternalFilterPass: n => {
+    const kws = attributeFilter.value.split(/[\s,]+/).filter(k => k).map(k => k.toLowerCase())
+    return kws.length === 0 || kws.some(kw => String(n.data.MAP_ID).toLowerCase().includes(kw))
+  }
+}))
 </script>
+
+<style scoped>
+.custom-project-dropdown { width: 300px; }
+.custom-textarea-filter { width: 300px; font-size: 0.8rem; }
+.toggle-label { font-size: 0.8rem; cursor: pointer; }
+:deep(.ag-theme-alpine) { --ag-header-background-color: #f8f9fa; }
+.modal-xl { max-width: 95%; }
+</style>
