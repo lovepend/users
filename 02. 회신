@@ -38,9 +38,8 @@ const { userInfo } = storeToRefs(useAppAuthenticationStore())
 const { getEmployeeById, getNameDeptKey } = useEmployees()
 const route = useRoute()
 
-///////////////////////////////////////////////////////////////////////////////
-//#region import Component, Modal 사용시 필수 설정
 defineOptions({ name: 'CompareRevisions' })
+
 const _Props = defineProps({
   title: { type: [String, Object], required: false, default: null },
   proj_no: { type: [String, Object], required: false, default: null },
@@ -77,29 +76,29 @@ const onActionClose = function () {
   if (fn && typeof fn?.call === 'function') return fn.call(this)
 }
 defineExpose({ onClickApply: () => onActionClose(), onClickClose: () => onActionClose() })
-//#endregion
 
-//#region Received - Props
 const _CurrProjNoRef = computed(() => (_IsModalPage || !_IsOwnerPage) ? unref(_Props.proj_no) : route.query?.proj_no)
 const _CurrRegTypeIdRef = computed(() => (_IsModalPage || !_IsOwnerPage) ? unref(_Props.reg_type_id) : route.query?.reg_type_id)
 const _CurrRevisionsRef = computed(() => (_IsModalPage || !_IsOwnerPage) ? unref(_Props.revisions) : route.query?.revisions)
-watch([_CurrProjNoRef, _CurrRegTypeIdRef], () => onInitialize())
-watch(_CurrRevisionsRef, () => onInitialize(true))
-//#endregion
 
-/************************************
- * LIFECYCLE
- * ***********************************/
+watch(_CurrProjNoRef, () => onInitialize())
+watch(_CurrRegTypeIdRef, () => onInitialize())
+watch(_CurrRevisionsRef, () => onInitialize(true))
+
 onMounted(() => {
   if (sAlert?.isVisible()) sAlert.close()
   onInitialize()
 })
 
-/************************************
- * GLOBAL & DATA
- * ***********************************/
-const _Revision1Ref = computed(() => _CurrRevisionsRef.value?.[0] || null)
-const _Revision2Ref = computed(() => _CurrRevisionsRef.value?.[1] || null)
+const _Revision1Ref = computed(() => {
+  const revs = _CurrRevisionsRef.value; if (!revs) return null
+  try { return (revs[0]?.REV_NO && revs[0]?.REV) ? revs[0] : null } catch { return null }
+})
+const _Revision2Ref = computed(() => {
+  const revs = _CurrRevisionsRef.value; if (!revs) return null
+  try { return (revs[1]?.REV_NO && revs[1]?.REV) ? revs[1] : null } catch { return null }
+})
+
 const _BaseColsRef = shallowRef([])
 const _BaseAttrRef = shallowRef({})
 const _Rev1DataIdxRef = shallowRef({})
@@ -110,7 +109,7 @@ const _IsChangesOnly = shallowRef(true)
 watch(_IsChangesOnly, item => onShowChangesData(item))
 
 /************************************
- * EXCEL STYLES (화면 색상과 매칭)
+ * EXCEL STYLES 정의 (색상 코드 추가)
  * ***********************************/
 const excelStyles = [
   { id: 'sfore_A', font: { color: '#008000', bold: true } },
@@ -119,34 +118,31 @@ const excelStyles = [
   { id: 'sback_D', interior: { color: '#FFEBEE', pattern: 'Solid' } },
   { id: 'sfore_M', font: { color: '#0000FF' } },
   { id: 'sback_M', interior: { color: '#E3F2FD', pattern: 'Solid' } },
+  { id: 'sfore_A_Empty', font: { color: '#cccccc' } },
+  { id: 'sback_A_Empty', interior: { color: '#f0f0f0', pattern: 'Solid' } },
   { id: 'text-center', alignment: { horizontal: 'Center' } },
   { id: 'align-content-center', alignment: { vertical: 'Center' } }
 ]
 
-/************************************
- * GRID FUNCTIONS
- * ***********************************/
 const makeCellClass = function (params) {
-  const data = params.data
-  const value = params.value
-  const attId = params.column.colId
+  const data = params.data; const value = params.value; const attId = params.column.colId
   const classes = ['align-content-center', 'border-0']
-  const statId = '_CHG_STATUS'
-  const status = data?.[statId]
+  const statId = '_CHG_STATUS'; const status = data?.[statId]
   const empty = (value ?? '') == '' ? '_Empty' : ''
 
   if (attId === statId) {
     classes.push('text-center', 'sback_Status')
-    if (status) classes.push(`sfore_${status}${empty}`)
+    if (status === 'A') classes.push(`sfore_A${empty}`)
+    else if (status === 'D') classes.push(`sfore_D${empty}`)
+    else if (status === 'M') classes.push(`sfore_M${empty}`)
   } else {
-    // 엑셀 스타일 적용을 위해 M 상태일 때 배경색 클래스 추가 로직을 cellClass로 이동
+    // 엑셀 스타일 적용을 위해 M 상태일 때 배경색 클래스 추가
     if (status === 'A' || status === 'D') {
       classes.push(`sfore_${status}${empty}`, `sback_${status}${empty}`)
     } else if (status === 'M') {
       const tagIdx = data?.[_Field.TAG_IDX]
-      const val1 = _Rev1DataIdxRef.value?.[tagIdx]?.[attId] ?? ''
-      const val2 = _Rev2DataIdxRef.value?.[tagIdx]?.[attId] ?? ''
-      if (val1 !== val2) {
+      const data1 = _Rev1DataIdxRef.value?.[tagIdx]; const data2 = _Rev2DataIdxRef.value?.[tagIdx]
+      if ((data1?.[attId] ?? '') !== (data2?.[attId] ?? '')) {
         classes.push(`sfore_M${empty}`, `sback_M${empty}`)
       }
     }
@@ -155,83 +151,66 @@ const makeCellClass = function (params) {
 }
 
 const makeCellRenderer = function (params) {
-  const data = params.data
-  const attId = params.column.colId
-  const tagIdx = data?.[_Field.TAG_IDX]
-  if (!data || !tagIdx) return params.value ?? ''
-  
-  const status = data?._CHG_STATUS
-  const data1 = _Rev1DataIdxRef.value?.[tagIdx]
-  const data2 = _Rev2DataIdxRef.value?.[tagIdx]
-  
-  let val1 = data1?.[attId] ?? ''
-  let val2 = data2?.[attId] ?? ''
+  const data = params.data; const value = params.value ?? ''; const attId = params.column.colId
+  const statId = '_CHG_STATUS'; const status = data?.[statId]
+  const tagIdx = data?.[_Field.TAG_IDX]; const empty = (value ?? '') == '' ? '_Empty' : ''
+  if (!data || !tagIdx || attId === statId || attId === _Field.TAG_IDX) return value
 
-  // 사용자 정보 포맷팅
+  const exceptBackIds = [_Field.REV_NO, _Field.REV, _Field.VER, _Field.CRTE_DTM, _Field.CHGE_DTM, _Field.DEL_DTM, 'STAGE', 'REASON']
+  const exceptForeIds = [_Field.CRTE_DTM, _Field.CHGE_DTM, _Field.DEL_DTM]
+  const data1 = _Rev1DataIdxRef.value?.[tagIdx]; const data2 = _Rev2DataIdxRef.value?.[tagIdx]
+  
+  let val1 = data1?.[attId] ?? ''; let val2 = data2?.[attId] ?? ''
   if ([_Field.PIC_NO, _Field.CRTER_NO, _Field.CHGER_NO].includes(attId)) {
     const keyInfo = getNameDeptKey(attId)
-    val1 = data1 ? `${data1[keyInfo.NAME]}(${data1[keyInfo.DEPT]})` : ''
-    val2 = data2 ? `${data2[keyInfo.NAME]}(${data2[keyInfo.DEPT]})` : ''
+    val1 = data1 ? `${data1[keyInfo.NAME] ?? ''}(${data1[keyInfo.DEPT] ?? ''})` : ''
+    val2 = data2 ? `${data2[keyInfo.NAME] ?? ''}(${data2[keyInfo.DEPT] ?? ''})` : ''
   }
 
-  // 변경 상태에 따른 클래스 추출 (단순화)
-  const isDiff = val1 !== val2
   let fcClass = '', bgClass = ''
   if (status === 'A' || status === 'D') {
-    fcClass = `sfore_${status}`; bgClass = `sback_${status}`
-  } else if (status === 'M' && isDiff) {
-    fcClass = 'sfore_M'; bgClass = 'sback_M'
+    fcClass = `sfore_${status}${empty}`; bgClass = `sback_${status}${empty}`
+  } else if (val1 !== val2) {
+    if (!exceptForeIds.includes(attId)) fcClass = `sfore_M${empty}`
+    if (!exceptBackIds.includes(attId)) bgClass = `sback_M${empty}`
   }
 
-  return `
-    <div class="position-absolute top-0 bottom-0 start-0 end-0">
-      <span class="d-block h-25px px-1 ${fcClass} ${bgClass}">${val1}</span>
-      <span class="d-block h-25px px-1">${val2}</span>
-    </div>
-  `
+  return `<div class="position-absolute top-0 bottom-0 start-0 end-0">
+    <span class="d-block h-25px px-1 ${fcClass} ${bgClass}">${val1}</span>
+    <span class="d-block h-25px px-1">${val2}</span>
+  </div>`
 }
 
 const _ColDefsRef = ref([])
+const _DataListRef = shallowRef([])
+const _GridRef = shallowRef(null)
 const _GridBindProps = ref({
   columnDefs: _ColDefsRef,
   rowData: _DataListRef,
   getRowId: params => params.data?.TAG_IDX,
   rowHeight: 50,
   class: 'ag-theme-custom',
-  excelStyles: excelStyles, // 엑셀 스타일 등록
+  excelStyles: excelStyles,
   defaultColDef: {
     cellClass: makeCellClass,
     cellRenderer: makeCellRenderer,
-    minWidth: 80,
     filter: 'agMultiColumnFilter',
     floatingFilter: true,
+    minWidth: 80,
   },
   defaultExcelExportParams: {
-    fileName: `Revision_Compare_${fns_format(new Date(), 'yyyyMMdd')}.xlsx`,
-    // 엑셀에는 현재 리비전 값(val1)만 내보내거나, 두 값을 합쳐서 내보낼 수 있습니다.
-    processCellCallback: (params) => {
-      // HTML이 아닌 순수 텍스트만 내보내도록 설정
-      return params.value;
-    }
-  },
-  autoSizeStrategy: { type: 'fitCellContents' },
-  suppressRowTransform: true,
+    processCellCallback: (params) => params.value // HTML 제거
+  }
 })
 
-const _GridOnProps = {
-  gridReady: params => { _GridRef.value = params.api }
-}
-const _GridRef = shallowRef(null)
+const _GridOnProps = { gridReady: params => { _GridRef.value = params.api } }
 
-/************************************
- * DATA INITIALIZE FUNCTIONS
- * ***********************************/
 const onInitialize = async function (DATA_UPDATE) {
   try {
     onShowOverlay()
-    const projNo = _CurrProjNoRef.value
-    const regId = _CurrRegTypeIdRef.value
-    if (!projNo || !regId || !_Revision1Ref.value || !_Revision2Ref.value) return
+    const projNo = _CurrProjNoRef.value; const regId = _CurrRegTypeIdRef.value
+    const rev1Info = _Revision1Ref.value; const rev2Info = _Revision2Ref.value
+    if (!projNo || !regId || !rev1Info || !rev2Info) return
 
     if (!DATA_UPDATE || _ColDefsRef.value.length === 0) {
       const baseMaster = await createBaseInformation(projNo, regId, false, false)
@@ -239,96 +218,101 @@ const onInitialize = async function (DATA_UPDATE) {
       _BaseAttrRef.value = baseMaster.getBaseAttrByReg(projNo, regId)
       createColDefs()
     }
-    await setRevisionData(1)
-    await setRevisionData(2)
-    await getCompareData()
+    await setRevisionData(1); await setRevisionData(2); await getCompareData()
   } catch (error) {
     sAlert.Error(`Failed to Load - ${error.message}`)
-  } finally {
-    onHideOverlay()
-  }
+  } finally { onHideOverlay() }
 }
 
 const createColDefs = function () {
+  const baseCols = _BaseColsRef.value ?? []
+  const baseColDefs = baseCols.map(item => {
+    const attId = item.ATT_ID; const define = { field: attId, headerName: item.DESC }
+    if ([_Field._ID, _Field.PROJ_NO, _Field.REG_TYPE_ID].includes(attId)) define.hide = true
+    if ([_Field.PIC_NO, _Field.CRTER_NO, _Field.CHGER_NO].includes(attId)) {
+      define.filterValueGetter = params => {
+        const keyInfo = getNameDeptKey(attId); const d = params.data
+        return `${d[keyInfo.NAME] ?? ''}(${d[keyInfo.DEPT] ?? ''})`
+      }
+    }
+    return define
+  })
   const _DefaultCols = [
-    { field: '_CHG_STATUS', headerName: 'Changed', cellClass: 'text-center' },
+    { field: '_CHG_STATUS', headerName: 'Changed' },
     { field: _Field.REV_NO, headerName: 'Revision No' },
+    { field: _Field.REV, headerName: 'Revision', hide: true },
+    { field: _Field.VER, headerName: 'Version', hide: true },
     { field: 'STAGE', headerName: 'Stage' },
     { field: 'REASON', headerName: 'Reason' },
   ]
-  const baseColDefs = _BaseColsRef.value.map(item => ({
-    field: item.ATT_ID, 
-    headerName: item.DESC,
-    hide: [_Field._ID, _Field.PROJ_NO, _Field.REG_TYPE_ID].includes(item.ATT_ID)
-  }))
   _ColDefsRef.value = _DefaultCols.concat(baseColDefs)
 }
 
 const setRevisionData = async function (REV_NUM) {
-  const projNo = _CurrProjNoRef.value
-  const regId = _CurrRegTypeIdRef.value
+  const projNo = _CurrProjNoRef.value; const regId = _CurrRegTypeIdRef.value
   const revInfo = REV_NUM === 1 ? _Revision1Ref.value : _Revision2Ref.value
+  const baseAttr = _BaseAttrRef.value; const newDataIndex = {}
   
   const response = await ApiCommon.postDataGetRevData({
-    ProjectNo: projNo, REG_TYPE_ID: regId,
-    Revision: revInfo.REV, Version: revInfo.VER ?? '',
+    ProjectNo: projNo, REG_TYPE_ID: regId, Revision: revInfo.REV, Version: revInfo.VER ?? '',
   }) || []
 
-  const newDataIndex = {}
   for (const dataItem of response) {
-    const tagIdx = dataItem.TAG_IDX
-    const newDataItem = { ...dataItem }
+    const tagIdx = dataItem.TAG_IDX; const newDataItem = {}
+    const dataIds = Object.keys(dataItem)
     
-    // Attribute Flattening 로직 (기존 로직 유지)
-    if (dataItem[_Field.ATTRIBUTES]) {
-      dataItem[_Field.ATTRIBUTES].forEach(attr => {
-        newDataItem[attr.ATT_ID] = String(attr.VALUE ?? '').trim()
-      })
+    for (const dataId of dataIds) {
+      const dataVal = dataItem[dataId]
+      if (dataId === _Field.ATTRIBUTES) {
+        (dataVal ?? []).forEach(attr => {
+          const attId = attr.ATT_ID; if (dataIds.includes(attId)) return
+          const baseInfo = baseAttr[attId]
+          if (baseInfo?.isCaseOrg) {
+            const caseInfo = baseInfo.CASE_INFO; const prntAttId = caseInfo?.PRNT_ATT_ID
+            let caseValue = null; try { caseValue = JSON.parse(attr.VALUE) } catch {}
+            if (prntAttId) newDataItem[`${attId}[{${prntAttId}}]`] = caseValue?.[dataItem[prntAttId]]
+            ;(caseInfo?.CASELIST ?? []).forEach(val => { newDataItem[`${attId}[${val}]`] = caseValue?.[val] })
+          } else {
+            newDataItem[attId] = String(attr.VALUE ?? '').trim()
+          }
+        })
+      } else if ([_Field.PIC_NO, _Field.CRTER_NO, _Field.CHGER_NO].includes(dataId)) {
+        const emp = await getEmployeeById(dataVal); const key = getNameDeptKey(dataId)
+        newDataItem[key.NAME] = emp.EMP_NM; newDataItem[key.DEPT] = emp.DEPT_NAME; newDataItem[dataId] = dataVal
+      } else if ([_Field.CRTE_DTM, _Field.CHGE_DTM].includes(dataId)) {
+        newDataItem[dataId] = dataVal ? fns_format(dataVal, 'yyyy-MM-dd HH:mm:ss') : dataVal
+      } else if (dataId === _Field.REV_NO) {
+        newDataItem[dataId] = revInfo.REV_NO; newDataItem[_Field.REV] = revInfo.REV
+        newDataItem[_Field.VER] = revInfo.VER; newDataItem['STAGE'] = revInfo.STAGE; newDataItem['REASON'] = revInfo.REASON
+      } else {
+        newDataItem[dataId] = dataVal
+      }
     }
-    
-    // 날짜 및 사용자 정보 처리
-    if (dataItem[_Field.PIC_NO]) {
-      const emp = await getEmployeeById(dataItem[_Field.PIC_NO])
-      const keyInfo = getNameDeptKey(_Field.PIC_NO)
-      newDataItem[keyInfo.NAME] = emp.EMP_NM
-      newDataItem[keyInfo.DEPT] = emp.DEPT_NAME
-    }
-    
-    newDataItem[_Field.REV_NO] = revInfo.REV_NO
     newDataIndex[tagIdx] = newDataItem
   }
-  
-  if (REV_NUM === 1) _Rev1DataIdxRef.value = newDataIndex
-  else _Rev2DataIdxRef.value = newDataIndex
+  if (REV_NUM === 1) _Rev1DataIdxRef.value = newDataIndex; else _Rev2DataIdxRef.value = newDataIndex
 }
 
 const getCompareData = async function () {
-  const rev1DataIdx = _Rev1DataIdxRef.value
-  const rev2DataIdx = _Rev2DataIdxRef.value
+  const rev1DataIdx = _Rev1DataIdxRef.value; const rev2DataIdx = _Rev2DataIdxRef.value
   const tagIdxSet = new Set([...Object.keys(rev1DataIdx), ...Object.keys(rev2DataIdx)])
+  const baseAttIds = Object.keys(_BaseAttrRef.value); const exceptAttIds = [_Field._ID, _Field.REV, _Field.VER, _Field.CRTER_NO, _Field.CRTE_DTM, _Field.CHGER_NO, _Field.CHGE_DTM]
   
-  const modDataList = [], orgDataList = []
+  const modDataList = []; const orgDataList = []
   tagIdxSet.forEach(tagIdx => {
-    const data1 = rev1DataIdx[tagIdx], data2 = rev2DataIdx[tagIdx]
+    const data1 = rev1DataIdx[tagIdx]; const data2 = rev2DataIdx[tagIdx]
     let status = !data1 ? 'D' : !data2 ? 'A' : null
-    
     if (!status) {
-      // 필드 비교 로직
-      const isDiff = Object.keys(_BaseAttrRef.value).some(id => (data1[id] ?? '') !== (data2[id] ?? ''))
-      if (isDiff) status = 'M'
+      const hasDiff = baseAttIds.some(id => !exceptAttIds.includes(id) && (data1[id] ?? '') !== (data2[id] ?? ''))
+      if (hasDiff) status = 'M'
     }
-
-    const dataItem = { ...(data1 || data2), TAG_IDX: tagIdx, _CHG_STATUS: status }
+    const dataItem = Object.assign({}, data1 || data2, { TAG_IDX: tagIdx, _CHG_STATUS: status })
     orgDataList.push(dataItem)
     if (status) modDataList.push(dataItem)
   })
-
-  _OrgDataListRef.value = orgDataList
-  _ModDataListRef.value = modDataList
-  onShowChangesData(_IsChangesOnly.value)
+  _OrgDataListRef.value = orgDataList; _ModDataListRef.value = modDataList
+  _DataListRef.value = _IsChangesOnly.value ? modDataList : orgDataList
 }
 
-const onShowChangesData = (IS_MOD) => {
-  _DataListRef.value = IS_MOD ? _ModDataListRef.value : _OrgDataListRef.value
-}
+const onShowChangesData = (IS_MOD) => { _DataListRef.value = IS_MOD ? _ModDataListRef.value : _OrgDataListRef.value }
 </script>
