@@ -102,7 +102,6 @@ import * as bootstrap from 'bootstrap'
 const route = useRoute()
 let diffModal = null
 
-// --- State ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
@@ -112,7 +111,6 @@ const gridApi = shallowRef()
 const gridRowData = ref([])
 const dynamicCols = ref([])
 
-// 모달 전용 State
 const selectedMapId = ref('')
 const activeTab = ref('MAP_ATT')
 const modalRowData = ref([])
@@ -121,7 +119,16 @@ const clickedRow = ref(null)
 const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'CATEGORY', 'TOOL_ID', 'TOOL_TYPE', 'MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']
 const TAB_KEY_MAP = { 'MAP_ATT': 'ATT_ID', 'MAP_CLS': 'OBJ_CLS_ID', 'MAP_TMPLS': 'TMPL_ID', 'MAP_RELS': 'REL_ID' }
 
-// --- 프로젝트 선택 필터 (기본 로직) ---
+// --- 공통 설정 (미니필터 핵심) ---
+const defaultColDef = { 
+  sortable: true, 
+  resizable: true, 
+  filter: true,           // 필터 기능 활성화
+  floatingFilter: true,  // 헤더 바로 아래 미니 필터(인풋창) 활성화
+  flex: 1,
+  minWidth: 100
+}
+
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   return projectList.value.filter(p => !kw || p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
@@ -146,7 +153,6 @@ onMounted(async () => {
 
 const areEqual = (v1, v2) => JSON.stringify(v1 || '') === JSON.stringify(v2 || '')
 
-// --- 메인 조회 로직 (복구) ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   gridApi.value?.setGridOption('loading', true)
@@ -181,7 +187,6 @@ const onSearch = async () => {
   } finally { gridApi.value?.setGridOption('loading', false) }
 }
 
-// --- 메인 그리드 컬럼 정의 ---
 const mainColumnDefs = computed(() => {
   const cols = [
     { headerName: 'Condition', field: 'CONDITION', width: 110, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' }) },
@@ -200,7 +205,6 @@ const mainColumnDefs = computed(() => {
   return cols
 })
 
-// --- 모달 로직 (신규 반영) ---
 const onCellClicked = (p) => {
   if (p.column.getColId() === 'DIFF_INFO' && p.value) {
     clickedRow.value = p.data; selectedMapId.value = p.data.MAP_ID; diffModal.show()
@@ -242,8 +246,6 @@ const modalColumnDefs = computed(() => {
   return cols
 })
 
-// --- 공통 설정 ---
-const defaultColDef = { sortable: true, resizable: true, filter: true, floatingFilter: true }
 const onGridReady = p => { gridApi.value = p.api }
 const isExternalFilterPresent = () => attributeFilter.value.trim() !== ''
 const doesExternalFilterPass = n => {
