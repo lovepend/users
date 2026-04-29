@@ -119,19 +119,18 @@ const clickedRow = ref(null)
 const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'CATEGORY', 'TOOL_ID', 'TOOL_TYPE', 'MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']
 const TAB_KEY_MAP = { 'MAP_ATT': 'ATT_ID', 'MAP_CLS': 'OBJ_CLS_ID', 'MAP_TMPLS': 'TMPL_ID', 'MAP_RELS': 'REL_ID' }
 
-// --- [핵심] 미니 필터(Floating Filter) 자동 작동 설정 ---
+// --- [수정] 공통 설정: 너비 원복을 위해 flex: 1 제거 ---
 const defaultColDef = { 
   sortable: true, 
   resizable: true, 
-  filter: 'agTextColumnFilter', // 모든 컬럼에 텍스트 필터 적용
-  floatingFilter: true,         // 헤더 아래 미니 필터창 표시
+  filter: 'agTextColumnFilter',
+  floatingFilter: true,
   filterParams: {
-    debounceMs: 200,            // 입력 시 0.2초 후 자동 필터링
+    debounceMs: 200,
     suppressAndOrCondition: true 
   },
-  suppressFloatingFilterButton: true, // 우측 작은 돋보기 버튼 숨기고 인풋창만 넓게 사용
-  flex: 1,
-  minWidth: 120
+  suppressFloatingFilterButton: true,
+  // flex: 1 대신 적절한 너비를 직접 부여하기 위해 주석 처리하거나 제거합니다.
 }
 
 const filteredProjectList = computed(() => {
@@ -192,6 +191,7 @@ const onSearch = async () => {
   } finally { gridApi.value?.setGridOption('loading', false) }
 }
 
+// --- [수정] 메인 그리드 컬럼 정의: 너비 원복 ---
 const mainColumnDefs = computed(() => {
   const cols = [
     { headerName: 'Condition', field: 'CONDITION', width: 110, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' }) },
@@ -199,13 +199,17 @@ const mainColumnDefs = computed(() => {
     { headerName: 'Mapping ID', field: 'MAP_ID', width: 200, pinned: 'left' }
   ]
   dynamicCols.value.forEach(proj => {
+    // Exist 컬럼 고정 너비
     const children = [{ headerName: 'Exist', valueGetter: p => (p.data[proj]?.EXIST ? 'Alive' : '-'), width: 80, cellStyle: { textAlign: 'center' }, cellRenderer: p => p.value === 'Alive' ? `<i class="fa fa-check-circle text-success"></i>` : `<span class="text-muted">-</span>` }]
+    
     if (viewMode.value === 'detail') {
       COMPARE_FIELDS.forEach(f => {
         children.push({ headerName: f, valueGetter: p => { const v = p.data[proj]?.[f]; return typeof v === 'object' ? JSON.stringify(v) : (v ?? '') }, width: 150, tooltipValueGetter: p => p.value })
       })
     }
-    cols.push({ headerName: `${proj}`, children: children })
+    
+    // 프로젝트 그룹 컬럼 (간편 조회 시에도 너무 넓어지지 않게 설정)
+    cols.push({ headerName: `${proj}`, children: children, width: viewMode.value === 'simple' ? 100 : undefined })
   })
   return cols
 })
@@ -266,7 +270,6 @@ watch([attributeFilter, viewMode], () => gridApi.value?.onFilterChanged())
 .toggle-label { cursor: pointer; font-size: 0.82rem; padding: 4px 16px; }
 .btn-check:checked + .toggle-label { background-color: #fff !important; color: #0d6efd !important; }
 
-/* 미니 필터 영역 클릭 및 입력 활성화 */
 :deep(.ag-theme-custom) { 
   --ag-header-background-color: #f8f9fa; 
   --ag-font-size: 12px; 
