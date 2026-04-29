@@ -22,19 +22,30 @@
                     type="text"
                     class="form-control form-control-sm"
                     v-model="projectSearchKeyword"
-                    placeholder="프로젝트 검색..."
+                    placeholder="프로젝트 번호/명 검색..."
                     @click.stop
                   />
                 </li>
                 <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
-                  <label class="form-check-label d-flex align-items-center w-100 fw-bold cursor-pointer">
-                    <input class="form-check-input me-2 mt-0" type="checkbox" :checked="isAllSelected" :indeterminate="isIndeterminate" @change="toggleAllSelection" />
+                  <label class="form-check-label d-flex align-items-center w-100 fw-bold" style="cursor: pointer">
+                    <input
+                      class="form-check-input me-2 mt-0"
+                      type="checkbox"
+                      :checked="isAllSelected"
+                      :indeterminate="isIndeterminate"
+                      @change="toggleAllSelection"
+                    />
                     <span>전체 선택 / 해제</span>
                   </label>
                 </li>
                 <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
-                  <label class="form-check-label d-flex align-items-center w-100 cursor-pointer">
-                    <input class="form-check-input me-2 mt-0" type="checkbox" :value="proj.PROJ_NO" v-model="selectedProjects" />
+                  <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
+                    <input
+                      class="form-check-input me-2 mt-0"
+                      type="checkbox"
+                      :value="proj.PROJ_NO"
+                      v-model="selectedProjects"
+                    />
                     <span class="text-truncate">
                       <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
                       <small class="text-muted ms-1">({{ proj.DESC }})</small>
@@ -51,11 +62,15 @@
               class="form-control form-control-sm custom-textarea-filter"
               rows="1"
               v-model="searchKeywordRef"
-              placeholder="Tag No... (공백/엔터 구분)"
+              placeholder="Tag No... (공백/엔터/쉼표)"
             ></textarea>
           </div>
 
-          <button class="btn btn-sm btn-primary px-3 shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0">
+          <button
+            class="btn btn-sm btn-primary px-3 shadow-sm"
+            @click="onSearch"
+            :disabled="selectedProjects.length === 0"
+          >
             <i class="fa fa-search me-1"></i>조회
           </button>
 
@@ -95,11 +110,15 @@
       <div class="custom-modal-window shadow-lg">
         <div class="modal-header-dark">
           <div class="d-flex align-items-center gap-2">
-            <span class="badge shadow-sm" :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }">{{ selectedRow?.Source }}</span>
+            <span class="badge shadow-sm" :style="{ backgroundColor: selectedRow?.Source === 'Working' ? '#ed6c02' : '#0288d1' }">
+              {{ selectedRow?.Source }}
+            </span>
             <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
           </div>
           <div class="d-flex gap-2">
-            <button class="btn btn-xs btn-outline-light" @click="isJsonMode = !isJsonMode">{{ isJsonMode ? 'Table View' : 'JSON View' }}</button>
+            <button class="btn btn-xs btn-outline-light" @click="isJsonMode = !isJsonMode">
+              {{ isJsonMode ? 'Table View' : 'JSON View' }}
+            </button>
             <button @click="closeModal" class="btn btn-xs btn-danger">✕</button>
           </div>
         </div>
@@ -123,14 +142,14 @@ import { sortBy } from 'lodash-es'
 import { sAlert } from '@/utils/messages/alert-common'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-// --- State (A와 B의 결합) ---
+// --- 상태 관리 ---
 const gridApi = shallowRef()
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
-const searchKeywordRef = ref('') // B의 검색 키워드
-const localFilterQuery = ref('') // B의 결과 내 검색
-const columnFilterQuery = ref('') // B의 컬럼 필터
+const searchKeywordRef = ref('')
+const localFilterQuery = ref('')
+const columnFilterQuery = ref('')
 const viewMode = ref('simple')
 
 const rawDataList = ref([])
@@ -141,23 +160,44 @@ const showModal = ref(false)
 const selectedRow = ref(null)
 const isJsonMode = ref(false)
 
-// --- 프로젝트 선택 (A 로직) ---
+// --- [A] 프로젝트 선택 로직 ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   if (!kw) return projectList.value
-  return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
+  return projectList.value.filter(p => 
+    p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw))
+  )
 })
-const isAllSelected = computed(() => filteredProjectList.value.length > 0 && filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO)))
+
+const isAllSelected = computed(() => 
+  filteredProjectList.value.length > 0 && 
+  filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+)
+
 const isIndeterminate = computed(() => {
   const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
   return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
 })
+
 const toggleAllSelection = e => {
   const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
-  selectedProjects.value = e.target.checked ? [...new Set([...selectedProjects.value, ...filteredIds])] : selectedProjects.value.filter(id => !filteredIds.includes(id))
+  selectedProjects.value = e.target.checked 
+    ? [...new Set([...selectedProjects.value, ...filteredIds])] 
+    : selectedProjects.value.filter(id => !filteredIds.includes(id))
 }
 
-// --- 데이터 페칭 및 로직 (B 로직) ---
+// --- [B] 데이터 조회 및 하이라이트 로직 ---
+const highlightRenderer = p => {
+  const val = p.value === null || p.value === undefined ? '' : String(p.value)
+  if (!val || !localFilterQuery.value.trim()) return val
+  let text = val
+  localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).forEach(kw => {
+    const escaped = kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    text = text.replace(new RegExp(`(${escaped})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
+  })
+  return text
+}
+
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   gridApi.value?.setGridOption('loading', true)
@@ -166,7 +206,6 @@ const onSearch = async () => {
     const searchKeys = searchKeywordRef.value.split(/[\s,\n]+/).filter(k => k)
     let combined = []
 
-    // 선택된 여러 프로젝트에 대해 B의 로직 수행
     for (const projNo of selectedProjects.value) {
       for (const key of searchKeys) {
         const payload = { ProjectNo: projNo, Keyword: key }
@@ -185,7 +224,6 @@ const onSearch = async () => {
       }
     }
 
-    // 속성 및 컬럼 가공
     const allAttIds = new Set()
     const allKeys = new Set()
     const fixedKeys = ['Source', 'DELETED', 'TAG_IDX', 'TAG_NO', 'EP_ID', 'CLS_ID', 'ATTRIBUTES', '_id', 'ProjNo']
@@ -204,12 +242,10 @@ const onSearch = async () => {
       return flatItem
     })
 
-    // 컬럼 정의 생성 (상세 모드 대응)
     dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
       headerName: id, field: `ATT_${id}`, minWidth: 130, headerClass: 'att-column-header',
       cellRenderer: highlightRenderer,
-      cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000' }),
-      hide: viewMode.value === 'simple' // 간편 모드 시 속성 숨김 (선택 사항)
+      cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000' })
     }))
 
     dynamicRemainingCols.value = Array.from(allKeys).sort().map(k => ({
@@ -217,39 +253,41 @@ const onSearch = async () => {
     }))
 
     rawDataList.value = sortBy(processedData, ['ProjNo', 'TAG_NO', 'Source'])
-  } catch (err) { sAlert.Error('조회 실패') }
-  finally { gridApi.value?.setGridOption('loading', false) }
+  } catch (err) {
+    sAlert.Error('조회 실패')
+  } finally {
+    gridApi.value?.setGridOption('loading', false)
+  }
 }
 
-const highlightRenderer = p => {
-  const val = p.value === null || p.value === undefined ? '' : String(p.value)
-  if (!val || !localFilterQuery.value.trim()) return val
-  let text = val
-  localFilterQuery.value.split(/[\s,\n]+/).filter(k => k).forEach(kw => {
-    text = text.replace(new RegExp(`(${kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
-  })
-  return text
-}
-
-// --- 그리드 설정 ---
+// --- 그리드 정의 ---
 const mainColDefs = computed(() => {
   const baseCols = [
-    { headerName: 'Project', field: 'ProjNo', width: 120, pinned: 'left', filter: true, cellStyle: { fontWeight: 'bold' } },
-    { headerName: 'Source', field: 'Source', width: 110, pinned: 'left', 
+    { headerName: 'Project', field: 'ProjNo', width: 120, pinned: 'left', cellStyle: { fontWeight: 'bold' } },
+    { headerName: 'Source', field: 'Source', width: 100, pinned: 'left',
       cellRenderer: p => `<span class="badge shadow-sm" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'};color:white;">${p.value}</span>`
     },
     { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'CLS_ID', headerName: 'Class', width: 140, pinned: 'left', cellRenderer: highlightRenderer,
+    { field: 'CLS_ID', headerName: 'Class', width: 130, pinned: 'left', cellRenderer: highlightRenderer,
       cellStyle: { cursor: 'pointer', textDecoration: 'underline', color: '#0d6efd', fontWeight: 'bold' }
     },
   ]
 
-  // 상세 모드일 때만 모든 컬럼 표시
+  // 상세 모드일 때만 동적 컬럼 추가
   const dynamicCols = viewMode.value === 'detail' ? [...dynamicAttCols.value, ...dynamicRemainingCols.value] : []
-  
+
   return [...baseCols, ...dynamicCols].filter(c => {
     if (!columnFilterQuery.value.trim() || c.pinned) return true
     return columnFilterQuery.value.toLowerCase().split(/[\s,\n]+/).some(kw => c.headerName?.toLowerCase().includes(kw))
+  })
+})
+
+const filteredData = computed(() => {
+  if (!localFilterQuery.value.trim()) return rawDataList.value
+  const kws = localFilterQuery.value.toLowerCase().split(/[\s,\n]+/).filter(k => k)
+  return rawDataList.value.filter(i => {
+    const target = `${i.TAG_NO} ${i.ProjNo} ${i.Source} ${i.CLS_ID}`.toLowerCase()
+    return kws.some(kw => target.includes(kw))
   })
 })
 
@@ -263,15 +301,6 @@ const gridBindProps = computed(() => ({
   class: 'ag-theme-custom'
 }))
 
-const filteredData = computed(() => {
-  if (!localFilterQuery.value.trim()) return rawDataList.value
-  const kws = localFilterQuery.value.toLowerCase().split(/[\s,\n]+/).filter(k => k)
-  return rawDataList.value.filter(i => {
-    const target = `${i.TAG_NO} ${i.ProjNo} ${i.Source} ${i.CLS_ID}`.toLowerCase()
-    return kws.some(kw => target.includes(kw))
-  })
-})
-
 const onGridReady = p => { gridApi.value = p.api }
 const onCellClicked = p => {
   if (p.column.getColId() === 'Source') {
@@ -280,15 +309,18 @@ const onCellClicked = p => {
   }
 }
 
-// --- 모달 로직 (B 로직) ---
+// --- 모달 그리드 정의 ---
 const modalGridBindProps = computed(() => {
   if (!selectedRow.value) return { columnDefs: [], rowData: [] }
   const rows = []
   Object.entries(selectedRow.value).forEach(([k, v]) => {
-    if (k !== 'ATTRIBUTES' && !k.startsWith('ATT_') && k !== 'Source') rows.push({ category: 'System', key: k, value: v ?? '-' })
+    if (k !== 'ATTRIBUTES' && !k.startsWith('ATT_') && k !== 'Source') 
+      rows.push({ category: 'System', key: k, value: v ?? '-' })
   })
   if (Array.isArray(selectedRow.value.ATTRIBUTES)) {
-    selectedRow.value.ATTRIBUTES.forEach(a => rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' }))
+    selectedRow.value.ATTRIBUTES.forEach(a => 
+      rows.push({ category: 'Attribute', key: a.ATT_ID, value: a.VALUE ?? 'null' })
+    )
   }
   return {
     columnDefs: [
@@ -296,9 +328,12 @@ const modalGridBindProps = computed(() => {
       { headerName: 'Property', field: 'key', width: 200 },
       { headerName: 'Value', field: 'value', flex: 1 },
     ],
-    rowData: rows
+    rowData: rows,
+    headerHeight: 35,
+    rowHeight: 32,
   }
 })
+
 const closeModal = () => { showModal.value = false; selectedRow.value = null; }
 
 onMounted(async () => {
@@ -312,25 +347,31 @@ watch([localFilterQuery, viewMode], () => { gridApi.value?.onFilterChanged() })
 </script>
 
 <style scoped lang="scss">
-/* A의 토글 버튼 스타일 및 B의 테마 통합 */
 .ag-theme-custom {
   --ag-header-background-color: #f8f9fa;
   --ag-font-size: 12px;
-  :deep(.filter-highlight) { background-color: #ffeb3b; font-weight: bold; }
-  :deep(.att-column-header) { background-color: #fff9db !important; }
+  :deep(.filter-highlight) { background-color: #ffeb3b; font-weight: bold; border-radius: 2px; }
+  :deep(.att-column-header) { background-color: #fff9db !important; color: #856404 !important; }
 }
 
 .custom-project-dropdown { min-width: 300px; border: 1px solid #cbd5e1; }
 .custom-textarea-filter { width: 250px; resize: none; font-size: 12px; }
 
-/* 슬라이딩 토글 버튼 (A 스타일) */
+/* A 스타일 슬라이딩 토글 */
 .toggle-label { border: none !important; color: #6c757d; font-weight: 600; transition: all 0.2s ease; font-size: 0.8rem; }
 .btn-check:checked + .toggle-label { background-color: #ffffff !important; color: #0d6efd !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
 
-/* 모달 스타일 (B 스타일) */
-.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; }
-.custom-modal-window { background: #fff; width: 1000px; height: 80%; border-radius: 8px; display: flex; flex-direction: column; }
-.modal-header-dark { background: #343a40; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
-.modal-body-content { flex: 1; }
-.cursor-pointer { cursor: pointer; }
+/* B 스타일 모달 */
+.custom-modal-overlay { 
+  position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+  background: rgba(15, 23, 42, 0.6); z-index: 9999; 
+  display: flex; align-items: center; justify-content: center; 
+}
+.custom-modal-window { 
+  background: #fff; width: 1100px; height: 85%; border-radius: 12px; 
+  display: flex; flex-direction: column; overflow: hidden; 
+}
+.modal-header-dark { background: #1e293b; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
+.modal-body-content { flex: 1; background: #fff; }
+.json-wrapper { background: #f1f5f9; font-family: monospace; }
 </style>
