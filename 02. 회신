@@ -1,300 +1,312 @@
 <template>
-  <div class="component-template">
-    <header class="template__page-head">
-      <div class="template__title-wrapper">
-        <h1 class="template__page-title">컴포넌트 가이드</h1>
-        <span class="tpl-badge">v1.2</span>
+  <div class="main-layout">
+    <header class="main-header">
+      <div class="header-content">
+        <h1 class="header-title">컴포넌트 라이브러리 가이드</h1>
+        <div class="header-badges">
+          <span class="badge primary">Vue 3</span>
+          <span class="badge outline">Standard UI</span>
+        </div>
       </div>
-      <p class="template__page-desc">공통 컴포넌트의 사용 예시와 UI 레이아웃 가이드를 제공합니다.</p>
+      
+      <nav class="quick-nav">
+        <a href="#section-title" class="nav-item">PageTitle</a>
+        <a href="#section-card" class="nav-item">Cards</a>
+        <a href="#section-form" class="nav-item">Forms</a>
+        <a href="#section-action" class="nav-item">Actions</a>
+      </nav>
     </header>
 
-    <div class="template__body">
-      <nav class="template__toc" aria-label="페이지 섹션">
-        <a class="template__toc-link" href="#tpl-section-pageTitle">PageTitle</a>
-        <a class="template__toc-link" href="#tpl-section-cards">Cards</a>
-        <a class="template__toc-link" href="#tpl-section-buttons">Buttons</a>
-        <a class="template__toc-link" href="#tpl-section-inputs">Inputs</a>
-        <a class="template__toc-link" href="#tpl-section-toast">Toast</a>
-      </nav>
-
-      <div class="template__stack">
-        <section class="template__section template__section--first" id="tpl-section-pageTitle">
-          <h2 class="template__section-title">PageTitle & Global Actions</h2>
-          <div class="tpl-demo-container">
-            <PageTitle icon="fa-laptop-code" title="프로젝트 관리" style="width: 100%">
+    <main class="content-body">
+      <div class="content-inner">
+        
+        <section id="section-title" class="content-section">
+          <div class="section-header">
+            <h2 class="section-label">PageTitle & Global Actions</h2>
+          </div>
+          <div class="demo-card">
+            <PageTitle icon="fa-lock" title="시스템 설정" style="width: 100%">
               <template #sub-content>
                 <CheckBox
-                  id="tpl-cb-agree"
-                  label="필터 잠금"
+                  id="cb-edit-mode"
+                  label="편집 활성화"
                   v-model:value="checkDemo.agree"
-                  @change="onCheckDemoChange('agree', $event)"
                 />
               </template>
               <template #actions>
-                <div class="tpl-action-group">
+                <div class="action-group">
                   <InputBox
-                    id="tpl-in-keywords"
+                    id="in-search"
+                    placeholder="검색어를 입력하세요..."
                     v-model:value="formDemo.inputText"
-                    placeholder="검색어 입력..."
                     icon="fa-search"
-                    @input="onFormInputDemo"
-                    @clear="onFormInputClear"
                   />
                   <SelectBox
                     :list="formDemo.selectList"
                     v-model:value="formDemo.selectId"
-                    placeholder="카테고리"
-                    @change="onFormSelectChange"
+                    placeholder="필터 선택"
                   />
-                  <ButtonsComponent :buttons="buttonData1" @button-click="handleButtonClick" />
+                  <ButtonsComponent :buttons="buttonData0" @button-click="handleButtonClick" />
                 </div>
               </template>
             </PageTitle>
           </div>
         </section>
 
-        <section id="tpl-section-cards" class="template__section">
-          <h2 class="template__section-title">DefaultCard Layout</h2>
-          <p class="template__section-desc">표준 카드 레이아웃으로 헤더, 탭, 액션바를 포함합니다.</p>
-
-          <div class="template__grid">
-            <div class="template__demo">
-              <DefaultCard
-                :title="example1.title"
-                :tabs="example1.tabs"
-                v-model:active-tab="activeTab1"
-                class="template__card"
-                @tab-change="onTabChange('예시1', $event)"
-              >
-                <template #header-right>
-                  <ButtonsComponent :buttons="buttonData0" @button-click="handleButtonClick" />
-                </template>
-                <template #actions>
-                  <div class="tpl-card-actions">
-                    <CheckBox id="tpl-cb-news" label="상태 요약 보기" v-model:value="checkDemo.news" />
-                    <SwitchBox :list="formDemo.switchList" v-model:value="formDemo.switchId" />
+        <section id="section-card" class="content-section">
+          <div class="section-header">
+            <h2 class="section-label">Card View Examples</h2>
+          </div>
+          <div class="card-grid">
+            <DefaultCard
+              :title="example1.title"
+              :tabs="example1.tabs"
+              v-model:active-tab="activeTab1"
+              @tab-change="onTabChange('재고', $event)"
+            >
+              <div class="card-content-box">
+                <div class="mini-table">
+                  <div class="mini-table-head">
+                    <span>코드</span><span>품목명</span><span>수량</span><span>상태</span>
                   </div>
-                </template>
-                
-                <div class="tpl-mini-grid">
-                  <div class="tpl-mini-grid__head tpl-mini-grid__row">
-                    <span>코드</span><span>항목</span><span>수량</span><span>상태</span>
-                  </div>
-                  <div v-for="row in miniRows" :key="row.code" class="tpl-mini-grid__row">
-                    <span>{{ row.code }}</span>
-                    <span>{{ row.name }}</span>
-                    <span class="tpl-num">{{ row.qty }}</span>
-                    <span :class="['tpl-status', row.status === '정상' ? 'is-ok' : 'is-warn']">{{ row.status }}</span>
+                  <div v-for="row in miniRows" :key="row.code" class="mini-table-row">
+                    <span class="txt-code">{{ row.code }}</span>
+                    <span class="txt-name">{{ row.name }}</span>
+                    <span class="txt-num">{{ row.qty }}</span>
+                    <span :class="['status-pill', row.status === '정상' ? 'success' : 'warn']">
+                      {{ row.status }}
+                    </span>
                   </div>
                 </div>
-              </DefaultCard>
+              </div>
+            </DefaultCard>
+
+            <DefaultCard title="데이터 요약" class="summary-card">
+              <template #header-right>
+                <SwitchBox :list="formDemo.switchListDisabled" v-model:value="formDemo.switchId2" />
+              </template>
+              <div class="placeholder-content">
+                <i class="fa fa-chart-line"></i>
+                <p>데이터 분석을 위해 탭을 선택해주세요.</p>
+              </div>
+            </DefaultCard>
+          </div>
+        </section>
+
+        <section id="section-form" class="content-section">
+          <div class="section-header">
+            <h2 class="section-label">Form Controls</h2>
+          </div>
+          <div class="form-row-grid">
+            <div class="input-field">
+              <label>텍스트 입력</label>
+              <InputBox v-model:value="formDemo.inputMemo" placeholder="메모를 남겨주세요." />
+            </div>
+            <div class="input-field">
+              <label>상태 선택</label>
+              <SelectBox :list="formDemo.selectList" v-model:value="formDemo.selectId" />
+            </div>
+            <div class="input-field">
+              <label>알림 설정</label>
+              <SwitchBox :list="formDemo.switchList" v-model:value="formDemo.switchId" />
             </div>
           </div>
         </section>
 
-        <section class="template__section" id="tpl-section-inputs">
-          <h2 class="template__section-title">Form Controls</h2>
-          <div class="tpl-form-grid">
-            <div class="tpl-form-item">
-              <label class="tpl-label">SelectBox</label>
-              <SelectBox :list="formDemo.selectList" v-model:value="formDemo.selectId" @change="onFormSelectChange" />
-            </div>
-            <div class="tpl-form-item">
-              <label class="tpl-label">InputBox</label>
-              <InputBox v-model:value="formDemo.inputMemo" placeholder="메모를 입력하세요" />
-            </div>
-            <div class="tpl-form-item">
-              <label class="tpl-label">SwitchBox</label>
-              <SwitchBox :list="formDemo.switchListDisabled" v-model:value="formDemo.switchId2" />
-            </div>
-          </div>
-        </section>
-
-        <section class="template__section" id="tpl-section-toast">
-          <h2 class="template__section-title">Global Toast</h2>
-          <div class="tpl-toast-demo">
-            <div class="tpl-toast-demo__buttons">
-              <button type="button" class="tpl-btn tpl-btn--primary" @click="showTplToastSuccess">Success</button>
-              <button type="button" class="tpl-btn tpl-btn--danger" @click="showTplToastFail">Error</button>
-              <button type="button" class="tpl-btn tpl-btn--warning" @click="showTplToastWarning">Confirm Modal</button>
-              <button type="button" class="tpl-btn tpl-btn--ghost" @click="showTplToastConfirm">Delete Dialog</button>
-            </div>
-          </div>
-        </section>
       </div>
-    </div>
+    </main>
   </div>
 </template>
 
+<script setup>
+/* 기존에 쓰시던 script 로직 그대로 붙여넣으시면 됩니다 */
+import { reactive, ref } from 'vue'
+import PageTitle from '@/components/toolBar/PageTitle.vue'
+import ButtonsComponent from '@/components/editors/button/ButtonsComponent.vue'
+import DefaultCard from '@/components/default/DefaultCard.vue'
+import CheckBox from '@/components/default/editors/CheckBox.vue'
+import SelectBox from '@/components/default/editors/SelectBox.vue'
+import InputBox from '@/components/default/editors/InputBox.vue'
+import SwitchBox from '@/components/default/editors/SwitchBox.vue'
+
+// 데이터 및 이벤트 로직 (생략 - 기존 코드 유지)
+const activeTab1 = ref('list')
+const checkDemo = reactive({ agree: true })
+const formDemo = reactive({
+  inputText: '',
+  selectId: 'opt-1',
+  selectList: [{ id: 'opt-1', label: '옵션 01' }, { id: 'opt-2', label: '옵션 02' }],
+  switchList: [{ id: 'on', label: 'ON' }, { id: 'off', label: 'OFF' }],
+  switchListDisabled: [{ id: 'a', label: 'A' }, { id: 'b', label: 'B' }]
+})
+const buttonData0 = ref([{ id: 'save', text: '저장', color: 'var(--btn03)', icon: 'fa-save' }])
+const miniRows = [
+  { code: 'A01', name: '아이템 1', qty: 10, status: '정상' },
+  { code: 'A02', name: '아이템 2', qty: 0, status: '품절' }
+]
+
+const handleButtonClick = (e, id) => console.log(id)
+const onTabChange = (n, id) => console.log(n, id)
+</script>
+
 <style scoped>
-  .component-template {
-    --tpl-divider: var(--border01, rgba(0, 0, 0, 0.08));
-    display: flex;
-    flex-direction: column;
-    width: 100%;
-    height: 100%;
-    max-width: 1280px;
-    margin: 0 auto;
-    overflow: hidden;
-    background: var(--bg01);
-  }
+/* 핵심 레이아웃 스타일 */
+.main-layout {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100vh;
+  background-color: #f4f7fa; /* 연한 배경색으로 컴포넌트 강조 */
+  color: #333;
+}
 
-  /* 헤더 디자인 */
-  .template__page-head {
-    padding: 24px 32px;
-    background: var(--bg01);
-  }
+.main-header {
+  background: #fff;
+  border-bottom: 1px solid #e1e4e8;
+  padding: 20px 40px 0;
+  z-index: 10;
+}
 
-  .template__title-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    margin-bottom: 8px;
-  }
+.header-content {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
 
-  .template__page-title {
-    margin: 0;
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: var(--txt03);
-  }
+.header-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin: 0;
+}
 
-  .tpl-badge {
-    padding: 2px 8px;
-    font-size: 0.75rem;
-    background: var(--primary-color);
-    color: #fff;
-    border-radius: 4px;
-  }
+.quick-nav {
+  display: flex;
+  gap: 24px;
+}
 
-  .template__page-desc {
-    color: var(--txt13);
-    font-size: 0.9rem;
-  }
+.nav-item {
+  padding: 12px 4px;
+  font-size: 14px;
+  color: #666;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s;
+}
 
-  /* 네비게이션(TOC) */
-  .template__toc {
-    display: flex;
-    gap: 12px;
-    padding: 0 32px 16px;
-    border-bottom: 1px solid var(--tpl-divider);
-  }
+.nav-item:hover {
+  color: var(--primary-color, #4a90e2);
+  border-bottom-color: var(--primary-color, #4a90e2);
+}
 
-  .template__toc-link {
-    padding: 6px 16px;
-    font-size: 0.85rem;
-    text-decoration: none;
-    color: var(--txt13);
-    border-radius: 20px;
-    border: 1px solid var(--tpl-divider);
-    transition: all 0.2s;
-  }
+.content-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 30px 40px;
+}
 
-  .template__toc-link:hover {
-    border-color: var(--primary-color);
-    color: var(--primary-color);
-  }
+.content-inner {
+  max-width: 1400px;
+  margin: 0 auto;
+}
 
-  /* 메인 스크롤 영역 */
-  .template__stack {
-    flex: 1;
-    overflow-y: auto;
-    padding: 32px;
-    scroll-behavior: smooth;
-  }
+.content-section {
+  margin-bottom: 40px;
+}
 
-  .template__section {
-    margin-bottom: 48px;
-  }
+.section-label {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 16px;
+  color: #555;
+}
 
-  .template__section-title {
-    font-size: 1.1rem;
-    font-weight: 600;
-    margin-bottom: 20px;
-    padding-left: 10px;
-    border-left: 4px solid var(--primary-color);
-    color: var(--txt03);
-  }
+.demo-card {
+  background: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
 
-  /* 데모 컨테이너 */
-  .tpl-demo-container {
-    padding: 20px;
-    background: var(--card-bg);
-    border: 1px solid var(--tpl-divider);
-  }
+/* 액션 그룹 (버튼, 인풋 등 나란히 배치) */
+.action-group {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
 
-  .tpl-action-group {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
+/* 카드 그리드 */
+.card-grid {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 20px;
+}
 
-  .tpl-card-actions {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    width: 100%;
-  }
+/* 미니 테이블 스타일 */
+.mini-table {
+  border: 1px solid #eee;
+  border-radius: 4px;
+}
 
-  /* 미니 그리드 스타일 */
-  .tpl-mini-grid {
-    display: grid;
-    grid-template-columns: 100px 1fr 80px 80px;
-    border: 1px solid var(--tpl-divider);
-  }
+.mini-table-head {
+  display: grid;
+  grid-template-columns: 80px 1fr 60px 80px;
+  background: #f8f9fa;
+  padding: 10px;
+  font-weight: 600;
+  font-size: 13px;
+  border-bottom: 1px solid #eee;
+}
 
-  .tpl-mini-grid__row > span {
-    padding: 10px 15px;
-    border-bottom: 1px solid var(--tpl-divider);
-    font-size: 0.85rem;
-  }
+.mini-table-row {
+  display: grid;
+  grid-template-columns: 80px 1fr 60px 80px;
+  padding: 10px;
+  border-bottom: 1px solid #f9f9f9;
+  font-size: 13px;
+  align-items: center;
+}
 
-  .tpl-mini-grid__head {
-    background: var(--bg02, #f9f9f9);
-    font-weight: 600;
-  }
+.status-pill {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 10px;
+  text-align: center;
+}
+.status-pill.success { background: #e6f7ed; color: #1f8b4c; }
+.status-pill.warn { background: #fff4e5; color: #b76e00; }
 
-  .tpl-status.is-warn { color: var(--btn04); font-weight: 600; }
-  .tpl-status.is-ok { color: var(--primary-color); }
+/* 폼 그리드 */
+.form-row-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  background: #fff;
+  padding: 24px;
+  border-radius: 8px;
+}
 
-  /* 폼 그리드 */
-  .tpl-form-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 20px;
-  }
+.input-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
-  .tpl-form-item {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
+.input-field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #666;
+}
 
-  .tpl-label {
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--txt13);
-  }
+.badge {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.badge.primary { background: #4a90e2; color: #fff; }
+.badge.outline { border: 1px solid #4a90e2; color: #4a90e2; }
 
-  /* 버튼 스타일 */
-  .tpl-btn {
-    padding: 8px 16px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 500;
-    border: none;
-  }
-
-  .tpl-btn--primary { background: var(--primary-color); color: white; }
-  .tpl-btn--danger { background: var(--btn04); color: white; }
-  .tpl-btn--warning { background: var(--btn07); color: white; }
-  .tpl-btn--ghost { background: transparent; border: 1px solid var(--tpl-divider); }
-
-  /* 반응형 */
-  @media (max-width: 768px) {
-    .tpl-action-group { flex-direction: column; align-items: stretch; }
-    .template__toc { overflow-x: auto; white-space: nowrap; }
-    .template__page-head { padding: 16px; }
-    .template__stack { padding: 16px; }
-  }
+@media (max-width: 1024px) {
+  .card-grid { grid-template-columns: 1fr; }
+}
 </style>
