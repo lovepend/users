@@ -119,14 +119,19 @@ const clickedRow = ref(null)
 const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'CATEGORY', 'TOOL_ID', 'TOOL_TYPE', 'MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']
 const TAB_KEY_MAP = { 'MAP_ATT': 'ATT_ID', 'MAP_CLS': 'OBJ_CLS_ID', 'MAP_TMPLS': 'TMPL_ID', 'MAP_RELS': 'REL_ID' }
 
-// --- 공통 설정 (미니필터 핵심) ---
+// --- [핵심] 미니 필터(Floating Filter) 자동 작동 설정 ---
 const defaultColDef = { 
   sortable: true, 
   resizable: true, 
-  filter: true,           // 필터 기능 활성화
-  floatingFilter: true,  // 헤더 바로 아래 미니 필터(인풋창) 활성화
+  filter: 'agTextColumnFilter', // 모든 컬럼에 텍스트 필터 적용
+  floatingFilter: true,         // 헤더 아래 미니 필터창 표시
+  filterParams: {
+    debounceMs: 200,            // 입력 시 0.2초 후 자동 필터링
+    suppressAndOrCondition: true 
+  },
+  suppressFloatingFilterButton: true, // 우측 작은 돋보기 버튼 숨기고 인풋창만 넓게 사용
   flex: 1,
-  minWidth: 100
+  minWidth: 120
 }
 
 const filteredProjectList = computed(() => {
@@ -260,6 +265,21 @@ watch([attributeFilter, viewMode], () => gridApi.value?.onFilterChanged())
 .custom-textarea-filter { width: 300px !important; font-size: 0.8rem; resize: none; }
 .toggle-label { cursor: pointer; font-size: 0.82rem; padding: 4px 16px; }
 .btn-check:checked + .toggle-label { background-color: #fff !important; color: #0d6efd !important; }
-:deep(.ag-theme-custom) { --ag-header-background-color: #f8f9fa; --ag-font-size: 12px; }
+
+/* 미니 필터 영역 클릭 및 입력 활성화 */
+:deep(.ag-theme-custom) { 
+  --ag-header-background-color: #f8f9fa; 
+  --ag-font-size: 12px; 
+}
+:deep(.ag-floating-filter-input) {
+  pointer-events: auto !important;
+}
+:deep(.ag-floating-filter-body input) {
+  height: 24px !important;
+  border: 1px solid #ced4da !important;
+  border-radius: 3px !important;
+  padding: 0 5px !important;
+  background-color: white !important;
+}
 :deep(.ag-header-group-cell) { background-color: #f8f9fa !important; font-weight: bold; border-right: 1px solid #dee2e6 !important; }
 </style>
