@@ -29,11 +29,12 @@
       </template>
     </PageTitle>
     <div class="panel-body m-0 p-0 h-100">
-      <Splitter class="h-100">
+      <!-- Splitter 디자인 반영 -->
+      <Splitter class="h-100 custom-splitter">
         <SplitterPanel :size="55" :minSize="10">
-          <div class="panel m-0 p-0 h-100">
+          <div class="panel m-0 p-0 h-100 d-flex flex-column">
             <div class="panel-heading p-0 m-0">
-              <div class="w-100 h-100">
+              <div class="w-100">
                 <BasicToolBar
                   @delete-data="deleteSelectedData"
                   :showCreate="false"
@@ -45,14 +46,15 @@
                 />
               </div>
             </div>
-            <div class="panel-body overflow-hidden m-0 p-0 h-100">
+            <div class="panel-body overflow-hidden m-0 p-0 flex-grow-1">
               <ag-grid-vue v-bind="gridBindTagProps" v-on="gridOnCommonProps('Tag')" />
             </div>
           </div>
         </SplitterPanel>
-        <SplitterPanel :size="45">
-          <div class="panel m-0 p-0 h-100">
-            <div class="panel-body overflow-hidden m-0 p-0 h-100">
+        
+        <SplitterPanel :size="45" :minSize="10">
+          <div class="panel m-0 p-0 h-100 d-flex flex-column">
+            <div class="panel-body overflow-hidden m-0 p-0 flex-grow-1">
               <ag-grid-vue v-bind="gridBindAttProps" v-on="gridOnCommonProps('Att')" />
             </div>
           </div>
@@ -66,17 +68,22 @@
 import { ref, watch, shallowRef, onBeforeMount, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { storeToRefs } from 'pinia'
+
 import Splitter from 'primevue/splitter'
 import SplitterPanel from 'primevue/splitterpanel'
+
 import { useAppPermissionStore } from '@/stores/app-permission'
 import { useAppMenuStore } from '@/stores/app-menu'
+
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 import AgDetailStatusBar from '@/components/aggrid/AgDetailStatusBar.vue'
 import AgCustomFilter from '@/components/aggrid/AgCustomFilter.vue'
+
 import { sAlert } from '@/utils/messages/alert-common'
 import * as _ from 'lodash-es'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import axios from 'axios'
+
 import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
 import PageTitle from '@/components/toolBar/PageTitle.vue'
 
@@ -101,17 +108,10 @@ const gridApi_TagData = shallowRef()
 const gridApi_Atts = shallowRef()
 const themeClass = 'ag-theme-custom'
 
-// 공통 필터 파라미터 (키인 필터 활성화)
 const agMultiColumnFilterParams = {
   filters: [
-    {
-      filter: 'agTextColumnFilter',
-      filterParams: { buttons: ['reset'] },
-    },
-    {
-      filter: 'agSetColumnFilter',
-      filterParams: { buttons: ['reset'] },
-    }
+    { filter: 'agTextColumnFilter', filterParams: { buttons: ['reset'] } },
+    { filter: 'agSetColumnFilter', filterParams: { buttons: ['reset'] } }
   ],
 }
 
@@ -119,7 +119,7 @@ const defaultColDef = {
   editable: params => params.data.PROJ_NO === currentProjNo.value,
   filter: 'agMultiColumnFilter',
   filterParams: agMultiColumnFilterParams,
-  floatingFilter: true, // 헤더 아래 필터 입력창 활성화
+  floatingFilter: true,
   resizable: true,
   sortable: true,
 }
@@ -160,7 +160,6 @@ const getData = async () => {
   gridApi_TagData.value?.setGridOption('loading', true);
   tagAttListRef.value = [];
 
-  // API 주소 분기
   const url = isWorkingRef.value ? '/api/Data/SearchWorkingData' : '/api/Data/SearchPublishData';
 
   try {
@@ -171,7 +170,6 @@ const getData = async () => {
 
     tagDataListRef.value = (jsonData || []).filter(item => !item.DELETED);
     
-    // 로드 후 첫 번째 행 자동 선택
     if (tagDataListRef.value.length > 0) {
       setTimeout(() => {
         const firstNode = gridApi_TagData.value?.getDisplayedRowAtIndex(0);
@@ -182,7 +180,7 @@ const getData = async () => {
       }, 100);
     }
   } catch (error) {
-    sAlert.Error('데이터 로드 중 오류가 발생했습니다.');
+    sAlert.Error('데이터 로드 실패');
   } finally {
     gridApi_TagData.value?.setGridOption('loading', false);
   }
@@ -194,35 +192,23 @@ const getTagDataAttList = (tagData) => {
     context.value.customValue = '';
     return;
   }
-
-  // API 구조인 대문자 ATTRIBUTES 바인딩
   tagAttListRef.value = _.cloneDeep(tagData.ATTRIBUTES);
-  
   context.value = {
     customKey: 'Tag Idx : ',
     customValue: `${tagData.TAG_IDX} [${tagData.TAG_NO}]`
   };
 }
 
-// --- 그리드 이벤트 ---
 const onRowClicked = (event) => {
   selectedTagData.value = event.data;
   getTagDataAttList(event.data);
   isDisabledDeleteBtn.value = event.data.PROJ_NO !== currentProjNo.value;
 }
 
-const onGridReady = params => {
-  gridApi_TagData.value = params.api;
-  if (currentProjNo.value) getData();
-}
-
-const onGridReady_Atts = params => {
-  gridApi_Atts.value = params.api;
-}
-
+const onGridReady = params => { gridApi_TagData.value = params.api; if (currentProjNo.value) getData(); }
+const onGridReady_Atts = params => { gridApi_Atts.value = params.api; }
 const onSearch = () => getData();
 
-// --- Watchers ---
 watch(isWorkingRef, () => {
   isWorkingLabel.value = isWorkingRef.value ? 'Working' : 'Published';
   getData();
@@ -233,7 +219,6 @@ watch(currentProjNo, () => {
   selectedTagData.value = null;
 });
 
-// --- Grid Binding Props ---
 const gridBindCommonProps = {
   style: 'width: 100%; height: 100%',
   class: themeClass,
@@ -249,7 +234,6 @@ const gridBindTagProps = computed(() => ({
   rowData: tagDataListRef.value,
   columnDefs: colDefs,
   defaultColDef: defaultColDef,
-  suppressRowClickSelection: false,
 }))
 
 const gridBindAttProps = computed(() => ({
@@ -258,19 +242,12 @@ const gridBindAttProps = computed(() => ({
   rowData: tagAttListRef.value,
   columnDefs: colDefs_Atts,
   context: context.value,
-  defaultColDef: defaultColDef, // 상세 그리드에도 동일한 defaultColDef 적용 (필터 활성화)
+  defaultColDef: defaultColDef,
 }))
 
 const gridOnCommonProps = type => {
-  if (type === 'Tag') {
-    return {
-      gridReady: onGridReady,
-      rowClicked: onRowClicked,
-    }
-  }
-  return {
-    gridReady: onGridReady_Atts,
-  }
+  if (type === 'Tag') return { gridReady: onGridReady, rowClicked: onRowClicked };
+  return { gridReady: onGridReady_Atts };
 }
 
 defineOptions({
@@ -280,11 +257,52 @@ defineOptions({
 </script>
 
 <style scoped lang="scss">
-::v-deep(.p-splitter-gutter) {
-  background-color: #555555 !important;
-  width: 4px !important;
+/* 1. Splitter 거터(구분선) 디자인 */
+::v-deep(.custom-splitter) {
+  border: none !important;
+  
+  .p-splitter-gutter {
+    background: #e9ecef !important; /* 거터 배경색 */
+    width: 6px !important; /* 거터 두께 */
+    transition: background 0.2s;
+
+    &:hover {
+      background: #dee2e6 !important;
+    }
+  }
+
+  /* 2. 거터 내 핸들(드래그 표시) 디자인 */
+  .p-splitter-gutter-handle {
+    background: #adb5bd !important; /* 핸들 색상 */
+    border-radius: 4px;
+    height: 30px !important; /* 가로형일 때 핸들 높이 */
+    width: 4px !important;
+  }
 }
-::v-deep(.p-splitter-gutter-handle) {
-  background-color: #ff5555 !important;
+
+/* 3. 패널 내부 레이아웃 최적화 */
+.panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.flex-grow-1 {
+  flex: 1;
+  min-height: 0;
+}
+
+/* 4. AG Grid 높이 이슈 방지 */
+.ag-theme-custom {
+  height: 100%;
+}
+
+/* 5. 기존 스타일 유지 */
+.just-view {
+  color: var(--txt03);
+  background-color: var(--bg11);
+  padding: 6px 8px;
+  width: 100%;
+  text-align: center;
+  font-weight: 500;
 }
 </style>
