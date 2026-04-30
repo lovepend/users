@@ -1,137 +1,268 @@
 <template>
-  <div class="container">
-    <div class="header-tools">
-      <button @click="toggleMode">{{ isWorkingRef ? '운영 데이터 보기' : '작업 데이터 보기' }}</button>
-      <span>현재 모드: {{ isWorkingRef ? 'Working' : 'Published' }}</span>
-    </div>
-
-    <div class="grid-wrapper">
-      <!-- 왼쪽: Tag Data Grid -->
-      <div class="grid-section">
-        <h3>Tag Data List (Main)</h3>
-        <ag-grid-vue
-          style="width: 100%; height: 500px;"
-          class="ag-theme-alpine"
-          :columnDefs="colDefs_TagData"
-          :rowData="tagDataList"
-          :rowSelection="'single'"
-          @grid-ready="onGridReady_TagData"
-          @row-clicked="onRowClicked"
-        />
-      </div>
-
-      <!-- 오른쪽: Attribute Grid -->
-      <div class="grid-section">
-        <h3>Attributes (Tag: {{ context.customValue }})</h3>
-        <ag-grid-vue
-          style="width: 100%; height: 500px;"
-          class="ag-theme-alpine"
-          :columnDefs="colDefs_Atts"
-          :rowData="tagAttListRef"
-          @grid-ready="onGridReady_Atts"
-        />
-      </div>
+  <div class="panel panel-expandable m-0 p-0 h-100">
+    <PageTitle
+      icon="fa-square-check"
+      :title="'Tag List 및 Attributes 정보' + (currentProjNo ? ` [ ${currentProjNo} ]` : '')"
+    >
+      <template #actions>
+        <div class="d-flex align-items-center gap-2 me-2">
+          <label class="d-flex align-items-center gap-2">
+            <span class="fw-500">Keyword</span>
+            <input
+              type="text"
+              placeholder="Input Keyword"
+              class="form-control form-control-sm p-1"
+              style="min-height: 1rem"
+              v-model="searchKeywordRef"
+            />
+          </label>
+          <button class="btn btn-xs btn-primary" @click="onSearch">Search</button>
+        </div>
+        <div class="form-check form-switch m-0">
+          <label class="form-check-label text-dark user-select-none cursor-pointer">
+            <input class="form-check-input" type="checkbox" v-model="isWorkingRef" />
+            {{ isWorkingLabel }}
+          </label>
+        </div>
+        <panel-toolbar />
+      </template>
+    </PageTitle>
+    <div class="panel-body m-0 p-0 h-100">
+      <Splitter class="h-100">
+        <SplitterPanel :size="55" :minSize="10">
+          <div class="panel m-0 p-0 h-100">
+            <div class="panel-heading p-0 m-0">
+              <div class="w-100 h-100">
+                <BasicToolBar
+                  @delete-data="deleteSelectedData"
+                  :showCreate="false"
+                  :showMultiCreate="false"
+                  :showDelete="isShowDeleteBtn"
+                  :isDisabledDeleteBtn="isDisabledDeleteBtn"
+                  :showSave="false"
+                  :isDisabledSaveBtn="false"
+                />
+              </div>
+            </div>
+            <div class="panel-body overflow-hidden m-0 p-0 h-100">
+              <ag-grid-vue v-bind="gridBindTagProps" v-on="gridOnCommonProps('Tag')" />
+            </div>
+          </div>
+        </SplitterPanel>
+        <SplitterPanel :size="45">
+          <div class="panel m-0 p-0 h-100">
+            <div class="panel-body overflow-hidden m-0 p-0 h-100">
+              <!-- Context 값을 넘겨서 상단에 TagIdx 등이 나오게 설정 -->
+              <ag-grid-vue v-bind="gridBindAttProps" v-on="gridOnCommonProps('Att')" />
+            </div>
+          </div>
+        </SplitterPanel>
+      </Splitter>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue';
-import { AgGridVue } from 'ag-grid-vue3';
-import axios from 'axios';
-import _ from 'lodash';
+import { ref, watch, shallowRef, onBeforeMount, computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { storeToRefs } from 'pinia'
+import Splitter from 'primevue/splitter'
+import SplitterPanel from 'primevue/splitterpanel'
+import { useAppPermissionStore } from '@/stores/app-permission'
+import { useAppMenuStore } from '@/stores/app-menu'
+import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+import AgDetailStatusBar from '@/components/aggrid/AgDetailStatusBar.vue'
+import AgCustomFilter from '@/components/aggrid/AgCustomFilter.vue'
+import { sAlert } from '@/utils/messages/alert-common'
+import * as _ from 'lodash-es'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import axios from 'axios'
+import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
+import PageTitle from '@/components/toolBar/PageTitle.vue'
 
-// --- 상태 관리 ---
-const tagDataList = ref([]);        // 왼쪽 그리드용
-const tagAttListRef = ref([]);      // 오른쪽 그리드용 (선택된 태그의 속성)
-const isWorkingRef = ref(false);    // API 스위칭 플래그
-const context = ref({ customValue: 'None' });
+const route = useRoute()
+const appPermission = useAppPermissionStore()
+const { isSetupAdmin } = storeToRefs(appPermission)
+const { currentProjNo } = storeToRefs(useAppMenuStore())
 
-const gridApi_TagData = ref(null);
-const gridApi_Atts = ref(null);
+const tagDataListRef = ref([])
+const tagAttListRef = ref([])
+const selectedTagData = ref(null)
+const searchKeywordRef = ref('')
+const isWorkingRef = ref(false)
+const isWorkingLabel = ref('Published')
+const context = ref({ customKey: 'Tag Idx : ', customValue: '' })
 
-// --- 컬럼 정의 (필드명은 API 응답 대문자와 일치시킴) ---
-const colDefs_TagData = ref([
-  { field: 'TAG_NO', headerName: '태그 번호', sortable: true, filter: true, checkboxSelection: true },
-  { field: 'TAG_DESC', headerName: '설명', flex: 1 },
-  { field: 'STATUS', headerName: '상태', width: 100 }
-]);
+const isShowDeleteBtn = ref(isSetupAdmin.value)
+const isDisabledDeleteBtn = ref(true)
 
-const colDefs_Atts = ref([
-  { field: 'ATT_ID', headerName: '속성 ID', width: 150 },
-  { field: 'VALUE', headerName: '속성값', editable: true, flex: 1 },
-  { field: 'VALUE_DBL', headerName: '숫자값', width: 100 },
-  { field: 'UOM_ID', headerName: '단위', width: 100 }
-]);
+// --- AG GRID 설정 ---
+const gridApi_TagData = shallowRef()
+const gridApi_Atts = shallowRef()
+const themeClass = 'ag-theme-custom'
 
-// --- API 호출 로직 ---
+const defaultColDef = {
+  editable: params => params.data.PROJ_NO === currentProjNo.value,
+  filter: 'agMultiColumnFilter',
+  floatingFilter: true,
+  resizable: true,
+}
+
+const colDefs = [
+  {
+    headerCheckboxSelection: true,
+    headerCheckboxSelectionFilteredOnly: true,
+    checkboxSelection: params => params.data.PROJ_NO === currentProjNo.value,
+    width: 40,
+    pinned: 'left'
+  },
+  { field: 'TAG_NO', headerName: 'Tag No', flex: 1 },
+  { field: 'TAG_IDX', headerName: 'Tag Idx', flex: 1.5 },
+  { field: 'CLS_ID', headerName: 'Class ID', flex: 1 },
+  { field: 'TAG_DESC', headerName: 'Description', flex: 1.5 },
+]
+
+const colDefs_Atts = [
+  { field: 'ATT_ID', headerName: 'Attribute ID', flex: 1 },
+  { field: 'VALUE', headerName: 'Value', flex: 1, editable: true },
+  { field: 'VALUE_DBL', headerName: 'Value(Num)', flex: 0.8, editable: true },
+  { field: 'UOM_ID', headerName: 'UOM', flex: 0.8, editable: true },
+]
+
+// --- 데이터 로드 로직 ---
 const getData = async () => {
-  try {
-    // 로딩 표시 (선택사항)
-    if (gridApi_TagData.value) gridApi_TagData.value.showLoadingOverlay();
+  if (!currentProjNo.value) return;
+  
+  gridApi_TagData.value?.setGridOption('loading', true);
+  tagAttListRef.value = [];
 
-    const url = isWorkingRef.value 
-      ? '/api/Data/SearchWorkingData' 
-      : '/api/Data/SearchPublishData';
+  const url = isWorkingRef.value ? '/api/Data/SearchWorkingData' : '/api/Data/SearchPublishData';
+
+  try {
+    const jsonData = await axiosWrapper.post(url, {
+      ProjectNo: currentProjNo.value,
+      Keyword: searchKeywordRef.value.trim(),
+    });
+
+    // 삭제되지 않은 데이터만 필터링 (API의 DELETED 필드 기준)
+    tagDataListRef.value = (jsonData || []).filter(item => !item.DELETED);
     
-    const response = await axios.get(url);
-    
-    // 데이터 검증 및 할당
-    if (response.data && Array.isArray(response.data)) {
-      tagDataList.value = response.data;
-    } else {
-      tagDataList.value = [];
+    // 첫 번째 로우 자동 선택 및 상세 정보 표시
+    if (tagDataListRef.value.length > 0) {
+        setTimeout(() => {
+            const firstNode = gridApi_TagData.value?.getDisplayedRowAtIndex(0);
+            if (firstNode) {
+                firstNode.setSelected(true);
+                onRowClicked({ data: firstNode.data, node: firstNode });
+            }
+        }, 100);
     }
   } catch (error) {
-    console.error('데이터 로드 실패:', error);
-    tagDataList.value = [];
+    sAlert.Error('데이터 로드 실패');
+  } finally {
+    gridApi_TagData.value?.setGridOption('loading', false);
   }
-};
+}
 
-// --- 이벤트 핸들러 ---
-const onGridReady_TagData = (params) => {
-  gridApi_TagData.value = params.api;
-  getData();
-};
-
-const onGridReady_Atts = (params) => {
-  gridApi_Atts.value = params.api;
-};
-
-// 행 클릭 시 오른쪽 그리드 업데이트 로직
-const onRowClicked = (params) => {
-  const data = params.data;
-  if (!data) return;
-
-  // 1. 헤더 텍스트 변경
-  context.value.customValue = data.TAG_NO || 'Unknown';
-
-  // 2. Attributes 추출 (핵심: 대문자 ATTRIBUTES 접근)
-  // API 응답 구조: { TAG_NO: "...", ATTRIBUTES: [...] }
-  if (data.ATTRIBUTES && Array.isArray(data.ATTRIBUTES)) {
-    // lodash로 깊은 복사하여 원본 데이터 오염 방지
-    tagAttListRef.value = _.cloneDeep(data.ATTRIBUTES);
-  } else {
+const getTagDataAttList = (tagData) => {
+  if (!tagData || !tagData.ATTRIBUTES) {
     tagAttListRef.value = [];
+    context.value.customValue = '';
+    return;
   }
-};
 
-const toggleMode = () => {
-  isWorkingRef.value = !isWorkingRef.value;
-  tagAttListRef.value = []; // 모드 변경 시 상세 정보 초기화
+  // API 데이터 구조 반영 (대문자 ATTRIBUTES 직접 참조)
+  tagAttListRef.value = _.cloneDeep(tagData.ATTRIBUTES);
+  
+  // 오른쪽 그리드 상단 정보 업데이트
+  context.value = {
+    customKey: 'Tag Idx : ',
+    customValue: `${tagData.TAG_IDX} [${tagData.TAG_NO}]`
+  };
+}
+
+// --- 그리드 이벤트 ---
+const onRowClicked = (event) => {
+  selectedTagData.value = event.data;
+  getTagDataAttList(event.data);
+  isDisabledDeleteBtn.value = event.data.PROJ_NO !== currentProjNo.value;
+}
+
+const onGridReady = params => {
+  gridApi_TagData.value = params.api;
+  if (currentProjNo.value) getData();
+}
+
+const onGridReady_Atts = params => {
+  gridApi_Atts.value = params.api;
+}
+
+const onSearch = () => getData();
+
+// --- Watchers ---
+watch(isWorkingRef, () => {
+  isWorkingLabel.value = isWorkingRef.value ? 'Working' : 'Published';
   getData();
-};
-
-// --- 초기 로드 ---
-onMounted(() => {
-  // 필요한 경우 초기화 로직 추가
 });
+
+watch(currentProjNo, () => {
+  getData();
+  selectedTagData.value = null;
+});
+
+// --- Grid Binding Props ---
+const gridBindCommonProps = {
+  style: 'width: 100%; height: 100%',
+  class: themeClass,
+  suppressLastEmptyLineOnPaste: true,
+  enableRangeSelection: true,
+  columnHoverHighlight: true,
+  loadingOverlayComponent: AggridLoadingOverlay,
+}
+
+const gridBindTagProps = computed(() => ({
+  ...gridBindCommonProps,
+  rowSelection: 'multiple',
+  rowData: tagDataListRef.value,
+  columnDefs: colDefs,
+  defaultColDef: defaultColDef,
+  suppressRowClickSelection: false, // 클릭 시 선택되도록 변경
+}))
+
+const gridBindAttProps = computed(() => ({
+  ...gridBindCommonProps,
+  rowSelection: 'multiple',
+  rowData: tagAttListRef.value,
+  columnDefs: colDefs_Atts,
+  context: context.value,
+  defaultColDef: { ...defaultColDef, filter: false }, // 상세는 필터 제외하거나 간소화
+}))
+
+const gridOnCommonProps = type => {
+  if (type === 'Tag') {
+    return {
+      gridReady: onGridReady,
+      rowClicked: onRowClicked, // cellClicked 대신 rowClicked 권장
+    }
+  }
+  return {
+    gridReady: onGridReady_Atts,
+  }
+}
+
+defineOptions({
+  name: 'PubWrkData',
+  components: { AgDetailStatusBar, AgCustomFilter },
+})
 </script>
 
-<style scoped>
-.container { padding: 20px; }
-.header-tools { margin-bottom: 15px; display: flex; gap: 10px; align-items: center; }
-.grid-wrapper { display: flex; gap: 20px; }
-.grid-section { flex: 1; min-width: 0; }
-h3 { margin-bottom: 10px; font-size: 1.1rem; color: #333; }
+<style scoped lang="scss">
+/* 스플리터 구분선 스타일 */
+::v-deep(.p-splitter-gutter) {
+  background-color: #555555 !important;
+  width: 4px !important;
+}
+::v-deep(.p-splitter-gutter-handle) {
+  background-color: #ff5555 !important;
+}
 </style>
