@@ -14,6 +14,7 @@
               class="form-control form-control-sm p-1"
               style="min-height: 1rem"
               v-model="searchKeywordRef"
+              @keyup.enter="onSearch"
             />
           </label>
           <button class="btn btn-xs btn-primary" @click="onSearch">Search</button>
@@ -52,7 +53,6 @@
         <SplitterPanel :size="45">
           <div class="panel m-0 p-0 h-100">
             <div class="panel-body overflow-hidden m-0 p-0 h-100">
-              <!-- Context 값을 넘겨서 상단에 TagIdx 등이 나오게 설정 -->
               <ag-grid-vue v-bind="gridBindAttProps" v-on="gridOnCommonProps('Att')" />
             </div>
           </div>
@@ -101,11 +101,27 @@ const gridApi_TagData = shallowRef()
 const gridApi_Atts = shallowRef()
 const themeClass = 'ag-theme-custom'
 
+// 공통 필터 파라미터 (키인 필터 활성화)
+const agMultiColumnFilterParams = {
+  filters: [
+    {
+      filter: 'agTextColumnFilter',
+      filterParams: { buttons: ['reset'] },
+    },
+    {
+      filter: 'agSetColumnFilter',
+      filterParams: { buttons: ['reset'] },
+    }
+  ],
+}
+
 const defaultColDef = {
   editable: params => params.data.PROJ_NO === currentProjNo.value,
   filter: 'agMultiColumnFilter',
-  floatingFilter: true,
+  filterParams: agMultiColumnFilterParams,
+  floatingFilter: true, // 헤더 아래 필터 입력창 활성화
   resizable: true,
+  sortable: true,
 }
 
 const colDefs = [
@@ -114,7 +130,8 @@ const colDefs = [
     headerCheckboxSelectionFilteredOnly: true,
     checkboxSelection: params => params.data.PROJ_NO === currentProjNo.value,
     width: 40,
-    pinned: 'left'
+    pinned: 'left',
+    filter: false
   },
   { field: 'TAG_NO', headerName: 'Tag No', flex: 1 },
   { field: 'TAG_IDX', headerName: 'Tag Idx', flex: 1.5 },
@@ -123,6 +140,13 @@ const colDefs = [
 ]
 
 const colDefs_Atts = [
+  { 
+    checkboxSelection: true, 
+    headerCheckboxSelection: true, 
+    width: 40, 
+    pinned: 'left',
+    filter: false 
+  },
   { field: 'ATT_ID', headerName: 'Attribute ID', flex: 1 },
   { field: 'VALUE', headerName: 'Value', flex: 1, editable: true },
   { field: 'VALUE_DBL', headerName: 'Value(Num)', flex: 0.8, editable: true },
@@ -136,6 +160,7 @@ const getData = async () => {
   gridApi_TagData.value?.setGridOption('loading', true);
   tagAttListRef.value = [];
 
+  // API 주소 분기
   const url = isWorkingRef.value ? '/api/Data/SearchWorkingData' : '/api/Data/SearchPublishData';
 
   try {
@@ -144,21 +169,20 @@ const getData = async () => {
       Keyword: searchKeywordRef.value.trim(),
     });
 
-    // 삭제되지 않은 데이터만 필터링 (API의 DELETED 필드 기준)
     tagDataListRef.value = (jsonData || []).filter(item => !item.DELETED);
     
-    // 첫 번째 로우 자동 선택 및 상세 정보 표시
+    // 로드 후 첫 번째 행 자동 선택
     if (tagDataListRef.value.length > 0) {
-        setTimeout(() => {
-            const firstNode = gridApi_TagData.value?.getDisplayedRowAtIndex(0);
-            if (firstNode) {
-                firstNode.setSelected(true);
-                onRowClicked({ data: firstNode.data, node: firstNode });
-            }
-        }, 100);
+      setTimeout(() => {
+        const firstNode = gridApi_TagData.value?.getDisplayedRowAtIndex(0);
+        if (firstNode) {
+          firstNode.setSelected(true);
+          onRowClicked({ data: firstNode.data, node: firstNode });
+        }
+      }, 100);
     }
   } catch (error) {
-    sAlert.Error('데이터 로드 실패');
+    sAlert.Error('데이터 로드 중 오류가 발생했습니다.');
   } finally {
     gridApi_TagData.value?.setGridOption('loading', false);
   }
@@ -171,10 +195,9 @@ const getTagDataAttList = (tagData) => {
     return;
   }
 
-  // API 데이터 구조 반영 (대문자 ATTRIBUTES 직접 참조)
+  // API 구조인 대문자 ATTRIBUTES 바인딩
   tagAttListRef.value = _.cloneDeep(tagData.ATTRIBUTES);
   
-  // 오른쪽 그리드 상단 정보 업데이트
   context.value = {
     customKey: 'Tag Idx : ',
     customValue: `${tagData.TAG_IDX} [${tagData.TAG_NO}]`
@@ -226,7 +249,7 @@ const gridBindTagProps = computed(() => ({
   rowData: tagDataListRef.value,
   columnDefs: colDefs,
   defaultColDef: defaultColDef,
-  suppressRowClickSelection: false, // 클릭 시 선택되도록 변경
+  suppressRowClickSelection: false,
 }))
 
 const gridBindAttProps = computed(() => ({
@@ -235,14 +258,14 @@ const gridBindAttProps = computed(() => ({
   rowData: tagAttListRef.value,
   columnDefs: colDefs_Atts,
   context: context.value,
-  defaultColDef: { ...defaultColDef, filter: false }, // 상세는 필터 제외하거나 간소화
+  defaultColDef: defaultColDef, // 상세 그리드에도 동일한 defaultColDef 적용 (필터 활성화)
 }))
 
 const gridOnCommonProps = type => {
   if (type === 'Tag') {
     return {
       gridReady: onGridReady,
-      rowClicked: onRowClicked, // cellClicked 대신 rowClicked 권장
+      rowClicked: onRowClicked,
     }
   }
   return {
@@ -257,7 +280,6 @@ defineOptions({
 </script>
 
 <style scoped lang="scss">
-/* 스플리터 구분선 스타일 */
 ::v-deep(.p-splitter-gutter) {
   background-color: #555555 !important;
   width: 4px !important;
