@@ -1,114 +1,137 @@
 <template>
-  <div style="display: flex; gap: 20px; height: 100vh; padding: 20px;">
-    <!-- 왼쪽: Tag Data Grid -->
-    <div style="flex: 1; display: flex; flex-direction: column;">
-      <h3>Tag Data List</h3>
-      <ag-grid-vue
-        style="width: 100%; height: 100%;"
-        class="ag-theme-alpine"
-        :columnDefs="colDefs_TagData"
-        :rowData="tagDataList"
-        @grid-ready="onGridReady_TagData"
-        @row-clicked="onRowClicked"
-        :rowSelection="'single'"
-      />
+  <div class="container">
+    <div class="header-tools">
+      <button @click="toggleMode">{{ isWorkingRef ? '운영 데이터 보기' : '작업 데이터 보기' }}</button>
+      <span>현재 모드: {{ isWorkingRef ? 'Working' : 'Published' }}</span>
     </div>
 
-    <!-- 오른쪽: Attribute Grid -->
-    <div style="flex: 1; display: flex; flex-direction: column;">
-      <h3>Attribute Grid ({{ context.customValue || '선택된 태그 없음' }})</h3>
-      <ag-grid-vue
-        style="width: 100%; height: 100%;"
-        class="ag-theme-alpine"
-        :columnDefs="colDefs_Atts"
-        :rowData="tagAttListRef"
-        @grid-ready="onGridReady_Atts"
-      />
+    <div class="grid-wrapper">
+      <!-- 왼쪽: Tag Data Grid -->
+      <div class="grid-section">
+        <h3>Tag Data List (Main)</h3>
+        <ag-grid-vue
+          style="width: 100%; height: 500px;"
+          class="ag-theme-alpine"
+          :columnDefs="colDefs_TagData"
+          :rowData="tagDataList"
+          :rowSelection="'single'"
+          @grid-ready="onGridReady_TagData"
+          @row-clicked="onRowClicked"
+        />
+      </div>
+
+      <!-- 오른쪽: Attribute Grid -->
+      <div class="grid-section">
+        <h3>Attributes (Tag: {{ context.customValue }})</h3>
+        <ag-grid-vue
+          style="width: 100%; height: 500px;"
+          class="ag-theme-alpine"
+          :columnDefs="colDefs_Atts"
+          :rowData="tagAttListRef"
+          @grid-ready="onGridReady_Atts"
+        />
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, watch } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
 import axios from 'axios';
 import _ from 'lodash';
 
-// --- State 관리 ---
-const tagDataList = ref([]);        // 왼쪽 그리드 데이터
-const tagAttListRef = ref([]);      // 오른쪽 그리드 데이터 (Attributes)
+// --- 상태 관리 ---
+const tagDataList = ref([]);        // 왼쪽 그리드용
+const tagAttListRef = ref([]);      // 오른쪽 그리드용 (선택된 태그의 속성)
+const isWorkingRef = ref(false);    // API 스위칭 플래그
+const context = ref({ customValue: 'None' });
+
 const gridApi_TagData = ref(null);
 const gridApi_Atts = ref(null);
-const isWorkingRef = ref(false);    // Working 데이터 여부
-const context = ref({ customValue: '' });
 
-// --- 컬럼 정의 ---
+// --- 컬럼 정의 (필드명은 API 응답 대문자와 일치시킴) ---
 const colDefs_TagData = ref([
-  { field: 'TAG_NO', headerName: 'Tag No', checkboxSelection: true },
-  { field: 'TAG_DESC', headerName: 'Description' },
-  { field: 'STATUS', headerName: 'Status' },
+  { field: 'TAG_NO', headerName: '태그 번호', sortable: true, filter: true, checkboxSelection: true },
+  { field: 'TAG_DESC', headerName: '설명', flex: 1 },
+  { field: 'STATUS', headerName: '상태', width: 100 }
 ]);
 
 const colDefs_Atts = ref([
-  { field: 'ATT_ID', headerName: 'Attribute ID', flex: 1 },
-  { field: 'VALUE', headerName: 'Value', flex: 1, editable: true },
-  { field: 'VALUE_DBL', headerName: 'Value (Double)', flex: 1 },
-  { field: 'UOM_ID', headerName: 'UOM', flex: 1 },
+  { field: 'ATT_ID', headerName: '속성 ID', width: 150 },
+  { field: 'VALUE', headerName: '속성값', editable: true, flex: 1 },
+  { field: 'VALUE_DBL', headerName: '숫자값', width: 100 },
+  { field: 'UOM_ID', headerName: '단위', width: 100 }
 ]);
 
-// --- 그리드 초기화 ---
+// --- API 호출 로직 ---
+const getData = async () => {
+  try {
+    // 로딩 표시 (선택사항)
+    if (gridApi_TagData.value) gridApi_TagData.value.showLoadingOverlay();
+
+    const url = isWorkingRef.value 
+      ? '/api/Data/SearchWorkingData' 
+      : '/api/Data/SearchPublishData';
+    
+    const response = await axios.get(url);
+    
+    // 데이터 검증 및 할당
+    if (response.data && Array.isArray(response.data)) {
+      tagDataList.value = response.data;
+    } else {
+      tagDataList.value = [];
+    }
+  } catch (error) {
+    console.error('데이터 로드 실패:', error);
+    tagDataList.value = [];
+  }
+};
+
+// --- 이벤트 핸들러 ---
 const onGridReady_TagData = (params) => {
   gridApi_TagData.value = params.api;
-  getData(); // 초기 데이터 로드
+  getData();
 };
 
 const onGridReady_Atts = (params) => {
   gridApi_Atts.value = params.api;
 };
 
-// --- 데이터 로드 (API 호출) ---
-const getData = async () => {
-  try {
-    // isWorkingRef 값에 따라 동적으로 URL 변경
-    const url = isWorkingRef.value 
-      ? '/api/Data/SearchWorkingData' 
-      : '/api/Data/SearchPublishData';
+// 행 클릭 시 오른쪽 그리드 업데이트 로직
+const onRowClicked = (params) => {
+  const data = params.data;
+  if (!data) return;
 
-    const response = await axios.get(url);
-    tagDataList.value = response.data;
-  } catch (error) {
-    console.error('Data Load Error:', error);
-  }
-};
+  // 1. 헤더 텍스트 변경
+  context.value.customValue = data.TAG_NO || 'Unknown';
 
-// --- 행 클릭 이벤트 (오른쪽 그리드 데이터 채우기) ---
-const onRowClicked = (event) => {
-  const selectedData = event.data;
-  
-  // 1. 헤더 정보 업데이트
-  context.value.customValue = selectedData.TAG_NO;
-
-  // 2. 오른쪽 그리드 데이터 가공 및 할당
-  // API 응답 구조상 'ATTRIBUTES' (대문자)에 데이터가 들어있음
-  if (selectedData && selectedData.ATTRIBUTES) {
-    // 깊은 복사를 통해 참조를 끊고 할당
-    tagAttListRef.value = _.cloneDeep(selectedData.ATTRIBUTES);
+  // 2. Attributes 추출 (핵심: 대문자 ATTRIBUTES 접근)
+  // API 응답 구조: { TAG_NO: "...", ATTRIBUTES: [...] }
+  if (data.ATTRIBUTES && Array.isArray(data.ATTRIBUTES)) {
+    // lodash로 깊은 복사하여 원본 데이터 오염 방지
+    tagAttListRef.value = _.cloneDeep(data.ATTRIBUTES);
   } else {
     tagAttListRef.value = [];
   }
-
-  console.log('Selected Attributes:', tagAttListRef.value);
 };
 
-// --- 필요한 경우 Working 모드 전환 ---
 const toggleMode = () => {
   isWorkingRef.value = !isWorkingRef.value;
+  tagAttListRef.value = []; // 모드 변경 시 상세 정보 초기화
   getData();
 };
+
+// --- 초기 로드 ---
+onMounted(() => {
+  // 필요한 경우 초기화 로직 추가
+});
 </script>
 
-<style>
-/* AG Grid 테마 로드 (Main.js에서 로드하지 않았을 경우) */
-@import "ag-grid-community/styles/ag-grid.css";
-@import "ag-grid-community/styles/ag-theme-alpine.css";
+<style scoped>
+.container { padding: 20px; }
+.header-tools { margin-bottom: 15px; display: flex; gap: 10px; align-items: center; }
+.grid-wrapper { display: flex; gap: 20px; }
+.grid-section { flex: 1; min-width: 0; }
+h3 { margin-bottom: 10px; font-size: 1.1rem; color: #333; }
 </style>
