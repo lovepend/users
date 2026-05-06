@@ -1,41 +1,130 @@
 <template>
-  <!-- 탭 최상위 div도 높이 100%와 flex를 가져야 함 -->
-  <div class="h-100 d-flex flex-column">
-    <div class="flex-grow-1 min-h-0">
-      <!-- AG Grid 예시 -->
-      <ag-grid-vue
-        style="width: 100%; height: 100%;"
-        class="ag-theme-alpine"
-        :columnDefs="columnDefs"
-        :rowData="rowData"
-        @grid-ready="onGridReady"
+  <!-- 최상위 컨테이너: 전체 화면 높이를 사용하고 내부 스크롤 발생 방지 -->
+  <div class="main-layout-container h-100 d-flex flex-column bg-light overflow-hidden">
+    
+    <!-- 1. 프로젝트 선택 영역 (상단 고정 높이) -->
+    <header class="flex-shrink-0 p-3 bg-white border-bottom shadow-sm">
+      <div class="d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-3">
+          <h5 class="mb-0 fw-bold">프로젝트 데이터 비교</h5>
+          <!-- 여기에 프로젝트 선택 Selectbox 등 배치 -->
+          <div class="project-selector">
+             <!-- 예: <v-select v-model="selectedProject" :items="projects" ... /> -->
+          </div>
+        </div>
+        <div class="header-actions">
+          <button class="btn btn-primary btn-sm">데이터 불러오기</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- 2. 그리드 및 탭 영역 (남은 모든 높이를 차지) -->
+    <main class="flex-grow-1 min-h-0 p-2">
+      <DefaultCard 
+        :tabs="tabList" 
+        :title="null" 
+        v-model:active-tab="activeTab" 
+        class="h-100 grid-card"
       >
-      </ag-grid-vue>
-      
-      <!-- 만약 SpreadJS라면 -->
-      <!-- <gc-spread-sheets-designer style="height: 100%; width: 100%;" ... /> -->
-    </div>
+        <!-- 우측 상단 추가 컨트롤 (필요 시) -->
+        <template #header-right>
+          <div class="d-flex gap-2 pe-2">
+            <span class="badge bg-info text-dark">조회일시: 2024-05-22</span>
+          </div>
+        </template>
+
+        <!-- 탭 콘텐츠: 이 영역이 100%를 차지해야 내부 그리드가 높이를 인지함 -->
+        <div class="tab-content-wrapper">
+          <keep-alive>
+            <component 
+              :is="tabs[activeTab]" 
+              :active="activeTab"
+              class="h-100" 
+            />
+          </keep-alive>
+        </div>
+      </DefaultCard>
+    </main>
   </div>
 </template>
 
 <script setup>
-// ... 데이터 로직 ...
+import { ref } from 'vue'
+import DefaultCard from '@/components/default/DefaultCard.vue'
+
+// 탭별 하위 컴포넌트 임포트 (실제 파일 경로에 맞게 확인 필요)
+import AttrCompareTab from './components/AttrCompareTab.vue'
+import CodeCompareTab from './components/CodeCompareTab.vue'
+import ClassCompareTab from './components/ClassCompareTab.vue'
+import RegisterCompareTab from './components/RegisterCompareTab.vue'
+import TemplateCompareTab from './components/TemplateCompareTab.vue'
+import UOMCompareTab from './components/UOMCompareTab.vue'
+import AdapterCompareTab from './components/AdapterCompareTab.vue'
+
+const activeTab = ref('attr')
+
+// 공통 가이드에 맞춘 탭 리스트
+const tabList = [
+  { id: 'attr', name: 'Attribute', icon: 'fa-layer-group' },
+  { id: 'code', name: 'Code', icon: 'fa-code' },
+  { id: 'class', name: 'Class', icon: 'fa-shapes' },
+  { id: 'register', name: 'Register', icon: 'fa-address-card' },
+  { id: 'template', name: 'Template', icon: 'fa-file-code' },
+  { id: 'adapter', name: 'Adapter', icon: 'fa-plug' },
+  { id: 'uom', name: 'UOM', icon: 'fa-ruler' },
+]
+
+// 동적 컴포넌트 매핑
+const tabs = {
+  attr: AttrCompareTab,
+  code: CodeCompareTab,
+  class: ClassCompareTab,
+  register: RegisterCompareTab,
+  template: TemplateCompareTab,
+  uom: UOMCompareTab,
+  adapter: AdapterCompareTab,
+}
 </script>
 
 <style scoped>
-.h-100 {
-  height: 100%;
+/* 전체 레이아웃의 높이를 뷰포트에 고정 */
+.main-layout-container {
+  height: 100vh;
 }
-.d-flex {
+
+/* flex 자식의 최소 높이를 0으로 설정해야 부모를 넘치지 않고 축소됨 */
+.min-h-0 {
+  min-height: 0;
+}
+
+/* DefaultCard 내부 구조 커스텀 스타일링 */
+:deep(.grid-card) {
   display: flex;
+  flex-direction: column;
+  border-radius: 8px;
 }
-.flex-column {
+
+:deep(.card__contents) {
+  flex-grow: 1;
+  min-height: 0; /* 중요: 그리드가 높이를 계산할 수 있게 함 */
+  padding: 0 !important; /* 그리드가 카드 경계까지 꽉 차도록 */
+  display: flex;
   flex-direction: column;
 }
-.flex-grow-1 {
+
+/* 탭 콘텐츠 영역을 100% 높이 flex로 설정 */
+.tab-content-wrapper {
   flex-grow: 1;
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
-.min-h-0 {
+
+/* 하위 탭 컴포넌트 공통 스타일 */
+.tab-content-wrapper > * {
+  flex-grow: 1;
   min-height: 0;
 }
 </style>
