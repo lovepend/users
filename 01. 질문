@@ -1,84 +1,41 @@
 <template>
-  <div class="h-100 d-flex flex-column bg-light">
-    <!-- 공통 DefaultCard 컴포넌트를 사용하여 탭 구현 -->
-    <DefaultCard 
-      :tabs="tabList" 
-      :title="null" 
-      v-model:active-tab="activeTab" 
-      class="custom-card-wrapper"
-    >
-      <template #header-right>
-        <!-- 우측 상단에 버튼이나 스위치가 필요할 경우 여기에 배치 -->
-      </template>
-
-      <!-- 탭 내부 콘텐츠 영역 -->
-      <div class="flex-grow-1 overflow-hidden p-3">
-        <keep-alive>
-          <component :is="tabs[activeTab]" />
-        </keep-alive>
-      </div>
-    </DefaultCard>
+  <!-- 탭 최상위 div도 높이 100%와 flex를 가져야 함 -->
+  <div class="h-100 d-flex flex-column">
+    <div class="flex-grow-1 min-h-0">
+      <!-- AG Grid 예시 -->
+      <ag-grid-vue
+        style="width: 100%; height: 100%;"
+        class="ag-theme-alpine"
+        :columnDefs="columnDefs"
+        :rowData="rowData"
+        @grid-ready="onGridReady"
+      >
+      </ag-grid-vue>
+      
+      <!-- 만약 SpreadJS라면 -->
+      <!-- <gc-spread-sheets-designer style="height: 100%; width: 100%;" ... /> -->
+    </div>
   </div>
 </template>
 
 <script setup>
-  import { ref } from 'vue'
-  import DefaultCard from '@/components/default/DefaultCard.vue' // 공통 카드 컴포넌트 임포트
-  
-  import AttrCompareTab from './components/AttrCompareTab.vue'
-  import CodeCompareTab from './components/CodeCompareTab.vue'
-  import ClassCompareTab from './components/ClassCompareTab.vue'
-  import RegisterCompareTab from './components/RegisterCompareTab.vue'
-  import TemplateCompareTab from './components/TemplateCompareTab.vue'
-  import UOMCompareTab from './components/UOMCompareTab.vue'
-  import AdapterCompareTab from './components/AdapterCompareTab.vue'
-  import OtherCompareTab from './components/OtherCompareTab.vue'
-
-  const activeTab = ref('attr')
-
-  // 공통 탭 구조에 맞춘 데이터 배열
-  const tabList = [
-    { id: 'attr', name: 'Attribute', icon: 'fa-layer-group' },
-    { id: 'code', name: 'Code', icon: 'fa-layer-group' },
-    { id: 'class', name: 'Class', icon: 'fa-layer-group' },
-    { id: 'register', name: 'Register', icon: 'fa-layer-group' },
-    { id: 'template', name: 'Template', icon: 'fa-layer-group' },
-    { id: 'adapter', name: 'Adapter', icon: 'fa-layer-group' },
-    { id: 'uom', name: 'UOM', icon: 'fa-layer-group' },
-  ]
-
-  const tabs = {
-    attr: AttrCompareTab,
-    code: CodeCompareTab,
-    class: ClassCompareTab,
-    register: RegisterCompareTab,
-    template: TemplateCompareTab,
-    uom: UOMCompareTab,
-    adapter: AdapterCompareTab,
-    other: OtherCompareTab,
-  }
+// ... 데이터 로직 ...
 </script>
 
 <style scoped>
-  /* 공통 스타일을 사용하므로 기존 custom-tab 관련 스타일은 대폭 삭제되었습니다. */
-  .custom-card-wrapper {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    border: none; /* 필요 시 조절 */
-  }
-
-  /* 콘텐츠 영역 배경색 및 경계 처리 */
-  .flex-grow-1 {
-    background-color: #f8f9fa;
-    min-height: 0;
-  }
-
-  /* DefaultCard 내부의 contents 영역이 꽉 차도록 설정 */
-  :deep(.card__contents) {
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    height: 100%;
-  }
+.h-100 {
+  height: 100%;
+}
+.d-flex {
+  display: flex;
+}
+.flex-column {
+  flex-direction: column;
+}
+.flex-grow-1 {
+  flex-grow: 1;
+}
+.min-h-0 {
+  min-height: 0;
+}
 </style>
