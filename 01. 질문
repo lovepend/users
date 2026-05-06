@@ -1,55 +1,63 @@
 <template>
-  <!-- 전체를 감싸는 컨테이너 추가 -->
-  <div class="h-100 d-flex flex-column">
+  <!-- 1. 전체 화면 높이를 꽉 채우기 위한 최상위 컨테이너 -->
+  <div class="h-100 p-2">
     <DefaultCard
       :title="{
         icon: 'fa-list',
         title: $t('ProjectManagemente_vue.project_list'),
         subtitle: loadTitleMsgRef ? `( ${loadTitleMsgRef} ${$t('ProjectManagemente_vue.project_message_2')} )` : '',
       }"
-      class="flex-grow-1"
+      class="h-100"
     >
-      <!-- 상단 툴바 영역 -->
+      <!-- 2. 카드 헤더의 툴바 영역 (기존 로직 유지) -->
       <template #header-left v-if="!loadTitleMsgRef">
         <i class="fa fa-spin fa-circle-notch text-gray"></i>
       </template>
-      
+
       <template #actions v-if="!userInfo?.IsSystemAdmin">
         <NoPermissionArea />
       </template>
-      
+
       <template #header-right v-else>
         <NewBasicToolBar v-bind="toolbarBindRef" v-on="toolbarEventsRef" />
       </template>
 
-      <!-- 카드 본문(Default Slot): 여기에 검색바와 그리드를 모두 넣습니다 -->
+      <!-- 3. 카드 본문: 기존의 검색바 + 그리드 로직 통합 -->
       <div class="d-flex flex-column h-100 bg-white">
-        <!-- 검색 및 필터 바 -->
+        
+        <!-- [조회 바 영역] -->
         <div class="p-3 border-bottom shadow-sm bg-light">
           <div class="d-flex align-items-center justify-content-between">
             <div class="d-flex align-items-center gap-3">
               <div class="d-flex align-items-center gap-2">
                 <span class="fw-bold text-dark text-nowrap">Projects</span>
-                <!-- 프로젝트 선택 드롭다운 (기존 코드 유지) -->
+                <!-- 프로젝트 선택 드롭다운 -->
                 <div class="dropdown">
                   <button
                     class="btn btn-sm btn-outline-secondary dropdown-toggle custom-project-dropdown text-start d-flex justify-content-between align-items-center bg-white"
                     type="button"
                     data-bs-toggle="dropdown"
+                    style="min-width: 200px;"
                   >
                     <span class="text-truncate me-2">
                       {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}
                     </span>
                   </button>
                   <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 350px">
-                    <!-- ... 드롭다운 내부 리스트 생략 ... -->
+                    <li class="p-2 border-bottom mb-2">
+                      <input type="text" class="form-control form-control-sm" v-model="projectSearchTerm" placeholder="프로젝트 검색..." />
+                    </li>
                     <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item">
-                       <!-- 기존 루프 동일 -->
+                      <div class="form-check">
+                        <input class="form-check-input" type="checkbox" :id="proj.PROJ_NO" :value="proj.PROJ_NO" v-model="selectedProjects" />
+                        <label class="form-check-label w-100" :for="proj.PROJ_NO">{{ proj.PROJ_NO }} - {{ proj.PROJ_NM }}</label>
+                      </div>
                     </li>
                   </ul>
                 </div>
               </div>
 
+              <!-- 비교 조회 버튼 -->
               <button
                 class="btn btn-sm btn-primary px-3 shadow-sm"
                 @click="onSearch"
@@ -58,7 +66,7 @@
                 <i class="fa fa-search me-1"></i>비교 조회
               </button>
 
-              <!-- 조회 모드 토글 -->
+              <!-- 조회 모드 (간편/상세) -->
               <div class="view-mode-toggle-container ms-3">
                 <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
                   <input type="radio" class="btn-check" id="modeSimple" value="simple" v-model="viewMode" />
@@ -70,24 +78,130 @@
               </div>
             </div>
 
-            <!-- 멀티 필터 텍스트 영역 -->
+            <!-- 멀티 필터 (우측) -->
             <div class="d-flex align-items-center gap-2">
               <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>멀티 필터</span>
               <textarea
                 class="form-control form-control-sm border-success custom-textarea-filter"
                 v-model="attributeFilter"
                 rows="1"
-                placeholder="ATT_ID 입력"
+                placeholder="ATT_ID 입력 (쉼표 또는 줄바꿈)"
+                style="width: 250px;"
               ></textarea>
             </div>
           </div>
         </div>
 
-        <!-- 메인 그리드 영역 (Card 높이에 맞춰 꽉 차게) -->
-        <div class="flex-grow-1 overflow-hidden" style="min-height: 400px;">
-          <ag-grid-vue v-bind="gridOptions" @grid-ready="onGridReady" />
+        <!-- [그리드 영역] -->
+        <div class="flex-grow-1 position-relative">
+          <ag-grid-vue
+            style="width: 100%; height: 100%;"
+            class="ag-theme-alpine"
+            v-bind="gridOptions"
+            :rowData="gridRowData" 
+            @grid-ready="onGridReady"
+          />
         </div>
       </div>
     </DefaultCard>
   </div>
 </template>
+
+<script>
+import { ref, computed, onMounted } from 'vue';
+import { AgGridVue } from 'ag-grid-vue3';
+// 컴포넌트 및 라이브러리 import (사용 환경에 맞게 조정)
+
+export default {
+  name: 'ProjectManagement',
+  components: {
+    AgGridVue,
+    // DefaultCard, NewBasicToolBar 등 필요한 컴포넌트 등록
+  },
+  setup() {
+    // 1. 상태 변수 정의
+    const gridApi = ref(null);
+    const gridRowData = ref([]);
+    const selectedProjects = ref([]);
+    const projectSearchTerm = ref('');
+    const viewMode = ref('simple');
+    const attributeFilter = ref('');
+    const projectList = ref([]); // 서버에서 받아올 프로젝트 목록
+    
+    // 2. 그리드 기본 설정
+    const gridOptions = computed(() => ({
+      columnDefs: dynamicCols.value, // 아래에서 정의
+      defaultColDef: {
+        sortable: true,
+        filter: true,
+        resizable: true,
+        flex: 1,
+      },
+      // 필요한 다른 옵션들 추가
+    }));
+
+    const dynamicCols = computed(() => {
+      // viewMode나 데이터에 따라 컬럼 정의를 리턴하는 로직
+      const baseCols = [
+        { field: 'ATT_ID', headerName: '속성 ID', pinned: 'left' },
+        { field: 'CONDITION', headerName: '조건', pinned: 'left' }
+      ];
+      // 프로젝트별 동적 컬럼 추가 로직 필요
+      return baseCols;
+    });
+
+    // 3. 주요 함수
+    const onGridReady = (params) => {
+      gridApi.value = params.api;
+    };
+
+    const onSearch = async () => {
+      if (gridApi.value) gridApi.value.setGridOption('loading', true);
+      
+      try {
+        // API 호출 로직 (기존 코드 그대로 적용)
+        // const response = await axiosWrapper.get(...);
+        // const processedData = ... (데이터 가공)
+        
+        // 데이터 반영 (v-bind 되어있으므로 value만 바꿔주면 됨)
+        // gridRowData.value = processedData; 
+      } catch (error) {
+        console.error("Search Error:", error);
+      } finally {
+        if (gridApi.value) gridApi.value.setGridOption('loading', false);
+      }
+    };
+
+    return {
+      gridApi,
+      gridRowData,
+      gridOptions,
+      selectedProjects,
+      projectSearchTerm,
+      viewMode,
+      attributeFilter,
+      onGridReady,
+      onSearch,
+      // ... 기타 필요한 변수들
+    };
+  }
+};
+</script>
+
+<style scoped>
+/* 기존에 쓰시던 CSS 그대로 유지 */
+.custom-textarea-filter {
+  resize: none;
+  min-height: 31px;
+}
+.toggle-label {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+/* DefaultCard 내부의 그리드가 꽉 차도록 설정 */
+:deep(.card-body) {
+  padding: 0; 
+  display: flex;
+  flex-direction: column;
+}
+</style>
