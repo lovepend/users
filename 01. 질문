@@ -4,7 +4,7 @@
     <div class="p-3 border-bottom bg-light">
       <div class="d-flex align-items-center gap-3">
         
-        <!-- 1. 프로젝트 선택 (기존 방식 원복: 키인 검색) -->
+        <!-- 1. 프로젝트 선택 (키인 검색 방식) -->
         <div class="d-flex align-items-center gap-2">
           <span class="fw-bold text-dark text-nowrap">Project</span>
           <div class="dropdown">
@@ -22,11 +22,11 @@
                   class="form-control form-control-sm" 
                   v-model="projectSearchKeyword" 
                   @click.stop 
-                  placeholder="프로젝트 번호/명 입력..." 
+                  placeholder="프로젝트 검색..." 
                 />
               </li>
               <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO">
-                <a class="dropdown-item" @click="selectProject(proj)" style="cursor: pointer;">
+                <a class="dropdown-item" @click="selectedProject = proj" style="cursor: pointer;">
                   <b class="text-primary">{{ proj.PROJ_NO }}</b> <small class="text-muted ms-1">{{ proj.DESC }}</small>
                 </a>
               </li>
@@ -34,15 +34,15 @@
           </div>
         </div>
 
-        <!-- 2. 통합 조회 키워드 입력 -->
+        <!-- 2. 단일 키워드 입력창 -->
         <div class="d-flex align-items-center gap-2 border-start ps-3">
           <span class="fw-bold text-dark text-nowrap">Keyword</span>
           <input 
             type="text" 
             class="form-control form-control-sm" 
-            style="width: 250px" 
+            style="width: 200px" 
             v-model="searchKeyword" 
-            placeholder="Tag No 입력 (엔터 시 조회)"
+            placeholder="검색어 입력..."
             @keyup.enter="onSearch"
           />
         </div>
@@ -57,16 +57,15 @@
           <i v-else class="fa fa-search me-1"></i>조회
         </button>
 
-        <!-- 4. 멀티 필터 (그리드 내부 검색용) -->
-        <div class="d-flex align-items-center gap-2 border-start ps-3 ms-auto">
-          <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>Filter</span>
-          <textarea
+        <!-- 4. 필터 (그리드 내부 검색용) -->
+        <div class="ms-auto">
+          <input
+            type="text"
             class="form-control form-control-sm border-success"
             v-model="attributeFilter"
-            rows="1"
-            style="width: 200px; font-size: 12px;"
+            style="width: 180px;"
             placeholder="결과 내 필터..."
-          ></textarea>
+          />
         </div>
       </div>
     </div>
@@ -98,76 +97,69 @@ const isLoading = ref(false)
 // --- State ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
-const selectedProject = ref(null) // 단일 선택으로 변경
+const selectedProject = ref(null)
 const searchKeyword = ref('')
 const attributeFilter = ref('')
 const gridRowData = ref([])
 
 const urlEpId = computed(() => route.query.ep_id || '')
 
-// --- 프로젝트 선택 (기존 검색 기능 원복) ---
+// 프로젝트 검색 필터
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
-  return projectList.value.filter(p => 
-    !kw || p.PROJ_NO.toLowerCase().includes(kw) || p.DESC.toLowerCase().includes(kw)
-  )
+  return projectList.value.filter(p => !kw || p.PROJ_NO.toLowerCase().includes(kw) || p.DESC.toLowerCase().includes(kw))
 })
 
-const selectProject = (proj) => {
-  selectedProject.value = proj
-}
-
-// --- 핵심: 조회 및 데이터 합치기 (Publish + Working) ---
+// --- 핵심: 조회 로직 (요청하신 파라미터 형식 적용) ---
 const onSearch = async () => {
-  if (!selectedProject.value) return sAlert.Warning('프로젝트를 선택해 주세요.')
+  if (!selectedProject.value) return sAlert.Warning('프로젝트를 선택하세요.')
   
   isLoading.value = true
   gridApi.value?.showLoadingOverlay()
 
   try {
     const projNo = selectedProject.value.PROJ_NO
-    const keywords = searchKeyword.value.split(/[\s,]+/).filter(k => k.trim())
-
-    // 1. Publish 데이터와 Working 데이터 병렬 호출
-    const [pubRes, workRes] = await Promise.all([
-      axiosWrapper.post('/api/Data/SearchPublishData', { ProjectNo: projNo, Keywords: keywords }, { headers: { Projectno: projNo, Ep_id: urlEpId.value } }),
-      axiosWrapper.post('/api/Data/SearchWorkingData', { ProjectNo: projNo, Keywords: keywords }, { headers: { Projectno: projNo, Ep_id: urlEpId.value } })
-    ])
-
-    // 2. 참조 코드 기반 데이터 매핑 (Type 구분자 추가하여 합치기)
-    // 서버 응답이 배열인지 확인 후 가공
-    const pubList = (Array.isArray(pubRes) ? pubRes : []).map(item => ({
-      ...item,
-      DATA_TYPE: 'Publish', // 구분값 추가
-      REG_TYPE_ID: item.REG_TYPE_ID || 'PUB'
-    }))
-
-    const workList = (Array.isArray(workRes) ? workRes : []).map(item => ({
-      ...item,
-      DATA_TYPE: 'Working', // 구분값 추가
-      REG_TYPE_ID: item.REG_TYPE_ID || 'WORK'
-    }))
-
-    // 3. 두 리스트를 하나로 합쳐서 그리드에 전달 (Total)
-    gridRowData.value = [...pubList, ...workList]
-
-    if (gridRowData.value.length === 0) {
-      gridApi.value?.showNoRowsOverlay()
+    
+    /**
+     * 파라미터 구조 수정: 
+     * Keywords 값을 [""] (빈 문자열이 담긴 배열)로 고정하여 전송
+     */
+    const payload = {
+      ProjectNo: projNo,
+      Keywords: [""] 
     }
 
+    const config = {
+      headers: { Projectno: projNo, Ep_id: urlEpId.value }
+    }
+
+    // Publish와 Working 데이터 각각 호출
+    const [pubRes, workRes] = await Promise.all([
+      axiosWrapper.post('/api/Data/SearchPublishData', payload, config),
+      axiosWrapper.post('/api/Data/SearchWorkingData', payload, config)
+    ])
+
+    // 데이터 합치기 (단순 통합)
+    const combined = [
+      ...(Array.isArray(pubRes) ? pubRes : []),
+      ...(Array.isArray(workRes) ? workRes : [])
+    ]
+
+    gridRowData.value = combined
+
+    if (combined.length === 0) gridApi.value?.showNoRowsOverlay()
+
   } catch (err) {
-    console.error(err)
-    sAlert.Error('데이터 조회 중 오류가 발생했습니다.')
+    sAlert.Error('데이터 조회 실패')
   } finally {
     isLoading.value = false
     gridApi.value?.hideOverlay()
   }
 }
 
-// --- 그리드 정의 ---
+// --- 그리드 설정 ---
 const columnDefs = [
-  { headerName: 'Source', field: 'DATA_TYPE', width: 100, cellStyle: p => ({ fontWeight: 'bold', color: p.value === 'Publish' ? '#0d6efd' : '#fd7e14' }) },
-  { headerName: 'Tag Number', field: 'TAG_NO', width: 180, filter: 'agTextColumnFilter' },
+  { headerName: 'Tag Number', field: 'TAG_NO', width: 180, pinned: 'left' },
   { headerName: 'Description', field: 'TAG_DESC', width: 250 },
   { headerName: 'Class', field: 'CLS_ID', width: 100 },
   { headerName: 'Status', field: 'STATUS_ID', width: 100 },
@@ -178,26 +170,30 @@ const columnDefs = [
 const gridOptions = computed(() => ({
   columnDefs: columnDefs,
   rowData: gridRowData.value,
-  defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true },
+  defaultColDef: { sortable: true, filter: true, resizable: true },
   loadingOverlayComponent: AggridLoadingOverlay,
-  // 내부 멀티 필터 로직
-  isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
+  // 입력한 키워드로 그리드 내 필터링 수행
+  isExternalFilterPresent: () => searchKeyword.value.trim() !== '' || attributeFilter.value.trim() !== '',
   doesExternalFilterPass: (node) => {
-    const terms = attributeFilter.value.split(/[\s,\n]+/).filter(t => t.trim()).map(t => t.toLowerCase())
-    const target = String(node.data.TAG_NO || '').toLowerCase()
-    return terms.some(term => target.includes(term))
+    const kw = searchKeyword.value.toLowerCase()
+    const filter = attributeFilter.value.toLowerCase()
+    const tagNo = String(node.data.TAG_NO || '').toLowerCase()
+    
+    // 키워드와 필터 중 하나라도 포함되면 표시
+    return tagNo.includes(kw) && tagNo.includes(filter)
   }
 }))
 
-const onGridReady = (params) => { gridApi.value = params.api }
+const onGridReady = (p) => { gridApi.value = p.api }
 
-watch(attributeFilter, () => gridApi.value?.onFilterChanged())
+// 검색어나 필터 값이 바뀔 때 그리드 리프레시
+watch([searchKeyword, attributeFilter], () => {
+  gridApi.value?.onFilterChanged()
+})
 
 onMounted(async () => {
-  try {
-    const res = await axiosWrapper.get('/api/Project/Get', { headers: { Ep_id: urlEpId.value } })
-    projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
-  } catch (e) { console.error(e) }
+  const res = await axiosWrapper.get('/api/Project/Get', { headers: { Ep_id: urlEpId.value } })
+  projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
 })
 </script>
 
