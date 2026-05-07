@@ -1,68 +1,47 @@
 <template>
   <div class="tag-analysis-container">
-    <!-- 상단 검색 영역 -->
-    <div class="search-header">
-      <div class="input-group">
-        <label>검색어(TAG NO/Name)</label>
+    <div class="search-section">
+      <!-- 왼쪽: 프로젝트 선택 및 조회 버튼 -->
+      <div class="left-controls">
+        <div class="control-item">
+          <label>Project</label>
+          <select v-model="selectedProject" class="project-select">
+            <option value="TE1002">TE1002 (Current)</option>
+            <option value="TE1003">TE1003 (Next)</option>
+          </select>
+        </div>
+        <button @click="fetchMergedData" class="btn-search">
+          <i class="icon-search"></i> 조회 (Search)
+        </button>
+      </div>
+
+      <!-- 오른쪽: 키워드 입력 창 -->
+      <div class="right-keywords">
+        <label>Keywords (Tag No / Name)</label>
         <textarea 
           v-model="searchKeywords" 
-          placeholder="여러 개 입력 시 줄바꿈이나 공백으로 구분"
+          placeholder="여러 개 입력 시 엔터(Enter)로 구분"
           @input="handleSearch"
         ></textarea>
       </div>
-      <div class="action-buttons">
-        <button @click="fetchMergedData" class="btn-primary">통합 조회</button>
-        <button @click="exportToExcel" class="btn-success">엑셀 저장</button>
-      </div>
     </div>
 
-    <!-- 메인 그리드 영역 -->
-    <div class="grid-wrapper">
+    <!-- 하단 그리드 영역 -->
+    <div class="grid-container">
       <ag-grid-vue
-        style="width: 100%; height: 600px;"
+        style="width: 100%; height: 650px;"
         class="ag-theme-alpine"
         :columnDefs="columnDefs"
         :rowData="rowData"
         :defaultColDef="defaultColDef"
         @grid-ready="onGridReady"
-        :getRowStyle="getRowStyle"
       />
-    </div>
-
-    <!-- 속성 비교 상세 모달 -->
-    <div v-if="showDetail" class="detail-modal">
-      <div class="modal-content">
-        <h3>Tag 속성 상세 비교 ({{ selectedTag?.TAG_NO }})</h3>
-        <div class="tab-menu">
-          <button :class="{ active: viewMode === 'table' }" @click="viewMode = 'table'">Table View</button>
-          <button :class="{ active: viewMode === 'json' }" @click="viewMode = 'json'">JSON View</button>
-        </div>
-        
-        <div class="scroll-area">
-          <table v-if="viewMode === 'table'" class="detail-table">
-            <thead>
-              <tr>
-                <th>속성명</th>
-                <th>값</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(val, key) in flattenedAttributes" :key="key">
-                <td>{{ key }}</td>
-                <td :class="{ 'no-value': val === 'null' }">{{ val }}</td>
-              </tr>
-            </tbody>
-          </table>
-          <pre v-else class="json-viewer">{{ JSON.stringify(selectedTag, null, 2) }}</pre>
-        </div>
-        <button @click="showDetail = false" class="btn-close">닫기</button>
-      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, computed, reactive } from 'vue';
+import { ref, computed } from 'vue';
 import { AgGridVue } from 'ag-grid-vue3';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
@@ -72,92 +51,59 @@ export default {
   components: { AgGridVue },
   setup() {
     const gridApi = ref(null);
+    const selectedProject = ref('TE1002'); // 기본값 프로젝트 번호
     const searchKeywords = ref('');
     const rowData = ref([]);
     const dynamicAttCols = ref([]);
-    const showDetail = ref(false);
-    const selectedTag = ref(null);
-    const viewMode = ref('table');
 
-    // 1. 기본 컬럼 정의
+    // 컬럼 정의 (베이스 + 동적 속성)
     const columnDefs = computed(() => [
-      { headerName: 'Source', field: 'Source', width: 100, pinned: 'left', 
-        cellStyle: params => params.value === 'Working' ? { color: '#e67e22', fontWeight: 'bold' } : { color: '#27ae60' } 
-      },
-      { headerName: 'Tag No', field: 'TAG_NO', width: 150, pinned: 'left', cellRenderer: 'HighlightRenderer' },
+      { headerName: 'Source', field: 'Source', width: 100, pinned: 'left' },
+      { headerName: 'Tag No', field: 'TAG_NO', width: 160, pinned: 'left' },
       { headerName: 'Description', field: 'TAG_DESC', width: 200 },
-      { headerName: 'Class ID', field: 'CLS_ID', width: 120, cellClass: 'link-cell', onCellClicked: (p) => openClassSpec(p.data.CLS_ID) },
-      // 동적 속성 컬럼들이 여기에 병합됨
+      { headerName: 'Class ID', field: 'CLS_ID', width: 120 },
       ...dynamicAttCols.value
     ]);
 
     const defaultColDef = {
-      sortable: true,
-      filter: true,
-      resizable: true,
-      floatingFilter: true
+      sortable: true, filter: true, resizable: true, floatingFilter: true
     };
 
-    // 2. 데이터 통합 및 속성 피벗 로직 (핵심 기능)
     const fetchMergedData = async () => {
-      // Mock API 호출 (SearchPublishData + SearchWorkingData 병합 시뮬레이션)
-      const publishData = [
-        { TAG_NO: 'TAG-001', TAG_DESC: 'Main Pump', CLS_ID: 'C01', ATTRIBUTES: [{ ATTR_NAME: 'Pressure', VALUE: '10bar' }, { ATTR_NAME: 'Temp', VALUE: '50C' }] },
-        { TAG_NO: 'TAG-002', TAG_DESC: 'Side Valve', CLS_ID: 'C02', ATTRIBUTES: [{ ATTR_NAME: 'Material', VALUE: 'SUS304' }] }
-      ];
-      const workingData = [
-        { TAG_NO: 'TAG-001', TAG_DESC: 'Main Pump(Rev)', CLS_ID: 'C01', ATTRIBUTES: [{ ATTR_NAME: 'Pressure', VALUE: '12bar' }, { ATTR_NAME: 'Vibration', VALUE: 'Normal' }] }
-      ];
-
-      // 데이터 병합 (Source 구분)
-      const merged = [
-        ...publishData.map(d => ({ ...d, Source: 'Publish' })),
-        ...workingData.map(d => ({ ...d, Source: 'Working' }))
+      console.log(`Searching for Project: ${selectedProject.value}`);
+      // 실제 구현 시 여기서 axios.get(..., { params: { project: selectedProject.value } })
+      
+      // 테스트용 가상 데이터
+      const mockData = [
+        { TAG_NO: 'TAG-001', TAG_DESC: 'Sample Pump', CLS_ID: 'C01', Source: 'Publish', ATTRIBUTES: [{ ATTR_NAME: 'RPM', VALUE: '1500' }] },
+        { TAG_NO: 'TAG-001', TAG_DESC: 'Sample Pump(Mod)', CLS_ID: 'C01', Source: 'Working', ATTRIBUTES: [{ ATTR_NAME: 'RPM', VALUE: '1800' }, { ATTR_NAME: 'Material', VALUE: 'Iron' }] }
       ];
 
-      // 동적 속성 컬럼 추출 로직
+      // 데이터 평면화 로직
       const attrSet = new Set();
-      merged.forEach(row => {
-        row.ATTRIBUTES?.forEach(attr => attrSet.add(attr.ATTR_NAME));
-        // 그리드에서 접근하기 쉽게 속성을 최상위 필드로 평면화
-        row.ATTRIBUTES?.forEach(attr => {
-          row[`ATTR_${attr.ATTR_NAME}`] = attr.VALUE;
+      const rows = mockData.map(d => {
+        const row = { ...d };
+        d.ATTRIBUTES?.forEach(a => {
+          attrSet.add(a.ATTR_NAME);
+          row[`ATTR_${a.ATTR_NAME}`] = a.VALUE;
         });
+        return row;
       });
 
-      dynamicAttCols.value = Array.from(attrSet).map(attrName => ({
-        headerName: `Attr: ${attrName}`,
-        field: `ATTR_${attrName}`,
-        width: 130,
-        valueFormatter: p => p.value || 'null',
-        cellStyle: p => !p.value ? { color: '#ccc', fontStyle: 'italic' } : null
+      // 동적 컬럼 생성
+      dynamicAttCols.value = Array.from(attrSet).map(name => ({
+        headerName: name,
+        field: `ATTR_${name}`,
+        width: 120
       }));
 
-      rowData.value = merged;
+      rowData.value = rows;
     };
 
-    // 3. 하이라이트 및 검색 필터 로직
     const handleSearch = () => {
-      if (!gridApi.value) return;
-      const keywords = searchKeywords.value.split(/[\s\n]+/).filter(k => k.length > 0);
-      
-      // AG-Grid 외부 필터링 혹은 QuickFilter 적용
-      gridApi.value.setQuickFilter(keywords.join(' '));
-    };
-
-    // 4. 상세 모달 데이터 가공
-    const flattenedAttributes = computed(() => {
-      if (!selectedTag.value) return {};
-      const attrs = {};
-      selectedTag.value.ATTRIBUTES?.forEach(a => {
-        attrs[a.ATTR_NAME] = a.VALUE;
-      });
-      return attrs;
-    });
-
-    const openClassSpec = (clsId) => {
-      console.log(`Navigating to Class Spec: ${clsId}`);
-      // 신규 탭 이동 로직 예시: window.open(`/spec/${clsId}`);
+      if (gridApi.value) {
+        gridApi.value.setQuickFilter(searchKeywords.value.replace(/\n/g, ' '));
+      }
     };
 
     const onGridReady = (params) => {
@@ -165,38 +111,75 @@ export default {
       fetchMergedData();
     };
 
-    const getRowStyle = (params) => {
-      if (params.data.Source === 'Working') return { backgroundColor: '#fffaf0' };
-    };
-
     return {
-      searchKeywords, rowData, columnDefs, defaultColDef,
-      dynamicAttCols, showDetail, selectedTag, viewMode,
-      flattenedAttributes, onGridReady, handleSearch, fetchMergedData,
-      getRowStyle
+      selectedProject, searchKeywords, rowData, columnDefs, defaultColDef,
+      onGridReady, fetchMergedData, handleSearch
     };
   }
 };
 </script>
 
 <style scoped>
-.tag-analysis-container { padding: 20px; font-family: 'Malgun Gothic', sans-serif; }
-.search-header { display: flex; gap: 20px; margin-bottom: 15px; align-items: flex-end; }
-.input-group { display: flex; flex-direction: column; flex: 1; }
-textarea { height: 60px; padding: 8px; border: 1px solid #ddd; border-radius: 4px; resize: none; }
-.btn-primary { background: #3498db; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px; height: 40px; }
-.btn-success { background: #27ae60; color: white; border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px; height: 40px; }
-.grid-wrapper { border: 1px solid #ccc; border-radius: 4px; overflow: hidden; }
+.tag-analysis-container { padding: 15px; background: #f9f9f9; }
 
-/* 상세 모달 스타일 */
-.detail-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 1000; }
-.modal-content { background: white; width: 800px; max-height: 80vh; padding: 25px; border-radius: 8px; display: flex; flex-direction: column; }
-.scroll-area { overflow-y: auto; flex: 1; margin: 15px 0; border: 1px solid #eee; }
-.detail-table { width: 100%; border-collapse: collapse; }
-.detail-table th, .detail-table td { border: 1px solid #ddd; padding: 10px; text-align: left; }
-.detail-table th { background: #f8f9fa; position: sticky; top: 0; }
-.no-value { color: #ccc; font-style: italic; }
-.json-viewer { background: #2c3e50; color: #ecf0f1; padding: 15px; border-radius: 4px; font-size: 12px; }
-.link-cell { color: #3498db; text-decoration: underline; cursor: pointer; }
-.active { background: #3498db !important; color: white !important; }
+/* 검색 섹션 레이아웃 */
+.search-section {
+  display: flex;
+  gap: 20px;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  margin-bottom: 20px;
+  align-items: flex-start;
+}
+
+/* 왼쪽: 프로젝트와 조회 버튼 */
+.left-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 200px;
+}
+
+.control-item { display: flex; flex-direction: column; gap: 5px; }
+.control-item label, .right-keywords label { font-weight: bold; font-size: 13px; color: #555; }
+
+.project-select {
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+}
+
+.btn-search {
+  background: #4a90e2;
+  color: white;
+  border: none;
+  padding: 12px;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.btn-search:hover { background: #357abd; }
+
+/* 오른쪽: 키워드 텍스트 영역 */
+.right-keywords {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+textarea {
+  height: 80px;
+  padding: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  resize: none;
+  font-family: inherit;
+}
+
+.grid-container { background: white; border-radius: 8px; padding: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
 </style>
