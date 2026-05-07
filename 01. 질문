@@ -1,87 +1,78 @@
 <template>
-  <div class="d-flex flex-column h-100 bg-white shadow-sm rounded">
-    <!-- 상단 컨트롤 바 -->
+  <div class="d-flex flex-column h-100 bg-white">
+    <!-- 상단 컨트롤 영역 -->
     <div class="p-3 border-bottom bg-light">
-      <div class="row g-2 align-items-center">
-        <!-- 프로젝트 선택 -->
-        <div class="col-auto d-flex align-items-center gap-2">
-          <span class="fw-bold text-secondary">Projects</span>
+      <div class="d-flex align-items-center gap-3">
+        
+        <!-- 1. 프로젝트 선택 (기존 방식 원복: 키인 검색) -->
+        <div class="d-flex align-items-center gap-2">
+          <span class="fw-bold text-dark text-nowrap">Project</span>
           <div class="dropdown">
             <button
-              class="btn btn-sm btn-white border dropdown-toggle custom-project-dropdown text-start shadow-sm"
+              class="btn btn-sm btn-outline-secondary dropdown-toggle bg-white custom-dropdown"
               type="button"
               data-bs-toggle="dropdown"
-              data-bs-auto-close="outside"
             >
-              <span class="text-truncate">
-                {{ selectedProjects.length > 0 ? `${selectedProjects[0]} 외 ${selectedProjects.length - 1}건` : '선택하세요' }}
-              </span>
+              {{ selectedProject ? selectedProject.PROJ_NO : '프로젝트를 선택하세요' }}
             </button>
-            <ul class="dropdown-menu p-2 shadow" style="min-width: 350px; max-height: 500px; overflow-y: auto;">
-              <li class="px-2 pb-2">
-                <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="Project ID/Name..." @click.stop />
+            <ul class="dropdown-menu p-2 shadow" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
+              <li class="px-2 pb-2 border-bottom mb-2">
+                <input 
+                  type="text" 
+                  class="form-control form-control-sm" 
+                  v-model="projectSearchKeyword" 
+                  @click.stop 
+                  placeholder="프로젝트 번호/명 입력..." 
+                />
               </li>
-              <li class="dropdown-item py-1 bg-light border-bottom">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" :checked="isAllSelected" :indeterminate="isIndeterminate" @change="toggleAllSelection" />
-                  <label class="form-check-label fw-bold">전체 선택</label>
-                </div>
-              </li>
-              <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item py-1">
-                <div class="form-check">
-                  <input class="form-check-input" type="checkbox" :value="proj.PROJ_NO" v-model="selectedProjects" />
-                  <label class="form-check-label">
-                    <span class="badge bg-primary me-1">{{ proj.PROJ_NO }}</span> {{ proj.DESC }}
-                  </label>
-                </div>
+              <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO">
+                <a class="dropdown-item" @click="selectProject(proj)" style="cursor: pointer;">
+                  <b class="text-primary">{{ proj.PROJ_NO }}</b> <small class="text-muted ms-1">{{ proj.DESC }}</small>
+                </a>
               </li>
             </ul>
           </div>
         </div>
 
-        <!-- 키워드 검색 (통합 조회) -->
-        <div class="col-auto d-flex align-items-center gap-2 border-start ps-3">
-          <span class="fw-bold text-secondary">Keyword</span>
-          <div class="input-group input-group-sm" style="width: 250px;">
-            <input 
-              type="text" 
-              class="form-control" 
-              v-model="searchKeyword" 
-              placeholder="Tag No (쉼표 구분 가능)"
-              @keyup.enter="onSearch"
-            />
-            <button class="btn btn-primary" @click="onSearch" :disabled="isLoading">
-              <i v-if="isLoading" class="fa fa-spinner fa-spin"></i>
-              <i v-else class="fa fa-search"></i>
-            </button>
-          </div>
+        <!-- 2. 통합 조회 키워드 입력 -->
+        <div class="d-flex align-items-center gap-2 border-start ps-3">
+          <span class="fw-bold text-dark text-nowrap">Keyword</span>
+          <input 
+            type="text" 
+            class="form-control form-control-sm" 
+            style="width: 250px" 
+            v-model="searchKeyword" 
+            placeholder="Tag No 입력 (엔터 시 조회)"
+            @keyup.enter="onSearch"
+          />
         </div>
 
-        <!-- 상세/간편 모드 (기존 토글) -->
-        <div class="col-auto ms-auto">
-          <div class="btn-group border rounded-pill p-1 bg-white shadow-sm">
-            <input type="radio" class="btn-check" id="vSimple" value="simple" v-model="viewMode" />
-            <label class="btn btn-sm rounded-pill border-0 px-3" for="vSimple">간편</label>
-            <input type="radio" class="btn-check" id="vDetail" value="detail" v-model="viewMode" />
-            <label class="btn btn-sm rounded-pill border-0 px-3" for="vDetail">상세</label>
-          </div>
-        </div>
+        <!-- 3. 조회 버튼 -->
+        <button
+          class="btn btn-sm btn-primary px-3"
+          @click="onSearch"
+          :disabled="!selectedProject || isLoading"
+        >
+          <i v-if="isLoading" class="fa fa-spinner fa-spin me-1"></i>
+          <i v-else class="fa fa-search me-1"></i>조회
+        </button>
 
-        <!-- 멀티 필터 (그리드 내부 검색) -->
-        <div class="col-auto d-flex align-items-center gap-2 border-start ps-3">
-          <span class="fw-bold text-success"><i class="fa fa-filter"></i></span>
+        <!-- 4. 멀티 필터 (그리드 내부 검색용) -->
+        <div class="d-flex align-items-center gap-2 border-start ps-3 ms-auto">
+          <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>Filter</span>
           <textarea
-            class="form-control form-control-sm custom-filter-area"
+            class="form-control form-control-sm border-success"
             v-model="attributeFilter"
             rows="1"
+            style="width: 200px; font-size: 12px;"
             placeholder="결과 내 필터..."
           ></textarea>
         </div>
       </div>
     </div>
 
-    <!-- 메인 그리드 영역 -->
-    <div class="flex-grow-1 position-relative">
+    <!-- 그리드 영역 -->
+    <div class="flex-grow-1">
       <ag-grid-vue
         style="width: 100%; height: 100%;"
         class="ag-theme-alpine"
@@ -104,152 +95,112 @@ const route = useRoute()
 const gridApi = shallowRef(null)
 const isLoading = ref(false)
 
-// --- State 설정 ---
+// --- State ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
-const selectedProjects = ref([])
+const selectedProject = ref(null) // 단일 선택으로 변경
 const searchKeyword = ref('')
 const attributeFilter = ref('')
-const viewMode = ref('simple')
-
 const gridRowData = ref([])
-const activeProjectColumns = ref([])
 
 const urlEpId = computed(() => route.query.ep_id || '')
 
-// --- 프로젝트 선택 핸들링 (전체 선택/검색 등 유지) ---
+// --- 프로젝트 선택 (기존 검색 기능 원복) ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
-  return projectList.value.filter(p => !kw || p.PROJ_NO.toLowerCase().includes(kw) || p.DESC.toLowerCase().includes(kw))
+  return projectList.value.filter(p => 
+    !kw || p.PROJ_NO.toLowerCase().includes(kw) || p.DESC.toLowerCase().includes(kw)
+  )
 })
 
-const isAllSelected = computed(() => filteredProjectList.value.length > 0 && filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO)))
-const isIndeterminate = computed(() => {
-  const selCount = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
-  return selCount > 0 && selCount < filteredProjectList.value.length
-})
-
-const toggleAllSelection = (e) => {
-  const checked = e.target.checked
-  const currentFiltered = filteredProjectList.value.map(p => p.PROJ_NO)
-  if (checked) {
-    selectedProjects.value = [...new Set([...selectedProjects.value, ...currentFiltered])]
-  } else {
-    selectedProjects.value = selectedProjects.value.filter(id => !currentFiltered.includes(id))
-  }
+const selectProject = (proj) => {
+  selectedProject.value = proj
 }
 
-// --- API 데이터 조회 및 고도화된 매핑 ---
+// --- 핵심: 조회 및 데이터 합치기 (Publish + Working) ---
 const onSearch = async () => {
-  if (selectedProjects.value.length === 0) return sAlert.Warning('대상 프로젝트를 먼저 선택해 주세요.')
+  if (!selectedProject.value) return sAlert.Warning('프로젝트를 선택해 주세요.')
   
   isLoading.value = true
   gridApi.value?.showLoadingOverlay()
 
   try {
+    const projNo = selectedProject.value.PROJ_NO
     const keywords = searchKeyword.value.split(/[\s,]+/).filter(k => k.trim())
-    const tagMap = new Map()
 
-    // 병렬 데이터 호출 (Publish & Working)
-    const apiCalls = selectedProjects.value.flatMap(projNo => [
+    // 1. Publish 데이터와 Working 데이터 병렬 호출
+    const [pubRes, workRes] = await Promise.all([
       axiosWrapper.post('/api/Data/SearchPublishData', { ProjectNo: projNo, Keywords: keywords }, { headers: { Projectno: projNo, Ep_id: urlEpId.value } }),
       axiosWrapper.post('/api/Data/SearchWorkingData', { ProjectNo: projNo, Keywords: keywords }, { headers: { Projectno: projNo, Ep_id: urlEpId.value } })
     ])
 
-    const results = await Promise.all(apiCalls)
+    // 2. 참조 코드 기반 데이터 매핑 (Type 구분자 추가하여 합치기)
+    // 서버 응답이 배열인지 확인 후 가공
+    const pubList = (Array.isArray(pubRes) ? pubRes : []).map(item => ({
+      ...item,
+      DATA_TYPE: 'Publish', // 구분값 추가
+      REG_TYPE_ID: item.REG_TYPE_ID || 'PUB'
+    }))
 
-    selectedProjects.value.forEach((projNo, idx) => {
-      const pubData = results[idx * 2] || []
-      const workData = results[idx * 2 + 1] || []
+    const workList = (Array.isArray(workRes) ? workRes : []).map(item => ({
+      ...item,
+      DATA_TYPE: 'Working', // 구분값 추가
+      REG_TYPE_ID: item.REG_TYPE_ID || 'WORK'
+    }))
 
-      const process = (data, type) => {
-        data.forEach(item => {
-          const key = item.TAG_NO
-          if (!tagMap.has(key)) {
-            tagMap.set(key, { ...item, _projects: {} })
-          }
-          const row = tagMap.get(key)
-          if (!row._projects[projNo]) row._projects[projNo] = { Publish: null, Working: null }
-          row._projects[projNo][type] = item
-        })
-      }
+    // 3. 두 리스트를 하나로 합쳐서 그리드에 전달 (Total)
+    gridRowData.value = [...pubList, ...workList]
 
-      process(pubData, 'Publish')
-      process(workData, 'Working')
-    })
+    if (gridRowData.value.length === 0) {
+      gridApi.value?.showNoRowsOverlay()
+    }
 
-    gridRowData.value = Array.from(tagMap.values())
-    activeProjectColumns.value = [...selectedProjects.value]
-    
   } catch (err) {
     console.error(err)
-    sAlert.Error('데이터를 불러오는 중 오류가 발생했습니다.')
+    sAlert.Error('데이터 조회 중 오류가 발생했습니다.')
   } finally {
     isLoading.value = false
     gridApi.value?.hideOverlay()
-    if (gridRowData.value.length === 0) gridApi.value?.showNoRowsOverlay()
   }
 }
 
-// --- 그리드 정의 (컬럼 및 옵션) ---
-const columnDefs = computed(() => {
-  const base = [
-    { headerName: 'Tag Number', field: 'TAG_NO', width: 160, pinned: 'left', checkboxSelection: true, headerCheckboxSelection: true },
-    { headerName: 'Description', field: 'TAG_DESC', width: 250 },
-    { headerName: 'Class', field: 'CLS_ID', width: 100 },
-  ]
-
-  const dynamic = activeProjectColumns.value.map(proj => ({
-    headerName: `PJ: ${proj}`,
-    children: [
-      { 
-        headerName: 'PUB', 
-        width: 80, 
-        valueGetter: p => p.data._projects[proj]?.Publish ? 'ON' : '-',
-        cellClassRules: { 'text-success fw-bold': "x === 'ON'" }
-      },
-      { 
-        headerName: 'WORK', 
-        width: 80, 
-        valueGetter: p => p.data._projects[proj]?.Working ? 'ON' : '-',
-        cellClassRules: { 'text-warning fw-bold': "x === 'ON'" }
-      }
-    ]
-  }))
-
-  return [...base, ...dynamic]
-})
+// --- 그리드 정의 ---
+const columnDefs = [
+  { headerName: 'Source', field: 'DATA_TYPE', width: 100, cellStyle: p => ({ fontWeight: 'bold', color: p.value === 'Publish' ? '#0d6efd' : '#fd7e14' }) },
+  { headerName: 'Tag Number', field: 'TAG_NO', width: 180, filter: 'agTextColumnFilter' },
+  { headerName: 'Description', field: 'TAG_DESC', width: 250 },
+  { headerName: 'Class', field: 'CLS_ID', width: 100 },
+  { headerName: 'Status', field: 'STATUS_ID', width: 100 },
+  { headerName: 'Reg Type', field: 'REG_TYPE_ID', width: 120 },
+  { headerName: 'Project No', field: 'PROJECT_NO', width: 120 }
+]
 
 const gridOptions = computed(() => ({
-  columnDefs: columnDefs.value,
+  columnDefs: columnDefs,
   rowData: gridRowData.value,
   defaultColDef: { sortable: true, filter: true, resizable: true, floatingFilter: true },
-  rowSelection: 'multiple',
   loadingOverlayComponent: AggridLoadingOverlay,
+  // 내부 멀티 필터 로직
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: (node) => {
-    const searchTerms = attributeFilter.value.split(/[\s,\n]+/).filter(t => t.trim()).map(t => t.toLowerCase())
+    const terms = attributeFilter.value.split(/[\s,\n]+/).filter(t => t.trim()).map(t => t.toLowerCase())
     const target = String(node.data.TAG_NO || '').toLowerCase()
-    return searchTerms.some(term => target.includes(term))
+    return terms.some(term => target.includes(term))
   }
 }))
 
-const onGridReady = (params) => {
-  gridApi.value = params.api
-}
+const onGridReady = (params) => { gridApi.value = params.api }
 
-// 필터 변경 시 그리드 갱신
 watch(attributeFilter, () => gridApi.value?.onFilterChanged())
 
 onMounted(async () => {
-  const res = await axiosWrapper.get('/api/Project/Get', { headers: { Ep_id: urlEpId.value } })
-  projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
+  try {
+    const res = await axiosWrapper.get('/api/Project/Get', { headers: { Ep_id: urlEpId.value } })
+    projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
+  } catch (e) { console.error(e) }
 })
 </script>
 
 <style scoped>
-.custom-project-dropdown { width: 220px; background-color: white; }
-.custom-filter-area { width: 250px; transition: all 0.3s; }
-.custom-filter-area:focus { width: 400px; height: 80px !important; position: absolute; right: 20px; z-index: 100; }
-.btn-check:checked + .btn { background-color: #0d6efd; color: white; }
+.custom-dropdown { width: 250px; text-align: left; display: flex; justify-content: space-between; align-items: center; }
 </style>
