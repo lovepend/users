@@ -1,77 +1,50 @@
 <template>
   <div class="d-flex flex-column h-100 bg-white">
-    <!-- 상단 컨트롤 영역 -->
+    <!-- 상단 컨트롤 바 -->
     <div class="p-3 border-bottom bg-light">
       <div class="d-flex align-items-center gap-3">
         
-        <!-- 1. 프로젝트 선택 (키인 검색 방식) -->
+        <!-- 1. 프로젝트 선택 (키인 검색) -->
         <div class="d-flex align-items-center gap-2">
-          <span class="fw-bold text-dark text-nowrap">Project</span>
+          <span class="fw-bold text-dark">Project</span>
           <div class="dropdown">
-            <button
-              class="btn btn-sm btn-outline-secondary dropdown-toggle bg-white custom-dropdown"
-              type="button"
-              data-bs-toggle="dropdown"
-            >
-              {{ selectedProject ? selectedProject.PROJ_NO : '프로젝트를 선택하세요' }}
+            <button class="btn btn-sm btn-outline-secondary dropdown-toggle bg-white custom-dropdown" type="button" data-bs-toggle="dropdown">
+              {{ selectedProject ? selectedProject.PROJ_NO : '선택하세요' }}
             </button>
             <ul class="dropdown-menu p-2 shadow" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
-              <li class="px-2 pb-2 border-bottom mb-2">
-                <input 
-                  type="text" 
-                  class="form-control form-control-sm" 
-                  v-model="projectSearchKeyword" 
-                  @click.stop 
-                  placeholder="프로젝트 검색..." 
-                />
+              <li class="px-2 pb-2">
+                <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" @click.stop placeholder="Search Project..." />
               </li>
               <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO">
                 <a class="dropdown-item" @click="selectedProject = proj" style="cursor: pointer;">
-                  <b class="text-primary">{{ proj.PROJ_NO }}</b> <small class="text-muted ms-1">{{ proj.DESC }}</small>
+                  <b class="text-primary">{{ proj.PROJ_NO }}</b> <small>{{ proj.DESC }}</small>
                 </a>
               </li>
             </ul>
           </div>
         </div>
 
-        <!-- 2. 단일 키워드 입력창 -->
+        <!-- 2. 키워드 입력 -->
         <div class="d-flex align-items-center gap-2 border-start ps-3">
-          <span class="fw-bold text-dark text-nowrap">Keyword</span>
-          <input 
-            type="text" 
-            class="form-control form-control-sm" 
-            style="width: 200px" 
-            v-model="searchKeyword" 
-            placeholder="검색어 입력..."
-            @keyup.enter="onSearch"
-          />
+          <span class="fw-bold text-dark">Keyword</span>
+          <input type="text" class="form-control form-control-sm" style="width: 200px" v-model="searchKeyword" placeholder="Tag No 입력..." @keyup.enter="onSearch" />
         </div>
 
         <!-- 3. 조회 버튼 -->
-        <button
-          class="btn btn-sm btn-primary px-3"
-          @click="onSearch"
-          :disabled="!selectedProject || isLoading"
-        >
-          <i v-if="isLoading" class="fa fa-spinner fa-spin me-1"></i>
-          <i v-else class="fa fa-search me-1"></i>조회
+        <button class="btn btn-sm btn-primary px-3" @click="onSearch" :disabled="!selectedProject || isLoading">
+          <i v-if="isLoading" class="fa fa-spinner fa-spin me-1"></i>조회
         </button>
 
-        <!-- 4. 필터 (그리드 내부 검색용) -->
-        <div class="ms-auto">
-          <input
-            type="text"
-            class="form-control form-control-sm border-success"
-            v-model="attributeFilter"
-            style="width: 180px;"
-            placeholder="결과 내 필터..."
-          />
+        <!-- 4. 결과 내 필터 (멀티 필터) -->
+        <div class="ms-auto d-flex align-items-center gap-2">
+          <span class="fw-bold text-success"><i class="fa fa-filter"></i> Filter</span>
+          <input type="text" class="form-control form-control-sm border-success" v-model="attributeFilter" style="width: 180px;" placeholder="Tag No 필터링..." />
         </div>
       </div>
     </div>
 
     <!-- 그리드 영역 -->
-    <div class="flex-grow-1">
+    <div class="flex-grow-1 overflow-hidden">
       <ag-grid-vue
         style="width: 100%; height: 100%;"
         class="ag-theme-alpine"
@@ -94,7 +67,6 @@ const route = useRoute()
 const gridApi = shallowRef(null)
 const isLoading = ref(false)
 
-// --- State ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProject = ref(null)
@@ -104,13 +76,12 @@ const gridRowData = ref([])
 
 const urlEpId = computed(() => route.query.ep_id || '')
 
-// 프로젝트 검색 필터
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   return projectList.value.filter(p => !kw || p.PROJ_NO.toLowerCase().includes(kw) || p.DESC.toLowerCase().includes(kw))
 })
 
-// --- 핵심: 조회 로직 (요청하신 파라미터 형식 적용) ---
+// --- 조회 로직 ---
 const onSearch = async () => {
   if (!selectedProject.value) return sAlert.Warning('프로젝트를 선택하세요.')
   
@@ -119,77 +90,53 @@ const onSearch = async () => {
 
   try {
     const projNo = selectedProject.value.PROJ_NO
-    
-    /**
-     * 파라미터 구조 수정: 
-     * Keywords 값을 [""] (빈 문자열이 담긴 배열)로 고정하여 전송
-     */
-    const payload = {
-      ProjectNo: projNo,
-      Keywords: [""] 
-    }
+    const payload = { ProjectNo: projNo, Keywords: [""] } // 요청하신 배열 형식 고정
+    const config = { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
 
-    const config = {
-      headers: { Projectno: projNo, Ep_id: urlEpId.value }
-    }
-
-    // Publish와 Working 데이터 각각 호출
+    // 펍, 워크 데이터를 병렬로 호출해서 합침
     const [pubRes, workRes] = await Promise.all([
-      axiosWrapper.post('/api/Data/SearchPublishData', payload, config),
-      axiosWrapper.post('/api/Data/SearchWorkingData', payload, config)
+      axiosWrapper.post('/api/Data/SearchPublishData', payload, config).catch(() => []),
+      axiosWrapper.post('/api/Data/SearchWorkingData', payload, config).catch(() => [])
     ])
 
-    // 데이터 합치기 (단순 통합)
-    const combined = [
-      ...(Array.isArray(pubRes) ? pubRes : []),
-      ...(Array.isArray(workRes) ? workRes : [])
-    ]
-
-    gridRowData.value = combined
-
-    if (combined.length === 0) gridApi.value?.showNoRowsOverlay()
+    // 단순히 합쳐서 그리드에 바인딩
+    gridRowData.value = [...pubRes, ...workRes]
 
   } catch (err) {
-    sAlert.Error('데이터 조회 실패')
+    sAlert.Error('조회 실패')
   } finally {
     isLoading.value = false
     gridApi.value?.hideOverlay()
   }
 }
 
-// --- 그리드 설정 ---
-const columnDefs = [
-  { headerName: 'Tag Number', field: 'TAG_NO', width: 180, pinned: 'left' },
-  { headerName: 'Description', field: 'TAG_DESC', width: 250 },
-  { headerName: 'Class', field: 'CLS_ID', width: 100 },
-  { headerName: 'Status', field: 'STATUS_ID', width: 100 },
-  { headerName: 'Reg Type', field: 'REG_TYPE_ID', width: 120 },
-  { headerName: 'Project No', field: 'PROJECT_NO', width: 120 }
-]
-
+// --- 그리드 정의 ---
 const gridOptions = computed(() => ({
-  columnDefs: columnDefs,
+  columnDefs: [
+    { headerName: 'Tag Number', field: 'TAG_NO', width: 180, pinned: 'left' },
+    { headerName: 'Description', field: 'TAG_DESC', width: 250 },
+    { headerName: 'Class', field: 'CLS_ID', width: 100 },
+    { headerName: 'Reg Type', field: 'REG_TYPE_ID', width: 120 },
+    { headerName: 'Status', field: 'STATUS_ID', width: 100 },
+    { headerName: 'Project No', field: 'PROJECT_NO', width: 120 }
+  ],
   rowData: gridRowData.value,
   defaultColDef: { sortable: true, filter: true, resizable: true },
   loadingOverlayComponent: AggridLoadingOverlay,
-  // 입력한 키워드로 그리드 내 필터링 수행
+  // 검색어(Keyword)와 필터 모두 그리드 내부 필터로 동작하게 설정
   isExternalFilterPresent: () => searchKeyword.value.trim() !== '' || attributeFilter.value.trim() !== '',
   doesExternalFilterPass: (node) => {
     const kw = searchKeyword.value.toLowerCase()
     const filter = attributeFilter.value.toLowerCase()
     const tagNo = String(node.data.TAG_NO || '').toLowerCase()
-    
-    // 키워드와 필터 중 하나라도 포함되면 표시
     return tagNo.includes(kw) && tagNo.includes(filter)
   }
 }))
 
 const onGridReady = (p) => { gridApi.value = p.api }
 
-// 검색어나 필터 값이 바뀔 때 그리드 리프레시
-watch([searchKeyword, attributeFilter], () => {
-  gridApi.value?.onFilterChanged()
-})
+// 상단 Keyword 입력이나 Filter 입력 시 그리드 즉시 반응
+watch([searchKeyword, attributeFilter], () => { gridApi.value?.onFilterChanged() })
 
 onMounted(async () => {
   const res = await axiosWrapper.get('/api/Project/Get', { headers: { Ep_id: urlEpId.value } })
