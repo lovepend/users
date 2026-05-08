@@ -1,308 +1,220 @@
 <template>
-  <div class="panel panel-expandable m-0 p-0 h-100">
-    <PageTitle
-      icon="fa-square-check"
-      :title="'Tag List 및 Attributes 정보' + (currentProjNo ? ` [ ${currentProjNo} ]` : '')"
-    >
-      <template #actions>
-        <div class="d-flex align-items-center gap-2 me-2">
-          <label class="d-flex align-items-center gap-2">
-            <span class="fw-500">Keyword</span>
-            <input
-              type="text"
-              placeholder="Input Keyword"
-              class="form-control form-control-sm p-1"
-              style="min-height: 1rem"
-              v-model="searchKeywordRef"
-              @keyup.enter="onSearch"
-            />
-          </label>
-          <button class="btn btn-xs btn-primary" @click="onSearch">Search</button>
-        </div>
-        <div class="form-check form-switch m-0">
-          <label class="form-check-label text-dark user-select-none cursor-pointer">
-            <input class="form-check-input" type="checkbox" v-model="isWorkingRef" />
-            {{ isWorkingLabel }}
-          </label>
-        </div>
-        <panel-toolbar />
-      </template>
-    </PageTitle>
-    <div class="panel-body m-0 p-0 h-100">
-      <!-- Splitter 디자인 반영 -->
-      <Splitter class="h-100 custom-splitter">
-        <SplitterPanel :size="55" :minSize="10">
-          <div class="panel m-0 p-0 h-100 d-flex flex-column">
-            <div class="panel-heading p-0 m-0">
-              <div class="w-100">
-                <BasicToolBar
-                  @delete-data="deleteSelectedData"
-                  :showCreate="false"
-                  :showMultiCreate="false"
-                  :showDelete="isShowDeleteBtn"
-                  :isDisabledDeleteBtn="isDisabledDeleteBtn"
-                  :showSave="false"
-                  :isDisabledSaveBtn="false"
-                />
+  <div class="h-100 p-2 bg-light">
+    <!-- DefaultCard 컴포넌트 -->
+    <DefaultCard class="h-100 shadow-sm border-0">
+      <!-- [수정] 보통 우리 프로젝트의 DefaultCard는 #title 또는 #header-left/right를 사용합니다 -->
+      <template #title>
+        <div class="d-flex align-items-center justify-content-between w-100">
+          <!-- 좌측: 아이콘 + 프로젝트 선택 -->
+          <div class="d-flex align-items-center gap-3">
+            <div class="d-flex align-items-center gap-2 border-end pe-3">
+              <i class="fa fa-layer-group text-primary fs-5"></i>
+              <span class="fw-bold text-dark" style="font-size: 0.95rem">데이터 통합 집계</span>
+            </div>
+
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted small text-nowrap">대상 프로젝트</span>
+              <div class="dropdown">
+                <button
+                  class="btn btn-sm btn-white border custom-dropdown-btn d-flex justify-content-between align-items-center bg-white"
+                  type="button"
+                  data-bs-toggle="dropdown"
+                  data-bs-auto-close="outside"
+                >
+                  <span class="text-truncate" style="max-width: 150px">
+                    {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '전체 프로젝트' }}
+                  </span>
+                  <i class="fa fa-chevron-down ms-2 text-muted" style="font-size: 0.7rem"></i>
+                </button>
+                <ul
+                  class="dropdown-menu p-2 shadow-lg border-0"
+                  style="min-width: 300px; max-height: 400px; overflow-y: auto"
+                >
+                  <li class="px-2 pb-2 border-bottom mb-2">
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text bg-white border-end-0"
+                        ><i class="fa fa-search text-muted"></i
+                      ></span>
+                      <input
+                        type="text"
+                        class="form-control border-start-0 ps-0"
+                        v-model="projectSearchKeyword"
+                        placeholder="검색..."
+                        @click.stop
+                      />
+                    </div>
+                  </li>
+                  <li class="dropdown-item px-2 py-1 rounded mb-1 bg-light">
+                    <CheckBox id="all-check" label="전체 선택" :value="isAllSelected" @change="toggleAllSelection" />
+                  </li>
+                  <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1 rounded">
+                    <CheckBox
+                      :id="'p-' + proj.PROJ_NO"
+                      :label="`${proj.PROJ_NO} (${proj.DESC})`"
+                      :value="selectedProjects.includes(proj.PROJ_NO)"
+                      @change="val => handleProjectChange(proj.PROJ_NO, val)"
+                    />
+                  </li>
+                </ul>
               </div>
             </div>
-            <div class="panel-body overflow-hidden m-0 p-0 flex-grow-1">
-              <ag-grid-vue v-bind="gridBindTagProps" v-on="gridOnCommonProps('Tag')" />
-            </div>
           </div>
-        </SplitterPanel>
-        
-        <SplitterPanel :size="45" :minSize="10">
-          <div class="panel m-0 p-0 h-100 d-flex flex-column">
-            <div class="panel-body overflow-hidden m-0 p-0 flex-grow-1">
-              <ag-grid-vue v-bind="gridBindAttProps" v-on="gridOnCommonProps('Att')" />
-            </div>
+
+          <!-- 우측: 필터링 입력창 + 조회 버튼 -->
+          <div class="d-flex align-items-center gap-2">
+            <InputBox
+              id="search-filter"
+              v-model:value="attributeFilter"
+              placeholder="결과 내 필터링..."
+              icon="fa-filter"
+              class="header-search-input"
+              @clear="attributeFilter = ''"
+            />
+            <button
+              class="btn btn-primary btn-sm px-3 fw-bold"
+              style="height: 32px"
+              @click="onSearch"
+              :disabled="selectedProjects.length === 0"
+            >
+              조회
+            </button>
           </div>
-        </SplitterPanel>
-      </Splitter>
-    </div>
+        </div>
+      </template>
+
+      <!-- 본문 영역: 기본 슬롯 (#default) -->
+      <div class="flex-grow-1 h-100 overflow-hidden" style="min-height: 400px">
+        <ag-grid-vue class="ag-theme-custom h-100" v-bind="gridOptions" @grid-ready="onGridReady" />
+      </div>
+    </DefaultCard>
   </div>
 </template>
 
 <script setup>
-import { ref, watch, shallowRef, onBeforeMount, computed } from 'vue'
-import { useRoute } from 'vue-router'
-import { storeToRefs } from 'pinia'
+  import { ref, computed, shallowRef, onMounted, watch } from 'vue'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 
-import Splitter from 'primevue/splitter'
-import SplitterPanel from 'primevue/splitterpanel'
+  // 컴포넌트 임포트 (경로를 다시 한번 확인해주세요)
+  import DefaultCard from '@/components/default/DefaultCard.vue'
+  import CheckBox from '@/components/default/editors/CheckBox.vue'
+  import InputBox from '@/components/default/editors/InputBox.vue'
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-import { useAppPermissionStore } from '@/stores/app-permission'
-import { useAppMenuStore } from '@/stores/app-menu'
+  // --- State ---
+  const projectList = ref([])
+  const projectSearchKeyword = ref('')
+  const selectedProjects = ref([])
+  const attributeFilter = ref('')
+  const gridApi = shallowRef()
+  const gridRowData = ref([])
+  const dynamicColumnDefs = ref([])
 
-import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-import AgDetailStatusBar from '@/components/aggrid/AgDetailStatusBar.vue'
-import AgCustomFilter from '@/components/aggrid/AgCustomFilter.vue'
+  // --- 프로젝트 선택 로직 ---
+  const filteredProjectList = computed(() => {
+    const kw = projectSearchKeyword.value.toLowerCase()
+    return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw) || p.DESC.toLowerCase().includes(kw))
+  })
 
-import { sAlert } from '@/utils/messages/alert-common'
-import * as _ from 'lodash-es'
-import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import axios from 'axios'
+  const isAllSelected = computed(
+    () =>
+      filteredProjectList.value.length > 0 &&
+      filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+  )
 
-import BasicToolBar from '@/components/toolBar/BasicToolBar.vue'
-import PageTitle from '@/components/toolBar/PageTitle.vue'
+  const toggleAllSelection = val => {
+    const ids = filteredProjectList.value.map(p => p.PROJ_NO)
+    selectedProjects.value = val ? [...new Set([...selectedProjects.value, ...ids])] : []
+  }
 
-const route = useRoute()
-const appPermission = useAppPermissionStore()
-const { isSetupAdmin } = storeToRefs(appPermission)
-const { currentProjNo } = storeToRefs(useAppMenuStore())
+  const handleProjectChange = (id, val) => {
+    if (val) selectedProjects.value.push(id)
+    else selectedProjects.value = selectedProjects.value.filter(i => i !== id)
+  }
 
-const tagDataListRef = ref([])
-const tagAttListRef = ref([])
-const selectedTagData = ref(null)
-const searchKeywordRef = ref('')
-const isWorkingRef = ref(false)
-const isWorkingLabel = ref('Published')
-const context = ref({ customKey: 'Tag Idx : ', customValue: '' })
-
-const isShowDeleteBtn = ref(isSetupAdmin.value)
-const isDisabledDeleteBtn = ref(true)
-
-// --- AG GRID 설정 ---
-const gridApi_TagData = shallowRef()
-const gridApi_Atts = shallowRef()
-const themeClass = 'ag-theme-custom'
-
-const agMultiColumnFilterParams = {
-  filters: [
-    { filter: 'agTextColumnFilter', filterParams: { buttons: ['reset'] } },
-    { filter: 'agSetColumnFilter', filterParams: { buttons: ['reset'] } }
-  ],
-}
-
-const defaultColDef = {
-  editable: params => params.data.PROJ_NO === currentProjNo.value,
-  filter: 'agMultiColumnFilter',
-  filterParams: agMultiColumnFilterParams,
-  floatingFilter: true,
-  resizable: true,
-  sortable: true,
-}
-
-const colDefs = [
-  {
-    headerCheckboxSelection: true,
-    headerCheckboxSelectionFilteredOnly: true,
-    checkboxSelection: params => params.data.PROJ_NO === currentProjNo.value,
-    width: 40,
-    pinned: 'left',
-    filter: false
-  },
-  { field: 'TAG_NO', headerName: 'Tag No', flex: 1 },
-  { field: 'TAG_IDX', headerName: 'Tag Idx', flex: 1.5 },
-  { field: 'CLS_ID', headerName: 'Class ID', flex: 1 },
-  { field: 'TAG_DESC', headerName: 'Description', flex: 1.5 },
-]
-
-const colDefs_Atts = [
-  { 
-    checkboxSelection: true, 
-    headerCheckboxSelection: true, 
-    width: 40, 
-    pinned: 'left',
-    filter: false 
-  },
-  { field: 'ATT_ID', headerName: 'Attribute ID', flex: 1 },
-  { field: 'VALUE', headerName: 'Value', flex: 1, editable: true },
-  { field: 'VALUE_DBL', headerName: 'Value(Num)', flex: 0.8, editable: true },
-  { field: 'UOM_ID', headerName: 'UOM', flex: 0.8, editable: true },
-]
-
-// --- 데이터 로드 로직 ---
-const getData = async () => {
-  if (!currentProjNo.value) return;
-  
-  gridApi_TagData.value?.setGridOption('loading', true);
-  tagAttListRef.value = [];
-
-  const url = isWorkingRef.value ? '/api/Data/SearchWorkingData' : '/api/Data/SearchPublishData';
-
-  try {
-    const jsonData = await axiosWrapper.post(url, {
-      ProjectNo: currentProjNo.value,
-      Keyword: searchKeywordRef.value.trim(),
-    });
-
-    tagDataListRef.value = (jsonData || []).filter(item => !item.DELETED);
-    
-    if (tagDataListRef.value.length > 0) {
-      setTimeout(() => {
-        const firstNode = gridApi_TagData.value?.getDisplayedRowAtIndex(0);
-        if (firstNode) {
-          firstNode.setSelected(true);
-          onRowClicked({ data: firstNode.data, node: firstNode });
-        }
-      }, 100);
+  onMounted(async () => {
+    try {
+      const res = await axiosWrapper.get('/api/Project/Get')
+      projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
+    } catch (e) {
+      console.error('Project Load Fail', e)
     }
-  } catch (error) {
-    sAlert.Error('데이터 로드 실패');
-  } finally {
-    gridApi_TagData.value?.setGridOption('loading', false);
+  })
+
+  // --- 데이터 조회 로직 ---
+  const onSearch = async () => {
+    if (gridApi.value) gridApi.value.setGridOption('loading', true)
+    try {
+      const promises = selectedProjects.value.map(p =>
+        axiosWrapper
+          .post('/api/Attributes/Get', { ProjectNo: p })
+          .then(res => res.map(row => ({ ...row, _P_NO: p })))
+          .catch(() => [])
+      )
+      const results = await Promise.all(promises)
+      gridRowData.value = results.flat()
+
+      if (gridRowData.value.length > 0) {
+        const keys = Object.keys(gridRowData.value[0])
+        dynamicColumnDefs.value = keys.map(k => ({
+          headerName: k === '_P_NO' ? '프로젝트' : k,
+          field: k,
+          pinned: k === '_P_NO' ? 'left' : null,
+          width: 120,
+        }))
+      }
+    } finally {
+      if (gridApi.value) gridApi.value.setGridOption('loading', false)
+    }
   }
-}
 
-const getTagDataAttList = (tagData) => {
-  if (!tagData || !tagData.ATTRIBUTES) {
-    tagAttListRef.value = [];
-    context.value.customValue = '';
-    return;
+  // --- 그리드 설정 ---
+  const gridOptions = computed(() => ({
+    columnDefs: dynamicColumnDefs.value,
+    rowData: gridRowData.value,
+    loadingOverlayComponent: AggridLoadingOverlay,
+    defaultColDef: { sortable: true, filter: true, resizable: true },
+    isExternalFilterPresent: () => attributeFilter.value !== '',
+    doesExternalFilterPass: node => {
+      const val = attributeFilter.value.toLowerCase()
+      return Object.values(node.data).some(v => String(v).toLowerCase().includes(val))
+    },
+  }))
+
+  const onGridReady = p => {
+    gridApi.value = p.api
   }
-  tagAttListRef.value = _.cloneDeep(tagData.ATTRIBUTES);
-  context.value = {
-    customKey: 'Tag Idx : ',
-    customValue: `${tagData.TAG_IDX} [${tagData.TAG_NO}]`
-  };
-}
-
-const onRowClicked = (event) => {
-  selectedTagData.value = event.data;
-  getTagDataAttList(event.data);
-  isDisabledDeleteBtn.value = event.data.PROJ_NO !== currentProjNo.value;
-}
-
-const onGridReady = params => { gridApi_TagData.value = params.api; if (currentProjNo.value) getData(); }
-const onGridReady_Atts = params => { gridApi_Atts.value = params.api; }
-const onSearch = () => getData();
-
-watch(isWorkingRef, () => {
-  isWorkingLabel.value = isWorkingRef.value ? 'Working' : 'Published';
-  getData();
-});
-
-watch(currentProjNo, () => {
-  getData();
-  selectedTagData.value = null;
-});
-
-const gridBindCommonProps = {
-  style: 'width: 100%; height: 100%',
-  class: themeClass,
-  suppressLastEmptyLineOnPaste: true,
-  enableRangeSelection: true,
-  columnHoverHighlight: true,
-  loadingOverlayComponent: AggridLoadingOverlay,
-}
-
-const gridBindTagProps = computed(() => ({
-  ...gridBindCommonProps,
-  rowSelection: 'multiple',
-  rowData: tagDataListRef.value,
-  columnDefs: colDefs,
-  defaultColDef: defaultColDef,
-}))
-
-const gridBindAttProps = computed(() => ({
-  ...gridBindCommonProps,
-  rowSelection: 'multiple',
-  rowData: tagAttListRef.value,
-  columnDefs: colDefs_Atts,
-  context: context.value,
-  defaultColDef: defaultColDef,
-}))
-
-const gridOnCommonProps = type => {
-  if (type === 'Tag') return { gridReady: onGridReady, rowClicked: onRowClicked };
-  return { gridReady: onGridReady_Atts };
-}
-
-defineOptions({
-  name: 'PubWrkData',
-  components: { AgDetailStatusBar, AgCustomFilter },
-})
+  watch(
+    () => attributeFilter.value,
+    () => gridApi.value?.onFilterChanged()
+  )
 </script>
 
-<style scoped lang="scss">
-/* 1. Splitter 거터(구분선) 디자인 */
-::v-deep(.custom-splitter) {
-  border: none !important;
-  
-  .p-splitter-gutter {
-    background: #e9ecef !important; /* 거터 배경색 */
-    width: 6px !important; /* 거터 두께 */
-    transition: background 0.2s;
-
-    &:hover {
-      background: #dee2e6 !important;
-    }
-  }
-
-  /* 2. 거터 내 핸들(드래그 표시) 디자인 */
-  .p-splitter-gutter-handle {
-    background: #adb5bd !important; /* 핸들 색상 */
+<style scoped>
+  .custom-dropdown-btn {
+    height: 32px;
+    font-size: 0.85rem;
     border-radius: 4px;
-    height: 30px !important; /* 가로형일 때 핸들 높이 */
-    width: 4px !important;
+    min-width: 180px;
   }
-}
 
-/* 3. 패널 내부 레이아웃 최적화 */
-.panel {
-  display: flex;
-  flex-direction: column;
-}
+  .header-search-input {
+    width: 240px !important;
+  }
 
-.flex-grow-1 {
-  flex: 1;
-  min-height: 0;
-}
+  /* ag-Grid가 부모 높이를 채우도록 강제 */
+  :deep(.ag-theme-custom) {
+    height: 100% !important;
+  }
 
-/* 4. AG Grid 높이 이슈 방지 */
-.ag-theme-custom {
-  height: 100%;
-}
+  /* DefaultCard 내부 슬롯 레이아웃 보정 */
+  :deep(.card-header) {
+    background-color: #fff !important;
+    padding: 0.5rem 1rem !important;
+  }
 
-/* 5. 기존 스타일 유지 */
-.just-view {
-  color: var(--txt03);
-  background-color: var(--bg11);
-  padding: 6px 8px;
-  width: 100%;
-  text-align: center;
-  font-weight: 500;
-}
+  :deep(.card-body) {
+    padding: 0 !important;
+    display: flex;
+    flex-direction: column;
+  }
 </style>
