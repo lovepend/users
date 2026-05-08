@@ -209,4 +209,98 @@ const gridOptions = computed(() => ({
       cellRenderer: p => `<span class="badge shadow-sm" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>`
     },
     { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'CLS_
+    { field: 'CLS_ID', headerName: 'Class', width: 130, pinned: 'left' },
+    ...dynamicAttCols.value
+  ],
+  rowData: filteredData.value,
+  loadingOverlayComponent: AggridLoadingOverlay,
+  headerHeight: 38,
+  rowHeight: 34,
+  defaultColDef: {
+    sortable: true,
+    filter: true,
+    resizable: true,
+    flex: 1,
+    minWidth: 100
+  }
+}))
+
+const filteredData = computed(() => {
+  if (!localFilterQuery.value.trim()) return rawDataList.value
+  const query = localFilterQuery.value.toLowerCase()
+  return rawDataList.value.filter(i => 
+    `${i.TAG_NO} ${i.TAG_IDX} ${i.CLS_ID} ${i.Source}`.toLowerCase().includes(query)
+  )
+})
+
+const onGridReady = (params) => { gridApi.value = params.api }
+
+onMounted(fetchProjectList)
+</script>
+
+<style scoped lang="scss">
+.grid-wrapper {
+  flex: 1;
+  min-height: 0;
+  border-top: 1px solid var(--tpl-divider);
+}
+
+.header-divider {
+  width: 1px;
+  height: 14px;
+  background-color: var(--tpl-divider);
+  margin: 0 10px;
+}
+
+/* 프로젝트 콤보박스 스타일 */
+.custom-single-select {
+  :deep(.input-box-container) { margin-bottom: 0; }
+  .dropdown-item.active-proj {
+    background-color: #f1f5f9;
+    font-weight: bold;
+    color: var(--primary-color);
+  }
+}
+
+/* [핵심] Custom Ag-Grid 테마 스타일링 */
+:deep(.ag-theme-custom) {
+  --ag-border-color: #dee2e6;
+  --ag-header-background-color: #f8f9fa;
+  --ag-font-size: 12px;
+
+  .ag-header-cell {
+    border-right: 1px solid #dee2e6 !important;
+    font-weight: 600;
+  }
+  
+  .ag-cell {
+    border-right: 1px solid #f1f3f5 !important;
+    display: flex;
+    align-items: center;
+  }
+
+  .filter-highlight {
+    background-color: #ffeb3b !important;
+    color: #000 !important;
+    font-weight: bold;
+    padding: 0 2px;
+    border-radius: 2px;
+  }
+
+  /* 속성 컬럼 강조 */
+  .att-column-header {
+    background-color: #fff9db !important;
+    color: #856404 !important;
+    border-bottom: 2px solid #ffe066 !important;
+  }
+}
+
+.tpl-btn {
+  height: 32px;
+  padding: 0 16px;
+  border-radius: 4px;
+  font-weight: 500;
+  &--primary { background: var(--primary-color); color: #fff; border: none; }
+  &:hover { filter: brightness(90%); }
+}
+</style>
