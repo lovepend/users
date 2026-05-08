@@ -1,23 +1,25 @@
 <template>
-  <div class="h-100 p-2 bg-light">
-    <!-- DefaultCard 컴포넌트를 메인 컨테이너로 사용 -->
-    <DefaultCard class="h-100 d-flex flex-column shadow-sm border-0">
-      <!-- 카드 헤더 영역: 아이콘 + 프로젝트 선택 + 검색바 정렬 -->
-      <template #header>
+  <!-- 최상위 컨테이너에 flex와 높이 강제 지정 -->
+  <div class="d-flex flex-column h-100 p-2 bg-light" style="min-height: 500px">
+    <!-- DefaultCard 컴포넌트 -->
+    <DefaultCard class="h-100 shadow-sm border-0">
+      
+      <!-- 1. 헤더 영역 (보통 #title 또는 #header 슬롯 사용) -->
+      <template #title>
         <div class="d-flex align-items-center justify-content-between w-100 py-1">
           <div class="d-flex align-items-center gap-3">
-            <!-- 1. 맨 앞 아이콘 및 타이틀 -->
+            <!-- 아이콘 및 타이틀 -->
             <div class="d-flex align-items-center gap-2 border-end pe-3">
               <i class="fa fa-layer-group text-primary fs-5"></i>
               <span class="fw-bold text-dark" style="font-size: 0.95rem">데이터 통합 집계</span>
             </div>
 
-            <!-- 2. 프로젝트 선택 (SelectBox/Dropdown 스타일) -->
+            <!-- 프로젝트 선택 드롭다운 -->
             <div class="d-flex align-items-center gap-2">
               <span class="text-muted small text-nowrap">대상 프로젝트</span>
               <div class="dropdown">
                 <button
-                  class="btn btn-sm btn-white border custom-dropdown-btn d-flex justify-content-between align-items-center"
+                  class="btn btn-sm btn-white border custom-dropdown-btn d-flex justify-content-between align-items-center bg-white"
                   type="button"
                   data-bs-toggle="dropdown"
                   data-bs-auto-close="outside"
@@ -27,15 +29,10 @@
                   </span>
                   <i class="fa fa-chevron-down ms-2 text-muted" style="font-size: 0.7rem"></i>
                 </button>
-                <ul
-                  class="dropdown-menu p-2 shadow-lg border-0"
-                  style="min-width: 300px; max-height: 400px; overflow-y: auto"
-                >
+                <ul class="dropdown-menu p-2 shadow-lg border-0" style="min-width: 300px; max-height: 400px; overflow-y: auto">
                   <li class="px-2 pb-2 border-bottom mb-2">
                     <div class="input-group input-group-sm">
-                      <span class="input-group-text bg-white border-end-0"
-                        ><i class="fa fa-search text-muted"></i
-                      ></span>
+                      <span class="input-group-text bg-white border-end-0"><i class="fa fa-search text-muted"></i></span>
                       <input
                         type="text"
                         class="form-control border-start-0 ps-0"
@@ -61,18 +58,19 @@
             </div>
           </div>
 
-          <!-- 3. 우측 검색 및 액션 -->
+          <!-- 우측 필터 및 버튼 -->
           <div class="d-flex align-items-center gap-2">
             <InputBox
               id="search-filter"
               v-model:value="attributeFilter"
-              placeholder="필터링 키워드 입력..."
+              placeholder="결과 내 필터링..."
               icon="fa-filter"
               class="header-search-input"
               @clear="attributeFilter = ''"
             />
             <button
               class="btn btn-primary btn-sm px-3 fw-bold"
+              style="height: 32px"
               @click="onSearch"
               :disabled="selectedProjects.length === 0"
             >
@@ -82,145 +80,133 @@
         </div>
       </template>
 
-      <!-- 카드 본문 영역: ag-Grid -->
-      <div class="flex-grow-1 overflow-hidden" style="min-height: 0">
-        <ag-grid-vue class="ag-theme-custom h-100" v-bind="gridOptions" @grid-ready="onGridReady" />
+      <!-- 2. 본문 영역 (보통 기본 슬롯 혹은 #content 사용) -->
+      <div class="w-100 h-100 overflow-hidden" style="min-height: 400px">
+        <ag-grid-vue 
+          class="ag-theme-custom h-100" 
+          v-bind="gridOptions" 
+          @grid-ready="onGridReady" 
+        />
       </div>
     </DefaultCard>
   </div>
 </template>
 
 <script setup>
-  import { ref, computed, shallowRef, onMounted, watch } from 'vue'
-  import { useRoute } from 'vue-router'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sAlert } from '@/utils/messages/alert-common'
+import { ref, computed, shallowRef, onMounted, watch } from 'vue'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
 
-  // 템플릿 컴포넌트
-  import PageTitle from '@/components/toolBar/PageTitle.vue'
-  import ButtonsComponent from '@/components/editors/button/ButtonsComponent.vue'
-  import NoPermissionArea from '@/components/editors/button/NoPermissionArea.vue'
-  import DefaultCard from '@/components/default/DefaultCard.vue'
-  import CheckBox from '@/components/default/editors/CheckBox.vue'
-  import SelectBox from '@/components/default/editors/SelectBox.vue'
-  import InputBox from '@/components/default/editors/InputBox.vue'
-  import OTPInputBox from '@/components/default/editors/OTPInputBox.vue'
-  import SwitchBox from '@/components/default/editors/SwitchBox.vue'
-  import Switch from '@/components/default/editors/Switch.vue'
-  import { useToast } from '@/composables/useToast'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+// 컴포넌트 임포트 (경로 확인 필수!)
+import DefaultCard from '@/components/default/DefaultCard.vue'
+import CheckBox from '@/components/default/editors/CheckBox.vue'
+import InputBox from '@/components/default/editors/InputBox.vue'
+import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-  const route = useRoute()
+// --- State ---
+const projectList = ref([])
+const projectSearchKeyword = ref('')
+const selectedProjects = ref([])
+const attributeFilter = ref('')
 
-  // --- State ---
-  const projectList = ref([])
-  const projectSearchKeyword = ref('')
-  const selectedProjects = ref([])
-  const attributeFilter = ref('')
+const gridApi = shallowRef()
+const gridRowData = ref([])
+const dynamicColumnDefs = ref([])
 
-  const gridApi = shallowRef()
-  const gridRowData = ref([])
-  const dynamicColumnDefs = ref([])
+// --- 프로젝트 선택 로직 ---
+const filteredProjectList = computed(() => {
+  const kw = projectSearchKeyword.value.toLowerCase()
+  return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw) || p.DESC.toLowerCase().includes(kw))
+})
 
-  // --- 프로젝트 선택 로직 ---
-  const filteredProjectList = computed(() => {
-    const kw = projectSearchKeyword.value.toLowerCase()
-    return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw) || p.DESC.toLowerCase().includes(kw))
-  })
+const isAllSelected = computed(() =>
+  filteredProjectList.value.length > 0 &&
+  filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+)
 
-  const isAllSelected = computed(
-    () =>
-      filteredProjectList.value.length > 0 &&
-      filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
-  )
+const toggleAllSelection = val => {
+  const ids = filteredProjectList.value.map(p => p.PROJ_NO)
+  selectedProjects.value = val ? [...new Set([...selectedProjects.value, ...ids])] : []
+}
 
-  const toggleAllSelection = val => {
-    const ids = filteredProjectList.value.map(p => p.PROJ_NO)
-    selectedProjects.value = val
-      ? [...new Set([...selectedProjects.value, ...ids])]
-      : selectedProjects.value.filter(id => !ids.includes(id))
-  }
+const handleProjectChange = (id, val) => {
+  if (val) selectedProjects.value.push(id)
+  else selectedProjects.value = selectedProjects.value.filter(i => i !== id)
+}
 
-  const handleProjectChange = (id, val) => {
-    if (val) selectedProjects.value.push(id)
-    else selectedProjects.value = selectedProjects.value.filter(i => i !== id)
-  }
-
-  onMounted(async () => {
+onMounted(async () => {
+  try {
     const res = await axiosWrapper.get('/api/Project/Get')
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
-  })
+  } catch (e) {
+    console.error('Project Load Fail', e)
+  }
+})
 
-  // --- 데이터 조회 로직 ---
-  const onSearch = async () => {
-    if (gridApi.value) gridApi.value.setGridOption('loading', true)
-    try {
-      const promises = selectedProjects.value.map(p =>
-        axiosWrapper
-          .post('/api/Attributes/Get', { ProjectNo: p })
-          .then(res => res.map(row => ({ ...row, _P_NO: p })))
-          .catch(() => [])
-      )
-      const results = await Promise.all(promises)
-      gridRowData.value = results.flat()
+// --- 데이터 조회 로직 ---
+const onSearch = async () => {
+  if (gridApi.value) gridApi.value.setGridOption('loading', true)
+  try {
+    const promises = selectedProjects.value.map(p =>
+      axiosWrapper.post('/api/Attributes/Get', { ProjectNo: p })
+        .then(res => res.map(row => ({ ...row, _P_NO: p })))
+        .catch(() => [])
+    )
+    const results = await Promise.all(promises)
+    gridRowData.value = results.flat()
 
-      if (gridRowData.value.length > 0) {
-        const keys = Object.keys(gridRowData.value[0])
-        dynamicColumnDefs.value = keys.map(k => ({
-          headerName: k === '_P_NO' ? '프로젝트' : k,
-          field: k,
-          pinned: k === '_P_NO' ? 'left' : null,
-          width: 120,
-        }))
-      }
-    } finally {
-      if (gridApi.value) gridApi.value.setGridOption('loading', false)
+    if (gridRowData.value.length > 0) {
+      const keys = Object.keys(gridRowData.value[0])
+      dynamicColumnDefs.value = keys.map(k => ({
+        headerName: k === '_P_NO' ? '프로젝트' : k,
+        field: k,
+        pinned: k === '_P_NO' ? 'left' : null,
+        width: 120,
+      }))
     }
+  } finally {
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
+}
 
-  // --- 그리드 설정 ---
-  const gridOptions = computed(() => ({
-    columnDefs: dynamicColumnDefs.value,
-    rowData: gridRowData.value,
-    loadingOverlayComponent: AggridLoadingOverlay,
-    defaultColDef: { sortable: true, filter: true, resizable: true },
-    isExternalFilterPresent: () => attributeFilter.value !== '',
-    doesExternalFilterPass: node => {
-      const val = attributeFilter.value.toLowerCase()
-      return Object.values(node.data).some(v => String(v).toLowerCase().includes(val))
-    },
-  }))
+// --- 그리드 설정 ---
+const gridOptions = computed(() => ({
+  columnDefs: dynamicColumnDefs.value,
+  rowData: gridRowData.value,
+  loadingOverlayComponent: AggridLoadingOverlay,
+  defaultColDef: { sortable: true, filter: true, resizable: true },
+  isExternalFilterPresent: () => attributeFilter.value !== '',
+  doesExternalFilterPass: node => {
+    const val = attributeFilter.value.toLowerCase()
+    return Object.values(node.data).some(v => String(v).toLowerCase().includes(val))
+  },
+}))
 
-  const onGridReady = p => {
-    gridApi.value = p.api
-  }
-  watch(
-    () => attributeFilter.value,
-    () => gridApi.value?.onFilterChanged()
-  )
+const onGridReady = p => { gridApi.value = p.api }
+watch(() => attributeFilter.value, () => gridApi.value?.onFilterChanged())
 </script>
 
 <style scoped>
-  .custom-dropdown-btn {
-    background-color: #fff;
-    height: 32px;
-    font-size: 0.85rem;
-    border-radius: 4px;
-    min-width: 180px;
-  }
+.custom-dropdown-btn {
+  height: 32px;
+  font-size: 0.85rem;
+  border-radius: 4px;
+  min-width: 180px;
+}
 
-  .header-search-input {
-    width: 240px !important;
-  }
+.header-search-input {
+  width: 240px !important;
+}
 
-  :deep(.ag-theme-custom) {
-    --ag-header-background-color: #fcfcfc;
-    --ag-border-color: #eee;
-  }
+:deep(.ag-theme-custom) {
+  height: 100% !important;
+  --ag-header-background-color: #fcfcfc;
+}
 
-  /* DefaultCard 헤더 커스텀 하단 라인 */
-  :deep(.card-header) {
-    background-color: #fff !important;
-    border-bottom: 1px solid #eaeaea !important;
-  }
+/* DefaultCard가 내부적으로 card-body 클래스를 가질 경우 대응 */
+:deep(.card-body) {
+  padding: 0 !important; /* 그리드가 꽉 차게 */
+  display: flex;
+  flex-direction: column;
+}
 </style>
