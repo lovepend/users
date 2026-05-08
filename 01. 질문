@@ -1,54 +1,54 @@
 <template>
-  <div class="h-100 d-flex flex-column bg-white">
-    <!-- DefaultCard를 사용하되, index.vue에서 이미 감싸고 있다면 
-         여기서는 디자인 가이드에 맞춘 컨테이너만 구성합니다. -->
+  <div class="h-100 d-flex flex-column template-container">
     <div class="template__card d-flex flex-column h-100">
       
-      <!-- 1. 컨트롤 영역 (템플릿의 #actions 영역 스타일 적용) -->
-      <div class="tpl-check-demo tpl-field-demo border-0 border-bottom">
+      <!-- 상단 컨트롤 영역: 템플릿의 tpl-check-demo 스타일 적용 -->
+      <div class="tpl-control-area border-bottom">
         <div class="d-flex align-items-center justify-content-between w-100 px-1">
           
-          <!-- 왼쪽: 프로젝트 선택 영역 (SelectBox + InputBox 조합) -->
+          <!-- 왼쪽: 타이틀 및 프로젝트 선택 -->
           <div class="d-flex align-items-center gap-3">
-            <div class="d-flex align-items-center gap-2">
-              <i class="fa fa-layer-group text-primary"></i>
-              <span class="fw-bold">데이터 통합 집계</span>
+            <div class="template-title-area">
+              <!-- 템플릿 PageTitle 예시 아이콘인 fa-lock 또는 fa-list 계열로 통일 -->
+              <i class="fa fa-list-alt title-icon"></i>
+              <span class="title-text">데이터 통합 집계</span>
             </div>
 
-            <div class="d-flex align-items-center gap-2 border-start ps-3">
-              <!-- 프로젝트 선택 셀렉트박스 -->
+            <div class="divider-line"></div>
+
+            <div class="d-flex align-items-center gap-2">
+              <!-- 프로젝트 선택 셀렉트박스 (리스트 컬러 이슈 대응) -->
               <SelectBox
                 label="대상 프로젝트"
                 :list="projectSelectList"
                 v-model:value="selectedProject"
-                placeholder="프로젝트 선택"
-                style="width: 180px"
+                placeholder="항목 선택"
+                class="custom-selectbox"
               />
-              <!-- 상세 검색/입력용 인풋박스 -->
               <InputBox
                 id="proj-detail"
                 v-model:value="projectSearchKeyword"
-                placeholder="코드 직접 입력..."
-                style="width: 150px"
+                placeholder="코드 입력"
+                class="custom-inputbox"
               />
             </div>
           </div>
 
-          <!-- 오른쪽: 검색 및 필터 영역 (돋보기 아이콘 적용) -->
+          <!-- 오른쪽: 검색 및 조회 버튼 (Toast 버튼 스타일) -->
           <div class="d-flex align-items-center gap-2">
-            <!-- [요청사항] 돋보기 아이콘이 포함된 검색창 -->
             <InputBox
               id="tpl-in-keywords"
               v-model:value="attributeFilter"
-              placeholder="결과 내 필터링..."
+              placeholder="검색어"
               icon="fa-search" 
-              style="width: 220px"
+              class="search-input"
               @clear="attributeFilter = ''"
             />
+            <!-- Toast 확인 버튼 스타일 적용 -->
             <button 
-              class="tpl-btn tpl-btn--sm tpl-btn--primary" 
+              type="button"
+              class="tpl-btn tpl-btn--primary toast-style-btn" 
               @click="onSearch"
-              :disabled="!selectedProject"
             >
               조회
             </button>
@@ -56,7 +56,7 @@
         </div>
       </div>
 
-      <!-- 2. 그리드 영역 -->
+      <!-- 그리드 영역 -->
       <div class="flex-grow-1 min-h-0">
         <ag-grid-vue
           class="ag-theme-custom h-100"
@@ -72,25 +72,23 @@
 import { ref, computed, shallowRef, onMounted, watch } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 
-// 공통 컴포넌트 임포트 (템플릿 기준 경로)
+// 공통 컴포넌트
 import SelectBox from '@/components/default/editors/SelectBox.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-// --- State ---
 const projectList = ref([])
-const selectedProject = ref('') // SelectBox용
-const projectSearchKeyword = ref('') // InputBox용
+const selectedProject = ref('')
+const projectSearchKeyword = ref('')
 const attributeFilter = ref('')
 const gridApi = shallowRef()
 const gridRowData = ref([])
 const dynamicColumnDefs = ref([])
 
-// --- 프로젝트 리스트 변환 (SelectBox용) ---
 const projectSelectList = computed(() => {
   return projectList.value.map(p => ({
     id: p.PROJ_NO,
-    label: `${p.PROJ_NO} (${p.DESC || 'No Desc'})`
+    label: p.PROJ_NO
   }))
 })
 
@@ -99,37 +97,26 @@ onMounted(async () => {
     const res = await axiosWrapper.get('/api/Project/Get')
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
   } catch (e) {
-    console.error('프로젝트 로드 실패', e)
+    console.error(e)
   }
 })
 
-// --- 데이터 조회 ---
 const onSearch = async () => {
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
-  
-  // SelectBox에서 선택된 값 또는 InputBox 입력값 우선순위 결정
   const targetProj = selectedProject.value || projectSearchKeyword.value
-  
   try {
     const res = await axiosWrapper.post('/api/Attributes/Get', { ProjectNo: targetProj })
     gridRowData.value = Array.isArray(res) ? res : []
-    
     if (gridRowData.value.length > 0) {
       dynamicColumnDefs.value = Object.keys(gridRowData.value[0]).map(k => ({
-        headerName: k,
-        field: k,
-        filter: true,
-        width: 130
+        headerName: k, field: k, filter: true, width: 130
       }))
     }
-  } catch (e) {
-    gridRowData.value = []
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-// --- 그리드 설정 ---
 const gridOptions = computed(() => ({
   columnDefs: dynamicColumnDefs.value,
   rowData: gridRowData.value,
@@ -147,26 +134,82 @@ watch(() => attributeFilter.value, () => gridApi.value?.onFilterChanged())
 </script>
 
 <style scoped>
-/* 템플릿의 tpl-check-demo 스타일 커스텀 */
-.tpl-check-demo {
-  padding: 12px 16px;
-  background: #fff; /* 회색 방지: 강제 흰색 배경 */
+/* 1. 폰트 및 전체 배경 (템플릿 기준) */
+.template-container {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg01, #fff);
+  color: var(--txt03, #333);
 }
 
-/* 템플릿 버튼 스타일 적용 */
-.tpl-btn--primary {
-  background: var(--primary-color, #0d6efd);
-  color: #fff;
+/* 2. 상단 컨트롤 영역 (tpl-check-demo 스타일 복제) */
+.tpl-control-area {
+  display: flex;
+  align-items: center;
+  padding: 16px;
+  background: var(--card-bg, #fff);
+}
+
+/* 3. 타이틀 및 아이콘 스타일 */
+.template-title-area {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.title-icon {
+  font-size: 1.1rem;
+  color: var(--primary-color, #1976d2);
+}
+.title-text {
+  font-size: 1.125rem;
+  font-weight: 500;
+  letter-spacing: 0.00938em;
+  color: var(--txt03);
+}
+
+.divider-line {
+  width: 1px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.08);
+  margin: 0 8px;
+}
+
+/* 4. SelectBox/InputBox 규격화 */
+.custom-selectbox { width: 160px; }
+.custom-inputbox { width: 140px; }
+.search-input { width: 200px; }
+
+/* 5. [중요] SelectBox 클릭 시 리스트 글자색 수정 */
+:deep(.select-box-container select), 
+:deep(.select-box-container option) {
+  color: #333 !important; /* 흰색 방지 */
+  background-color: #fff !important;
+}
+
+/* 6. 조회 버튼 (Toast 확인 버튼 스타일 적용) */
+.toast-style-btn {
   border: none;
+  background: var(--primary-color, #1976d2);
+  color: #fff;
+  height: 32px;
+  padding: 0 16px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  box-shadow: 
+    0 2px 2px 0 rgba(0, 0, 0, 0.14), 
+    0 3px 1px -2px rgba(0, 0, 0, 0.12), 
+    0 1px 5px 0 rgba(0, 0, 0, 0.2);
+  transition: box-shadow 0.2s ease-in-out;
+}
+.toast-style-btn:hover {
+  box-shadow: 
+    0 3px 3px -2px rgba(0, 0, 0, 0.2), 
+    0 3px 4px 0 rgba(0, 0, 0, 0.14), 
+    0 1px 8px 0 rgba(0, 0, 0, 0.12);
+  filter: brightness(1.1);
 }
 
+/* 7. 그리드 정밀 튜닝 */
 :deep(.ag-theme-custom) {
-  height: 100% !important;
   border: none !important;
-}
-
-/* 폼 요소 간격 조절 */
-:deep(.input-box-container), :deep(.select-box-container) {
-  margin-bottom: 0 !important;
 }
 </style>
