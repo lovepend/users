@@ -1,44 +1,77 @@
 <template>
-  <div class="h-100 d-flex flex-column overflow-hidden">
-    <!-- 상단 탭 메뉴 영역 (필요시 추가) -->
-    <ul class="nav nav-tabs px-3 pt-2 bg-white">
-      <li class="nav-item">
-        <a class="nav-link" :class="{ active: currentTab === 'TagTab' }" @click="currentTab = 'TagTab'" href="#">
-          데이터 집계
-        </a>
-      </li>
-      <!-- 추가 탭이 필요하면 여기에 배치 -->
-    </ul>
-
-    <!-- 실제 콘텐츠가 노출되는 영역 -->
-    <div class="flex-grow-1 position-relative">
-      <transition name="fade" mode="out-in">
-        <!-- 동적 컴포넌트 또는 v-if로 TagTab 렌더링 -->
-        <div v-if="currentTab === 'TagTab'" class="h-100">
-          <TagTab />
-        </div>
-        <div v-else class="p-5 text-center text-muted">
-          준비 중인 탭입니다.
-        </div>
-      </transition>
-    </div>
-  </div>
+  <main class="flex-grow-1 min-h-0 p-2">
+    <DefaultCard :tabs="tabList" :title="null" v-model:active-tab="activeTab" class="h-100 grid-card">
+      <div class="tab-content-wrapper">
+        <keep-alive>
+          <component :is="tabs[activeTab]" :active="activeTab" class="h-100" />
+        </keep-alive>
+      </div>
+    </DefaultCard>
+  </main>
 </template>
 
 <script setup>
-import { ref } from 'vue'
-import TagTab from './TagTab.vue' // [중요] 같은 폴더 내에 TagTab.vue가 있어야 함
+  import { ref } from 'vue'
+  import DefaultCard from '@/components/default/DefaultCard.vue'
 
-const currentTab = ref('TagTab')
+  import TagTab from './components/TagTab.vue'
+
+  import TestTab from './components/TestTab.vue'
+  // import TagTypeTab from './components/TagTypeTab.vue'
+  // import MergeTab from './components/MergeTab.vue'
+
+  const activeTab = ref('test')
+
+  const tabList = [
+    { id: 'tag', name: 'tag', icon: 'fa-layer-group' },
+    { id: 'test', name: 'test', icon: 'fa-address-card' },
+    // { id: 'tagtype', name: 'tagtype', icon: 'fa-code' },
+    // { id: 'merge', name: 'merge', icon: 'fa-shapes' },
+  ]
+
+  const tabs = {
+    tag: TagTab,
+
+    test: TestTab,
+    // tagtype: TagTypeTab,
+    // merge: MergeTab,
+  }
 </script>
 
 <style scoped>
-.nav-tabs .nav-link { cursor: pointer; font-weight: 500; color: #666; border: none; padding: 0.75rem 1.2rem; }
-.nav-tabs .nav-link.active { color: #0d6efd; border-bottom: 2px solid #0d6efd; background: none; }
+  .main-layout-container {
+    height: 100vh;
+  }
 
-/* 탭 전환 애니메이션 */
-.fade-enter-active, .fade-leave-active { transition: opacity 0.15s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+  .min-h-0 {
+    min-height: 0;
+  }
 
-:deep(.h-100) { height: 100% !important; }
+  :deep(.grid-card) {
+    display: flex;
+    flex-direction: column;
+    border-radius: 8px;
+  }
+
+  :deep(.card__contents) {
+    flex-grow: 1;
+    min-height: 0;
+    padding: 0 !important;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .tab-content-wrapper {
+    flex-grow: 1;
+    height: 100%;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .tab-content-wrapper > * {
+    flex-grow: 1;
+    min-height: 0;
+  }
 </style>
