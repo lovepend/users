@@ -1,79 +1,70 @@
 <template>
-  <div class="h-100 d-flex flex-column bg-white">
-    <div class="template__card d-flex flex-column h-100">
-      
-      <!-- 상단 컨트롤 영역 -->
-      <div class="tpl-control-area border-bottom">
-        <div class="d-flex align-items-center justify-content-between w-100 px-2">
-          
-          <!-- [왼쪽] 타이틀 및 프로젝트 선택 (SelectBox만 배치) -->
-          <div class="d-flex align-items-center gap-3">
-            <div class="template-title-area">
-              <!-- 재고 현황과 동일한 스타일을 위해 tpl-icon 클래스 적용 -->
-              <i class="fa fa-th-list tpl-icon--title"></i>
-              <span class="title-text">데이터 통합 집계</span>
-            </div>
-
-            <div class="divider-line"></div>
-
-            <!-- [수정] SelectBox 데이터 매핑 및 시인성 개선 -->
-            <div class="d-flex align-items-center">
-              <SelectBox
-                label="대상 프로젝트"
-                :list="projectSelectList"
-                v-model:value="selectedProject"
-                placeholder="프로젝트 선택"
-                class="custom-selectbox"
-              />
-            </div>
-          </div>
-
-          <!-- [오른쪽] 프로젝트 코드 입력 + 필터 + 조회 버튼 -->
-          <div class="d-flex align-items-center gap-2">
-            <!-- [이동] 프로젝트 코드를 직접 입력하는 창을 우측으로 배치 -->
-            <InputBox
-              id="proj-detail"
-              v-model:value="projectSearchKeyword"
-              placeholder="프로젝트 코드"
-              style="width: 130px"
-            />
-            <div class="divider-line mx-1"></div>
-            <InputBox
-              id="tpl-in-keywords"
-              v-model:value="attributeFilter"
-              placeholder="결과 내 검색"
-              icon="fa-search" 
-              class="search-input"
-              @clear="attributeFilter = ''"
-            />
-            <!-- Toast 스타일의 확인 버튼 -->
-            <button 
-              type="button"
-              class="tpl-btn tpl-btn--primary toast-confirm-btn" 
-              @click="onSearch"
-            >
-              조회
-            </button>
-          </div>
-        </div>
+  <!-- [수정] 최상위에서 DefaultCard를 호출하여 템플릿 표준 디자인을 그대로 상속받습니다. -->
+  <DefaultCard
+    title="데이터 통합 집계"
+    icon="fa-th-list" 
+    class="h-100 template__card"
+  >
+    <!-- 1. 헤더 우측 슬롯 (조회 버튼 및 검색창 배치 가능) -->
+    <template #header-right>
+      <div class="d-flex align-items-center gap-2">
+        <!-- [이동] 프로젝트 코드 입력창 -->
+        <InputBox
+          id="proj-detail"
+          v-model:value="projectSearchKeyword"
+          placeholder="코드 입력"
+          style="width: 110px"
+        />
+        <div class="header-divider"></div>
+        <InputBox
+          id="tpl-in-keywords"
+          v-model:value="attributeFilter"
+          placeholder="결과 내 검색"
+          icon="fa-search" 
+          style="width: 180px"
+          @clear="attributeFilter = ''"
+        />
+        <!-- Toast 스타일의 조회 버튼 -->
+        <button 
+          type="button"
+          class="tpl-btn tpl-btn--primary toast-confirm-btn" 
+          @click="onSearch"
+        >
+          조회
+        </button>
       </div>
+    </template>
 
-      <!-- 그리드 영역 -->
-      <div class="flex-grow-1 min-h-0">
-        <ag-grid-vue
-          class="ag-theme-custom h-100"
-          v-bind="gridOptions"
-          @grid-ready="onGridReady"
+    <!-- 2. 컨트롤 영역 슬롯 (프로젝트 선택 셀렉트박스) -->
+    <template #actions>
+      <div class="d-flex align-items-center gap-2 py-1">
+        <span class="label-text">대상 프로젝트 :</span>
+        <SelectBox
+          :list="projectSelectList"
+          v-model:value="selectedProject"
+          placeholder="프로젝트를 선택하세요"
+          class="custom-selectbox"
         />
       </div>
+    </template>
+
+    <!-- 3. 카드 바디: 그리드 영역 -->
+    <div class="grid-wrapper">
+      <ag-grid-vue
+        class="ag-theme-custom h-100"
+        v-bind="gridOptions"
+        @grid-ready="onGridReady"
+      />
     </div>
-  </div>
+  </DefaultCard>
 </template>
 
 <script setup>
 import { ref, computed, shallowRef, onMounted, watch } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 
+// 공통 컴포넌트 임포트
+import DefaultCard from '@/components/default/cards/DefaultCard.vue'
 import SelectBox from '@/components/default/editors/SelectBox.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
@@ -86,13 +77,12 @@ const gridApi = shallowRef()
 const gridRowData = ref([])
 const dynamicColumnDefs = ref([])
 
-// [수정] SelectBox에서 글자가 안 나오는 문제를 해결하기 위해 
-// 템플릿 컴포넌트가 흔히 사용하는 'text', 'value' 필드로 매핑합니다.
+// [해결] SelectBox 글자 미노출 방지를 위한 필드 매핑
 const projectSelectList = computed(() => {
   return projectList.value.map(p => ({
     value: p.PROJ_NO,
-    text: p.PROJ_NO,   // 글자가 안 나올 경우 'text' 필드를 참조할 확률이 높음
-    label: p.PROJ_NO   // 기존 'label' 필드 유지
+    text: p.PROJ_NO,   // 화면 표시용
+    label: p.PROJ_NO   // 호환성용
   }))
 })
 
@@ -131,62 +121,50 @@ watch(() => attributeFilter.value, () => gridApi.value?.onFilterChanged())
 </script>
 
 <style scoped>
-/* 아이콘 스타일 수정 (재고 현황 아이콘과 일치 유도) */
-.tpl-icon--title {
-  color: #5d78ff; /* 템플릿 프라이머리 톤 */
-  font-size: 14px;
-  margin-right: 8px;
+/* 그리드가 카드 높이를 꽉 채우도록 설정 */
+.grid-wrapper {
+  height: 100%;
+  flex: 1;
+  min-height: 0;
 }
 
-.title-text {
-  font-size: 15px;
-  font-weight: 600;
-  color: #333;
-}
-
-.tpl-control-area {
-  padding: 10px 16px;
-  background-color: #fff;
-}
-
-.divider-line {
+.header-divider {
   width: 1px;
-  height: 16px;
-  background-color: #e0e0e0;
-  margin: 0 10px;
+  height: 14px;
+  background-color: #dee2e6;
 }
 
-/* SelectBox 글자 시인성 강제 패치 */
-.custom-selectbox {
-  width: 180px;
+.label-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: #666;
 }
+
+.custom-selectbox {
+  width: 220px;
+}
+
+/* [해결] SelectBox 드롭다운 글자색 강제 적용 */
 :deep(.select-box-container select) {
   color: #333 !important;
-  font-size: 13px !important;
 }
-/* 리스트가 열렸을 때 내부 글자색 강제 적용 */
 :deep(.select-box-container option) {
   color: #333 !important;
   background-color: #fff !important;
 }
 
-.search-input { width: 180px; }
-
-/* Toast 확인 버튼 스타일 (입체감 있는 디자인) */
+/* Toast 확인 버튼 스타일 */
 .toast-confirm-btn {
-  background-color: #4e73df;
+  background-color: #5d78ff;
   border: none;
   color: white;
-  padding: 6px 16px;
-  font-size: 13px;
+  padding: 5px 15px;
+  font-size: 12px;
   font-weight: 500;
-  border-radius: 4px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  transition: all 0.2s;
+  border-radius: 3px;
+  box-shadow: 0 2px 5px rgba(93, 120, 255, 0.2);
 }
 .toast-confirm-btn:hover {
-  background-color: #2e59d9;
-  box-shadow: 0 4px 8px rgba(0,0,0,0.15);
-  transform: translateY(-1px);
+  filter: brightness(0.9);
 }
 </style>
