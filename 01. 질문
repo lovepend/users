@@ -18,7 +18,7 @@
               @input="projSearchQuery = selectedProjNo"
               style="width: 100%"
             />
-            <ul class="dropdown-menu shadow-lg p-0 w-100" style="max-height: 300px; overflow-y: auto;">
+            <ul class="dropdown-menu shadow-lg p-0 w-100" style="max-height: 300px; overflow-y: auto; z-index: 1060;">
               <li v-for="proj in filteredProjectOptions" :key="proj.value">
                 <a class="dropdown-item py-2 px-3 cursor-pointer" 
                    :class="{ 'active-proj': selectedProjNo === proj.value }"
@@ -44,7 +44,7 @@
 
           <button 
             type="button" 
-            class="tpl-btn tpl-btn--sm tpl-btn--primary me-2" 
+            class="tpl-btn tpl-btn--sm tpl-btn--primary" 
             @click="confirmSearch"
           >
             <i class="fa fa-search me-1"></i>조회
@@ -57,16 +57,15 @@
             label="결과 검색"
             v-model:value="localFilterQuery"
             icon="fa-filter"
-            placeholder="결과 내 실시간 찾기"
-            style="width: 200px"
-            class="border-success"
+            placeholder="결과 내 찾기"
+            style="width: 180px"
           />
         </div>
       </template>
 
       <div class="grid-wrapper w-100 h-100">
         <ag-grid-vue
-          class="ag-theme-custom w-100 h-100 custom-tag-analysis-grid"
+          class="ag-theme-custom w-100 h-100" 
           v-bind="gridOptions"
           @grid-ready="onGridReady"
         />
@@ -82,16 +81,16 @@ import { useToast } from '@/composables/useToast'
 import { sAlert } from '@/utils/messages/alert-common'
 import { sortBy } from 'lodash-es'
 
-// 표준 컴포넌트
+// 표준 컴포넌트 임포트
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
 const toast = useToast()
 
-// 상태 관리
+// 상태 데이터
 const cardTitle = {
-  icon: 'fa-search-plus',
+  icon: 'fa-list', // 기존 템플릿 아이콘 유지
   title: 'Tag 통합 분석',
   subtitle: 'Publish/Working 데이터 교차 비교'
 }
@@ -106,7 +105,7 @@ const gridApi = shallowRef()
 const rawDataList = ref([])
 const dynamicAttCols = ref([])
 
-// 1. 프로젝트 리스트 조회 및 필터링 로직
+// 1. 프로젝트 리스트 필터링 로직
 const fetchProjectList = async () => {
   try {
     const res = await axiosWrapper.get('/api/Project/Get')
@@ -125,14 +124,14 @@ const selectProject = (val) => {
   projSearchQuery.value = val
 }
 
-// 2 & 4. API 통합 조회 (Pub + Wrk)
+// 2 & 4. Toast 컨펌 및 통합 데이터 조회
 const confirmSearch = () => {
-  if (!selectedProjNo.value) return sAlert.Warning('프로젝트를 먼저 선택하세요.')
+  if (!selectedProjNo.value) return sAlert.Warning('프로젝트를 선택하세요.')
   
   toast.show({
-    title: '통합 조회 시작',
-    content: `[${selectedProjNo.value}] 프로젝트의 데이터를 분석하시겠습니까?`,
-    okText: '조회',
+    title: '조회 확인',
+    content: `[${selectedProjNo.value}] 데이터를 조회하시겠습니까?`,
+    okText: '확인',
     cancelText: '취소',
     onOk: () => fetchData()
   })
@@ -143,28 +142,22 @@ const fetchData = async () => {
 
   try {
     const payload = { ProjectNo: selectedProjNo.value, Keyword: searchKeyword.value }
-    
-    // 4. 공용(Publish) 및 작업(Working) 데이터 동시 호출
-    const [pubRes, wrkRes] = await Promise.allSettled([
+    const [pRes, wRes] = await Promise.allSettled([
       axiosWrapper.post('/api/Data/SearchPublishData', payload),
       axiosWrapper.post('/api/Data/SearchWorkingData', payload)
     ])
 
     let combined = []
-    if (pubRes.status === 'fulfilled' && pubRes.value) {
-      const data = Array.isArray(pubRes.value) ? pubRes.value : [pubRes.value]
-      combined.push(...data.map(i => ({ ...i, Source: 'Published' })))
+    if (pRes.status === 'fulfilled' && pRes.value) {
+      combined.push(...(Array.isArray(pRes.value) ? pRes.value : [pRes.value]).map(i => ({ ...i, Source: 'Published' })))
     }
-    if (wrkRes.status === 'fulfilled' && wrkRes.value) {
-      const data = Array.isArray(wrkRes.value) ? wrkRes.value : [wrkRes.value]
-      combined.push(...data.map(i => ({ ...i, Source: 'Working' })))
+    if (wRes.status === 'fulfilled' && wRes.value) {
+      combined.push(...(Array.isArray(wRes.value) ? wRes.value : [wRes.value]).map(i => ({ ...i, Source: 'Working' })))
     }
 
-    // 데이터 가공 (Attributes 평탄화)
+    // Attributes 평탄화 로직
     const allAttIds = new Set()
-    combined.forEach(item => {
-      (item.ATTRIBUTES || []).forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
-    })
+    combined.forEach(item => (item.ATTRIBUTES || []).forEach(a => a?.ATT_ID && allAttIds.add(a.ATT_ID)))
 
     const processedData = combined.map(item => {
       const flatItem = { ...item }
@@ -175,19 +168,23 @@ const fetchData = async () => {
       return flatItem
     })
 
-    // 동적 컬럼 생성
+    // 동적 속성 컬럼 (Custom 테마 스타일 적용)
     dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
       headerName: id,
       field: `ATT_${id}`,
-      minWidth: 120,
+      minWidth: 130,
       headerClass: 'att-column-header',
-      cellRenderer: highlightRenderer, // 3. 하이라이트 적용
-      cellStyle: p => ({ background: '#fff9db', color: p.value === 'null' ? '#adb5bd' : '#000' })
+      cellRenderer: highlightRenderer,
+      cellStyle: p => ({ 
+        background: '#fff9db', 
+        color: p.value === 'null' ? '#adb5bd' : '#000',
+        borderRight: '1px solid #dee2e6' 
+      })
     }))
 
     rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
   } catch (err) {
-    sAlert.Error('데이터 통합 중 오류 발생')
+    sAlert.Error('데이터 로드 실패')
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
@@ -195,14 +192,13 @@ const fetchData = async () => {
 
 // 3. 결과 내 하이라이트 렌더러
 const highlightRenderer = (p) => {
-  const val = p.value === null || p.value === undefined ? '' : String(p.value)
+  const val = (p.value === null || p.value === undefined) ? '' : String(p.value)
   if (!val || !localFilterQuery.value.trim()) return val
-  
   const kw = localFilterQuery.value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   return val.replace(new RegExp(`(${kw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
 }
 
-// 그리드 설정
+// Ag-Grid 설정 (Custom 테마 적용)
 const gridOptions = computed(() => ({
   columnDefs: [
     { 
@@ -210,69 +206,7 @@ const gridOptions = computed(() => ({
       field: 'Source', 
       width: 110, 
       pinned: 'left',
-      cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>`
+      cellRenderer: p => `<span class="badge shadow-sm" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>`
     },
     { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'CLS_ID', headerName: 'Class', width: 120, pinned: 'left' },
-    ...dynamicAttCols.value
-  ],
-  rowData: filteredData.value,
-  loadingOverlayComponent: AggridLoadingOverlay,
-  quickFilterText: localFilterQuery.value, // 그리드 자체 필터 기능 활용
-  defaultColDef: { sortable: true, filter: true, resizable: true }
-}))
-
-const filteredData = computed(() => {
-  if (!localFilterQuery.value.trim()) return rawDataList.value
-  const query = localFilterQuery.value.toLowerCase()
-  return rawDataList.value.filter(i => 
-    `${i.TAG_NO} ${i.TAG_IDX} ${i.CLS_ID} ${i.Source}`.toLowerCase().includes(query)
-  )
-})
-
-const onGridReady = (params) => { gridApi.value = params.api }
-
-onMounted(fetchProjectList)
-</script>
-
-<style scoped lang="scss">
-.grid-wrapper { flex: 1; min-height: 0; }
-
-.header-divider {
-  width: 1px;
-  height: 16px;
-  background-color: var(--tpl-divider, #e0e0e0);
-  margin: 0 10px;
-}
-
-/* 프로젝트 콤보박스 스타일 */
-.custom-single-select {
-  .dropdown-item.active-proj {
-    background-color: #f1f5f9;
-    font-weight: bold;
-    color: var(--primary-color);
-  }
-}
-
-/* 하이라이트 및 그리드 커스텀 */
-:deep(.custom-tag-analysis-grid) {
-  .filter-highlight {
-    background-color: #ffeb3b !important;
-    font-weight: bold;
-    padding: 0 2px;
-    border-radius: 2px;
-  }
-  .att-column-header {
-    background-color: #fff9db !important;
-    color: #856404 !important;
-  }
-}
-
-.tpl-btn {
-  height: 32px;
-  border-radius: 4px;
-  font-weight: 500;
-  transition: all 0.2s;
-  &:hover { opacity: 0.9; transform: translateY(-1px); }
-}
-</style>
+    { field: 'CLS_
