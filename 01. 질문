@@ -1,6 +1,6 @@
 <template>
-  <div class="template__page d-flex flex-column h-100 bg-white">
-    <!-- 상단 헤더 영역: 프로젝트 선택 및 조회 버튼 -->
+  <div class="d-flex flex-column h-100 bg-white">
+    <!-- 기존 UI 유지: 상단 검색바 -->
     <div class="p-3 border-bottom shadow-sm bg-light">
       <div class="d-flex align-items-center justify-content-between">
         <div class="d-flex align-items-center gap-3">
@@ -46,176 +46,182 @@
           </div>
 
           <button
-            class="btn btn-sm btn-primary px-4 shadow-sm"
+            class="btn btn-sm btn-primary px-3 shadow-sm"
             @click="onSearch"
             :disabled="selectedProjects.length === 0"
           >
-            <i class="fa fa-play me-1"></i>데이터 원본 조회
+            <i class="fa fa-search me-1"></i>데이터 조회 (Raw)
           </button>
-          
-          <span class="text-muted small">※ 서버에서 받은 JSON 데이터를 그대로 테이블로 변환합니다.</span>
         </div>
 
-        <!-- 결과 내 필터 -->
+        <!-- 멀티 필터 UI 유지 -->
         <div class="d-flex align-items-center gap-2">
-          <span class="fw-bold text-success text-nowrap small"><i class="fa fa-filter"></i> 결과 필터</span>
-          <input
-            type="text"
-            class="form-control form-control-sm border-success"
-            style="width: 200px"
-            v-model="quickFilterText"
-            placeholder="빠른 검색..."
-          />
+          <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>멀티 필터</span>
+          <textarea
+            class="form-control form-control-sm border-success custom-textarea-filter"
+            v-model="attributeFilter"
+            rows="1"
+            placeholder="ATT_ID 입력 (엔터/쉼표 구분)"
+          ></textarea>
         </div>
       </div>
     </div>
 
-    <!-- 그리드 영역 -->
+    <!-- 그리드 영역: ag-theme-custom 적용 -->
     <div class="flex-grow-1 overflow-hidden">
-      <ag-grid-vue
-        class="ag-theme-alpine w-100 h-100"
-        :columnDefs="columnDefs"
-        :rowData="rowData"
-        :defaultColDef="defaultColDef"
-        :loadingOverlayComponent="loadingOverlayComponent"
-        @grid-ready="onGridReady"
-        :quickFilterText="quickFilterText"
-      />
+      <ag-grid-vue v-bind="gridOptions" @grid-ready="onGridReady" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, shallowRef, onMounted } from 'vue'
+import { ref, computed, shallowRef, onMounted, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { sAlert } from '@/utils/messages/alert-common'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-import 'ag-grid-community/styles/ag-grid.css'
-import 'ag-grid-community/styles/ag-theme-alpine.css'
+const route = useRoute()
 
 // --- State ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
-const quickFilterText = ref('')
+const attributeFilter = ref('')
 
 const gridApi = shallowRef()
-const rowData = ref([])
-const columnDefs = ref([])
+const gridRowData = ref([])
+const dynamicColumnDefs = ref([]) // 서버 JSON에서 추출한 컬럼들
 
-const loadingOverlayComponent = AggridLoadingOverlay
-const defaultColDef = {
-  sortable: true,
-  filter: true,
-  resizable: true,
-  floatingFilter: true,
-  flex: 1,
-  minWidth: 100
-}
+const urlEpId = computed(() => route.query.ep_id || '')
+const urlProjNo = computed(() => route.query.project_no || '')
 
-// --- 프로젝트 목록 로드 ---
+// --- 프로젝트 목록 로드 (기존 유지) ---
 onMounted(async () => {
   try {
-    const res = await axiosWrapper.get('/api/Project/Get')
+    const res = await axiosWrapper.get('/api/Project/Get', {
+      headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value },
+    })
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
   } catch (error) {
-    console.error('Project Load Error:', error)
+    console.error(error)
   }
 })
 
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   if (!kw) return projectList.value
-  return projectList.value.filter(p => 
-    p.PROJ_NO?.toLowerCase().includes(kw) || p.DESC?.toLowerCase().includes(kw)
+  return projectList.value.filter(
+    p => (p.PROJ_NO && p.PROJ_NO.toLowerCase().includes(kw)) || (p.DESC && p.DESC.toLowerCase().includes(kw))
   )
 })
 
-// --- 데이터 조회 및 자동 컬럼 생성 ---
+// --- 핵심: 데이터 조회 및 JSON 평탄화 출력 ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
-  
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
-  rowData.value = []
-  columnDefs.value = []
 
   try {
-    // 1. 선택된 프로젝트들의 데이터를 병렬로 가져옴
+    // 모든 선택 프로젝트의 데이터를 호출
     const fetchPromises = selectedProjects.value.map(projNo =>
-      axiosWrapper.post('/api/Attributes/Get', { ContainDeleted: false, ProjectNo: projNo })
+      axiosWrapper
+        .post(
+          '/api/Attributes/Get',
+          { ContainDeleted: false, ProjectNo: projNo },
+          { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
+        )
         .then(res => {
-          // 각 로우에 소속 프로젝트 정보를 추가
-          return (Array.isArray(res) ? res : []).map(item => ({
-            ...item,
-            __ORIGIN_PROJ_NO: projNo // 출처 표시용 서비스 컬럼
-          }))
+          // 데이터에 소속 프로젝트 정보를 심어서 반환
+          return (Array.isArray(res) ? res : []).map(item => ({ ...item, _SOURCE_PROJ: projNo }))
         })
         .catch(() => [])
     )
 
     const results = await Promise.all(fetchPromises)
-    const combinedData = results.flat()
+    const flatData = results.flat() // 모든 데이터를 하나의 배열로 합침
 
-    if (combinedData.length > 0) {
-      // 2. JSON 데이터의 모든 Key를 추출하여 컬럼 정의 생성
+    if (flatData.length > 0) {
+      // 1. JSON 내 모든 Key 추출 (컬럼 자동 생성용)
       const allKeys = new Set()
-      combinedData.forEach(obj => {
-        Object.keys(obj).forEach(key => {
-          // ATTRIBUTES 같은 객체/배열 타입은 제외하거나 문자열화 해서 보여줌
-          if (typeof obj[key] !== 'object') {
-            allKeys.add(key)
-          }
+      flatData.forEach(row => {
+        Object.keys(row).forEach(key => {
+          if (typeof row[key] !== 'object') allKeys.add(key)
         })
       })
 
-      const generatedCols = Array.from(allKeys).map(key => ({
-        headerName: key,
+      // 2. 컬럼 정의 생성 (기존 스타일 적용)
+      dynamicColumnDefs.value = Array.from(allKeys).map(key => ({
+        headerName: key === '_SOURCE_PROJ' ? 'Origin Project' : key,
         field: key,
-        // 출처 컬럼은 특별 관리
-        pinned: key === '__ORIGIN_PROJ_NO' ? 'left' : null,
-        cellClass: key === '__ORIGIN_PROJ_NO' ? 'bg-light fw-bold' : ''
+        pinned: key === '_SOURCE_PROJ' ? 'left' : null,
+        cellStyle: key === '_SOURCE_PROJ' ? { fontWeight: 'bold', backgroundColor: '#f8f9fa' } : null
       }))
 
-      columnDefs.value = generatedCols
-      rowData.value = combinedData
+      gridRowData.value = flatData
     } else {
       sAlert.Info('조회된 데이터가 없습니다.')
     }
   } catch (e) {
-    console.error(e)
-    sAlert.Error('데이터 로드 실패')
+    sAlert.Error('조회 실패')
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-const onGridReady = (params) => {
-  gridApi.value = params.api
+// --- 그리드 옵션 (ag-theme-custom 스타일 유지) ---
+const gridOptions = computed(() => ({
+  columnDefs: dynamicColumnDefs.value,
+  rowData: gridRowData.value,
+  style: 'width: 100%; height: 100%',
+  class: 'ag-theme-custom', // 기존 커스텀 테마 그대로 사용
+  loadingOverlayComponent: AggridLoadingOverlay,
+  defaultColDef: {
+    sortable: true,
+    resizable: true,
+    filter: true,
+    floatingFilter: true,
+    flex: 1,
+    minWidth: 120,
+  },
+  // 외부 필터 로직 유지
+  isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
+  doesExternalFilterPass: node => {
+    const inputIds = attributeFilter.value
+      .split(/[\s,\n]+/)
+      .filter(id => id.trim() !== '')
+      .map(id => id.toLowerCase())
+    if (inputIds.length === 0) return true
+    const targetId = String(node.data.ATT_ID || '').toLowerCase()
+    return inputIds.some(id => targetId.includes(id))
+  },
+}))
+
+const onGridReady = p => {
+  gridApi.value = p.api
 }
+
+watch([attributeFilter], () => {
+  if (gridApi.value) gridApi.value.onFilterChanged()
+})
 </script>
 
 <style scoped>
-.template__page {
-  background-color: #f8f9fa;
-}
-
 .custom-project-dropdown {
   width: 300px !important;
 }
+.custom-textarea-filter {
+  width: 300px !important;
+  font-size: 0.8rem;
+  resize: none;
+}
 
-:deep(.ag-theme-alpine) {
-  --ag-header-background-color: #f1f5f9;
-  --ag-header-foreground-color: #334155;
+/* 기존 커스텀 테마 유지용 스타일 */
+:deep(.ag-header-cell) {
+  background-color: #f8f9fa !important;
+  font-weight: bold;
+}
+
+:deep(.ag-theme-custom) {
   --ag-font-size: 12px;
-}
-
-:deep(.ag-row-hover) {
-  background-color: #f1f5f9 !important;
-}
-
-/* 출처 컬럼 강조용 */
-:deep(.bg-light) {
-  background-color: #f8fafc !important;
 }
 </style>
