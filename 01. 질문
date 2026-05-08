@@ -6,7 +6,6 @@
     >
       <template #header-right>
         <div class="d-flex align-items-center gap-2 flex-wrap">
-          
           <div class="dropdown custom-single-select" style="min-width: 220px">
             <InputBox
               id="input-proj"
@@ -14,7 +13,6 @@
               v-model:value="selectedProjNo"
               placeholder="프로젝트 선택/입력"
               data-bs-toggle="dropdown"
-              aria-expanded="false"
               @input="projSearchQuery = selectedProjNo"
               style="width: 100%"
             />
@@ -25,9 +23,6 @@
                    @click="selectProject(proj.value)">
                   {{ proj.text }}
                 </a>
-              </li>
-              <li v-if="filteredProjectOptions.length === 0" class="p-3 text-muted small text-center">
-                검색 결과가 없습니다.
               </li>
             </ul>
           </div>
@@ -42,11 +37,7 @@
 
           <div class="header-divider"></div>
 
-          <button 
-            type="button" 
-            class="tpl-btn tpl-btn--sm tpl-btn--primary" 
-            @click="confirmSearch"
-          >
+          <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--primary" @click="confirmSearch">
             <i class="fa fa-search me-1"></i>조회
           </button>
 
@@ -81,19 +72,12 @@ import { useToast } from '@/composables/useToast'
 import { sAlert } from '@/utils/messages/alert-common'
 import { sortBy } from 'lodash-es'
 
-// 표준 컴포넌트 임포트
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
 const toast = useToast()
-
-// 상태 데이터
-const cardTitle = {
-  icon: 'fa-list', // 기존 템플릿 아이콘 유지
-  title: 'Tag 통합 분석',
-  subtitle: 'Publish/Working 데이터 교차 비교'
-}
+const cardTitle = { icon: 'fa-list', title: 'Tag 통합 분석', subtitle: '속성 합집합 비교' }
 
 const projectOptions = ref([])
 const selectedProjNo = ref('')
@@ -105,7 +89,7 @@ const gridApi = shallowRef()
 const rawDataList = ref([])
 const dynamicAttCols = ref([])
 
-// 1. 프로젝트 리스트 필터링 로직
+// 프로젝트 리스트 조회
 const fetchProjectList = async () => {
   try {
     const res = await axiosWrapper.get('/api/Project/Get')
@@ -124,10 +108,8 @@ const selectProject = (val) => {
   projSearchQuery.value = val
 }
 
-// 2 & 4. Toast 컨펌 및 통합 데이터 조회
 const confirmSearch = () => {
   if (!selectedProjNo.value) return sAlert.Warning('프로젝트를 선택하세요.')
-  
   toast.show({
     title: '조회 확인',
     content: `[${selectedProjNo.value}] 데이터를 조회하시겠습니까?`,
@@ -155,24 +137,27 @@ const fetchData = async () => {
       combined.push(...(Array.isArray(wRes.value) ? wRes.value : [wRes.value]).map(i => ({ ...i, Source: 'Working' })))
     }
 
-    // Attributes 평탄화 로직
+    // 모든 데이터의 ATT_ID 합집합 추출
     const allAttIds = new Set()
-    combined.forEach(item => (item.ATTRIBUTES || []).forEach(a => a?.ATT_ID && allAttIds.add(a.ATT_ID)))
+    combined.forEach(item => {
+      (item.ATTRIBUTES || []).forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
+    })
 
     const processedData = combined.map(item => {
       const flatItem = { ...item }
+      // 모든 속성 키에 대해 값 매핑 (없으면 null 처리)
       allAttIds.forEach(id => {
         const target = (item.ATTRIBUTES || []).find(a => a?.ATT_ID === id)
-        flatItem[`ATT_${id}`] = target ? target.VALUE : 'null'
+        flatItem[`ATT_${id}`] = (target && target.VALUE !== null) ? target.VALUE : 'null'
       })
       return flatItem
     })
 
-    // 동적 속성 컬럼 (Custom 테마 스타일 적용)
+    // 오른쪽 동적 컬럼 (합집합 속성들)
     dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
       headerName: id,
       field: `ATT_${id}`,
-      minWidth: 130,
+      minWidth: 140,
       headerClass: 'att-column-header',
       cellRenderer: highlightRenderer,
       cellStyle: p => ({ 
@@ -190,7 +175,6 @@ const fetchData = async () => {
   }
 }
 
-// 3. 결과 내 하이라이트 렌더러
 const highlightRenderer = (p) => {
   const val = (p.value === null || p.value === undefined) ? '' : String(p.value)
   if (!val || !localFilterQuery.value.trim()) return val
@@ -198,18 +182,21 @@ const highlightRenderer = (p) => {
   return val.replace(new RegExp(`(${kw})`, 'gi'), `<mark class="filter-highlight">$1</mark>`)
 }
 
-// Ag-Grid 설정 (Custom 테마 적용)
+// Ag-Grid 설정
 const gridOptions = computed(() => ({
   columnDefs: [
+    // [왼쪽 고정 컬럼 영역]
     { 
-      headerName: 'Source', 
-      field: 'Source', 
-      width: 110, 
-      pinned: 'left',
-      cellRenderer: p => `<span class="badge shadow-sm" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>`
+      headerName: 'Source', field: 'Source', width: 110, pinned: 'left',
+      cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>`
     },
-    { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'CLS_ID', headerName: 'Class', width: 130, pinned: 'left' },
+    { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer, cellClass: 'fw-bold' },
+    { field: 'CLS_ID', headerName: 'Class', width: 120, pinned: 'left' },
+    { field: 'TAG_IDX', headerName: 'Tag Idx', width: 150, pinned: 'left' },
+    { field: 'EP_ID', headerName: 'EP ID', width: 100, pinned: 'left' },
+    { field: 'EP_IC', headerName: 'EP IC', width: 100, pinned: 'left' }, // 추가된 고정 헤더
+    
+    // [오른쪽 동적 합집합 영역]
     ...dynamicAttCols.value
   ],
   rowData: filteredData.value,
@@ -217,10 +204,7 @@ const gridOptions = computed(() => ({
   headerHeight: 38,
   rowHeight: 34,
   defaultColDef: {
-    sortable: true,
-    filter: true,
-    resizable: true,
-    flex: 1,
+    sortable: true, filter: true, resizable: true,
     minWidth: 100
   }
 }))
@@ -229,12 +213,11 @@ const filteredData = computed(() => {
   if (!localFilterQuery.value.trim()) return rawDataList.value
   const query = localFilterQuery.value.toLowerCase()
   return rawDataList.value.filter(i => 
-    `${i.TAG_NO} ${i.TAG_IDX} ${i.CLS_ID} ${i.Source}`.toLowerCase().includes(query)
+    `${i.TAG_NO} ${i.CLS_ID} ${i.TAG_IDX} ${i.Source}`.toLowerCase().includes(query)
   )
 })
 
 const onGridReady = (params) => { gridApi.value = params.api }
-
 onMounted(fetchProjectList)
 </script>
 
@@ -245,62 +228,36 @@ onMounted(fetchProjectList)
   border-top: 1px solid var(--tpl-divider);
 }
 
-.header-divider {
-  width: 1px;
-  height: 14px;
-  background-color: var(--tpl-divider);
-  margin: 0 10px;
-}
+.header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 10px; }
 
-/* 프로젝트 콤보박스 스타일 */
-.custom-single-select {
-  :deep(.input-box-container) { margin-bottom: 0; }
-  .dropdown-item.active-proj {
-    background-color: #f1f5f9;
-    font-weight: bold;
-    color: var(--primary-color);
-  }
-}
-
-/* [핵심] Custom Ag-Grid 테마 스타일링 */
+/* Custom 테마 스타일링 */
 :deep(.ag-theme-custom) {
   --ag-border-color: #dee2e6;
   --ag-header-background-color: #f8f9fa;
   --ag-font-size: 12px;
 
-  .ag-header-cell {
-    border-right: 1px solid #dee2e6 !important;
-    font-weight: 600;
-  }
-  
-  .ag-cell {
-    border-right: 1px solid #f1f3f5 !important;
-    display: flex;
-    align-items: center;
-  }
+  .ag-header-cell { border-right: 1px solid #dee2e6 !important; }
+  .ag-cell { border-right: 1px solid #f1f3f5 !important; display: flex; align-items: center; }
+
+  /* 고정 컬럼과 일반 컬럼 경계 강조 */
+  .ag-pinned-left-header { border-right: 2px solid #adb5bd !important; }
+  .ag-pinned-left-cols-container { border-right: 2px solid #adb5bd !important; }
 
   .filter-highlight {
     background-color: #ffeb3b !important;
     color: #000 !important;
     font-weight: bold;
     padding: 0 2px;
-    border-radius: 2px;
   }
 
-  /* 속성 컬럼 강조 */
   .att-column-header {
     background-color: #fff9db !important;
     color: #856404 !important;
-    border-bottom: 2px solid #ffe066 !important;
   }
 }
 
 .tpl-btn {
-  height: 32px;
-  padding: 0 16px;
-  border-radius: 4px;
-  font-weight: 500;
+  height: 32px; padding: 0 16px; border-radius: 4px; font-weight: 500;
   &--primary { background: var(--primary-color); color: #fff; border: none; }
-  &:hover { filter: brightness(90%); }
 }
 </style>
