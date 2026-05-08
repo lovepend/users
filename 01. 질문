@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-import { ref, computed, shallowRef, onMounted, watch } from 'vue'
+import { ref, computed, shallowRef, onMounted } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { useToast } from '@/composables/useToast'
 import { sAlert } from '@/utils/messages/alert-common'
@@ -73,7 +73,7 @@ import InputBox from '@/components/default/editors/InputBox.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
 const toast = useToast()
-const cardTitle = { icon: 'fa-list', title: 'Tag 통합 분석', subtitle: '전체 데이터 비교' }
+const cardTitle = { icon: 'fa-list', title: 'Tag 통합 분석', subtitle: '전체 속성 및 필드 분석' }
 
 const projectOptions = ref([])
 const selectedProjNo = ref('')
@@ -85,23 +85,21 @@ const gridApi = shallowRef()
 const rawDataList = ref([])
 const dynamicAttCols = ref([])
 
-// 1. 하이라이트 렌더러 (검색어 변경 시 즉시 반영을 위해 정규식 최적화)
+// 하이라이트 렌더러 (실시간 정규식 적용)
 const highlightRenderer = (params) => {
   const val = (params.value === null || params.value === undefined) ? '' : String(params.value)
   const searchTerm = localFilterQuery.value.trim()
   
-  if (!searchTerm || val === 'null') return val
+  if (!searchTerm || val === 'null' || val === '') return val
   
   try {
     const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
     const re = new RegExp(`(${escapedTerm})`, 'gi')
     return val.replace(re, `<mark class="filter-highlight">$1</mark>`)
-  } catch (e) {
-    return val
-  }
+  } catch (e) { return val }
 }
 
-// 필터 입력 시 그리드 리프레시 강제 실행 (하이라이트 즉시 갱신)
+// 검색 입력 시 그리드 셀 강제 리프레시 (하이라이트 반응)
 const onFilterInput = () => {
   if (gridApi.value) {
     gridApi.value.refreshCells({ force: true })
@@ -152,7 +150,6 @@ const fetchData = async () => {
       combined.push(...(Array.isArray(wRes.value) ? wRes.value : [wRes.value]).map(i => ({ ...i, Source: 'Working' })))
     }
 
-    // ATTRIBUTES 합집합 추출
     const allAttIds = new Set()
     combined.forEach(item => {
       (item.ATTRIBUTES || []).forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
@@ -167,17 +164,14 @@ const fetchData = async () => {
       return flatItem
     })
 
-    // 동적 속성 컬럼 (헤더 노란색)
+    // 동적 속성 컬럼 생성 (헤더만 노란색)
     dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
       headerName: id,
       field: `ATT_${id}`,
       minWidth: 140,
       headerClass: 'att-column-header',
       cellRenderer: highlightRenderer,
-      cellStyle: p => ({ 
-        color: p.value === 'null' ? '#adb5bd' : '#000',
-        borderRight: '1px solid #dee2e6' 
-      })
+      cellStyle: { borderRight: '1px solid #dee2e6' }
     }))
 
     rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
@@ -190,7 +184,7 @@ const fetchData = async () => {
 
 const gridOptions = computed(() => ({
   columnDefs: [
-    // 1. 고정 영역 (핵심 정보)
+    // 1. 고정 영역 (Key 정보)
     { headerName: 'Source', field: 'Source', width: 110, pinned: 'left', cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>` },
     { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
     { field: 'CLS_ID', headerName: 'Class', width: 120, pinned: 'left', cellRenderer: highlightRenderer },
@@ -198,22 +192,29 @@ const gridOptions = computed(() => ({
     { field: 'EP_ID', headerName: 'EP ID', width: 100, pinned: 'left' },
     { field: 'EP_IC', headerName: 'EP IC', width: 100, pinned: 'left' },
 
-    // 2. 상위 필드 영역 (말씀하신 모든 데이터 필드 포함)
+    // 2. 동적 속성 영역 (ATTRIBUTES 우선 배치)
+    ...dynamicAttCols.value,
+
+    // 3. 나머지 상위 필드 영역
     { field: 'BF_TAG_NO', headerName: 'BF Tag No', width: 140, cellRenderer: highlightRenderer },
     { field: 'TAG_DESC', headerName: 'Description', width: 200, cellRenderer: highlightRenderer },
-    { field: 'PRNT_TAG_IDX', headerName: 'Parent Idx', width: 150 },
-    { field: 'PROJ_NO', headerName: 'Project No', width: 120 },
+    { field: 'TAG_NO_PASSED', headerName: 'Passed', width: 100, cellRenderer: highlightRenderer },
+    { field: 'NEW_YN', headerName: 'New YN', width: 80 },
+    { field: 'DEL_YN', headerName: 'Del YN', width: 80 },
+    { field: 'PIC_NO', headerName: 'PIC No', width: 110 },
     { field: 'CHGER_NO', headerName: 'Chger No', width: 110 },
     { field: 'CHGE_DTM', headerName: 'Chge Dtm', width: 180 },
     { field: 'CRTER_NO', headerName: 'Crter No', width: 110 },
     { field: 'CRTE_DTM', headerName: 'Crte Dtm', width: 180 },
+    { field: 'PROJ_NO', headerName: 'Project No', width: 120 },
     { field: 'DATA_SOURCE', headerName: 'Data Source', width: 120 },
     { field: 'TAG_TYPE_ID', headerName: 'Tag Type', width: 110 },
+    { field: 'PRNT_TAG_IDX', headerName: 'Parent Idx', width: 150 },
     { field: 'DELETED', headerName: 'Deleted', width: 90 },
+    { field: 'DSN_SKL', headerName: 'DSN SKL', width: 100 },
     { field: '_id', headerName: 'Object ID', width: 200 },
-
-    // 3. ATTRIBUTES 동적 영역 (헤더만 노란색)
-    ...dynamicAttCols.value
+    { field: 'DEL_DTM', headerName: 'Del Dtm', width: 180 },
+    { field: 'DEL_USER', headerName: 'Del User', width: 110 }
   ],
   rowData: filteredData.value,
   loadingOverlayComponent: AggridLoadingOverlay,
@@ -247,17 +248,16 @@ onMounted(fetchProjectList)
   .ag-cell { border-right: 1px solid #f1f3f5 !important; display: flex; align-items: center; }
   .ag-pinned-left-cols-container { border-right: 2px solid #adb5bd !important; }
 
-  /* 하이라이트 스타일: 중요도 높음 */
+  /* 하이라이트 스타일 */
   .filter-highlight {
     background-color: #ffeb3b !important;
     color: #000 !important;
     font-weight: bold;
     padding: 0 2px;
     border-radius: 2px;
-    display: inline-block;
-    line-height: 1;
   }
 
+  /* ATTRIBUTES 헤더만 노란색 */
   .att-column-header {
     background-color: #fff9db !important; 
     color: #856404 !important;
