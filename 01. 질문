@@ -1,29 +1,30 @@
 <template>
+  <!-- h-100과 w-100으로 부모 너비/높이에 맞춤 -->
   <DefaultCard
     :title="cardTitle"
-    icon="fa-th-list"
-    class="h-100"
+    icon="fa-boxes-stacked"
+    class="w-100 h-100"
   >
-    <!-- [header-right] InputBox 세트 + Toast 버튼 -->
+    <!-- [header-right] 상단 검색 조건 영역 -->
     <template #header-right>
       <div class="d-flex align-items-center gap-2">
-        <!-- 1. 프로젝트 (메모 스타일: 아이콘 없음) -->
+        <!-- 1. 프로젝트 (메모 스타일) -->
         <InputBox
           id="input-proj"
           label="프로젝트"
           v-model:value="projectCode"
           placeholder="코드 입력"
-          style="width: 150px"
+          style="width: 140px"
         />
-        <!-- 2. 키워드 (메모 스타일: 아이콘 없음) -->
+        <!-- 2. 키워드 (메모 스타일) -->
         <InputBox
           id="input-keyword"
           label="키워드"
           v-model:value="keyword"
           placeholder="키워드 입력"
-          style="width: 150px"
+          style="width: 140px"
         />
-        <!-- 3. 검색 (돋보기 아이콘 적용) -->
+        <!-- 3. 검색 (돋보기 아이콘) -->
         <InputBox
           id="input-search"
           label="검색"
@@ -36,7 +37,7 @@
 
         <div class="header-divider"></div>
 
-        <!-- Toast "확인/취소" 스타일의 조회 버튼 -->
+        <!-- Toast 연동 조회 버튼 -->
         <button 
           type="button" 
           class="tpl-btn tpl-btn--sm tpl-btn--primary" 
@@ -47,10 +48,10 @@
       </div>
     </template>
 
-    <!-- [contents] Ag-Grid Custom 테마 영역 -->
-    <div class="grid-container">
+    <!-- [contents] 그리드 영역: 카드 너비에 100% 맞춤 -->
+    <div class="grid-wrapper w-100 h-100">
       <ag-grid-vue
-        class="ag-theme-custom h-100"
+        class="ag-theme-custom w-100 h-100"
         v-bind="gridOptions"
         @grid-ready="onGridReady"
       />
@@ -63,14 +64,14 @@ import { ref, computed, shallowRef } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { useToast } from '@/composables/useToast'
 
-// 컴포넌트 임포트
+// 템플릿 공통 컴포넌트
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
 const toast = useToast()
 
-// 상태 관리
+// 상태 데이터
 const cardTitle = {
   title: '재고 현황',
   subtitle: '창고별 집계 · 실시간 반영'
@@ -84,11 +85,13 @@ const gridApi = shallowRef()
 const gridRowData = ref([])
 const columnDefs = ref([])
 
-// 1. Toast를 이용한 조회 확인 로직
+/**
+ * Toast "확인/취소"를 이용한 조회 컨펌
+ */
 const confirmSearch = () => {
   toast.show({
-    title: '데이터 조회',
-    content: '입력한 조건으로 조회를 시작하시겠습니까?',
+    title: '조회 확인',
+    content: '입력하신 조건으로 데이터를 집계하시겠습니까?',
     okText: '확인',
     cancelText: '취소',
     onOk: () => {
@@ -97,64 +100,87 @@ const confirmSearch = () => {
   })
 }
 
-// 2. 실제 데이터 조회 함수
+/**
+ * API 데이터 호출
+ */
 const fetchData = async () => {
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
   
   try {
-    const res = await axiosWrapper.post('/api/Attributes/Get', { 
+    const res = await axiosWrapper.post('/api/Inventory/GetStatus', { 
       ProjectNo: projectCode.value,
       Keyword: keyword.value 
     })
     
     gridRowData.value = Array.isArray(res) ? res : []
     
-    // 컬럼 자동 생성
+    // 첫 번째 데이터를 기준으로 컬럼 자동 생성
     if (gridRowData.value.length > 0) {
       columnDefs.value = Object.keys(gridRowData.value[0]).map(key => ({
         headerName: key,
         field: key,
         sortable: true,
         filter: true,
-        resizable: true
+        resizable: true,
+        flex: 1 // 모든 컬럼이 너비에 맞춰 균등 배분되도록 설정
       }))
     }
   } catch (error) {
-    toast.fail({ title: '조회 실패', content: '데이터를 불러오지 못했습니다.' })
+    toast.fail({ title: '오류 발생', content: '데이터 조회 중 에러가 발생했습니다.' })
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-// Ag-Grid 설정
+/**
+ * Ag-Grid 설정
+ */
 const gridOptions = computed(() => ({
   columnDefs: columnDefs.value,
   rowData: gridRowData.value,
   loadingOverlayComponent: AggridLoadingOverlay,
-  // 템플릿의 Ag-Grid 스타일 가이드 준수
+  headerHeight: 40,
+  rowHeight: 35,
+  // 텍스트 필터 연동을 위한 가이드
+  quickFilterText: attributeFilter.value
 }))
 
 const onGridReady = (params) => {
   gridApi.value = params.api
+  // 그리드 너비를 카드에 맞게 강제 조정
+  params.api.sizeColumnsToFit()
 }
 </script>
 
 <style scoped>
-.grid-container {
+/* 카드와 그리드 너비 일치를 위한 스타일 */
+.w-100 { width: 100%; }
+.h-100 { height: 100%; }
+
+.grid-wrapper {
+  display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
-  height: 100%;
+  padding: 0; /* 카드 패딩과 충돌을 피하기 위해 0으로 설정 가능 */
 }
 
 .header-divider {
   width: 1px;
-  height: 16px;
-  background-color: var(--tpl-divider);
-  margin: 0 8px;
+  height: 14px;
+  background-color: #dee2e6;
+  margin: 0 10px;
 }
 
-/* 템플릿 InputBox 레이아웃 조정 */
+/* InputBox 간격 미세 조정 */
 :deep(.input-box-container) {
   margin-bottom: 0;
+}
+
+/* Ag-Grid 테마가 카드 너비를 벗어나지 않도록 설정 */
+.ag-theme-custom {
+  border: 1px solid var(--tpl-border-color, #e0e0e0);
+  border-radius: 4px;
+  overflow: hidden;
 }
 </style>
