@@ -1,20 +1,18 @@
 <template>
-  <!-- 최상위 컨테이너에 flex와 높이 강제 지정 -->
-  <div class="d-flex flex-column h-100 p-2 bg-light" style="min-height: 500px">
+  <div class="h-100 p-2 bg-light">
     <!-- DefaultCard 컴포넌트 -->
     <DefaultCard class="h-100 shadow-sm border-0">
       
-      <!-- 1. 헤더 영역 (보통 #title 또는 #header 슬롯 사용) -->
+      <!-- [수정] 보통 우리 프로젝트의 DefaultCard는 #title 또는 #header-left/right를 사용합니다 -->
       <template #title>
-        <div class="d-flex align-items-center justify-content-between w-100 py-1">
+        <div class="d-flex align-items-center justify-content-between w-100">
+          <!-- 좌측: 아이콘 + 프로젝트 선택 -->
           <div class="d-flex align-items-center gap-3">
-            <!-- 아이콘 및 타이틀 -->
             <div class="d-flex align-items-center gap-2 border-end pe-3">
               <i class="fa fa-layer-group text-primary fs-5"></i>
               <span class="fw-bold text-dark" style="font-size: 0.95rem">데이터 통합 집계</span>
             </div>
 
-            <!-- 프로젝트 선택 드롭다운 -->
             <div class="d-flex align-items-center gap-2">
               <span class="text-muted small text-nowrap">대상 프로젝트</span>
               <div class="dropdown">
@@ -58,7 +56,7 @@
             </div>
           </div>
 
-          <!-- 우측 필터 및 버튼 -->
+          <!-- 우측: 필터링 입력창 + 조회 버튼 -->
           <div class="d-flex align-items-center gap-2">
             <InputBox
               id="search-filter"
@@ -80,8 +78,8 @@
         </div>
       </template>
 
-      <!-- 2. 본문 영역 (보통 기본 슬롯 혹은 #content 사용) -->
-      <div class="w-100 h-100 overflow-hidden" style="min-height: 400px">
+      <!-- 본문 영역: 기본 슬롯 (#default) -->
+      <div class="flex-grow-1 h-100 overflow-hidden" style="min-height: 400px">
         <ag-grid-vue 
           class="ag-theme-custom h-100" 
           v-bind="gridOptions" 
@@ -95,9 +93,8 @@
 <script setup>
 import { ref, computed, shallowRef, onMounted, watch } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import { sAlert } from '@/utils/messages/alert-common'
 
-// 컴포넌트 임포트 (경로 확인 필수!)
+// 컴포넌트 임포트 (경로를 다시 한번 확인해주세요)
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import CheckBox from '@/components/default/editors/CheckBox.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
@@ -108,7 +105,6 @@ const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
 const attributeFilter = ref('')
-
 const gridApi = shallowRef()
 const gridRowData = ref([])
 const dynamicColumnDefs = ref([])
@@ -198,14 +194,19 @@ watch(() => attributeFilter.value, () => gridApi.value?.onFilterChanged())
   width: 240px !important;
 }
 
+/* ag-Grid가 부모 높이를 채우도록 강제 */
 :deep(.ag-theme-custom) {
   height: 100% !important;
-  --ag-header-background-color: #fcfcfc;
 }
 
-/* DefaultCard가 내부적으로 card-body 클래스를 가질 경우 대응 */
+/* DefaultCard 내부 슬롯 레이아웃 보정 */
+:deep(.card-header) {
+  background-color: #fff !important;
+  padding: 0.5rem 1rem !important;
+}
+
 :deep(.card-body) {
-  padding: 0 !important; /* 그리드가 꽉 차게 */
+  padding: 0 !important;
   display: flex;
   flex-direction: column;
 }
