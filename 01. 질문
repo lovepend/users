@@ -14,7 +14,6 @@
               v-model:value="selectedProjNo"
               placeholder="프로젝트 선택/입력"
               data-bs-toggle="dropdown"
-              aria-expanded="false"
               @input="projSearchQuery = selectedProjNo"
               style="width: 100%"
             />
@@ -34,16 +33,12 @@
             label="키워드"
             v-model:value="searchKeyword"
             placeholder="Tag No 입력"
-            style="width: 160px"
+            style="width: 220px"
           />
 
           <div class="header-divider"></div>
 
-          <button 
-            type="button" 
-            class="tpl-btn tpl-btn--sm tpl-btn--primary" 
-            @click="confirmSearch"
-          >
+          <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--primary" @click="confirmSearch">
             <i class="fa fa-search me-1"></i>조회
           </button>
 
@@ -55,7 +50,7 @@
             v-model:value="localFilterQuery"
             icon="fa-filter"
             placeholder="결과 내 찾기"
-            style="width: 180px"
+            style="width: 220px"
           />
         </div>
       </template>
@@ -83,12 +78,7 @@ import InputBox from '@/components/default/editors/InputBox.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
 const toast = useToast()
-
-const cardTitle = {
-  icon: 'fa-list',
-  title: 'Tag 통합 분석',
-  subtitle: '속성 합집합 비교 및 데이터 분석'
-}
+const cardTitle = { icon: 'fa-list', title: 'Tag 통합 분석', subtitle: '속성 합집합 비교' }
 
 const projectOptions = ref([])
 const selectedProjNo = ref('')
@@ -100,6 +90,7 @@ const gridApi = shallowRef()
 const rawDataList = ref([])
 const dynamicAttCols = ref([])
 
+// 프로젝트 리스트 조회
 const fetchProjectList = async () => {
   try {
     const res = await axiosWrapper.get('/api/Project/Get')
@@ -122,9 +113,8 @@ const confirmSearch = () => {
   if (!selectedProjNo.value) return sAlert.Warning('프로젝트를 선택하세요.')
   toast.show({
     title: '조회 확인',
-    content: `[${selectedProjNo.value}] 통합 데이터를 조회하시겠습니까?`,
+    content: `[${selectedProjNo.value}] 데이터를 조회하시겠습니까?`,
     okText: '확인',
-    cancelText: '취소',
     onOk: () => fetchData()
   })
 }
@@ -147,7 +137,7 @@ const fetchData = async () => {
       combined.push(...(Array.isArray(wRes.value) ? wRes.value : [wRes.value]).map(i => ({ ...i, Source: 'Working' })))
     }
 
-    // 모든 ATTRIBUTES의 합집합 추출
+    // 모든 ATTRIBUTES 키 수집
     const allAttIds = new Set()
     combined.forEach(item => {
       (item.ATTRIBUTES || []).forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
@@ -162,15 +152,15 @@ const fetchData = async () => {
       return flatItem
     })
 
-    // 동적 속성 컬럼 생성 (노란색 배경 제거 버전)
+    // 동적 컬럼 생성 (헤더만 노란색 처리)
     dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
       headerName: id,
       field: `ATT_${id}`,
       minWidth: 140,
-      headerClass: 'att-column-header',
+      headerClass: 'att-column-header', // CSS에서 노란색 배경 정의
       cellRenderer: highlightRenderer,
       cellStyle: p => ({ 
-        background: '#ffffff', // [수정] 노란색 제거 -> 흰색 배경 적용
+        background: '#ffffff', // 데이터 셀은 깔끔하게 흰색
         color: p.value === 'null' ? '#adb5bd' : '#000',
         borderRight: '1px solid #dee2e6' 
       })
@@ -178,7 +168,7 @@ const fetchData = async () => {
 
     rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
   } catch (err) {
-    sAlert.Error('데이터 통합 중 오류 발생')
+    sAlert.Error('데이터 로드 실패')
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
@@ -193,10 +183,10 @@ const highlightRenderer = (p) => {
 
 const gridOptions = computed(() => ({
   columnDefs: [
-    // [왼쪽 헤더 고정 영역]
+    // [왼쪽 고정 헤더] - 모두 흰색 배경으로 통일
     { 
       headerName: 'Source', field: 'Source', width: 110, pinned: 'left',
-      cellRenderer: p => `<span class="badge shadow-sm" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>`
+      cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>`
     },
     { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
     { field: 'CLS_ID', headerName: 'Class', width: 120, pinned: 'left' },
@@ -204,15 +194,16 @@ const gridOptions = computed(() => ({
     { field: 'EP_ID', headerName: 'EP ID', width: 100, pinned: 'left' },
     { field: 'EP_IC', headerName: 'EP IC', width: 100, pinned: 'left' },
     
-    // [오른쪽 동적 합집합 영역]
+    // [오른쪽 동적 합집합 헤더]
     ...dynamicAttCols.value
   ],
   rowData: filteredData.value,
   loadingOverlayComponent: AggridLoadingOverlay,
   headerHeight: 38,
   rowHeight: 34,
-  defaultColDef: {
-    sortable: true, filter: true, resizable: true, minWidth: 100
+  defaultColDef: { 
+    sortable: true, filter: true, resizable: true, 
+    cellStyle: { background: '#ffffff' } // 기본적으로 모든 셀은 흰색
   }
 }))
 
@@ -229,14 +220,9 @@ onMounted(fetchProjectList)
 </script>
 
 <style scoped lang="scss">
-.grid-wrapper {
-  flex: 1; min-height: 0;
-  border-top: 1px solid var(--tpl-divider);
-}
-
+.grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid var(--tpl-divider); }
 .header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 10px; }
 
-/* Custom Ag-Grid 테마 스타일링 */
 :deep(.ag-theme-custom) {
   --ag-border-color: #dee2e6;
   --ag-header-background-color: #f8f9fa;
@@ -245,8 +231,7 @@ onMounted(fetchProjectList)
   .ag-header-cell { border-right: 1px solid #dee2e6 !important; font-weight: 600; }
   .ag-cell { border-right: 1px solid #f1f3f5 !important; display: flex; align-items: center; }
 
-  /* 고정 컬럼과 동적 컬럼 사이 구분선 강조 */
-  .ag-pinned-left-header { border-right: 2px solid #adb5bd !important; }
+  /* 고정 컬럼 경계선 강조 */
   .ag-pinned-left-cols-container { border-right: 2px solid #adb5bd !important; }
 
   .filter-highlight {
@@ -254,13 +239,13 @@ onMounted(fetchProjectList)
     color: #000 !important;
     font-weight: bold;
     padding: 0 2px;
-    border-radius: 2px;
   }
 
-  /* 헤더는 노란색 계열로 구분하여 속성 영역임을 표시 */
+  /* [핵심] ATTRIBUTES 동적 컬럼 헤더만 노란색 적용 */
   .att-column-header {
-    background-color: #fff9db !important;
+    background-color: #fff9db !important; 
     color: #856404 !important;
+    border-bottom: 2px solid #ffe066 !important;
   }
 }
 
