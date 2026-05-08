@@ -1,101 +1,92 @@
 <template>
-  <div class="d-flex flex-column h-100 bg-white shadow-sm rounded-1 overflow-hidden">
-    <!-- 상단 툴바 영역: 템플릿의 PageTitle 및 InputBox 스타일 적용 -->
-    <div class="p-2 border-bottom bg-light">
-      <PageTitle icon="fa-database" title="데이터 통합 조회" style="width: 100%">
-        <template #sub-content>
-          <!-- 프로젝트 선택 (템플릿의 SelectBox 스타일 기반 커스텀) -->
-          <div class="d-flex align-items-center gap-2 ms-2">
-            <span class="fw-bold text-dark text-nowrap small">Projects</span>
-            <div class="dropdown">
-              <button
-                class="btn btn-sm btn-outline-secondary custom-project-dropdown text-start d-flex justify-content-between align-items-center bg-white border shadow-sm"
-                type="button"
-                data-bs-toggle="dropdown"
-                data-bs-auto-close="outside"
-                style="height: 32px; min-width: 200px;"
-              >
-                <span class="text-truncate me-2 small">
-                  {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트 선택' }}
-                </span>
-                <i class="fa fa-chevron-down small text-muted"></i>
-              </button>
-              <ul class="dropdown-menu p-2 shadow-lg border-0" style="max-height: 400px; overflow-y: auto; width: 350px">
-                <li class="px-2 pb-2 border-bottom mb-2">
-                  <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-white border-end-0"><i class="fa fa-search text-muted"></i></span>
-                    <input
-                      type="text"
-                      class="form-control border-start-0 ps-0"
-                      v-model="projectSearchKeyword"
-                      placeholder="프로젝트 검색..."
-                      @click.stop
+  <div class="h-100 p-2 bg-light">
+    <!-- DefaultCard 컴포넌트를 메인 컨테이너로 사용 -->
+    <DefaultCard class="h-100 d-flex flex-column shadow-sm border-0">
+      <!-- 카드 헤더 영역: 아이콘 + 프로젝트 선택 + 검색바 정렬 -->
+      <template #header>
+        <div class="d-flex align-items-center justify-content-between w-100 py-1">
+          <div class="d-flex align-items-center gap-3">
+            <!-- 1. 맨 앞 아이콘 및 타이틀 -->
+            <div class="d-flex align-items-center gap-2 border-end pe-3">
+              <i class="fa fa-layer-group text-primary fs-5"></i>
+              <span class="fw-bold text-dark" style="font-size: 0.95rem;">데이터 통합 집계</span>
+            </div>
+
+            <!-- 2. 프로젝트 선택 (SelectBox/Dropdown 스타일) -->
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted small text-nowrap">대상 프로젝트</span>
+              <div class="dropdown">
+                <button
+                  class="btn btn-sm btn-white border custom-dropdown-btn d-flex justify-content-between align-items-center"
+                  type="button"
+                  data-bs-toggle="dropdown"
+                  data-bs-auto-close="outside"
+                >
+                  <span class="text-truncate" style="max-width: 150px;">
+                    {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '전체 프로젝트' }}
+                  </span>
+                  <i class="fa fa-chevron-down ms-2 text-muted" style="font-size: 0.7rem;"></i>
+                </button>
+                <ul class="dropdown-menu p-2 shadow-lg border-0" style="min-width: 300px; max-height: 400px; overflow-y: auto;">
+                  <li class="px-2 pb-2 border-bottom mb-2">
+                    <div class="input-group input-group-sm">
+                      <span class="input-group-text bg-white border-end-0"><i class="fa fa-search text-muted"></i></span>
+                      <input type="text" class="form-control border-start-0 ps-0" v-model="projectSearchKeyword" placeholder="검색..." @click.stop />
+                    </div>
+                  </li>
+                  <li class="dropdown-item px-2 py-1 rounded mb-1 bg-light">
+                    <CheckBox id="all-check" label="전체 선택" :value="isAllSelected" @change="toggleAllSelection" />
+                  </li>
+                  <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1 rounded">
+                    <CheckBox
+                      :id="'p-' + proj.PROJ_NO"
+                      :label="`${proj.PROJ_NO} (${proj.DESC})`"
+                      :value="selectedProjects.includes(proj.PROJ_NO)"
+                      @change="(val) => handleProjectChange(proj.PROJ_NO, val)"
                     />
-                  </div>
-                </li>
-                <li class="dropdown-item px-2 py-1 rounded mb-1 bg-light">
-                  <CheckBox
-                    id="all-project-check"
-                    label="전체 선택 / 해제"
-                    :value="isAllSelected"
-                    @change="toggleAllSelection"
-                  />
-                </li>
-                <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1 rounded">
-                  <CheckBox
-                    :id="'proj-' + proj.PROJ_NO"
-                    :label="`${proj.PROJ_NO} (${proj.DESC})`"
-                    :value="selectedProjects.includes(proj.PROJ_NO)"
-                    @change="(val) => handleProjectItemChange(proj.PROJ_NO, val)"
-                  />
-                </li>
-              </ul>
+                  </li>
+                </ul>
+              </div>
             </div>
           </div>
-        </template>
 
-        <template #actions>
-          <div class="d-flex align-items-center gap-3">
-            <!-- 템플릿의 InputBox 컴포넌트 적용 (멀티 필터) -->
+          <!-- 3. 우측 검색 및 액션 -->
+          <div class="d-flex align-items-center gap-2">
             <InputBox
-              id="filter-keywords"
-              label="멀티 필터"
+              id="search-filter"
               v-model:value="attributeFilter"
+              placeholder="필터링 키워드 입력..."
               icon="fa-filter"
-              placeholder="검색어 입력 (엔터/쉼표 구분)"
-              class="custom-filter-input"
+              class="header-search-input"
               @clear="attributeFilter = ''"
             />
-
-            <!-- 조회 버튼 -->
-            <button
-              class="btn btn-primary shadow-sm d-flex align-items-center gap-2"
-              style="height: 32px; padding: 0 15px; font-weight: 600; font-size: 0.85rem;"
-              @click="onSearch"
-              :disabled="selectedProjects.length === 0"
-            >
-              <i class="fa fa-search"></i> 데이터 조회
+            <button class="btn btn-primary btn-sm px-3 fw-bold" @click="onSearch" :disabled="selectedProjects.length === 0">
+              조회
             </button>
           </div>
-        </template>
-      </PageTitle>
-    </div>
+        </div>
+      </template>
 
-    <!-- 그리드 영역 -->
-    <div class="flex-grow-1 position-relative">
-      <ag-grid-vue v-bind="gridOptions" @grid-ready="onGridReady" />
-    </div>
+      <!-- 카드 본문 영역: ag-Grid -->
+      <div class="flex-grow-1 overflow-hidden" style="min-height: 0;">
+        <ag-grid-vue
+          class="ag-theme-custom h-100"
+          v-bind="gridOptions"
+          @grid-ready="onGridReady"
+        />
+      </div>
+    </DefaultCard>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, shallowRef, onMounted, watch, reactive } from 'vue'
+import { ref, computed, shallowRef, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { sAlert } from '@/utils/messages/alert-common'
 
-// 컴포넌트 임포트 (경로는 프로젝트 설정에 맞게 조정하세요)
-import PageTitle from '@/components/toolBar/PageTitle.vue'
+// 템플릿 컴포넌트
+import DefaultCard from '@/components/default/cards/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 import CheckBox from '@/components/default/editors/CheckBox.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
@@ -112,158 +103,95 @@ const gridApi = shallowRef()
 const gridRowData = ref([])
 const dynamicColumnDefs = ref([])
 
-const urlEpId = computed(() => route.query.ep_id || '')
-const urlProjNo = computed(() => route.query.project_no || '')
-
 // --- 프로젝트 선택 로직 ---
 const filteredProjectList = computed(() => {
-  const kw = projectSearchKeyword.value.trim().toLowerCase()
-  if (!kw) return projectList.value
-  return projectList.value.filter(
-    p => (p.PROJ_NO && p.PROJ_NO.toLowerCase().includes(kw)) || (p.DESC && p.DESC.toLowerCase().includes(kw))
-  )
+  const kw = projectSearchKeyword.value.toLowerCase()
+  return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw) || p.DESC.toLowerCase().includes(kw))
 })
 
-const isAllSelected = computed(
-  () => filteredProjectList.value.length > 0 && filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+const isAllSelected = computed(() => 
+  filteredProjectList.value.length > 0 && filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
 )
 
-const toggleAllSelection = (checked) => {
-  const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
-  if (checked) {
-    selectedProjects.value = [...new Set([...selectedProjects.value, ...filteredIds])]
-  } else {
-    selectedProjects.value = selectedProjects.value.filter(id => !filteredIds.includes(id))
-  }
+const toggleAllSelection = (val) => {
+  const ids = filteredProjectList.value.map(p => p.PROJ_NO)
+  selectedProjects.value = val ? [...new Set([...selectedProjects.value, ...ids])] : selectedProjects.value.filter(id => !ids.includes(id))
 }
 
-const handleProjectItemChange = (projNo, checked) => {
-  if (checked) {
-    if (!selectedProjects.value.includes(projNo)) selectedProjects.value.push(projNo)
-  } else {
-    selectedProjects.value = selectedProjects.value.filter(id => id !== projNo)
-  }
+const handleProjectChange = (id, val) => {
+  if (val) selectedProjects.value.push(id)
+  else selectedProjects.value = selectedProjects.value.filter(i => i !== id)
 }
 
 onMounted(async () => {
-  try {
-    const res = await axiosWrapper.get('/api/Project/Get', {
-      headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value },
-    })
-    projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
-  } catch (error) {
-    console.error('Project Load Error:', error)
-  }
+  const res = await axiosWrapper.get('/api/Project/Get')
+  projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
 })
 
 // --- 데이터 조회 로직 ---
 const onSearch = async () => {
-  if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
-
   try {
-    const fetchPromises = selectedProjects.value.map(projNo =>
-      axiosWrapper
-        .post('/api/Attributes/Get', 
-          { ContainDeleted: false, ProjectNo: projNo },
-          { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
-        )
-        .then(res => (Array.isArray(res) ? res : []).map(item => ({ ...item, _TARGET_PROJ: projNo })))
+    const promises = selectedProjects.value.map(p => 
+      axiosWrapper.post('/api/Attributes/Get', { ProjectNo: p })
+        .then(res => res.map(row => ({ ...row, _P_NO: p })))
         .catch(() => [])
     )
-
-    const results = await Promise.all(fetchPromises)
-    const combinedData = results.flat()
-
-    if (combinedData.length > 0) {
-      const allKeys = new Set()
-      combinedData.forEach(row => {
-        Object.keys(row).forEach(key => {
-          if (typeof row[key] !== 'object') allKeys.add(key)
-        })
-      })
-
-      dynamicColumnDefs.value = Array.from(allKeys).map(key => ({
-        headerName: key === '_TARGET_PROJ' ? 'Project No' : key,
-        field: key,
-        width: 140,
-        pinned: (key === '_TARGET_PROJ' || key === 'ATT_ID') ? 'left' : null,
-        cellClass: (key === '_TARGET_PROJ') ? 'bg-light fw-bold' : ''
+    const results = await Promise.all(promises)
+    gridRowData.value = results.flat()
+    
+    if (gridRowData.value.length > 0) {
+      const keys = Object.keys(gridRowData.value[0])
+      dynamicColumnDefs.value = keys.map(k => ({
+        headerName: k === '_P_NO' ? '프로젝트' : k,
+        field: k,
+        pinned: k === '_P_NO' ? 'left' : null,
+        width: 120
       }))
-
-      gridRowData.value = combinedData
-    } else {
-      sAlert.Info('조회된 데이터가 없습니다.')
     }
-  } catch (e) {
-    sAlert.Error('조회 중 오류가 발생했습니다.')
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-// --- 그리드 옵션 ---
+// --- 그리드 설정 ---
 const gridOptions = computed(() => ({
   columnDefs: dynamicColumnDefs.value,
   rowData: gridRowData.value,
-  class: 'ag-theme-custom',
   loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: {
-    sortable: true,
-    resizable: true,
-    filter: true,
-    floatingFilter: true,
-    minWidth: 100,
-  },
-  isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
+  defaultColDef: { sortable: true, filter: true, resizable: true },
+  isExternalFilterPresent: () => attributeFilter.value !== '',
   doesExternalFilterPass: node => {
-    const tokens = attributeFilter.value.split(/[\s,\n]+/).filter(t => t.trim() !== '').map(t => t.toLowerCase())
-    if (tokens.length === 0) return true
-    const rowString = Object.values(node.data).join(' ').toLowerCase()
-    return tokens.every(token => rowString.includes(token))
-  },
+    const val = attributeFilter.value.toLowerCase()
+    return Object.values(node.data).some(v => String(v).toLowerCase().includes(val))
+  }
 }))
 
-const onGridReady = p => {
-  gridApi.value = p.api
-}
-
-watch(() => attributeFilter.value, () => {
-  if (gridApi.value) gridApi.value.onFilterChanged()
-})
+const onGridReady = p => { gridApi.value = p.api }
+watch(() => attributeFilter.value, () => gridApi.value?.onFilterChanged())
 </script>
 
 <style scoped>
-/* 템플릿의 디자인 감성을 유지하기 위한 추가 스타일 */
-.custom-project-dropdown {
-  border: 1px solid var(--border01) !important;
+.custom-dropdown-btn {
+  background-color: #fff;
+  height: 32px;
+  font-size: 0.85rem;
   border-radius: 4px;
-  transition: all 0.2s ease;
+  min-width: 180px;
 }
 
-.custom-project-dropdown:hover {
-  border-color: var(--primary-color) !important;
+.header-search-input {
+  width: 240px !important;
 }
 
-.custom-filter-input {
-  width: 280px !important;
-}
-
-/* ag-Grid 테마 커스텀 스타일 유지 */
 :deep(.ag-theme-custom) {
-  height: 100%;
-  --ag-header-background-color: #f8f9fa;
-  --ag-font-size: 12px;
+  --ag-header-background-color: #fcfcfc;
+  --ag-border-color: #eee;
 }
 
-:deep(.ag-header-cell-label) {
-  justify-content: center;
-  font-weight: 700;
-}
-
-/* 드롭다운 내부 체크박스 라벨 정렬 */
-:deep(.dropdown-item .form-check) {
-  margin-bottom: 0;
-  cursor: pointer;
+/* DefaultCard 헤더 커스텀 하단 라인 */
+:deep(.card-header) {
+  background-color: #fff !important;
+  border-bottom: 1px solid #eaeaea !important;
 }
 </style>
