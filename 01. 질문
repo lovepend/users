@@ -52,11 +52,11 @@
 </template>
 
 <script setup>
-import { ref, computed, shallowRef, reactive } from 'vue'
+import { ref, computed, shallowRef } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { useToast } from '@/composables/useToast'
 
-// 템플릿 컴포넌트 임포트 ([cite: 232])
+// 템플릿 공통 컴포넌트 임포트 [cite: 68]
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
@@ -64,13 +64,12 @@ import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 const toast = useToast()
 
 /**
- * 아이콘 해결 포인트! 
- * 템플릿 소스(example1)를 보면 title 객체 안에 icon이 포함되어 있습니다.
+ * 템플릿 예시 1번()과 완전히 동일한 아이콘 및 타이틀 구성
  */
 const exampleTitle = {
-  icon: 'fa-boxes-stacked', // 👈 여기에 아이콘 클래스를 넣어야 합니다.
+  icon: 'fa-list', // 기존 템플릿과 동일한 아이콘 
   title: '재고 현황',
-  subtitle: '창고별 집계 · 실시간 반영',
+  subtitle: '창고별 집계 · 실시간 반영', // 기존 템플릿 문구 유지 
 }
 
 const projectCode = ref('')
@@ -81,11 +80,13 @@ const gridApi = shallowRef()
 const gridRowData = ref([])
 const columnDefs = ref([])
 
-// Toast를 이용한 조회 확인 ([cite: 251, 252])
+/**
+ * Toast "확인/취소" 조회 컨펌 [cite: 67, 88]
+ */
 const confirmSearch = () => {
   toast.show({
     title: '조회 확인',
-    content: '입력하신 조건으로 데이터를 조회하시겠습니까?',
+    content: '데이터를 조회하시겠습니까?',
     okText: '확인',
     cancelText: '취소',
     onOk: () => fetchData()
@@ -100,13 +101,14 @@ const fetchData = async () => {
       Keyword: keyword.value 
     })
     gridRowData.value = Array.isArray(res) ? res : []
+    
     if (gridRowData.value.length > 0) {
       columnDefs.value = Object.keys(gridRowData.value[0]).map(key => ({
         headerName: key, field: key, sortable: true, filter: true, resizable: true, flex: 1
       }))
     }
   } catch (error) {
-    toast.fail({ title: '오류', content: '데이터를 불러오지 못했습니다.' })
+    toast.fail({ title: '오류', content: '데이터 조회 실패' })
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
@@ -133,8 +135,10 @@ const onGridReady = (params) => {
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  padding: 0; 
 }
 
+/* 템플릿 스타일 가이드 반영 [cite: 89] */
 .header-divider {
   width: 1px;
   height: 14px;
