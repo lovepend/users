@@ -1,215 +1,160 @@
 <template>
-  <div class="h-100 d-flex flex-column template-container">
-    <div class="template__card d-flex flex-column h-100">
-      
-      <!-- 상단 컨트롤 영역: 템플릿의 tpl-check-demo 스타일 적용 -->
-      <div class="tpl-control-area border-bottom">
-        <div class="d-flex align-items-center justify-content-between w-100 px-1">
-          
-          <!-- 왼쪽: 타이틀 및 프로젝트 선택 -->
-          <div class="d-flex align-items-center gap-3">
-            <div class="template-title-area">
-              <!-- 템플릿 PageTitle 예시 아이콘인 fa-lock 또는 fa-list 계열로 통일 -->
-              <i class="fa fa-list-alt title-icon"></i>
-              <span class="title-text">데이터 통합 집계</span>
-            </div>
-
-            <div class="divider-line"></div>
-
-            <div class="d-flex align-items-center gap-2">
-              <!-- 프로젝트 선택 셀렉트박스 (리스트 컬러 이슈 대응) -->
-              <SelectBox
-                label="대상 프로젝트"
-                :list="projectSelectList"
-                v-model:value="selectedProject"
-                placeholder="항목 선택"
-                class="custom-selectbox"
-              />
-              <InputBox
-                id="proj-detail"
-                v-model:value="projectSearchKeyword"
-                placeholder="코드 입력"
-                class="custom-inputbox"
-              />
-            </div>
-          </div>
-
-          <!-- 오른쪽: 검색 및 조회 버튼 (Toast 버튼 스타일) -->
-          <div class="d-flex align-items-center gap-2">
-            <InputBox
-              id="tpl-in-keywords"
-              v-model:value="attributeFilter"
-              placeholder="검색어"
-              icon="fa-search" 
-              class="search-input"
-              @clear="attributeFilter = ''"
-            />
-            <!-- Toast 확인 버튼 스타일 적용 -->
-            <button 
-              type="button"
-              class="tpl-btn tpl-btn--primary toast-style-btn" 
-              @click="onSearch"
-            >
-              조회
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- 그리드 영역 -->
-      <div class="flex-grow-1 min-h-0">
-        <ag-grid-vue
-          class="ag-theme-custom h-100"
-          v-bind="gridOptions"
-          @grid-ready="onGridReady"
+  <DefaultCard
+    :title="cardTitle"
+    icon="fa-th-list"
+    class="h-100"
+  >
+    <!-- [header-right] InputBox 세트 + Toast 버튼 -->
+    <template #header-right>
+      <div class="d-flex align-items-center gap-2">
+        <!-- 1. 프로젝트 (메모 스타일: 아이콘 없음) -->
+        <InputBox
+          id="input-proj"
+          label="프로젝트"
+          v-model:value="projectCode"
+          placeholder="코드 입력"
+          style="width: 150px"
         />
+        <!-- 2. 키워드 (메모 스타일: 아이콘 없음) -->
+        <InputBox
+          id="input-keyword"
+          label="키워드"
+          v-model:value="keyword"
+          placeholder="키워드 입력"
+          style="width: 150px"
+        />
+        <!-- 3. 검색 (돋보기 아이콘 적용) -->
+        <InputBox
+          id="input-search"
+          label="검색"
+          v-model:value="attributeFilter"
+          icon="fa-search"
+          placeholder="검색어 입력"
+          style="width: 180px"
+          @clear="attributeFilter = ''"
+        />
+
+        <div class="header-divider"></div>
+
+        <!-- Toast "확인/취소" 스타일의 조회 버튼 -->
+        <button 
+          type="button" 
+          class="tpl-btn tpl-btn--sm tpl-btn--primary" 
+          @click="confirmSearch"
+        >
+          조회
+        </button>
       </div>
+    </template>
+
+    <!-- [contents] Ag-Grid Custom 테마 영역 -->
+    <div class="grid-container">
+      <ag-grid-vue
+        class="ag-theme-custom h-100"
+        v-bind="gridOptions"
+        @grid-ready="onGridReady"
+      />
     </div>
-  </div>
+  </DefaultCard>
 </template>
 
 <script setup>
-import { ref, computed, shallowRef, onMounted, watch } from 'vue'
+import { ref, computed, shallowRef } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { useToast } from '@/composables/useToast'
 
-// 공통 컴포넌트
-import SelectBox from '@/components/default/editors/SelectBox.vue'
+// 컴포넌트 임포트
+import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-const projectList = ref([])
-const selectedProject = ref('')
-const projectSearchKeyword = ref('')
+const toast = useToast()
+
+// 상태 관리
+const cardTitle = {
+  title: '재고 현황',
+  subtitle: '창고별 집계 · 실시간 반영'
+}
+
+const projectCode = ref('')
+const keyword = ref('')
 const attributeFilter = ref('')
+
 const gridApi = shallowRef()
 const gridRowData = ref([])
-const dynamicColumnDefs = ref([])
+const columnDefs = ref([])
 
-const projectSelectList = computed(() => {
-  return projectList.value.map(p => ({
-    id: p.PROJ_NO,
-    label: p.PROJ_NO
-  }))
-})
+// 1. Toast를 이용한 조회 확인 로직
+const confirmSearch = () => {
+  toast.show({
+    title: '데이터 조회',
+    content: '입력한 조건으로 조회를 시작하시겠습니까?',
+    okText: '확인',
+    cancelText: '취소',
+    onOk: () => {
+      fetchData()
+    }
+  })
+}
 
-onMounted(async () => {
-  try {
-    const res = await axiosWrapper.get('/api/Project/Get')
-    projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
-  } catch (e) {
-    console.error(e)
-  }
-})
-
-const onSearch = async () => {
+// 2. 실제 데이터 조회 함수
+const fetchData = async () => {
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
-  const targetProj = selectedProject.value || projectSearchKeyword.value
+  
   try {
-    const res = await axiosWrapper.post('/api/Attributes/Get', { ProjectNo: targetProj })
+    const res = await axiosWrapper.post('/api/Attributes/Get', { 
+      ProjectNo: projectCode.value,
+      Keyword: keyword.value 
+    })
+    
     gridRowData.value = Array.isArray(res) ? res : []
+    
+    // 컬럼 자동 생성
     if (gridRowData.value.length > 0) {
-      dynamicColumnDefs.value = Object.keys(gridRowData.value[0]).map(k => ({
-        headerName: k, field: k, filter: true, width: 130
+      columnDefs.value = Object.keys(gridRowData.value[0]).map(key => ({
+        headerName: key,
+        field: key,
+        sortable: true,
+        filter: true,
+        resizable: true
       }))
     }
+  } catch (error) {
+    toast.fail({ title: '조회 실패', content: '데이터를 불러오지 못했습니다.' })
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
+// Ag-Grid 설정
 const gridOptions = computed(() => ({
-  columnDefs: dynamicColumnDefs.value,
+  columnDefs: columnDefs.value,
   rowData: gridRowData.value,
   loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, filter: true, resizable: true },
-  isExternalFilterPresent: () => attributeFilter.value !== '',
-  doesExternalFilterPass: node => {
-    const val = attributeFilter.value.toLowerCase()
-    return Object.values(node.data).some(v => String(v).toLowerCase().includes(val))
-  }
+  // 템플릿의 Ag-Grid 스타일 가이드 준수
 }))
 
-const onGridReady = p => { gridApi.value = p.api }
-watch(() => attributeFilter.value, () => gridApi.value?.onFilterChanged())
+const onGridReady = (params) => {
+  gridApi.value = params.api
+}
 </script>
 
 <style scoped>
-/* 1. 폰트 및 전체 배경 (템플릿 기준) */
-.template-container {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg01, #fff);
-  color: var(--txt03, #333);
+.grid-container {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
 }
 
-/* 2. 상단 컨트롤 영역 (tpl-check-demo 스타일 복제) */
-.tpl-control-area {
-  display: flex;
-  align-items: center;
-  padding: 16px;
-  background: var(--card-bg, #fff);
-}
-
-/* 3. 타이틀 및 아이콘 스타일 */
-.template-title-area {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.title-icon {
-  font-size: 1.1rem;
-  color: var(--primary-color, #1976d2);
-}
-.title-text {
-  font-size: 1.125rem;
-  font-weight: 500;
-  letter-spacing: 0.00938em;
-  color: var(--txt03);
-}
-
-.divider-line {
+.header-divider {
   width: 1px;
-  height: 20px;
-  background: rgba(0, 0, 0, 0.08);
+  height: 16px;
+  background-color: var(--tpl-divider);
   margin: 0 8px;
 }
 
-/* 4. SelectBox/InputBox 규격화 */
-.custom-selectbox { width: 160px; }
-.custom-inputbox { width: 140px; }
-.search-input { width: 200px; }
-
-/* 5. [중요] SelectBox 클릭 시 리스트 글자색 수정 */
-:deep(.select-box-container select), 
-:deep(.select-box-container option) {
-  color: #333 !important; /* 흰색 방지 */
-  background-color: #fff !important;
-}
-
-/* 6. 조회 버튼 (Toast 확인 버튼 스타일 적용) */
-.toast-style-btn {
-  border: none;
-  background: var(--primary-color, #1976d2);
-  color: #fff;
-  height: 32px;
-  padding: 0 16px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  box-shadow: 
-    0 2px 2px 0 rgba(0, 0, 0, 0.14), 
-    0 3px 1px -2px rgba(0, 0, 0, 0.12), 
-    0 1px 5px 0 rgba(0, 0, 0, 0.2);
-  transition: box-shadow 0.2s ease-in-out;
-}
-.toast-style-btn:hover {
-  box-shadow: 
-    0 3px 3px -2px rgba(0, 0, 0, 0.2), 
-    0 3px 4px 0 rgba(0, 0, 0, 0.14), 
-    0 1px 8px 0 rgba(0, 0, 0, 0.12);
-  filter: brightness(1.1);
-}
-
-/* 7. 그리드 정밀 튜닝 */
-:deep(.ag-theme-custom) {
-  border: none !important;
+/* 템플릿 InputBox 레이아웃 조정 */
+:deep(.input-box-container) {
+  margin-bottom: 0;
 }
 </style>
