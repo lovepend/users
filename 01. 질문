@@ -54,22 +54,20 @@
 <script setup>
 import { ref, computed, shallowRef } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import { useToast } from '@/composables/useToast'
+import { useToast } from '@/composables/useToast' // 
 
-// 템플릿 공통 컴포넌트 임포트 [cite: 68]
+// 템플릿 컴포넌트들
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
 const toast = useToast()
 
-/**
- * 템플릿 예시 1번()과 완전히 동일한 아이콘 및 타이틀 구성
- */
+// 카드 헤더 설정 (템플릿 예시 1번 아이콘 fa-list 적용) 
 const exampleTitle = {
-  icon: 'fa-list', // 기존 템플릿과 동일한 아이콘 
+  icon: 'fa-list',
   title: '재고 현황',
-  subtitle: '창고별 집계 · 실시간 반영', // 기존 템플릿 문구 유지 
+  subtitle: '창고별 집계 · 실시간 반영',
 }
 
 const projectCode = ref('')
@@ -81,39 +79,62 @@ const gridRowData = ref([])
 const columnDefs = ref([])
 
 /**
- * Toast "확인/취소" 조회 컨펌 [cite: 67, 88]
+ * [중요] 템플릿의 Toast "확인/취소" 버튼 로직 적용 
  */
 const confirmSearch = () => {
   toast.show({
     title: '조회 확인',
-    content: '데이터를 조회하시겠습니까?',
-    okText: '확인',
-    cancelText: '취소',
-    onOk: () => fetchData()
+    content: '선택한 조건으로 재고 현황을 조회하시겠습니까?',
+    code: 'CONFIRM_SEARCH',
+    okText: '확인',   // 
+    cancelText: '취소', // 
+    onOk: () => {
+      // 사용자가 '확인' 버튼을 눌렀을 때만 실제 조회 함수 호출
+      fetchData()
+    },
+    onCancel: () => {
+      // 취소 시 별도 로직이 필요하다면 여기에 작성 (예시에서는 생략) [cite: 253]
+    }
   })
 }
 
+/**
+ * 실제 데이터 조회 로직
+ */
 const fetchData = async () => {
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
+  
   try {
     const res = await axiosWrapper.post('/api/Inventory/GetStatus', { 
       ProjectNo: projectCode.value,
       Keyword: keyword.value 
     })
+    
     gridRowData.value = Array.isArray(res) ? res : []
     
     if (gridRowData.value.length > 0) {
       columnDefs.value = Object.keys(gridRowData.value[0]).map(key => ({
-        headerName: key, field: key, sortable: true, filter: true, resizable: true, flex: 1
+        headerName: key,
+        field: key,
+        sortable: true,
+        filter: true,
+        resizable: true,
+        flex: 1
       }))
     }
   } catch (error) {
-    toast.fail({ title: '오류', content: '데이터 조회 실패' })
+    toast.fail({ 
+      title: '조회 실패', 
+      content: '데이터를 불러오는 중 오류가 발생했습니다.' 
+    })
   } finally {
     if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
+/**
+ * Ag-Grid 설정
+ */
 const gridOptions = computed(() => ({
   columnDefs: columnDefs.value,
   rowData: gridRowData.value,
@@ -135,15 +156,30 @@ const onGridReady = (params) => {
   flex-direction: column;
   flex: 1;
   min-height: 0;
-  padding: 0; 
 }
 
-/* 템플릿 스타일 가이드 반영 [cite: 89] */
+/* 템플릿 변수 및 구분선 스타일 [cite: 254, 262] */
 .header-divider {
   width: 1px;
   height: 14px;
   background-color: var(--tpl-divider, rgba(0, 0, 0, 0.08));
   margin: 0 10px;
+}
+
+/* 템플릿의 기본 버튼 스타일 [cite: 288, 295] */
+.tpl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  height: 32px;
+  padding: 0 12px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  border: none;
+  background: var(--primary-color);
+  color: #fff;
+  cursor: pointer;
 }
 
 :deep(.input-box-container) {
@@ -152,6 +188,5 @@ const onGridReady = (params) => {
 
 .ag-theme-custom {
   border: 1px solid var(--tpl-divider);
-  overflow: hidden;
 }
 </style>
