@@ -83,36 +83,27 @@
   const rawDataList = ref([])
   const dynamicAttCols = ref([])
 
-  // 하이라이트 렌더러 (실시간 정규식 적용)
+  // 하이라이트 렌더러
   const highlightRenderer = params => {
     const val = params.value === null || params.value === undefined ? '' : String(params.value)
     const searchTerm = localFilterQuery.value.trim()
-
     if (!searchTerm || val === 'null' || val === '') return val
-
     try {
       const escapedTerm = searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       const re = new RegExp(`(${escapedTerm})`, 'gi')
       return val.replace(re, `<mark class="filter-highlight">$1</mark>`)
-    } catch (e) {
-      return val
-    }
+    } catch (e) { return val }
   }
 
-  // 검색 입력 시 그리드 셀 강제 리프레시 (하이라이트 반응)
   const onFilterInput = () => {
-    if (gridApi.value) {
-      gridApi.value.refreshCells({ force: true })
-    }
+    if (gridApi.value) gridApi.value.refreshCells({ force: true })
   }
 
   const fetchProjectList = async () => {
     try {
       const res = await axiosWrapper.get('/api/Project/Get')
       projectOptions.value = (res || []).map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
-    } catch (e) {
-      console.error(e)
-    }
+    } catch (e) { console.error(e) }
   }
 
   const filteredProjectOptions = computed(() => {
@@ -136,7 +127,6 @@
 
   const fetchData = async () => {
     if (gridApi.value) gridApi.value.setGridOption('loading', true)
-
     try {
       const payload = { ProjectNo: selectedProjNo.value, Keyword: searchKeyword.value }
       const [pRes, wRes] = await Promise.allSettled([
@@ -146,21 +136,15 @@
 
       let combined = []
       if (pRes.status === 'fulfilled' && pRes.value) {
-        combined.push(
-          ...(Array.isArray(pRes.value) ? pRes.value : [pRes.value]).map(i => ({ ...i, Source: 'Published' }))
-        )
+        combined.push(...(Array.isArray(pRes.value) ? pRes.value : [pRes.value]).map(i => ({ ...i, Source: 'Published' })))
       }
       if (wRes.status === 'fulfilled' && wRes.value) {
-        combined.push(
-          ...(Array.isArray(wRes.value) ? wRes.value : [wRes.value]).map(i => ({ ...i, Source: 'Working' }))
-        )
+        combined.push(...(Array.isArray(wRes.value) ? wRes.value : [wRes.value]).map(i => ({ ...i, Source: 'Working' })))
       }
 
       const allAttIds = new Set()
       combined.forEach(item => {
-        ;(item.ATTRIBUTES || []).forEach(a => {
-          if (a?.ATT_ID) allAttIds.add(a.ATT_ID)
-        })
+        ;(item.ATTRIBUTES || []).forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
       })
 
       const processedData = combined.map(item => {
@@ -172,17 +156,14 @@
         return flatItem
       })
 
-      // 동적 속성 컬럼 생성 (헤더만 노란색)
-      dynamicAttCols.value = Array.from(allAttIds)
-        .sort()
-        .map(id => ({
-          headerName: id,
-          field: `ATT_${id}`,
-          minWidth: 140,
-          headerClass: 'att-column-header',
-          cellRenderer: highlightRenderer,
-          cellStyle: { borderRight: '1px solid #dee2e6' },
-        }))
+      dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
+        headerName: id,
+        field: `ATT_${id}`,
+        minWidth: 140,
+        headerClass: 'att-column-header',
+        cellRenderer: highlightRenderer,
+        cellStyle: { borderRight: '1px solid #dee2e6' },
+      }))
 
       rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
     } catch (err) {
@@ -194,14 +175,12 @@
 
   const gridOptions = computed(() => ({
     columnDefs: [
-      // 1. 고정 영역 (Key 정보)
       {
         headerName: 'Source',
         field: 'Source',
         width: 110,
         pinned: 'left',
-        cellRenderer: p =>
-          `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>`,
+        cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>`,
       },
       { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
       { field: 'TAG_IDX', headerName: 'Tag Idx', width: 180, pinned: 'left' },
@@ -209,11 +188,7 @@
       { field: 'TAG_DESC', headerName: 'Description', width: 200, cellRenderer: highlightRenderer },
       { field: 'EP_ID', headerName: 'EP ID', width: 100, pinned: 'left' },
       { field: 'EP_IC', headerName: 'EP IC', width: 100, pinned: 'left' },
-
-      // 2. 동적 속성 영역 (ATTRIBUTES 우선 배치)
       ...dynamicAttCols.value,
-
-      // 3. 나머지 상위 필드 영역
       { field: 'BF_TAG_NO', headerName: 'BF Tag No', width: 140, cellRenderer: highlightRenderer },
       { field: 'TAG_NO_PASSED', headerName: 'Passed', width: 100, cellRenderer: highlightRenderer },
       { field: 'NEW_YN', headerName: 'New YN', width: 80 },
@@ -246,69 +221,36 @@
     return rawDataList.value.filter(i => Object.values(i).some(val => String(val).toLowerCase().includes(query)))
   })
 
-  const onGridReady = params => {
-    gridApi.value = params.api
-  }
-  onMounted(fetchProjectList)
+  const onGridReady = params => { gridApi.value = params.api }
+
+  // [수정 포인트] 최초 화면 접속 시 현재 프로젝트 할당
+  onMounted(async () => {
+    await fetchProjectList(); // 먼저 전체 리스트 로드
+    
+    // 전역 변수나 로컬 스토리지 등에서 현재 프로젝트 번호를 가져온다고 가정
+    // 실제 환경에 맞게 window.currentProject나 localStorage.getItem('prj') 등으로 수정하세요.
+    const currentPrj = window.current?.project || ''; 
+    
+    if (currentPrj) {
+      selectedProjNo.value = currentPrj;
+      projSearchQuery.value = currentPrj;
+    }
+  });
 </script>
 
 <style scoped lang="scss">
-  .grid-wrapper {
-    flex: 1;
-    min-height: 0;
-    border-top: 1px solid var(--tpl-divider);
-  }
-  .header-divider {
-    width: 1px;
-    height: 14px;
-    background-color: var(--tpl-divider);
-    margin: 0 10px;
-  }
-
+  /* 스타일은 이전과 동일 */
+  .grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid var(--tpl-divider); }
+  .header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 10px; }
   :deep(.ag-theme-custom) {
     --ag-border-color: #dee2e6;
     --ag-header-background-color: #f8f9fa;
     --ag-font-size: 12px;
-
-    .ag-header-cell {
-      border-right: 1px solid #dee2e6 !important;
-      font-weight: 600;
-    }
-    .ag-cell {
-      border-right: 1px solid #f1f3f5 !important;
-      display: flex;
-      align-items: center;
-    }
-    .ag-pinned-left-cols-container {
-      border-right: 2px solid #adb5bd !important;
-    }
-
-    /* 하이라이트 스타일 */
-    .filter-highlight {
-      background-color: #ffeb3b !important;
-      color: #000 !important;
-      font-weight: bold;
-      padding: 0 2px;
-      border-radius: 2px;
-    }
-
-    /* ATTRIBUTES 헤더만 노란색 */
-    .att-column-header {
-      background-color: #fff9db !important;
-      color: #856404 !important;
-      border-bottom: 2px solid #ffe066 !important;
-    }
+    .ag-header-cell { border-right: 1px solid #dee2e6 !important; font-weight: 600; }
+    .ag-cell { border-right: 1px solid #f1f3f5 !important; display: flex; align-items: center; }
+    .ag-pinned-left-cols-container { border-right: 2px solid #adb5bd !important; }
+    .filter-highlight { background-color: #ffeb3b !important; color: #000 !important; font-weight: bold; padding: 0 2px; border-radius: 2px; }
+    .att-column-header { background-color: #fff9db !important; color: #856404 !important; border-bottom: 2px solid #ffe066 !important; }
   }
-
-  .tpl-btn {
-    height: 32px;
-    padding: 0 16px;
-    border-radius: 4px;
-    font-weight: 500;
-    &--primary {
-      background: var(--primary-color);
-      color: #fff;
-      border: none;
-    }
-  }
+  .tpl-btn { height: 32px; padding: 0 16px; border-radius: 4px; font-weight: 500; &--primary { background: var(--primary-color); color: #fff; border: none; } }
 </style>
