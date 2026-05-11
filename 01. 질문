@@ -4,7 +4,7 @@
       <template #header-right>
         <div class="d-flex align-items-center gap-2 flex-wrap">
           
-          <div class="dropdown custom-single-select" style="min-width: 200px">
+          <div class="dropdown custom-single-select" style="min-width: 180px">
             <InputBox
               id="input-proj-merge"
               label="Project"
@@ -14,46 +14,51 @@
               data-bs-toggle="dropdown"
             />
             <ul class="dropdown-menu shadow-lg p-2 w-100" style="max-height: 300px; overflow-y: auto;">
-              <li class="px-2 pb-2 border-bottom mb-1">
-                <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="Search..." @click.stop />
+              <li class="p-2 border-bottom mb-1">
+                <input type="text" class="form-control form-control-sm" v-model="projSearchQuery" placeholder="Search..." @click.stop />
               </li>
-              <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item py-1 cursor-pointer" @click="selectProject(proj.PROJ_NO)">
-                <div class="d-flex align-items-center justify-content-between">
-                  <span :class="{ 'fw-bold text-primary': selectedProjNo === proj.PROJ_NO }">{{ proj.PROJ_NO }}</span>
-                  <small class="text-muted text-truncate" style="max-width: 100px;">{{ proj.DESC }}</small>
-                </div>
+              <li v-for="p in filteredProjectOptions" :key="p.value" class="dropdown-item py-1 cursor-pointer" @click="selectedProjNo = p.value">
+                <span :class="{ 'fw-bold text-primary': selectedProjNo === p.value }">{{ p.text }}</span>
               </li>
             </ul>
           </div>
 
-          <div class="dropdown custom-single-select" style="min-width: 200px">
+          <div class="dropdown custom-single-select" style="min-width: 180px">
             <InputBox
               id="input-reg-merge"
-              label="Register No"
-              v-model:value="selectedRegNo"
-              placeholder="Register 선택"
+              label="Register"
+              v-model:value="selectedRegTypeId"
+              placeholder="ID 선택"
               readonly
-              :disabled="!registerList.length"
+              :disabled="!regOptions.length"
               data-bs-toggle="dropdown"
             />
             <ul class="dropdown-menu shadow-lg p-2 w-100" style="max-height: 300px; overflow-y: auto;">
-              <li class="px-2 pb-2 border-bottom mb-1">
-                <input type="text" class="form-control form-control-sm" v-model="regSearchKeyword" placeholder="Search..." @click.stop />
+              <li class="p-2 border-bottom mb-1">
+                <input type="text" class="form-control form-control-sm" v-model="regSearchQuery" placeholder="Search..." @click.stop />
               </li>
-              <li v-for="reg in filteredRegisterList" :key="reg.REG_TYPE_ID" class="dropdown-item py-1 cursor-pointer" @click="selectRegister(reg.REG_TYPE_ID)">
-                <span :class="{ 'fw-bold text-primary': selectedRegNo === reg.REG_TYPE_ID }">{{ reg.REG_TYPE_ID }}</span>
+              <li v-for="r in filteredRegOptions" :key="r.TYPE_ID" class="dropdown-item py-1 cursor-pointer" @click="selectedRegTypeId = r.TYPE_ID">
+                <span :class="{ 'fw-bold text-primary': selectedRegTypeId === r.TYPE_ID }">{{ r.TYPE_ID }}</span>
               </li>
-              <li v-if="!registerList.length" class="dropdown-item text-muted small text-center">프로젝트를 먼저 선택하세요</li>
             </ul>
+          </div>
+
+          <div class="btn-group btn-group-sm ms-1" style="height: 32px;">
+            <input type="radio" class="btn-check" id="type_working" value="Working" v-model="selectedType" />
+            <label class="btn btn-outline-secondary d-flex align-items-center" for="type_working">Working</label>
+            <input type="radio" class="btn-check" id="type_publish" value="Publish" v-model="selectedType" />
+            <label class="btn btn-outline-secondary d-flex align-items-center" for="type_publish">Publish</label>
+            <input type="radio" class="btn-check" id="type_merged" value="Merged" v-model="selectedType" />
+            <label class="btn btn-outline-secondary d-flex align-items-center" for="type_merged">Merged</label>
           </div>
 
           <div class="header-divider"></div>
 
           <div class="d-flex align-items-center gap-2">
-            <button class="tpl-btn tpl-btn--sm btn-primary" @click="onMergeExecute" :disabled="!isMergeable">
-              <i class="fa fa-object-group me-1"></i> Merge
+            <button class="tpl-btn tpl-btn--sm btn-primary" @click="onSearch" :disabled="!selectedRegTypeId">
+              <i class="fa fa-search me-1"></i> 조회
             </button>
-            <button class="tpl-btn tpl-btn--sm btn-outline-secondary bg-white border" @click="resetFilters" title="초기화">
+            <button class="tpl-btn tpl-btn--sm btn-outline-secondary bg-white border" @click="resetFilters">
               <i class="fa fa-sync text-muted"></i>
             </button>
           </div>
@@ -62,10 +67,11 @@
 
       <div class="flex-grow-1 w-100 h-100 overflow-hidden d-flex flex-column">
         <div class="grid-header-title d-flex justify-content-between align-items-center px-3 py-2">
-          <span class="fw-bold small"><i class="fa fa-table me-2 text-primary"></i>Merged Data List</span>
-          <div class="d-flex gap-3 align-items-center">
-             <small class="text-muted">Total: <strong>{{ rowData.length }}</strong></small>
-          </div>
+          <span class="fw-bold small">
+            <i class="fa fa-table me-2 text-primary"></i>
+            {{ selectedType }} Data List <small v-if="selectedRegTypeId" class="text-muted ms-2">({{ selectedRegTypeId }})</small>
+          </span>
+          <small class="text-muted">Total: <strong>{{ rowData.length }}</strong></small>
         </div>
         
         <div class="flex-grow-1 border-top">
@@ -82,134 +88,126 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, shallowRef } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, watch, onMounted, shallowRef } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
 
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 
-const route = useRoute()
-const cardTitle = { icon: 'fa-list', title: 'Data Merge 관리', subtitle: 'Working / Published 통합 데이터 조회' }
+const cardTitle = { icon: 'fa-list', title: 'Data Merge 관리', subtitle: '프로젝트별 데이터 통합 관리' }
 
-// --- State ---
-const projectList = ref([])
-const projectSearchKeyword = ref('')
+// --- 상태 관리 ---
+const projectOptions = ref([])
+const regOptions = ref([])
 const selectedProjNo = ref('')
-
-const registerList = ref([]) // Register No 리스트 전용
-const regSearchKeyword = ref('')
-const selectedRegNo = ref('')
+const selectedRegTypeId = ref('')
+const selectedType = ref('Working')
+const projSearchQuery = ref('')
+const regSearchQuery = ref('')
 
 const rowData = ref([])
 const gridApi = shallowRef()
 
-// --- Filtering ---
-const filteredProjectList = computed(() => {
-  const kw = projectSearchKeyword.value.trim().toLowerCase()
-  return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC?.toLowerCase().includes(kw)))
+// --- 필터링 옵션 ---
+const filteredProjectOptions = computed(() => {
+  const q = projSearchQuery.value.toLowerCase()
+  return projectOptions.value.filter(p => p.text.toLowerCase().includes(q))
+})
+const filteredRegOptions = computed(() => {
+  const q = regSearchQuery.value.toLowerCase()
+  return regOptions.value.filter(r => r.TYPE_ID.toLowerCase().includes(q))
 })
 
-const filteredRegisterList = computed(() => {
-  const kw = regSearchKeyword.value.trim().toLowerCase()
-  return registerList.value.filter(r => r.REG_TYPE_ID.toLowerCase().includes(kw))
-})
-
-const isMergeable = computed(() => selectedProjNo.value && selectedRegNo.value && rowData.value.length > 0)
-
-// --- Events ---
-const selectProject = async projNo => {
-  selectedProjNo.value = projNo
-  selectedRegNo.value = '' // 프로젝트 바뀌면 Register 초기화
-  rowData.value = []
-  await fetchRegisters() // Register 리스트 새로 가져오기
-}
-
-const selectRegister = async regNo => {
-  selectedRegNo.value = regNo
-  await fetchData() // Register 선택되면 실제 데이터 로드
-}
-
-const resetFilters = () => {
-  selectedProjNo.value = ''; selectedRegNo.value = '';
-  registerList.value = []; rowData.value = [];
-}
-
-// --- API Calls ---
-const fetchProjects = async () => {
+// --- 이벤트 & API ---
+const fetchProjectList = async () => {
   const res = await axiosWrapper.get('/api/Project/Get')
-  projectList.value = Array.isArray(res) ? res : []
+  projectOptions.value = res.map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
 }
 
-// 💡 프로젝트에 딸린 Register(101TEST 등) 목록을 가져오는 API
-const fetchRegisters = async () => {
-  if (!selectedProjNo.value) return
-  try {
-    // API 주소는 프로젝트 규칙에 맞게 /api/TagType/Get 또는 /api/Register/Get 등으로 조정
-    const res = await axiosWrapper.post('/api/TagType/Get', { 
-      ProjectNo: selectedProjNo.value,
-      ContainDeleted: false 
-    })
-    registerList.value = Array.isArray(res) ? res : []
-  } catch (error) {
-    console.error("Register Load Error:", error)
+// 프로젝트 변경 시 Register 목록 로드
+watch(selectedProjNo, async (newVal) => {
+  selectedRegTypeId.value = ''
+  regOptions.value = []
+  if (!newVal) return
+  const res = await axiosWrapper.post('/api/Register/Get', { ProjectNo: newVal })
+  if (res) regOptions.value = res
+})
+
+// 데이터 조회 (보내주신 로직 적용)
+const onSearch = async () => {
+  if (!selectedProjNo.value || !selectedRegTypeId.value) {
+    return sAlert.Warning('Project No와 Register ID를 선택하세요.')
   }
-}
 
-// 💡 최종 병합 데이터 호출
-const fetchData = async () => {
-  if (!selectedProjNo.value || !selectedRegNo.value) return
-  
   try {
     const payload = {
       ProjectNo: selectedProjNo.value,
-      REG_TYPE_ID: selectedRegNo.value,
-      Type: 'Merged'
+      REG_TYPE_ID: selectedRegTypeId.value,
+      Type: selectedType.value,
+      ContainDeleted: false,
     }
-    const res = await axiosWrapper.post('/api/Data/GetMergedData', payload) 
-    rowData.value = Array.isArray(res) ? res : []
-  } catch (error) {
-    console.error("Merge Data Load Error:", error)
-    rowData.value = []
+
+    const response = await axiosWrapper.post('/api/Data/GetMergedData', payload)
+    const resData = response.data || response
+    
+    // 💡 핵심: Register ID로 객체 접근
+    const resultObj = resData[selectedRegTypeId.value]
+    if (!resultObj) {
+      rowData.value = []
+      return sAlert.Info('조회된 데이터가 없습니다.')
+    }
+
+    // 💡 핵심: 선택된 Type에 따른 데이터 매핑
+    let finalData = []
+    if (selectedType.value === 'Working') finalData = resultObj.WrkData || []
+    else if (selectedType.value === 'Publish') finalData = resultObj.PubData || []
+    else if (selectedType.value === 'Merged') finalData = resultObj.MergeData || []
+
+    rowData.value = finalData
+    sAlert.Success(`조회 완료: ${finalData.length}건`)
+  } catch (err) {
+    console.error(err)
+    sAlert.Error('데이터 처리 중 오류 발생')
   }
 }
 
-const onMergeExecute = () => { console.log('Merge 실행') }
+const resetFilters = () => {
+  selectedProjNo.value = ''; selectedRegTypeId.value = '';
+  selectedType.value = 'Working'; rowData.value = [];
+}
 
-// --- AG Grid Config ---
+// --- AG Grid 설정 ---
 const gridOptions = computed(() => ({
   columnDefs: [
-    { headerName: 'Tag No', field: 'TAG_NO', width: 180, checkboxSelection: true, headerCheckboxSelection: true, pinned: 'left' },
+    { headerName: 'Tag No', field: 'TAG_NO', width: 180, checkboxSelection: true, headerCheckboxSelection: true },
     { headerName: 'Status', field: 'STATUS', width: 100 },
-    { headerName: 'Description', field: 'DESC', flex: 1 },
+    { headerName: 'Class', field: 'CLS_ID', width: 120 },
+    { headerName: 'Description', field: 'TAG_DESC', flex: 1 },
     { headerName: 'Update Date', field: 'UPDATE_DT', width: 150 },
   ],
-  defaultColDef: { resizable: true, sortable: true, filter: true },
+  defaultColDef: { resizable: true, sortable: true, filter: true, floatingFilter: true },
   rowSelection: 'multiple',
 }))
 
 const onGridReady = p => { gridApi.value = p.api }
 
-onMounted(async () => {
-  await fetchProjects()
-  const urlProjNo = route.query?.proj_no
-  if (urlProjNo) {
-    selectedProjNo.value = urlProjNo
-    await fetchRegisters()
-    // URL에 reg_no까지 있다면 자동 로드 로직 추가 가능
-  }
-})
+onMounted(fetchProjectList)
 </script>
 
 <style scoped lang="scss">
 .header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 8px; }
-.grid-header-title { background-color: var(--tpl-table-thead-bg, #f8f9fa); color: var(--tpl-body-color); }
+.grid-header-title { background-color: var(--tpl-table-thead-bg, #f8f9fa); color: var(--tpl-body-color); border-radius: 4px 4px 0 0; }
+
 :deep(.ag-theme-custom) {
   --ag-background-color: var(--card-bg, #ffffff);
-  --ag-foreground-color: var(--tpl-body-color, #212529);
   --ag-header-background-color: var(--tpl-table-thead-bg, #f8f9fa);
-  --ag-border-color: var(--tpl-divider, #dee2e6);
   --ag-font-size: 11px;
+  .ag-header-cell-label { justify-content: center; font-weight: 600; }
 }
-.tpl-btn { height: 32px; padding: 0 12px; border-radius: 4px; display: flex; align-items: center; font-size: 12px; }
+
+.btn-group .btn {
+  font-size: 11px;
+  padding: 2px 8px;
+}
 </style>
