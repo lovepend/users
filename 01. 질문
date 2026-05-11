@@ -61,6 +61,7 @@
 
 <script setup>
   import { ref, computed, shallowRef, onMounted } from 'vue'
+  import { useRoute } from 'vue-router' // URL 파라미터 접근용
   import { axiosWrapper } from '@/utils/axios/axios-wrapper'
   import { useToast } from '@/composables/useToast'
   import { sAlert } from '@/utils/messages/alert-common'
@@ -70,6 +71,7 @@
   import InputBox from '@/components/default/editors/InputBox.vue'
   import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
+  const route = useRoute()
   const toast = useToast()
   const cardTitle = { icon: 'fa-list', title: 'Tag 통합 분석', subtitle: '전체 속성 및 필드 분석' }
 
@@ -223,23 +225,25 @@
 
   const onGridReady = params => { gridApi.value = params.api }
 
-  // [수정 포인트] 최초 화면 접속 시 현재 프로젝트 할당
+  // [수정 포인트] URL 쿼리 파라미터에서 proj_no 추출
   onMounted(async () => {
-    await fetchProjectList(); // 먼저 전체 리스트 로드
+    await fetchProjectList();
     
-    // 전역 변수나 로컬 스토리지 등에서 현재 프로젝트 번호를 가져온다고 가정
-    // 실제 환경에 맞게 window.currentProject나 localStorage.getItem('prj') 등으로 수정하세요.
-    const currentPrj = window.current?.project || ''; 
+    // 1. Vue Router가 있으면 route.query에서 가져오고, 없으면 순수 JS로 검색
+    const urlProjNo = route.query?.proj_no || new URLSearchParams(window.location.search).get('proj_no');
     
-    if (currentPrj) {
-      selectedProjNo.value = currentPrj;
-      projSearchQuery.value = currentPrj;
+    if (urlProjNo) {
+      selectedProjNo.value = urlProjNo;
+      projSearchQuery.value = urlProjNo;
+      
+      // 필요하다면 여기서 즉시 조회 실행
+      // fetchData();
     }
   });
 </script>
 
 <style scoped lang="scss">
-  /* 스타일은 이전과 동일 */
+  /* 스타일 섹션은 이전과 동일 */
   .grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid var(--tpl-divider); }
   .header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 10px; }
   :deep(.ag-theme-custom) {
