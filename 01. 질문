@@ -76,10 +76,12 @@
         
         <div class="flex-grow-1 border-top">
           <ag-grid-vue
-            v-bind="gridOptions"
-            class="ag-theme-custom w-100 h-100"
+            style="width: 100%; height: 100%;"
+            class="ag-theme-custom"
+            :column-defs="columnDefs"
             :row-data="rowData"
             @grid-ready="onGridReady"
+            v-bind="gridOptions"
           />
         </div>
       </div>
@@ -95,7 +97,7 @@ import { sAlert } from '@/utils/messages/alert-common'
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 
-const cardTitle = { icon: 'fa-list', title: 'Data Merge 관리', subtitle: '프로젝트별 데이터 통합 관리' }
+const cardTitle = { icon: 'fa-list', title: 'Data Merge 관리', subtitle: '속성 합집합 및 Diff 상태 조회' }
 
 // --- 상태 관리 ---
 const projectOptions = ref([])
@@ -107,6 +109,7 @@ const projSearchQuery = ref('')
 const regSearchQuery = ref('')
 
 const rowData = ref([])
+const columnDefs = ref([]) // 동적 컬럼 정의
 const gridApi = shallowRef()
 
 // --- 필터링 옵션 ---
@@ -119,22 +122,19 @@ const filteredRegOptions = computed(() => {
   return regOptions.value.filter(r => r.TYPE_ID.toLowerCase().includes(q))
 })
 
-// --- 이벤트 & API ---
+// --- API 로직 ---
 const fetchProjectList = async () => {
   const res = await axiosWrapper.get('/api/Project/Get')
   projectOptions.value = res.map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
 }
 
-// 프로젝트 변경 시 Register 목록 로드
 watch(selectedProjNo, async (newVal) => {
-  selectedRegTypeId.value = ''
-  regOptions.value = []
+  selectedRegTypeId.value = ''; regOptions.value = []
   if (!newVal) return
   const res = await axiosWrapper.post('/api/Register/Get', { ProjectNo: newVal })
   if (res) regOptions.value = res
 })
 
-// 데이터 조회 (보내주신 로직 적용)
 const onSearch = async () => {
   if (!selectedProjNo.value || !selectedRegTypeId.value) {
     return sAlert.Warning('Project No와 Register ID를 선택하세요.')
@@ -150,45 +150,86 @@ const onSearch = async () => {
 
     const response = await axiosWrapper.post('/api/Data/GetMergedData', payload)
     const resData = response.data || response
-    
-    // 💡 핵심: Register ID로 객체 접근
     const resultObj = resData[selectedRegTypeId.value]
+
     if (!resultObj) {
-      rowData.value = []
+      rowData.value = []; columnDefs.value = [];
       return sAlert.Info('조회된 데이터가 없습니다.')
     }
 
-    // 💡 핵심: 선택된 Type에 따른 데이터 매핑
-    let finalData = []
-    if (selectedType.value === 'Working') finalData = resultObj.WrkData || []
-    else if (selectedType.value === 'Publish') finalData = resultObj.PubData || []
-    else if (selectedType.value === 'Merged') finalData = resultObj.MergeData || []
+    // 1. Diff 데이터 맵 생성 (TAG_IDX 기준)
+    const diffMap = new Map()
+    if (Array.isArray(resultObj.DiffData)) {
+      resultObj.DiffData.forEach(d => {
+        if (d.TAG_IDX) diffMap.set(d.TAG_IDX.toString(), d)
+      })
+    }
 
-    rowData.value = finalData
-    sAlert.Success(`조회 완료: ${finalData.length}건`)
+    // 2. 현재 타입 데이터 선택
+    let rawList = []
+    if (selectedType.value === 'Working') rawList = resultObj.WrkData || []
+    else if (selectedType.value === 'Publish') rawList = resultObj.PubData || []
+    else if (selectedType.value === 'Merged') rawList = resultObj.MergeData || []
+
+    // 3. 데이터 가공 및 컬럼 합집합 추출
+    const allKeys = new Set()
+    const processedData = rawList.map(item => {
+      const diffInfo = diffMap.get(item.TAG_IDX?.toString()) || {}
+      let flat = { 선택: false }
+
+      // ATTRIBUTES 객체 평탄화 (SpreadJS 로직 이식)
+      if (Array.isArray(item.ATTRIBUTES)) {
+        item.ATTRIBUTES.forEach(attr => {
+          if (attr.ATT_ID) flat[attr.ATT_ID] = attr.VALUE ?? ''
+        })
+      }
+
+      // 기본 데이터 + Diff 정보(EditType, Status) 병합
+      Object.assign(flat, { 
+        ...item, 
+        Edit: diffInfo.EditType || '', 
+        Status: diffInfo.Status || '' 
+      })
+
+      // 컬럼으로 추출할 키 수집 (내부용 변수 제외)
+      Object.keys(flat).forEach(key => {
+        if (!['ATTRIBUTES', '__diffProps', '_id', '선택', 'Edit', 'Status'].includes(key) && typeof flat[key] !== 'object') {
+          allKeys.add(key)
+        }
+      })
+      return flat
+    })
+
+    // 4. 컬럼 정의 (Edit, Status를 맨 앞으로)
+    const dynamicCols = [
+      { headerName: 'Edit', field: 'Edit', width: 90, pinned: 'left', cellClass: 'text-center' },
+      { headerName: 'Status', field: 'Status', width: 100, pinned: 'left', cellClass: 'text-center' },
+      { headerName: 'Tag No', field: 'TAG_NO', width: 180, pinned: 'left', checkboxSelection: true, headerCheckboxSelection: true },
+      ...Array.from(allKeys).filter(k => k !== 'TAG_NO').sort().map(key => ({
+        headerName: key,
+        field: key,
+        minWidth: 120
+      }))
+    ]
+
+    columnDefs.value = dynamicCols
+    rowData.value = processedData
+    sAlert.Success(`조회 완료: ${processedData.length}건`)
   } catch (err) {
-    console.error(err)
-    sAlert.Error('데이터 처리 중 오류 발생')
+    console.error(err); sAlert.Error('데이터 처리 중 오류 발생')
   }
 }
 
 const resetFilters = () => {
-  selectedProjNo.value = ''; selectedRegTypeId.value = '';
-  selectedType.value = 'Working'; rowData.value = [];
+  selectedProjNo.value = ''; selectedRegTypeId.value = ''; rowData.value = [];
 }
 
-// --- AG Grid 설정 ---
-const gridOptions = computed(() => ({
-  columnDefs: [
-    { headerName: 'Tag No', field: 'TAG_NO', width: 180, checkboxSelection: true, headerCheckboxSelection: true },
-    { headerName: 'Status', field: 'STATUS', width: 100 },
-    { headerName: 'Class', field: 'CLS_ID', width: 120 },
-    { headerName: 'Description', field: 'TAG_DESC', flex: 1 },
-    { headerName: 'Update Date', field: 'UPDATE_DT', width: 150 },
-  ],
+// --- AG Grid 기본 설정 ---
+const gridOptions = {
   defaultColDef: { resizable: true, sortable: true, filter: true, floatingFilter: true },
   rowSelection: 'multiple',
-}))
+  suppressFieldDotNotation: true // 속성명에 점(.)이 있을 경우 대비
+}
 
 const onGridReady = p => { gridApi.value = p.api }
 
@@ -197,17 +238,20 @@ onMounted(fetchProjectList)
 
 <style scoped lang="scss">
 .header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 8px; }
-.grid-header-title { background-color: var(--tpl-table-thead-bg, #f8f9fa); color: var(--tpl-body-color); border-radius: 4px 4px 0 0; }
+.grid-header-title { background-color: var(--tpl-table-thead-bg, #f8f9fa); color: var(--tpl-body-color); }
 
 :deep(.ag-theme-custom) {
   --ag-background-color: var(--card-bg, #ffffff);
-  --ag-header-background-color: var(--tpl-table-thead-bg, #f8f9fa);
   --ag-font-size: 11px;
   .ag-header-cell-label { justify-content: center; font-weight: 600; }
+  /* Edit/Status 컬럼 강조 스타일 (선택사항) */
+  .ag-cell[col-id="Edit"], .ag-cell[col-id="Status"] { font-weight: bold; }
 }
 
-.btn-group .btn {
-  font-size: 11px;
-  padding: 2px 8px;
+.tpl-btn {
+  height: 32px; padding: 0 12px; border-radius: 4px; display: flex; align-items: center; font-size: 12px;
+  &.btn-primary { background-color: #007bff; border: none; color: white; &:hover { background-color: #0056b3; } }
 }
+
+.btn-group .btn { font-size: 11px; padding: 2px 8px; }
 </style>
