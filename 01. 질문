@@ -42,10 +42,10 @@
 
           <InputBox
             id="input-filter"
-            label="결과 검색"
+            label="통합 검색"
             v-model:value="localFilterQuery"
             icon="fa-filter"
-            placeholder="결과 내 찾기"
+            placeholder="전체 필드 검색"
             style="width: 220px"
             @input="onFilterInput"
           />
@@ -61,7 +61,7 @@
 
 <script setup>
   import { ref, computed, shallowRef, onMounted } from 'vue'
-  import { useRoute } from 'vue-router' // URL 파라미터 접근용
+  import { useRoute } from 'vue-router'
   import { axiosWrapper } from '@/utils/axios/axios-wrapper'
   import { useToast } from '@/composables/useToast'
   import { sAlert } from '@/utils/messages/alert-common'
@@ -73,7 +73,7 @@
 
   const route = useRoute()
   const toast = useToast()
-  const cardTitle = { icon: 'fa-list', title: 'Tag 통합 분석', subtitle: '전체 속성 및 필드 분석' }
+  const cardTitle = { icon: 'fa-list', title: 'Tag 통합 분석', subtitle: '속성 필터링 분석' }
 
   const projectOptions = ref([])
   const selectedProjNo = ref('')
@@ -97,6 +97,7 @@
     } catch (e) { return val }
   }
 
+  // 통합 검색 입력 시 리프레시
   const onFilterInput = () => {
     if (gridApi.value) gridApi.value.refreshCells({ force: true })
   }
@@ -122,7 +123,7 @@
     if (!selectedProjNo.value) return sAlert.Warning('프로젝트를 선택하세요.')
     toast.show({
       title: '조회 확인',
-      content: `[${selectedProjNo.value}] 전체 데이터를 조회하시겠습니까?`,
+      content: `[${selectedProjNo.value}] 데이터를 조회하시겠습니까?`,
       onOk: () => fetchData(),
     })
   }
@@ -158,13 +159,14 @@
         return flatItem
       })
 
+      // 동적 컬럼 생성
       dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
         headerName: id,
         field: `ATT_${id}`,
         minWidth: 140,
         headerClass: 'att-column-header',
         cellRenderer: highlightRenderer,
-        cellStyle: { borderRight: '1px solid #dee2e6' },
+        filter: 'agTextColumnFilter', // 텍스트 필터 지정
       }))
 
       rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
@@ -182,20 +184,23 @@
         field: 'Source',
         width: 110,
         pinned: 'left',
+        filter: 'agTextColumnFilter',
         cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>`,
       },
-      { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-      { field: 'TAG_IDX', headerName: 'Tag Idx', width: 180, pinned: 'left' },
-      { field: 'CLS_ID', headerName: 'Class', width: 120, pinned: 'left', cellRenderer: highlightRenderer },
-      { field: 'TAG_DESC', headerName: 'Description', width: 200, cellRenderer: highlightRenderer },
-      { field: 'EP_ID', headerName: 'EP ID', width: 100, pinned: 'left' },
-      { field: 'EP_IC', headerName: 'EP IC', width: 100, pinned: 'left' },
+      { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', filter: 'agTextColumnFilter', cellRenderer: highlightRenderer },
+      { field: 'TAG_IDX', headerName: 'Tag Idx', width: 180, pinned: 'left', filter: 'agTextColumnFilter' },
+      { field: 'CLS_ID', headerName: 'Class', width: 120, pinned: 'left', filter: 'agTextColumnFilter', cellRenderer: highlightRenderer },
+      { field: 'TAG_DESC', headerName: 'Description', width: 200, filter: 'agTextColumnFilter', cellRenderer: highlightRenderer },
+      { field: 'EP_ID', headerName: 'EP ID', width: 100, pinned: 'left', filter: 'agTextColumnFilter' },
+      { field: 'EP_IC', headerName: 'EP IC', width: 100, pinned: 'left', filter: 'agTextColumnFilter' },
+      
       ...dynamicAttCols.value,
-      { field: 'BF_TAG_NO', headerName: 'BF Tag No', width: 140, cellRenderer: highlightRenderer },
-      { field: 'TAG_NO_PASSED', headerName: 'Passed', width: 100, cellRenderer: highlightRenderer },
+      
+      { field: 'BF_TAG_NO', headerName: 'BF Tag No', width: 140, filter: 'agTextColumnFilter', cellRenderer: highlightRenderer },
+      { field: 'TAG_NO_PASSED', headerName: 'Passed', width: 100, filter: 'agTextColumnFilter' },
       { field: 'NEW_YN', headerName: 'New YN', width: 80 },
       { field: 'DEL_YN', headerName: 'Del YN', width: 80 },
-      { field: 'PIC_NO', headerName: 'PIC No', width: 110 },
+      { field: 'PIC_NO', headerName: 'PIC No', width: 110, filter: 'agTextColumnFilter' },
       { field: 'CHGER_NO', headerName: 'Chger No', width: 110 },
       { field: 'CHGE_DTM', headerName: 'Chge Dtm', width: 180 },
       { field: 'CRTER_NO', headerName: 'Crter No', width: 110 },
@@ -213,10 +218,19 @@
     rowData: filteredData.value,
     loadingOverlayComponent: AggridLoadingOverlay,
     headerHeight: 38,
+    floatingFiltersHeight: 38, // 미니 필터 영역 높이
     rowHeight: 34,
-    defaultColDef: { sortable: true, filter: true, resizable: true, cellStyle: { background: '#ffffff' } },
+    // [핵심 포인트] 기본 컬럼 설정에 필터 옵션 추가
+    defaultColDef: { 
+      sortable: true, 
+      filter: true, 
+      floatingFilter: true, // 헤더 아래 미니 필터창 활성화
+      resizable: true, 
+      cellStyle: { background: '#ffffff' } 
+    }
   }))
 
+  // 상단 통합 검색 로직 (그대로 유지)
   const filteredData = computed(() => {
     const query = localFilterQuery.value.trim().toLowerCase()
     if (!query) return rawDataList.value
@@ -225,36 +239,43 @@
 
   const onGridReady = params => { gridApi.value = params.api }
 
-  // [수정 포인트] URL 쿼리 파라미터에서 proj_no 추출
   onMounted(async () => {
     await fetchProjectList();
-    
-    // 1. Vue Router가 있으면 route.query에서 가져오고, 없으면 순수 JS로 검색
     const urlProjNo = route.query?.proj_no || new URLSearchParams(window.location.search).get('proj_no');
-    
     if (urlProjNo) {
       selectedProjNo.value = urlProjNo;
       projSearchQuery.value = urlProjNo;
-      
-      // 필요하다면 여기서 즉시 조회 실행
-      // fetchData();
     }
   });
 </script>
 
 <style scoped lang="scss">
-  /* 스타일 섹션은 이전과 동일 */
   .grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid var(--tpl-divider); }
   .header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 10px; }
+
   :deep(.ag-theme-custom) {
     --ag-border-color: #dee2e6;
     --ag-header-background-color: #f8f9fa;
     --ag-font-size: 12px;
+
+    /* 미니 필터(Floating Filter) 스타일 조정 */
+    .ag-floating-filter-button { display: none; } /* 필터 상세 팝업 버튼 숨김 (깔끔하게) */
+    .ag-floating-filter-input {
+      input {
+        height: 24px !important;
+        font-size: 11px;
+        border-radius: 4px;
+        border: 1px solid #ced4da;
+      }
+    }
+
     .ag-header-cell { border-right: 1px solid #dee2e6 !important; font-weight: 600; }
     .ag-cell { border-right: 1px solid #f1f3f5 !important; display: flex; align-items: center; }
     .ag-pinned-left-cols-container { border-right: 2px solid #adb5bd !important; }
+
     .filter-highlight { background-color: #ffeb3b !important; color: #000 !important; font-weight: bold; padding: 0 2px; border-radius: 2px; }
     .att-column-header { background-color: #fff9db !important; color: #856404 !important; border-bottom: 2px solid #ffe066 !important; }
   }
+
   .tpl-btn { height: 32px; padding: 0 16px; border-radius: 4px; font-weight: 500; &--primary { background: var(--primary-color); color: #fff; border: none; } }
 </style>
