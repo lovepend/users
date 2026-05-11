@@ -29,7 +29,7 @@
           <div class="header-divider"></div>
 
           <div class="d-flex align-items-center gap-2">
-            <button class="tpl-btn tpl-btn--sm btn-primary" @click="onMerge" :disabled="!isMergeable">
+            <button class="tpl-btn tpl-btn--sm btn-primary" @click="onMergeExecute" :disabled="!isMergeable">
               <i class="fa fa-object-group me-1"></i> Merge
             </button>
             <button class="tpl-btn tpl-btn--sm btn-outline-secondary bg-white border" @click="resetFilters" title="초기화">
@@ -41,8 +41,9 @@
 
       <div class="flex-grow-1 w-100 h-100 overflow-hidden d-flex flex-column">
         <div class="grid-header-title d-flex justify-content-between align-items-center px-3 py-2">
-          <span class="fw-bold small"><i class="fa fa-table me-2 text-primary"></i>Data Merging List</span>
-          <div class="d-flex gap-3">
+          <span class="fw-bold small"><i class="fa fa-table me-2 text-primary"></i>Merged Data List</span>
+          <div class="d-flex gap-3 align-items-center">
+             <span class="badge bg-info-subtle text-info border border-info-subtle" style="font-size: 10px">Merge Mode</span>
              <small class="text-muted">Total: <strong>{{ rowData.length }}</strong></small>
           </div>
         </div>
@@ -69,7 +70,7 @@ import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 
 const route = useRoute()
-const cardTitle = { icon: 'fa-list', title: 'Data Merge 관리', subtitle: '데이터 통합 및 매핑 설정' }
+const cardTitle = { icon: 'fa-list', title: 'Data Merge 관리', subtitle: 'Working / Published 통합 데이터 조회' }
 
 // --- State ---
 const projectList = ref([])
@@ -78,7 +79,7 @@ const selectedProjNo = ref('')
 const rowData = ref([])
 const gridApi = shallowRef()
 
-// --- Filtering ---
+// --- Filtering & Logic ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
@@ -111,40 +112,45 @@ const fetchData = async () => {
   if (!selectedProjNo.value) return
   
   try {
-    // 💡 404 해결: 검증된 API 주소와 필수 페이로드(Register ID 등) 반영
+    // 💡 알려주신 API 주소와 데이터 유형 적용
     const payload = {
       ProjectNo: selectedProjNo.value,
-      REG_TYPE_ID: '101TEST', // 이전에 사용하시던 고유 ID
-      Type: 'Merged',
-      ContainDeleted: false
+      REG_TYPE_ID: '101TEST',
+      Type: 'Merged' // Working, Publish, Merged 중 선택된 타입
     }
 
-    const res = await axiosWrapper.post('/api/TagType/Get', payload) 
+    const res = await axiosWrapper.post('/api/Data/GetMergedData', payload) 
     rowData.value = Array.isArray(res) ? res : []
   } catch (error) {
-    console.error("Data Load Error:", error)
+    console.error("Merge Data Load Error:", error)
     rowData.value = []
   }
 }
 
-const onMerge = async () => {
-  console.log('Merge processing for:', selectedProjNo.value)
-  // 머지 실행 API 로직 추가 가능
+const onMergeExecute = async () => {
+  // 실제 머지 실행 API 호출 로직이 필요하다면 여기에 작성
+  console.log('Execute Merging for:', selectedProjNo.value)
 }
 
 // --- AG Grid Config ---
 const gridOptions = computed(() => ({
   columnDefs: [
-    { headerName: 'ID', field: 'ID', width: 100, checkboxSelection: true, headerCheckboxSelection: true },
-    { headerName: 'Type', field: 'TYPE_ID', width: 150 },
-    { headerName: 'LNK Code Count', field: 'LNK_CODE', width: 150, valueGetter: p => p.data.LNK_CODE?.length || 0 },
-    { headerName: 'Reg Date', field: 'REG_DT', width: 180 },
-    { headerName: 'Description', field: 'DESC', flex: 1 },
+    { headerName: 'Tag No', field: 'TAG_NO', width: 180, checkboxSelection: true, headerCheckboxSelection: true, pinned: 'left' },
+    { headerName: 'Status', field: 'STATUS', width: 100, 
+      cellRenderer: p => {
+        const color = p.value === 'Merged' ? 'success' : 'warning'
+        return `<span class="badge bg-${color}-subtle text-${color} border border-${color}-subtle" style="font-size: 10px">${p.value}</span>`
+      }
+    },
+    { headerName: 'Area', field: 'AREA_NAME', width: 120 },
+    { headerName: 'Description', field: 'DESC', flex: 1, minWidth: 200 },
+    { headerName: 'Update Date', field: 'UPDATE_DT', width: 150 },
   ],
   defaultColDef: {
     resizable: true,
     sortable: true,
     filter: true,
+    floatingFilter: true // 필터바 추가
   },
   rowSelection: 'multiple',
 }))
@@ -167,13 +173,12 @@ onMounted(async () => {
 .grid-header-title { background-color: var(--tpl-table-thead-bg, #f8f9fa); color: var(--tpl-body-color); }
 
 :deep(.ag-theme-custom) {
-  /* 다크모드 글자 안보임 현상 해결 변수 */
+  /* 다크모드 대응 */
   --ag-background-color: var(--card-bg, #ffffff);
   --ag-foreground-color: var(--tpl-body-color, #212529);
   --ag-header-background-color: var(--tpl-table-thead-bg, #f8f9fa);
   --ag-header-foreground-color: var(--tpl-body-color);
   --ag-border-color: var(--tpl-divider, #dee2e6);
-  --ag-row-border-color: var(--tpl-divider, #dee2e6);
   --ag-font-size: 11px;
 
   .ag-header-cell-label { justify-content: center; font-weight: 600; }
@@ -182,10 +187,7 @@ onMounted(async () => {
 
 .tpl-btn {
   height: 32px; padding: 0 12px; border-radius: 4px; display: flex; align-items: center; font-size: 12px;
-  &.btn-primary { 
-    background-color: #007bff; border: none; color: white;
-    &:disabled { background-color: #ccc; }
-  }
+  &.btn-primary { border: none; }
 }
 
 .dropdown-menu {
