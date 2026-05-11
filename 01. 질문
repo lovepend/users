@@ -3,6 +3,7 @@
     <DefaultCard :title="cardTitle" class="w-100 h-100">
       <template #header-right>
         <div class="d-flex align-items-center gap-2 flex-wrap">
+          
           <div class="dropdown custom-single-select" style="min-width: 200px">
             <InputBox
               id="input-proj-merge"
@@ -11,18 +12,38 @@
               placeholder="프로젝트 선택"
               readonly
               data-bs-toggle="dropdown"
-              style="width: 100%"
             />
-            <ul class="dropdown-menu shadow-lg p-2 w-100" style="max-height: 300px; overflow-y: auto; z-index: 1060">
+            <ul class="dropdown-menu shadow-lg p-2 w-100" style="max-height: 300px; overflow-y: auto;">
               <li class="px-2 pb-2 border-bottom mb-1">
                 <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="Search..." @click.stop />
               </li>
               <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item py-1 cursor-pointer" @click="selectProject(proj.PROJ_NO)">
                 <div class="d-flex align-items-center justify-content-between">
                   <span :class="{ 'fw-bold text-primary': selectedProjNo === proj.PROJ_NO }">{{ proj.PROJ_NO }}</span>
-                  <small class="text-muted ms-1 text-truncate" style="max-width: 100px;">{{ proj.DESC }}</small>
+                  <small class="text-muted text-truncate" style="max-width: 100px;">{{ proj.DESC }}</small>
                 </div>
               </li>
+            </ul>
+          </div>
+
+          <div class="dropdown custom-single-select" style="min-width: 200px">
+            <InputBox
+              id="input-reg-merge"
+              label="Register No"
+              v-model:value="selectedRegNo"
+              placeholder="Register 선택"
+              readonly
+              :disabled="!registerList.length"
+              data-bs-toggle="dropdown"
+            />
+            <ul class="dropdown-menu shadow-lg p-2 w-100" style="max-height: 300px; overflow-y: auto;">
+              <li class="px-2 pb-2 border-bottom mb-1">
+                <input type="text" class="form-control form-control-sm" v-model="regSearchKeyword" placeholder="Search..." @click.stop />
+              </li>
+              <li v-for="reg in filteredRegisterList" :key="reg.REG_TYPE_ID" class="dropdown-item py-1 cursor-pointer" @click="selectRegister(reg.REG_TYPE_ID)">
+                <span :class="{ 'fw-bold text-primary': selectedRegNo === reg.REG_TYPE_ID }">{{ reg.REG_TYPE_ID }}</span>
+              </li>
+              <li v-if="!registerList.length" class="dropdown-item text-muted small text-center">프로젝트를 먼저 선택하세요</li>
             </ul>
           </div>
 
@@ -43,7 +64,6 @@
         <div class="grid-header-title d-flex justify-content-between align-items-center px-3 py-2">
           <span class="fw-bold small"><i class="fa fa-table me-2 text-primary"></i>Merged Data List</span>
           <div class="d-flex gap-3 align-items-center">
-             <span class="badge bg-info-subtle text-info border border-info-subtle" style="font-size: 10px">Merge Mode</span>
              <small class="text-muted">Total: <strong>{{ rowData.length }}</strong></small>
           </div>
         </div>
@@ -76,49 +96,76 @@ const cardTitle = { icon: 'fa-list', title: 'Data Merge 관리', subtitle: 'Work
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjNo = ref('')
+
+const registerList = ref([]) // Register No 리스트 전용
+const regSearchKeyword = ref('')
+const selectedRegNo = ref('')
+
 const rowData = ref([])
 const gridApi = shallowRef()
 
-// --- Filtering & Logic ---
+// --- Filtering ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
-  return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
+  return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC?.toLowerCase().includes(kw)))
 })
 
-const isMergeable = computed(() => selectedProjNo.value && rowData.value.length > 0)
+const filteredRegisterList = computed(() => {
+  const kw = regSearchKeyword.value.trim().toLowerCase()
+  return registerList.value.filter(r => r.REG_TYPE_ID.toLowerCase().includes(kw))
+})
+
+const isMergeable = computed(() => selectedProjNo.value && selectedRegNo.value && rowData.value.length > 0)
 
 // --- Events ---
 const selectProject = async projNo => {
   selectedProjNo.value = projNo
-  await fetchData()
+  selectedRegNo.value = '' // 프로젝트 바뀌면 Register 초기화
+  rowData.value = []
+  await fetchRegisters() // Register 리스트 새로 가져오기
+}
+
+const selectRegister = async regNo => {
+  selectedRegNo.value = regNo
+  await fetchData() // Register 선택되면 실제 데이터 로드
 }
 
 const resetFilters = () => {
-  selectedProjNo.value = ''
-  rowData.value = []
+  selectedProjNo.value = ''; selectedRegNo.value = '';
+  registerList.value = []; rowData.value = [];
 }
 
 // --- API Calls ---
 const fetchProjects = async () => {
+  const res = await axiosWrapper.get('/api/Project/Get')
+  projectList.value = Array.isArray(res) ? res : []
+}
+
+// 💡 프로젝트에 딸린 Register(101TEST 등) 목록을 가져오는 API
+const fetchRegisters = async () => {
+  if (!selectedProjNo.value) return
   try {
-    const res = await axiosWrapper.get('/api/Project/Get')
-    projectList.value = Array.isArray(res) ? res : []
+    // API 주소는 프로젝트 규칙에 맞게 /api/TagType/Get 또는 /api/Register/Get 등으로 조정
+    const res = await axiosWrapper.post('/api/TagType/Get', { 
+      ProjectNo: selectedProjNo.value,
+      ContainDeleted: false 
+    })
+    registerList.value = Array.isArray(res) ? res : []
   } catch (error) {
-    console.error("Project Load Error:", error)
+    console.error("Register Load Error:", error)
   }
 }
 
+// 💡 최종 병합 데이터 호출
 const fetchData = async () => {
-  if (!selectedProjNo.value) return
+  if (!selectedProjNo.value || !selectedRegNo.value) return
   
   try {
-    // 💡 알려주신 API 주소와 데이터 유형 적용
     const payload = {
       ProjectNo: selectedProjNo.value,
-      REG_TYPE_ID: '101TEST',
-      Type: 'Merged' // Working, Publish, Merged 중 선택된 타입
+      REG_TYPE_ID: selectedRegNo.value,
+      Type: 'Merged'
     }
-
     const res = await axiosWrapper.post('/api/Data/GetMergedData', payload) 
     rowData.value = Array.isArray(res) ? res : []
   } catch (error) {
@@ -127,43 +174,29 @@ const fetchData = async () => {
   }
 }
 
-const onMergeExecute = async () => {
-  // 실제 머지 실행 API 호출 로직이 필요하다면 여기에 작성
-  console.log('Execute Merging for:', selectedProjNo.value)
-}
+const onMergeExecute = () => { console.log('Merge 실행') }
 
 // --- AG Grid Config ---
 const gridOptions = computed(() => ({
   columnDefs: [
     { headerName: 'Tag No', field: 'TAG_NO', width: 180, checkboxSelection: true, headerCheckboxSelection: true, pinned: 'left' },
-    { headerName: 'Status', field: 'STATUS', width: 100, 
-      cellRenderer: p => {
-        const color = p.value === 'Merged' ? 'success' : 'warning'
-        return `<span class="badge bg-${color}-subtle text-${color} border border-${color}-subtle" style="font-size: 10px">${p.value}</span>`
-      }
-    },
-    { headerName: 'Area', field: 'AREA_NAME', width: 120 },
-    { headerName: 'Description', field: 'DESC', flex: 1, minWidth: 200 },
+    { headerName: 'Status', field: 'STATUS', width: 100 },
+    { headerName: 'Description', field: 'DESC', flex: 1 },
     { headerName: 'Update Date', field: 'UPDATE_DT', width: 150 },
   ],
-  defaultColDef: {
-    resizable: true,
-    sortable: true,
-    filter: true,
-    floatingFilter: true // 필터바 추가
-  },
+  defaultColDef: { resizable: true, sortable: true, filter: true },
   rowSelection: 'multiple',
 }))
 
 const onGridReady = p => { gridApi.value = p.api }
 
-// 초기 진입 시 URL 파라미터 확인
 onMounted(async () => {
   await fetchProjects()
   const urlProjNo = route.query?.proj_no
   if (urlProjNo) {
     selectedProjNo.value = urlProjNo
-    await fetchData()
+    await fetchRegisters()
+    // URL에 reg_no까지 있다면 자동 로드 로직 추가 가능
   }
 })
 </script>
@@ -171,27 +204,12 @@ onMounted(async () => {
 <style scoped lang="scss">
 .header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 8px; }
 .grid-header-title { background-color: var(--tpl-table-thead-bg, #f8f9fa); color: var(--tpl-body-color); }
-
 :deep(.ag-theme-custom) {
-  /* 다크모드 대응 */
   --ag-background-color: var(--card-bg, #ffffff);
   --ag-foreground-color: var(--tpl-body-color, #212529);
   --ag-header-background-color: var(--tpl-table-thead-bg, #f8f9fa);
-  --ag-header-foreground-color: var(--tpl-body-color);
   --ag-border-color: var(--tpl-divider, #dee2e6);
   --ag-font-size: 11px;
-
-  .ag-header-cell-label { justify-content: center; font-weight: 600; }
-  .ag-cell { display: flex; align-items: center; color: var(--tpl-body-color); }
 }
-
-.tpl-btn {
-  height: 32px; padding: 0 12px; border-radius: 4px; display: flex; align-items: center; font-size: 12px;
-  &.btn-primary { border: none; }
-}
-
-.dropdown-menu {
-  font-size: 12px;
-  .dropdown-item:hover { background-color: var(--tpl-table-thead-bg); }
-}
+.tpl-btn { height: 32px; padding: 0 12px; border-radius: 4px; display: flex; align-items: center; font-size: 12px; }
 </style>
