@@ -3,251 +3,342 @@
     <DefaultCard :title="cardTitle" class="w-100 h-100">
       <template #header-right>
         <div class="d-flex align-items-center gap-2 flex-wrap">
-          
-          <div class="dropdown custom-single-select" style="min-width: 180px">
+          <div class="dropdown custom-single-select" style="min-width: 220px">
             <InputBox
-              id="input-proj-merge"
-              label="Project"
+              id="input-proj"
+              label="프로젝트"
               v-model:value="selectedProjNo"
-              placeholder="프로젝트 선택"
-              readonly
+              placeholder="프로젝트 선택/입력"
               data-bs-toggle="dropdown"
+              @input="projSearchQuery = selectedProjNo"
+              style="width: 100%"
             />
-            <ul class="dropdown-menu shadow-lg p-2 w-100" style="max-height: 300px; overflow-y: auto;">
-              <li class="p-2 border-bottom mb-1">
-                <input type="text" class="form-control form-control-sm" v-model="projSearchQuery" placeholder="Search..." @click.stop />
-              </li>
-              <li v-for="p in filteredProjectOptions" :key="p.value" class="dropdown-item py-1 cursor-pointer" @click="selectedProjNo = p.value">
-                <span :class="{ 'fw-bold text-primary': selectedProjNo === p.value }">{{ p.text }}</span>
+            <ul class="dropdown-menu shadow-lg p-0 w-100" style="max-height: 300px; overflow-y: auto; z-index: 1060">
+              <li v-for="proj in filteredProjectOptions" :key="proj.value">
+                <a
+                  class="dropdown-item py-2 px-3 cursor-pointer"
+                  :class="{ 'active-proj': selectedProjNo === proj.value }"
+                  @click="selectProject(proj.value)"
+                >
+                  {{ proj.text }}
+                </a>
               </li>
             </ul>
           </div>
 
-          <div class="dropdown custom-single-select" style="min-width: 180px">
-            <InputBox
-              id="input-reg-merge"
-              label="Register"
-              v-model:value="selectedRegTypeId"
-              placeholder="ID 선택"
-              readonly
-              :disabled="!regOptions.length"
-              data-bs-toggle="dropdown"
-            />
-            <ul class="dropdown-menu shadow-lg p-2 w-100" style="max-height: 300px; overflow-y: auto;">
-              <li class="p-2 border-bottom mb-1">
-                <input type="text" class="form-control form-control-sm" v-model="regSearchQuery" placeholder="Search..." @click.stop />
-              </li>
-              <li v-for="r in filteredRegOptions" :key="r.TYPE_ID" class="dropdown-item py-1 cursor-pointer" @click="selectedRegTypeId = r.TYPE_ID">
-                <span :class="{ 'fw-bold text-primary': selectedRegTypeId === r.TYPE_ID }">{{ r.TYPE_ID }}</span>
-              </li>
-            </ul>
-          </div>
-
-          <div class="btn-group btn-group-sm ms-1" style="height: 32px;">
-            <input type="radio" class="btn-check" id="type_working" value="Working" v-model="selectedType" />
-            <label class="btn btn-outline-secondary d-flex align-items-center" for="type_working">Working</label>
-            <input type="radio" class="btn-check" id="type_publish" value="Publish" v-model="selectedType" />
-            <label class="btn btn-outline-secondary d-flex align-items-center" for="type_publish">Publish</label>
-            <input type="radio" class="btn-check" id="type_merged" value="Merged" v-model="selectedType" />
-            <label class="btn btn-outline-secondary d-flex align-items-center" for="type_merged">Merged</label>
-          </div>
+          <InputBox
+            id="input-keyword"
+            label="키워드"
+            v-model:value="searchKeyword"
+            placeholder="Tag No 입력"
+            style="width: 220px"
+          />
 
           <div class="header-divider"></div>
+          
+          <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--primary" @click="confirmSearch">
+            <i class="fa fa-search me-1"></i>조회
+          </button>
+          
+          <div class="header-divider"></div>
 
-          <div class="d-flex align-items-center gap-2">
-            <button class="tpl-btn tpl-btn--sm btn-primary" @click="onSearch" :disabled="!selectedRegTypeId">
-              <i class="fa fa-search me-1"></i> 조회
-            </button>
-            <button class="tpl-btn tpl-btn--sm btn-outline-secondary bg-white border" @click="resetFilters">
-              <i class="fa fa-sync text-muted"></i>
-            </button>
-          </div>
+          <InputBox
+            id="input-filter"
+            label="결과 검색"
+            v-model:value="localFilterQuery"
+            icon="fa-filter"
+            placeholder="결과 내 찾기"
+            style="width: 220px"
+            @input="onFilterInput"
+          />
         </div>
       </template>
 
-      <div class="flex-grow-1 w-100 h-100 overflow-hidden d-flex flex-column">
-        <div class="grid-header-title d-flex justify-content-between align-items-center px-3 py-2">
-          <span class="fw-bold small">
-            <i class="fa fa-table me-2 text-primary"></i>
-            {{ selectedType }} Data List <small v-if="selectedRegTypeId" class="text-muted ms-2">({{ selectedRegTypeId }})</small>
-          </span>
-          <small class="text-muted">Total: <strong>{{ rowData.length }}</strong></small>
-        </div>
-        
-        <div class="flex-grow-1 border-top">
-          <ag-grid-vue
-            style="width: 100%; height: 100%;"
-            class="ag-theme-custom"
-            :column-defs="columnDefs"
-            :row-data="rowData"
-            @grid-ready="onGridReady"
-            v-bind="gridOptions"
-          />
-        </div>
+      <div class="grid-wrapper w-100 h-100">
+        <ag-grid-vue
+          class="ag-theme-custom w-100 h-100"
+          v-bind="gridOptions"
+          @grid-ready="onGridReady"
+          @cell-clicked="onCellClicked"
+        />
       </div>
     </DefaultCard>
+
+    <div v-if="showClassModal" class="custom-modal-overlay" @click.self="closeClassModal">
+      <div class="custom-modal-window shadow-lg" style="width: 850px; height: 60%">
+        <div class="modal-header-dark" style="background: #334155">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fa fa-info-circle text-info"></i>
+            <span class="fw-bold text-white">Class Info: {{ clickedClassId }}</span>
+          </div>
+          <button @click="closeClassModal" class="btn btn-xs btn-danger">✕</button>
+        </div>
+        <div class="modal-body-content p-3 h-100 d-flex flex-column">
+          <div class="ag-theme-custom flex-grow-1">
+            <ag-grid-vue
+              style="width: 100%; height: 100%"
+              :columnDefs="classModalColDefs"
+              :rowData="classModalData"
+              :defaultColDef="{ resizable: true, sortable: true, filter: true }"
+              @cell-clicked="onClassGridCellClicked"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showDetailModal" class="custom-modal-overlay" @click.self="closeDetailModal">
+      <div class="custom-modal-window shadow-lg" style="width: 900px; height: 80%">
+        <div class="modal-header-dark">
+          <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
+          <button @click="closeDetailModal" class="btn btn-xs btn-danger">✕</button>
+        </div>
+        <div class="modal-body-content p-2 h-100">
+          <div class="ag-theme-custom h-100">
+            <ag-grid-vue
+              style="width: 100%; height: 100%"
+              :columnDefs="detailModalColDefs"
+              :rowData="detailModalRowData"
+              :defaultColDef="{ resizable: true }"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted, shallowRef } from 'vue'
-import { useRoute } from 'vue-router' // URL 인식용 추가
+import { ref, computed, shallowRef, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { sAlert } from '@/utils/messages/alert-common'
+import { sortBy } from 'lodash-es'
 
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
+import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
 const route = useRoute()
-const cardTitle = { icon: 'fa-list', title: 'Data Merge 관리', subtitle: '속성 합집합 및 Diff 상태 조회' }
+const router = useRouter()
+const cardTitle = { icon: 'fa-list', title: 'Tag 통합 분석', subtitle: '속성 필터링 분석' }
 
-// --- 상태 관리 ---
-const projectOptions = ref([])
-const regOptions = ref([])
-const selectedProjNo = ref('')
-const selectedRegTypeId = ref('')
-const selectedType = ref('Working')
-const projSearchQuery = ref('')
-const regSearchQuery = ref('')
-
-const rowData = ref([])
-const columnDefs = ref([]) 
 const gridApi = shallowRef()
+const projectOptions = ref([])
+const selectedProjNo = ref('')
+const projSearchQuery = ref('')
+const searchKeyword = ref('')
+const localFilterQuery = ref('')
+const rawDataList = ref([])
+const dynamicAttCols = ref([])
 
-// --- 필터링 ---
-const filteredProjectOptions = computed(() => {
-  const q = projSearchQuery.value.toLowerCase()
-  return projectOptions.value.filter(p => p.text.toLowerCase().includes(q))
-})
-const filteredRegOptions = computed(() => {
-  const q = regSearchQuery.value.toLowerCase()
-  return regOptions.value.filter(r => r.TYPE_ID.toLowerCase().includes(q))
-})
+const showDetailModal = ref(false)
+const showClassModal = ref(false)
+const selectedRow = ref(null)
+const classModalData = ref([])
+const clickedClassId = ref('')
 
-// --- API 로직 ---
+// 1. 프로젝트 리스트 로드
 const fetchProjectList = async () => {
-  const res = await axiosWrapper.get('/api/Project/Get')
-  projectOptions.value = res.map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
+  try {
+    const res = await axiosWrapper.get('/api/Project/Get')
+    projectOptions.value = (res || []).map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
+  } catch (e) {
+    console.error(e)
+  }
 }
 
-// 💡 프로젝트 변경 감지하여 Register 목록 로드
-const fetchRegisters = async (projNo) => {
-  if (!projNo) return
-  const res = await axiosWrapper.post('/api/Register/Get', { ProjectNo: projNo })
-  if (res) regOptions.value = res
-}
-
-watch(selectedProjNo, async (newVal) => {
-  selectedRegTypeId.value = ''; regOptions.value = []
-  if (newVal) await fetchRegisters(newVal)
+const filteredProjectOptions = computed(() => {
+  const query = projSearchQuery.value.toLowerCase()
+  return projectOptions.value.filter(p => p.text.toLowerCase().includes(query))
 })
 
-const onSearch = async () => {
-  if (!selectedProjNo.value || !selectedRegTypeId.value) {
-    return sAlert.Warning('Project No와 Register ID를 선택하세요.')
-  }
+const selectProject = val => {
+  selectedProjNo.value = val
+  projSearchQuery.value = val
+}
 
+// 2. 조회 실행 (수동 버튼 클릭 시)
+const confirmSearch = () => {
+  if (!selectedProjNo.value) return sAlert.Warning('프로젝트를 선택하세요.')
+  fetchData()
+}
+
+const fetchData = async () => {
+  if (gridApi.value) gridApi.value.setGridOption('loading', true)
   try {
-    const payload = {
-      ProjectNo: selectedProjNo.value,
-      REG_TYPE_ID: selectedRegTypeId.value,
-      Type: selectedType.value,
-      ContainDeleted: false,
+    const payload = { ProjectNo: selectedProjNo.value, Keyword: searchKeyword.value }
+    const [pRes, wRes] = await Promise.allSettled([
+      axiosWrapper.post('/api/Data/SearchPublishData', payload),
+      axiosWrapper.post('/api/Data/SearchWorkingData', payload),
+    ])
+
+    let combined = []
+    if (pRes.status === 'fulfilled' && pRes.value) {
+      combined.push(...(Array.isArray(pRes.value) ? pRes.value : [pRes.value]).map(i => ({ ...i, Source: 'Published' })))
+    }
+    if (wRes.status === 'fulfilled' && wRes.value) {
+      combined.push(...(Array.isArray(wRes.value) ? wRes.value : [wRes.value]).map(i => ({ ...i, Source: 'Working' })))
     }
 
-    const response = await axiosWrapper.post('/api/Data/GetMergedData', payload)
-    const resData = response.data || response
-    const resultObj = resData[selectedRegTypeId.value]
-
-    if (!resultObj) {
-      rowData.value = []; columnDefs.value = [];
-      return sAlert.Info('조회된 데이터가 없습니다.')
-    }
-
-    const diffMap = new Map()
-    if (Array.isArray(resultObj.DiffData)) {
-      resultObj.DiffData.forEach(d => { if (d.TAG_IDX) diffMap.set(d.TAG_IDX.toString(), d) })
-    }
-
-    let rawList = []
-    if (selectedType.value === 'Working') rawList = resultObj.WrkData || []
-    else if (selectedType.value === 'Publish') rawList = resultObj.PubData || []
-    else if (selectedType.value === 'Merged') rawList = resultObj.MergeData || []
-
-    const allKeys = new Set()
-    const processedData = rawList.map(item => {
-      const diffInfo = diffMap.get(item.TAG_IDX?.toString()) || {}
-      let flat = { 선택: false }
-
-      if (Array.isArray(item.ATTRIBUTES)) {
-        item.ATTRIBUTES.forEach(attr => { if (attr.ATT_ID) flat[attr.ATT_ID] = attr.VALUE ?? '' })
-      }
-
-      Object.assign(flat, { ...item, Edit: diffInfo.EditType || '', Status: diffInfo.Status || '' })
-
-      Object.keys(flat).forEach(key => {
-        if (!['ATTRIBUTES', '__diffProps', '_id', '선택', 'Edit', 'Status'].includes(key) && typeof flat[key] !== 'object') {
-          allKeys.add(key)
-        }
-      })
-      return flat
+    const allAttIds = new Set()
+    combined.forEach(item => {
+      (item.ATTRIBUTES || []).forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
     })
 
-    const dynamicCols = [
-      { headerName: 'Edit', field: 'Edit', width: 90, pinned: 'left', cellStyle: { textAlign: 'center', fontWeight: 'bold' } },
-      { headerName: 'Status', field: 'Status', width: 100, pinned: 'left', cellStyle: { textAlign: 'center', fontWeight: 'bold' } },
-      { headerName: 'Tag No', field: 'TAG_NO', width: 180, pinned: 'left', checkboxSelection: true, headerCheckboxSelection: true },
-      ...Array.from(allKeys).filter(k => k !== 'TAG_NO').sort().map(key => ({
-        headerName: key, field: key, minWidth: 130
-      }))
-    ]
+    const processedData = combined.map(item => {
+      const flatItem = { ...item }
+      allAttIds.forEach(id => {
+        const target = (item.ATTRIBUTES || []).find(a => a?.ATT_ID === id)
+        flatItem[`ATT_${id}`] = target && target.VALUE !== null ? target.VALUE : 'null'
+      })
+      return flatItem
+    })
 
-    columnDefs.value = dynamicCols
-    rowData.value = processedData
-    sAlert.Success(`조회 완료: ${processedData.length}건`)
+    dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
+      headerName: id,
+      field: `ATT_${id}`,
+      minWidth: 140,
+      headerClass: 'att-column-header',
+      cellRenderer: highlightRenderer,
+    }))
+
+    rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
   } catch (err) {
-    console.error(err); sAlert.Error('데이터 로드 실패')
+    sAlert.Error('조회 실패')
+  } finally {
+    if (gridApi.value) gridApi.value.setGridOption('loading', false)
   }
 }
 
-const resetFilters = () => {
-  selectedProjNo.value = ''; selectedRegTypeId.value = ''; rowData.value = [];
+// 렌더러 및 필터링 로직
+const highlightRenderer = params => {
+  const val = params.value === null || params.value === undefined ? '' : String(params.value)
+  const searchTerm = localFilterQuery.value.trim()
+  if (!searchTerm || val === 'null' || val === '') return val
+  const re = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
+  return val.replace(re, `<mark class="filter-highlight">$1</mark>`)
 }
 
-const gridOptions = {
-  defaultColDef: { resizable: true, sortable: true, filter: true, floatingFilter: true },
-  rowSelection: 'multiple',
-  suppressFieldDotNotation: true
+const onFilterInput = () => {
+  if (gridApi.value) gridApi.value.refreshCells({ force: true })
 }
 
-const onGridReady = p => { gridApi.value = p.api }
+const onCellClicked = async p => {
+  const colId = p.column.getColId()
+  if (colId === 'Source') {
+    selectedRow.value = p.data
+    showDetailModal.value = true
+  } else if (colId === 'CLS_ID' && p.value) {
+    clickedClassId.value = p.value
+    try {
+      if (gridApi.value) gridApi.value.setGridOption('loading', true)
+      const res = await axiosWrapper.post('/api/Register/GetByClassIDs', {
+        ProjectNo: selectedProjNo.value,
+        ClassIDs: [p.value],
+      })
+      classModalData.value = Array.isArray(res) ? res : [res]
+      showClassModal.value = true
+    } catch (e) {
+      sAlert.Error('Class 정보 로드 실패')
+    } finally {
+      if (gridApi.value) gridApi.value.setGridOption('loading', false)
+    }
+  }
+}
 
-// 💡 https://m.kpedia.jp/w/19171 최초 마운트 시 실행
+const onClassGridCellClicked = p => {
+  if (p.column.getColId() === 'TYPE_ID' && p.value) {
+    const routeData = router.resolve({
+      path: '/register-mapping-setup',
+      query: { reg_type_id: p.data.TYPE_ID, proj_no: selectedProjNo.value, ep_id: p.data.EP_ID },
+    })
+    window.open(routeData.href, '_blank')
+  }
+}
+
+const gridOptions = computed(() => ({
+  columnDefs: [
+    {
+      headerName: 'Source',
+      field: 'Source',
+      width: 110,
+      pinned: 'left',
+      cellStyle: { cursor: 'pointer' },
+      cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>`,
+    },
+    { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
+    { field: 'TAG_IDX', headerName: 'Tag Idx', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
+    { field: 'TAG_DESC', headerName: 'Tag Desc', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
+    { field: 'EP_IC', headerName: 'EP IC', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
+    {
+      field: 'CLS_ID',
+      headerName: 'Class',
+      width: 120,
+      pinned: 'left',
+      cellRenderer: highlightRenderer,
+      cellStyle: { cursor: 'pointer', textDecoration: 'underline', color: '#0d6efd', fontWeight: 'bold' },
+    },
+    ...dynamicAttCols.value,
+  ],
+  rowData: filteredData.value,
+  loadingOverlayComponent: AggridLoadingOverlay,
+  defaultColDef: { sortable: true, filter: 'agTextColumnFilter', floatingFilter: true, resizable: true },
+}))
+
+const filteredData = computed(() => {
+  const query = localFilterQuery.value.trim().toLowerCase()
+  if (!query) return rawDataList.value
+  return rawDataList.value.filter(i => Object.values(i).some(val => String(val).toLowerCase().includes(query)))
+})
+
+// 모달 설정
+const classModalColDefs = [
+  { headerName: 'Register No', field: 'TYPE_ID', flex: 1, cellStyle: { fontWeight: 'bold', color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer' } },
+  { headerName: 'Description', field: 'DESC', flex: 1.5 },
+  { headerName: 'EP ID', field: 'EP_ID', width: 120 },
+]
+const detailModalColDefs = [
+  { headerName: 'Property', field: 'key', width: 220, pinned: 'left', cellStyle: { background: '#f8f9fa', fontWeight: 'bold' } },
+  { headerName: 'Value', field: 'value', flex: 1 },
+]
+const detailModalRowData = computed(() => {
+  if (!selectedRow.value) return []
+  return Object.entries(selectedRow.value).filter(([k]) => k !== 'ATTRIBUTES').map(([k, v]) => ({ key: k, value: v ?? '-' }))
+})
+
+const onGridReady = params => { gridApi.value = params.api }
+const closeClassModal = () => { showClassModal.value = false; classModalData.value = [] }
+const closeDetailModal = () => { showDetailModal.value = false; selectedRow.value = null }
+
+// 💡 핵심: 마운트 시 URL 파라미터가 있어도 번호만 세팅하고 fetchData()는 호출하지 않음
 onMounted(async () => {
   await fetchProjectList()
-  
-  // URL 쿼리 파라미터 확인 (?proj_no=TE1002 형태)
-  const urlProjNo = route.query?.proj_no
+  const urlProjNo = route.query?.proj_no || new URLSearchParams(window.location.search).get('proj_no')
   if (urlProjNo) {
-    const exists = projectOptions.value.find(p => p.value === urlProjNo)
-    if (exists) {
-      selectedProjNo.value = urlProjNo
-      // watch(selectedProjNo)에 의해 fetchRegisters가 자동 호출됩니다.
-    }
+    selectedProjNo.value = urlProjNo
+    projSearchQuery.value = urlProjNo
+    // 💡 fetchData() 호출을 의도적으로 제거하여 자동 조회를 막음
   }
 })
 </script>
 
 <style scoped lang="scss">
-.header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 8px; }
-.grid-header-title { background-color: var(--tpl-table-thead-bg, #f8f9fa); color: var(--tpl-body-color); }
+.grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid var(--tpl-divider); }
+.header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 10px; }
+
 :deep(.ag-theme-custom) {
-  --ag-background-color: var(--card-bg, #ffffff);
-  --ag-font-size: 11px;
-  .ag-header-cell-label { justify-content: center; font-weight: 600; }
+  --ag-border-color: #dee2e6;
+  --ag-header-background-color: #f8f9fa;
+  --ag-font-size: 12px;
+  .ag-header-cell { border-right: 1px solid #dee2e6 !important; font-weight: 600; }
+  .ag-cell { border-right: 1px solid #f1f3f5 !important; display: flex; align-items: center; }
+  .filter-highlight { background-color: #ffeb3b !important; color: #000 !important; font-weight: bold; }
+  .att-column-header { background-color: #fff9db !important; color: #856404 !important; }
 }
-.tpl-btn {
-  height: 32px; padding: 0 12px; border-radius: 4px; display: flex; align-items: center; font-size: 12px;
-  &.btn-primary { background-color: #007bff; border: none; color: white; cursor: pointer; }
-}
+
+.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.custom-modal-window { background: #fff; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
+.tpl-btn { height: 32px; padding: 0 16px; border-radius: 4px; font-weight: 500; &--primary { background: var(--primary-color); color: #fff; border: none; } }
 </style>
