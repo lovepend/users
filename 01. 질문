@@ -99,31 +99,46 @@ const resetFilters = () => {
 
 // --- API Calls ---
 const fetchProjects = async () => {
-  const res = await axiosWrapper.get('/api/Project/Get')
-  projectList.value = Array.isArray(res) ? res : []
+  try {
+    const res = await axiosWrapper.get('/api/Project/Get')
+    projectList.value = Array.isArray(res) ? res : []
+  } catch (error) {
+    console.error("Project Load Error:", error)
+  }
 }
 
 const fetchData = async () => {
   if (!selectedProjNo.value) return
-  // 기존 머지 대상 조회 API 호출 로직 (예시)
-  const res = await axiosWrapper.post('/api/Merge/GetList', { ProjectNo: selectedProjNo.value })
-  rowData.value = Array.isArray(res) ? res : []
+  
+  try {
+    // 💡 404 해결: 검증된 API 주소와 필수 페이로드(Register ID 등) 반영
+    const payload = {
+      ProjectNo: selectedProjNo.value,
+      REG_TYPE_ID: '101TEST', // 이전에 사용하시던 고유 ID
+      Type: 'Merged',
+      ContainDeleted: false
+    }
+
+    const res = await axiosWrapper.post('/api/TagType/Get', payload) 
+    rowData.value = Array.isArray(res) ? res : []
+  } catch (error) {
+    console.error("Data Load Error:", error)
+    rowData.value = []
+  }
 }
 
 const onMerge = async () => {
-  // 머지 실행 로직
-  console.log('Merging process start...')
+  console.log('Merge processing for:', selectedProjNo.value)
+  // 머지 실행 API 로직 추가 가능
 }
 
 // --- AG Grid Config ---
 const gridOptions = computed(() => ({
   columnDefs: [
     { headerName: 'ID', field: 'ID', width: 100, checkboxSelection: true, headerCheckboxSelection: true },
-    { headerName: 'Source Type', field: 'SOURCE_TYPE', width: 150 },
-    { headerName: 'Target Type', field: 'TARGET_TYPE', width: 150 },
-    { headerName: 'Status', field: 'STATUS', width: 120, 
-      cellRenderer: p => `<span class="badge ${p.value === 'Done' ? 'bg-success' : 'bg-warning text-dark'}">${p.value}</span>`
-    },
+    { headerName: 'Type', field: 'TYPE_ID', width: 150 },
+    { headerName: 'LNK Code Count', field: 'LNK_CODE', width: 150, valueGetter: p => p.data.LNK_CODE?.length || 0 },
+    { headerName: 'Reg Date', field: 'REG_DT', width: 180 },
     { headerName: 'Description', field: 'DESC', flex: 1 },
   ],
   defaultColDef: {
@@ -136,7 +151,7 @@ const gridOptions = computed(() => ({
 
 const onGridReady = p => { gridApi.value = p.api }
 
-// 초기 진입 시 로직
+// 초기 진입 시 URL 파라미터 확인
 onMounted(async () => {
   await fetchProjects()
   const urlProjNo = route.query?.proj_no
@@ -152,7 +167,7 @@ onMounted(async () => {
 .grid-header-title { background-color: var(--tpl-table-thead-bg, #f8f9fa); color: var(--tpl-body-color); }
 
 :deep(.ag-theme-custom) {
-  /* 다크모드 대응 통합 변수 */
+  /* 다크모드 글자 안보임 현상 해결 변수 */
   --ag-background-color: var(--card-bg, #ffffff);
   --ag-foreground-color: var(--tpl-body-color, #212529);
   --ag-header-background-color: var(--tpl-table-thead-bg, #f8f9fa);
@@ -167,7 +182,10 @@ onMounted(async () => {
 
 .tpl-btn {
   height: 32px; padding: 0 12px; border-radius: 4px; display: flex; align-items: center; font-size: 12px;
-  &.btn-primary { border: none; }
+  &.btn-primary { 
+    background-color: #007bff; border: none; color: white;
+    &:disabled { background-color: #ccc; }
+  }
 }
 
 .dropdown-menu {
