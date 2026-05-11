@@ -9,18 +9,20 @@
       if (!isProd) allowedStatus.push('READY')
 
       let fileData: Blob | null = null;
+      let isLocal = false; // 로컬 파일 여부 확인용 플래그
 
-      // 1. [우선 순위] 로컬 파일 시도 (public/temp.xlsx 등)
+      // 1. [우선 순위] 로컬 파일 시도
       try {
-        const localResponse = await fetch(`/${filename}`); // 프로젝트 public 폴더 내 파일
+        const localResponse = await fetch(`/${filename}`); 
         if (localResponse.ok) {
           fileData = await localResponse.blob();
-          console.log('로컬에서 파일을 먼저 불러왔습니다.');
+          isLocal = true; // 로컬 파일 로드 성공
+          console.log('로컬에서 파일을 성공적으로 불러왔습니다.');
         } else {
-          throw new Error('Local file not found');
+          throw new Error('Local file missing');
         }
       } catch (localError) {
-        // 2. [차선 책] 로컬 파일이 없으면 서버에 요청
+        // 2. [차선 책] 로컬에 없으면 서버 호출
         console.warn('로컬 파일이 없어 서버 API를 호출합니다.');
         try {
           const response: any = await axiosWrapper.postAll(
@@ -29,21 +31,30 @@
             { responseType: 'blob', headers: { FileToken: 'frontserver@sh' } }
           )
           fileData = response.data;
+          isLocal = false; // 서버 파일임
         } catch (serverError) {
-          console.error('서버 호출마저 실패했습니다.', serverError);
-          throw new Error('모든 경로에서 파일을 찾을 수 없습니다.');
+          console.error('서버 호출 실패:', serverError);
+          throw new Error('파일을 찾을 수 없습니다.');
         }
       }
 
       if (!fileData) return;
 
-      // 3. 파일 복호화 및 통합 파싱 로직
-      // (주의: 로컬 파일이 이미 평문이라면 복호화 함수 내부에서 예외처리가 필요할 수 있습니다)
-      const decryptedBlob: any = await ApiCommon.postFileDecryptFile({ 
-        FILE: new File([fileData], filename) 
-      })
-      const workbook = XLSX.read(await decryptedBlob.arrayBuffer(), { type: 'array' })
+      let workbookArrayBuffer: ArrayBuffer;
 
+      if (isLocal) {
+        // 로컬 파일은 복호화 없이 바로 ArrayBuffer로 변환
+        workbookArrayBuffer = await fileData.arrayBuffer();
+      } else {
+        // 서버 파일은 기존대로 복호화 진행
+        const decryptedBlob: any = await ApiCommon.postFileDecryptFile({ 
+          FILE: new File([fileData], filename) 
+        });
+        workbookArrayBuffer = await decryptedBlob.arrayBuffer();
+      }
+
+      // 3. 엑셀 파싱 및 데이터 그룹화 (이후 로직 동일)
+      const workbook = XLSX.read(workbookArrayBuffer, { type: 'array' })
       let combined: any[] = []
       workbook.SheetNames.forEach((name, index) => {
         const skip = index === 0 ? 2 : 0
@@ -57,7 +68,6 @@
 
         if (allowedStatus.includes(status) && version) {
           if (isProd) version = getUpdatedVersionForProd(version)
-
           if (!grouped[version]) grouped[version] = { version: version, items: [] }
           grouped[version].items.push({
             ...row,
@@ -73,8 +83,6 @@
 
     } catch (error) {
       console.error('Fetch Error:', error)
-      // 사용자에게 에러 알림 (선택 사항)
-      // sAlert.Error('릴리즈 노트를 불러올 수 없습니다.'); 
     } finally {
       isLoading.value = false
       if (SEF && (SEF as any).onHideOverlay) (SEF as any).onHideOverlay()
