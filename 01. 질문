@@ -1,18 +1,4 @@
-네, fetchAndParseExcel 함수 내의 axiosWrapper.postAll 호출 부분에 try-catch 로직을 강화하여, 서버에서 파일을 불러오는 데 실패했을 때 로컬 파일(예: public 폴더 등에 위치한 파일)을 불러오도록 수정할 수 있습니다.
-
-주요 수정 전략은 다음과 같습니다:
-
-서버 요청 실패 시 Catch: 서버 API 호출이 실패하면 catch 블록으로 이동합니다.
-
-로컬 파일 Fetch: 로컬 경로(예: /sample.xlsx)에서 파일을 fetch로 가져옵니다.
-
-동일한 파싱 로직 적용: 가져온 로컬 파일을 기존과 동일한 방식으로 복호화(필요 시) 및 파싱합니다.
-
-수정된 핵심 함수 코드는 다음과 같습니다.
-
-수정된 fetchAndParseExcel 함수
-TypeScript
-  /** 메인 페치 함수 */
+/** 메인 페치 함수 */
   const fetchAndParseExcel = async () => {
     try {
       isLoading.value = true
@@ -22,30 +8,39 @@ TypeScript
       let allowedStatus = ['FINISH', 'CHECKED']
       if (!isProd) allowedStatus.push('READY')
 
-      let responseData: any;
+      let fileData: Blob | null = null;
 
+      // 1. [우선 순위] 로컬 파일 시도 (public/temp.xlsx 등)
       try {
-        // 1. 우선 서버에서 파일을 시도
-        const response: any = await axiosWrapper.postAll(
-          urlList.gfi,
-          { id: fileId.value },
-          { responseType: 'blob', headers: { FileToken: 'frontserver@sh' } }
-        )
-        responseData = response.data;
-      } catch (serverError) {
-        // 2. 서버 호출 실패 시 로컬 파일을 불러옴
-        console.warn('서버 파일을 불러오지 못해 로컬 파일을 시도합니다.', serverError);
-        
-        // public 폴더 내에 해당 파일이 있어야 합니다 (예: public/temp.xlsx)
-        const localResponse = await fetch('/temp.xlsx'); 
-        if (!localResponse.ok) throw new Error('로컬 파일도 찾을 수 없습니다.');
-        
-        responseData = await localResponse.blob();
+        const localResponse = await fetch(`/${filename}`); // 프로젝트 public 폴더 내 파일
+        if (localResponse.ok) {
+          fileData = await localResponse.blob();
+          console.log('로컬에서 파일을 먼저 불러왔습니다.');
+        } else {
+          throw new Error('Local file not found');
+        }
+      } catch (localError) {
+        // 2. [차선 책] 로컬 파일이 없으면 서버에 요청
+        console.warn('로컬 파일이 없어 서버 API를 호출합니다.');
+        try {
+          const response: any = await axiosWrapper.postAll(
+            urlList.gfi,
+            { id: fileId.value },
+            { responseType: 'blob', headers: { FileToken: 'frontserver@sh' } }
+          )
+          fileData = response.data;
+        } catch (serverError) {
+          console.error('서버 호출마저 실패했습니다.', serverError);
+          throw new Error('모든 경로에서 파일을 찾을 수 없습니다.');
+        }
       }
 
-      // 3. 공통 복호화 및 파싱 로직 (서버 데이터든 로컬 데이터든 동일하게 처리)
+      if (!fileData) return;
+
+      // 3. 파일 복호화 및 통합 파싱 로직
+      // (주의: 로컬 파일이 이미 평문이라면 복호화 함수 내부에서 예외처리가 필요할 수 있습니다)
       const decryptedBlob: any = await ApiCommon.postFileDecryptFile({ 
-        FILE: new File([responseData], filename) 
+        FILE: new File([fileData], filename) 
       })
       const workbook = XLSX.read(await decryptedBlob.arrayBuffer(), { type: 'array' })
 
@@ -62,6 +57,7 @@ TypeScript
 
         if (allowedStatus.includes(status) && version) {
           if (isProd) version = getUpdatedVersionForProd(version)
+
           if (!grouped[version]) grouped[version] = { version: version, items: [] }
           grouped[version].items.push({
             ...row,
@@ -74,21 +70,13 @@ TypeScript
       releaseNotesGrouped.value = Object.values(grouped).sort((a: any, b: any) =>
         b.version.localeCompare(a.version, undefined, { numeric: true })
       )
+
     } catch (error) {
-      console.error('최종 데이터 로드 실패:', error)
-      sAlert.Error('데이터를 불러오는 중 오류가 발생했습니다.')
+      console.error('Fetch Error:', error)
+      // 사용자에게 에러 알림 (선택 사항)
+      // sAlert.Error('릴리즈 노트를 불러올 수 없습니다.'); 
     } finally {
       isLoading.value = false
       if (SEF && (SEF as any).onHideOverlay) (SEF as any).onHideOverlay()
     }
   }
-추가로 체크해야 할 사항
-로컬 파일 위치: 위 코드에서 fetch('/temp.xlsx')를 사용하려면 프로젝트의 public 폴더 바로 아래에 temp.xlsx 파일이 실재해야 합니다. 빌드 후에는 루트 경로에 위치하게 됩니다.
-
-복호화 로직: 만약 로컬 파일은 암호화되지 않은 일반 엑셀 파일이라면, ApiCommon.postFileDecryptFile 함수에서 에러가 날 수 있습니다. 로컬 파일일 경우 복호화 과정을 건너뛰도록 분기 처리가 필요할 수 있습니다.
-
-예: 로컬일 땐 바로 XLSX.read(await responseData.arrayBuffer(), ...) 호출
-
-CORS/보안: fetch로 로컬 에셋을 가져오는 것은 같은 도메인 내에서 문제없이 작동합니다.
-
-이 구조를 적용하면 서버 연결이 불안정하거나 파일 ID가 잘못되었을 때 준비된 로컬 백업 파일을 보여줄 수 있어 사용자 경험이 훨씬 매끄러워질 거예요.
