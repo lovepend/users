@@ -3,6 +3,7 @@
     <DefaultCard :title="cardTitle" class="w-100 h-100">
       <template #header-right>
         <div class="d-flex align-items-center gap-2 flex-wrap">
+          
           <div class="dropdown custom-single-select" style="min-width: 220px">
             <InputBox
               id="input-proj"
@@ -138,7 +139,7 @@ const selectedRow = ref(null)
 const classModalData = ref([])
 const clickedClassId = ref('')
 
-// 1. 프로젝트 리스트 로드
+// 1. 프로젝트 리스트 가져오기
 const fetchProjectList = async () => {
   try {
     const res = await axiosWrapper.get('/api/Project/Get')
@@ -158,12 +159,12 @@ const selectProject = val => {
   projSearchQuery.value = val
 }
 
-// 2. 조회 실행 (수동 버튼 클릭 시)
 const confirmSearch = () => {
   if (!selectedProjNo.value) return sAlert.Warning('프로젝트를 선택하세요.')
   fetchData()
 }
 
+// 2. 데이터 조회 로직
 const fetchData = async () => {
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
   try {
@@ -211,7 +212,7 @@ const fetchData = async () => {
   }
 }
 
-// 렌더러 및 필터링 로직
+// 렌더링 및 필터링 관련
 const highlightRenderer = params => {
   const val = params.value === null || params.value === undefined ? '' : String(params.value)
   const searchTerm = localFilterQuery.value.trim()
@@ -257,6 +258,7 @@ const onClassGridCellClicked = p => {
   }
 }
 
+// 3. AG Grid 설정 (StatusBar 추가)
 const gridOptions = computed(() => ({
   columnDefs: [
     {
@@ -264,6 +266,8 @@ const gridOptions = computed(() => ({
       field: 'Source',
       width: 110,
       pinned: 'left',
+      checkboxSelection: true,
+      headerCheckboxSelection: true,
       cellStyle: { cursor: 'pointer' },
       cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>`,
     },
@@ -283,7 +287,21 @@ const gridOptions = computed(() => ({
   ],
   rowData: filteredData.value,
   loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, filter: 'agTextColumnFilter', floatingFilter: true, resizable: true },
+  defaultColDef: { 
+    sortable: true, 
+    filter: 'agTextColumnFilter', 
+    floatingFilter: true, 
+    resizable: true 
+  },
+  rowSelection: 'multiple',
+  // 💡StatusBar 옵션
+  statusBar: {
+    statusPanels: [
+      { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'left' },
+      { statusPanel: 'agSelectedRowCountComponent', align: 'right' },
+      { statusPanel: 'agAggregationComponent', align: 'right' },
+    ],
+  },
 }))
 
 const filteredData = computed(() => {
@@ -292,7 +310,7 @@ const filteredData = computed(() => {
   return rawDataList.value.filter(i => Object.values(i).some(val => String(val).toLowerCase().includes(query)))
 })
 
-// 모달 설정
+// 모달 컬럼 정의
 const classModalColDefs = [
   { headerName: 'Register No', field: 'TYPE_ID', flex: 1, cellStyle: { fontWeight: 'bold', color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer' } },
   { headerName: 'Description', field: 'DESC', flex: 1.5 },
@@ -311,14 +329,14 @@ const onGridReady = params => { gridApi.value = params.api }
 const closeClassModal = () => { showClassModal.value = false; classModalData.value = [] }
 const closeDetailModal = () => { showDetailModal.value = false; selectedRow.value = null }
 
-// 💡 핵심: 마운트 시 URL 파라미터가 있어도 번호만 세팅하고 fetchData()는 호출하지 않음
+// 4. 최초 진입 시 로직 (자동 조회 방지 유지)
 onMounted(async () => {
   await fetchProjectList()
   const urlProjNo = route.query?.proj_no || new URLSearchParams(window.location.search).get('proj_no')
   if (urlProjNo) {
     selectedProjNo.value = urlProjNo
     projSearchQuery.value = urlProjNo
-    // 💡 fetchData() 호출을 의도적으로 제거하여 자동 조회를 막음
+    // fetchData() 를 호출하지 않아 자동 조회가 발생하지 않습니다.
   }
 })
 </script>
@@ -331,8 +349,21 @@ onMounted(async () => {
   --ag-border-color: #dee2e6;
   --ag-header-background-color: #f8f9fa;
   --ag-font-size: 12px;
+  
   .ag-header-cell { border-right: 1px solid #dee2e6 !important; font-weight: 600; }
   .ag-cell { border-right: 1px solid #f1f3f5 !important; display: flex; align-items: center; }
+  
+  /* StatusBar 스타일 */
+  .ag-status-bar {
+    font-weight: 500;
+    color: #444;
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+    padding: 0 15px;
+    font-size: 11px;
+    height: 32px;
+  }
+  
   .filter-highlight { background-color: #ffeb3b !important; color: #000 !important; font-weight: bold; }
   .att-column-header { background-color: #fff9db !important; color: #856404 !important; }
 }
@@ -340,5 +371,5 @@ onMounted(async () => {
 .custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; }
 .custom-modal-window { background: #fff; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
 .modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
-.tpl-btn { height: 32px; padding: 0 16px; border-radius: 4px; font-weight: 500; &--primary { background: var(--primary-color); color: #fff; border: none; } }
+.tpl-btn { height: 32px; padding: 0 16px; border-radius: 4px; font-weight: 500; &--primary { background: #007bff; color: #fff; border: none; cursor: pointer; } }
 </style>
