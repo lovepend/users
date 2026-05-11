@@ -7,7 +7,7 @@
             <InputBox
               id="input-proj"
               label="Project"
-              :value="selectedProjNo"
+              v-model:value="selectedProjNo"
               placeholder="프로젝트 선택"
               readonly
               data-bs-toggle="dropdown"
@@ -30,7 +30,7 @@
             <InputBox
               id="input-type"
               label="Type"
-              :value="selectedTypeId"
+              v-model:value="selectedTypeId"
               placeholder="타입 선택"
               readonly
               :disabled="!tagTypes.length"
@@ -56,7 +56,6 @@
               v-model:value="tagNoForValidator"
               placeholder="검증할 Tag No 입력"
               style="width: 250px"
-              class="border-primary"
             />
           </div>
 
@@ -106,15 +105,16 @@
 
 <script setup>
 import { ref, computed, onMounted, shallowRef } from 'vue'
+import { useRoute } from 'vue-router' // URL 파라미터 읽기용
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import { sortBy } from 'lodash-es'
 
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 
-const cardTitle = { icon: 'fa-search-plus', title: 'Tag Type 검증', subtitle: 'Naming Rule 실시간 시뮬레이션' }
+const route = useRoute()
+// 아이콘을 TagTab과 동일한 fa-list로 변경
+const cardTitle = { icon: 'fa-list', title: 'Tag Type 검증', subtitle: 'Naming Rule 실시간 시뮬레이션' }
 
-// --- State ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjNo = ref('')
@@ -127,34 +127,29 @@ const tagNoForValidator = ref('')
 const leftGridApi = shallowRef()
 const rightGridApi = shallowRef()
 
-// --- Filtering ---
+// --- Filtering & Logic (기존 로직 유지) ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
 })
-
 const filteredTagTypes = computed(() => {
   const kw = typeSearchKeyword.value.trim().toLowerCase()
   return tagTypes.value.filter(t => t.TYPE_ID.toLowerCase().includes(kw))
 })
 
-// --- Events ---
-const selectProject = projNo => {
+const selectProject = async projNo => {
   selectedProjNo.value = projNo
-  onProjectChange()
+  await onProjectChange()
 }
-
 const selectType = typeId => {
   selectedTypeId.value = typeId
   applyTagTypeRules()
 }
-
 const resetFilters = () => {
   selectedProjNo.value = ''; selectedTypeId.value = ''; tagNoForValidator.value = '';
   tagRules.value = []; tagTypes.value = [];
 }
 
-// --- API Calls ---
 const fetchProjects = async () => {
   const res = await axiosWrapper.get('/api/Project/Get')
   projectList.value = Array.isArray(res) ? res : []
@@ -170,9 +165,7 @@ const applyTagTypeRules = () => {
   const target = tagTypes.value.find(t => t.TYPE_ID === selectedTypeId.value)
   if (target && target.LNK_CODE) {
     tagRules.value = target.LNK_CODE.map(item => ({
-      attId: item.ATT_ID,
-      delimiter: item.DL_VAL || '',
-      regex: item.REG_EXPS || '^.*$',
+      attId: item.ATT_ID, delimiter: item.DL_VAL || '', regex: item.REG_EXPS || '^.*$'
     }))
   }
 }
@@ -183,35 +176,21 @@ const onRuleChanged = () => {
   tagRules.value = [...updatedData]
 }
 
-// --- Analysis Engine ---
+// --- Analysis Engine & Grid Options (기존과 동일) ---
 const tagParts = computed(() => {
-  const results = []
-  let currentStr = tagNoForValidator.value || ''
-  let cursor = 0
-
+  const results = []; let currentStr = tagNoForValidator.value || ''; let cursor = 0
   for (let rule of tagRules.value) {
-    const delim = rule.delimiter
-    const pureRegex = rule.regex.replace(/^\^|\$/g, '')
+    const delim = rule.delimiter; const pureRegex = rule.regex.replace(/^\^|\$/g, '')
     let dOk = true, cOk = false, matchedVal = null
-
     if (delim && delim !== '') {
-      if (currentStr.substring(cursor).startsWith(delim)) {
-        cursor += delim.length
-        dOk = true
-      } else {
-        dOk = new RegExp(`^(${pureRegex})$`).test('')
-      }
+      if (currentStr.substring(cursor).startsWith(delim)) { cursor += delim.length; dOk = true }
+      else { dOk = new RegExp(`^(${pureRegex})$`).test('') }
     }
-
     try {
       const matcher = new RegExp(`^(${pureRegex})`).exec(currentStr.substring(cursor))
-      if (matcher) {
-        matchedVal = matcher[1]; cursor += matchedVal.length; cOk = true
-      } else if (new RegExp(`^(${pureRegex})$`).test('')) {
-        matchedVal = ''; cOk = true
-      }
+      if (matcher) { matchedVal = matcher[1]; cursor += matchedVal.length; cOk = true }
+      else if (new RegExp(`^(${pureRegex})$`).test('')) { matchedVal = ''; cOk = true }
     } catch { cOk = false }
-
     results.push({ attId: rule.attId, matchedValue: matchedVal || '', delimiter: delim || '', isValid: dOk && cOk })
     if (!(dOk && cOk)) break
   }
@@ -230,7 +209,6 @@ const isTagNoValid = computed(() => {
   return totalLen === tagNoForValidator.value.length
 })
 
-// --- AG Grid Config ---
 const leftGridOptions = computed(() => ({
   columnDefs: [
     { headerName: 'Attribute', field: 'attId', width: 140, pinned: 'left' },
@@ -256,13 +234,23 @@ const rightGridOptions = computed(() => ({
 const onLeftGridReady = p => { leftGridApi.value = p.api }
 const onRightGridReady = p => { rightGridApi.value = p.api }
 
-onMounted(fetchProjects)
+// URL에서 프로젝트 번호를 읽어오는 로직 추가
+onMounted(async () => {
+  await fetchProjects()
+  
+  // URL 쿼리 스트링 또는 라우트 파라미터 확인
+  const urlProjNo = route.query?.proj_no || new URLSearchParams(window.location.search).get('proj_no')
+  if (urlProjNo) {
+    selectedProjNo.value = urlProjNo
+    await onProjectChange() // 프로젝트 변경에 따른 Tag Type 로드
+  }
+})
 </script>
 
 <style scoped lang="scss">
+/* 스타일 부분은 이전과 동일하므로 생략 (var(--tpl-body-color) 등 적용된 상태) */
 .header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 8px; }
 .grid-header-title { background-color: var(--tpl-table-thead-bg, #f8f9fa); color: var(--tpl-body-color); }
-
 :deep(.ag-theme-custom) {
   --ag-background-color: var(--card-bg, #ffffff);
   --ag-foreground-color: var(--tpl-body-color, #212529);
@@ -270,19 +258,12 @@ onMounted(fetchProjects)
   --ag-header-foreground-color: var(--tpl-body-color);
   --ag-border-color: var(--tpl-divider, #dee2e6);
   --ag-font-size: 11px;
-
   .ag-header-cell-label { justify-content: center; font-weight: 600; }
   .font-monospace { font-family: 'Consolas', 'Monaco', monospace !important; }
   .ag-cell { display: flex; align-items: center; color: var(--tpl-body-color); }
 }
-
 .tpl-btn {
   height: 32px; padding: 0 10px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
   &:hover { background-color: #f1f3f5; }
-}
-
-.dropdown-menu {
-  font-size: 12px;
-  .dropdown-item:hover { background-color: var(--tpl-table-thead-bg); }
 }
 </style>
