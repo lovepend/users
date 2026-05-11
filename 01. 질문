@@ -91,12 +91,14 @@
 
 <script setup>
 import { ref, computed, watch, onMounted, shallowRef } from 'vue'
+import { useRoute } from 'vue-router' // URL 인식용 추가
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
 import { sAlert } from '@/utils/messages/alert-common'
 
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
 
+const route = useRoute()
 const cardTitle = { icon: 'fa-list', title: 'Data Merge 관리', subtitle: '속성 합집합 및 Diff 상태 조회' }
 
 // --- 상태 관리 ---
@@ -109,10 +111,10 @@ const projSearchQuery = ref('')
 const regSearchQuery = ref('')
 
 const rowData = ref([])
-const columnDefs = ref([]) // 동적 컬럼 정의
+const columnDefs = ref([]) 
 const gridApi = shallowRef()
 
-// --- 필터링 옵션 ---
+// --- 필터링 ---
 const filteredProjectOptions = computed(() => {
   const q = projSearchQuery.value.toLowerCase()
   return projectOptions.value.filter(p => p.text.toLowerCase().includes(q))
@@ -128,11 +130,16 @@ const fetchProjectList = async () => {
   projectOptions.value = res.map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
 }
 
+// 💡 프로젝트 변경 감지하여 Register 목록 로드
+const fetchRegisters = async (projNo) => {
+  if (!projNo) return
+  const res = await axiosWrapper.post('/api/Register/Get', { ProjectNo: projNo })
+  if (res) regOptions.value = res
+}
+
 watch(selectedProjNo, async (newVal) => {
   selectedRegTypeId.value = ''; regOptions.value = []
-  if (!newVal) return
-  const res = await axiosWrapper.post('/api/Register/Get', { ProjectNo: newVal })
-  if (res) regOptions.value = res
+  if (newVal) await fetchRegisters(newVal)
 })
 
 const onSearch = async () => {
@@ -157,41 +164,27 @@ const onSearch = async () => {
       return sAlert.Info('조회된 데이터가 없습니다.')
     }
 
-    // 1. Diff 데이터 맵 생성 (TAG_IDX 기준)
     const diffMap = new Map()
     if (Array.isArray(resultObj.DiffData)) {
-      resultObj.DiffData.forEach(d => {
-        if (d.TAG_IDX) diffMap.set(d.TAG_IDX.toString(), d)
-      })
+      resultObj.DiffData.forEach(d => { if (d.TAG_IDX) diffMap.set(d.TAG_IDX.toString(), d) })
     }
 
-    // 2. 현재 타입 데이터 선택
     let rawList = []
     if (selectedType.value === 'Working') rawList = resultObj.WrkData || []
     else if (selectedType.value === 'Publish') rawList = resultObj.PubData || []
     else if (selectedType.value === 'Merged') rawList = resultObj.MergeData || []
 
-    // 3. 데이터 가공 및 컬럼 합집합 추출
     const allKeys = new Set()
     const processedData = rawList.map(item => {
       const diffInfo = diffMap.get(item.TAG_IDX?.toString()) || {}
       let flat = { 선택: false }
 
-      // ATTRIBUTES 객체 평탄화 (SpreadJS 로직 이식)
       if (Array.isArray(item.ATTRIBUTES)) {
-        item.ATTRIBUTES.forEach(attr => {
-          if (attr.ATT_ID) flat[attr.ATT_ID] = attr.VALUE ?? ''
-        })
+        item.ATTRIBUTES.forEach(attr => { if (attr.ATT_ID) flat[attr.ATT_ID] = attr.VALUE ?? '' })
       }
 
-      // 기본 데이터 + Diff 정보(EditType, Status) 병합
-      Object.assign(flat, { 
-        ...item, 
-        Edit: diffInfo.EditType || '', 
-        Status: diffInfo.Status || '' 
-      })
+      Object.assign(flat, { ...item, Edit: diffInfo.EditType || '', Status: diffInfo.Status || '' })
 
-      // 컬럼으로 추출할 키 수집 (내부용 변수 제외)
       Object.keys(flat).forEach(key => {
         if (!['ATTRIBUTES', '__diffProps', '_id', '선택', 'Edit', 'Status'].includes(key) && typeof flat[key] !== 'object') {
           allKeys.add(key)
@@ -200,15 +193,12 @@ const onSearch = async () => {
       return flat
     })
 
-    // 4. 컬럼 정의 (Edit, Status를 맨 앞으로)
     const dynamicCols = [
-      { headerName: 'Edit', field: 'Edit', width: 90, pinned: 'left', cellClass: 'text-center' },
-      { headerName: 'Status', field: 'Status', width: 100, pinned: 'left', cellClass: 'text-center' },
+      { headerName: 'Edit', field: 'Edit', width: 90, pinned: 'left', cellStyle: { textAlign: 'center', fontWeight: 'bold' } },
+      { headerName: 'Status', field: 'Status', width: 100, pinned: 'left', cellStyle: { textAlign: 'center', fontWeight: 'bold' } },
       { headerName: 'Tag No', field: 'TAG_NO', width: 180, pinned: 'left', checkboxSelection: true, headerCheckboxSelection: true },
       ...Array.from(allKeys).filter(k => k !== 'TAG_NO').sort().map(key => ({
-        headerName: key,
-        field: key,
-        minWidth: 120
+        headerName: key, field: key, minWidth: 130
       }))
     ]
 
@@ -216,7 +206,7 @@ const onSearch = async () => {
     rowData.value = processedData
     sAlert.Success(`조회 완료: ${processedData.length}건`)
   } catch (err) {
-    console.error(err); sAlert.Error('데이터 처리 중 오류 발생')
+    console.error(err); sAlert.Error('데이터 로드 실패')
   }
 }
 
@@ -224,34 +214,40 @@ const resetFilters = () => {
   selectedProjNo.value = ''; selectedRegTypeId.value = ''; rowData.value = [];
 }
 
-// --- AG Grid 기본 설정 ---
 const gridOptions = {
   defaultColDef: { resizable: true, sortable: true, filter: true, floatingFilter: true },
   rowSelection: 'multiple',
-  suppressFieldDotNotation: true // 속성명에 점(.)이 있을 경우 대비
+  suppressFieldDotNotation: true
 }
 
 const onGridReady = p => { gridApi.value = p.api }
 
-onMounted(fetchProjectList)
+// 💡 https://m.kpedia.jp/w/19171 최초 마운트 시 실행
+onMounted(async () => {
+  await fetchProjectList()
+  
+  // URL 쿼리 파라미터 확인 (?proj_no=TE1002 형태)
+  const urlProjNo = route.query?.proj_no
+  if (urlProjNo) {
+    const exists = projectOptions.value.find(p => p.value === urlProjNo)
+    if (exists) {
+      selectedProjNo.value = urlProjNo
+      // watch(selectedProjNo)에 의해 fetchRegisters가 자동 호출됩니다.
+    }
+  }
+})
 </script>
 
 <style scoped lang="scss">
 .header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 8px; }
 .grid-header-title { background-color: var(--tpl-table-thead-bg, #f8f9fa); color: var(--tpl-body-color); }
-
 :deep(.ag-theme-custom) {
   --ag-background-color: var(--card-bg, #ffffff);
   --ag-font-size: 11px;
   .ag-header-cell-label { justify-content: center; font-weight: 600; }
-  /* Edit/Status 컬럼 강조 스타일 (선택사항) */
-  .ag-cell[col-id="Edit"], .ag-cell[col-id="Status"] { font-weight: bold; }
 }
-
 .tpl-btn {
   height: 32px; padding: 0 12px; border-radius: 4px; display: flex; align-items: center; font-size: 12px;
-  &.btn-primary { background-color: #007bff; border: none; color: white; &:hover { background-color: #0056b3; } }
+  &.btn-primary { background-color: #007bff; border: none; color: white; cursor: pointer; }
 }
-
-.btn-group .btn { font-size: 11px; padding: 2px 8px; }
 </style>
