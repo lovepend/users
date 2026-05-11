@@ -3,301 +3,286 @@
     <DefaultCard :title="cardTitle" class="w-100 h-100">
       <template #header-right>
         <div class="d-flex align-items-center gap-2 flex-wrap">
-          <div class="dropdown custom-single-select" style="min-width: 220px">
+          <div class="dropdown custom-single-select" style="min-width: 200px">
             <InputBox
               id="input-proj"
-              label="프로젝트"
-              v-model:value="selectedProjNo"
-              placeholder="프로젝트 선택/입력"
+              label="Project"
+              :value="selectedProjNo"
+              placeholder="프로젝트 선택"
+              readonly
               data-bs-toggle="dropdown"
-              @input="projSearchQuery = selectedProjNo"
               style="width: 100%"
             />
-            <ul class="dropdown-menu shadow-lg p-0 w-100" style="max-height: 300px; overflow-y: auto; z-index: 1060">
-              <li v-for="proj in filteredProjectOptions" :key="proj.value">
-                <a class="dropdown-item py-2 px-3 cursor-pointer" :class="{ 'active-proj': selectedProjNo === proj.value }" @click="selectProject(proj.value)">
-                  {{ proj.text }}
-                </a>
+            <ul class="dropdown-menu shadow-lg p-2 w-100" style="max-height: 300px; overflow-y: auto; z-index: 1060">
+              <li class="px-2 pb-2 border-bottom mb-1">
+                <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="Search..." @click.stop />
+              </li>
+              <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item py-1 cursor-pointer" @click="selectProject(proj.PROJ_NO)">
+                <div class="d-flex align-items-center justify-content-between">
+                  <span :class="{ 'fw-bold text-primary': selectedProjNo === proj.PROJ_NO }">{{ proj.PROJ_NO }}</span>
+                  <small class="text-muted ms-1 text-truncate" style="max-width: 100px;">{{ proj.DESC }}</small>
+                </div>
               </li>
             </ul>
           </div>
 
-          <InputBox id="input-keyword" label="키워드" v-model:value="searchKeyword" placeholder="Tag No 입력" style="width: 220px" />
+          <div class="dropdown custom-single-select" style="min-width: 180px">
+            <InputBox
+              id="input-type"
+              label="Type"
+              :value="selectedTypeId"
+              placeholder="타입 선택"
+              readonly
+              :disabled="!tagTypes.length"
+              data-bs-toggle="dropdown"
+              style="width: 100%"
+            />
+            <ul class="dropdown-menu shadow-lg p-2 w-100" style="max-height: 300px; overflow-y: auto; z-index: 1060">
+              <li class="px-2 pb-2 border-bottom mb-1">
+                <input type="text" class="form-control form-control-sm" v-model="typeSearchKeyword" placeholder="Search..." @click.stop />
+              </li>
+              <li v-for="type in filteredTagTypes" :key="type.TYPE_ID" class="dropdown-item py-1 cursor-pointer" @click="selectType(type.TYPE_ID)">
+                <span :class="{ 'fw-bold text-primary': selectedTypeId === type.TYPE_ID }">{{ type.TYPE_ID }}</span>
+              </li>
+            </ul>
+          </div>
 
           <div class="header-divider"></div>
-          <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--primary" @click="confirmSearch">
-            <i class="fa fa-search me-1"></i>조회
+
+          <div class="d-flex align-items-center">
+            <InputBox
+              id="input-tagno"
+              label="Tag No"
+              v-model:value="tagNoForValidator"
+              placeholder="검증할 Tag No 입력"
+              style="width: 250px"
+              class="border-primary"
+            />
+          </div>
+
+          <div class="header-divider"></div>
+
+          <button type="button" class="tpl-btn tpl-btn--sm btn-outline-secondary bg-white border" @click="resetFilters" title="초기화">
+            <i class="fa fa-sync text-muted"></i>
           </button>
-          <div class="header-divider"></div>
-
-          <InputBox id="input-filter" label="결과 검색" v-model:value="localFilterQuery" icon="fa-filter" placeholder="결과 내 찾기" style="width: 220px" @input="onFilterInput" />
         </div>
       </template>
 
-      <div class="grid-wrapper w-100 h-100">
-        <ag-grid-vue class="ag-theme-custom w-100 h-100" v-bind="gridOptions" @grid-ready="onGridReady" @cell-clicked="onCellClicked" />
-      </div>
-    </DefaultCard>
-
-    <div v-if="showClassModal" class="custom-modal-overlay" @click.self="closeClassModal">
-      <div class="custom-modal-window shadow-lg" style="width: 850px; height: 60%">
-        <div class="modal-header-dark" style="background: #334155">
-          <div class="d-flex align-items-center gap-2">
-            <i class="fa fa-info-circle text-info"></i>
-            <span class="fw-bold text-white">Class Info: {{ clickedClassId }}</span>
+      <div class="row m-0 h-100 w-100 overflow-hidden">
+        <div class="col-md-6 p-0 h-100 border-end d-flex flex-column">
+          <div class="grid-header-title d-flex justify-content-between align-items-center px-3 py-2">
+            <span class="fw-bold small"><i class="fa fa-edit me-2 text-primary"></i>TAG_TYPE 정의</span>
+            <span v-if="selectedTypeId" class="badge bg-primary-subtle text-primary border border-primary-subtle">{{ selectedTypeId }}</span>
           </div>
-          <button @click="closeClassModal" class="btn btn-xs btn-danger">✕</button>
+          <div class="flex-grow-1 overflow-hidden border-top">
+            <ag-grid-vue
+              v-bind="leftGridOptions"
+              class="ag-theme-custom w-100 h-100"
+              @grid-ready="onLeftGridReady"
+              @cell-value-changed="onRuleChanged"
+            />
+          </div>
         </div>
-        <div class="modal-body-content p-3 h-100 d-flex flex-column">
-          <div class="ag-theme-custom flex-grow-1">
-            <ag-grid-vue 
-              style="width: 100%; height: 100%" 
-              :columnDefs="classModalColDefs" 
-              :rowData="classModalData" 
-              :defaultColDef="{ resizable: true, sortable: true, filter: true }" 
-              @cell-clicked="onClassGridCellClicked"
+
+        <div class="col-md-6 p-0 h-100 d-flex flex-column">
+          <div class="grid-header-title d-flex justify-content-between align-items-center px-3 py-2">
+            <span class="fw-bold small"><i class="fa fa-vials me-2 text-success"></i>실시간 분석 리포트</span>
+            <span :class="['badge shadow-sm px-3', isTagNoValid ? 'bg-success' : 'bg-danger']">
+              {{ isTagNoValid ? 'VALID' : 'INVALID' }}
+            </span>
+          </div>
+          <div class="flex-grow-1 overflow-hidden border-top">
+            <ag-grid-vue
+              v-bind="rightGridOptions"
+              class="ag-theme-custom w-100 h-100"
+              @grid-ready="onRightGridReady"
             />
           </div>
         </div>
       </div>
-    </div>
-
-    <div v-if="showDetailModal" class="custom-modal-overlay" @click.self="closeDetailModal">
-      <div class="custom-modal-window shadow-lg" style="width: 900px; height: 80%">
-        <div class="modal-header-dark">
-          <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
-          <button @click="closeDetailModal" class="btn btn-xs btn-danger">✕</button>
-        </div>
-        <div class="modal-body-content p-2 h-100">
-          <div class="ag-theme-custom h-100">
-            <ag-grid-vue style="width: 100%; height: 100%" :columnDefs="detailModalColDefs" :rowData="detailModalRowData" :defaultColDef="{ resizable: true }" />
-          </div>
-        </div>
-      </div>
-    </div>
+    </DefaultCard>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, shallowRef, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { ref, computed, onMounted, shallowRef } from 'vue'
 import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import { sAlert } from '@/utils/messages/alert-common'
 import { sortBy } from 'lodash-es'
 
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import InputBox from '@/components/default/editors/InputBox.vue'
-import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-const route = useRoute()
-const router = useRouter()
-const cardTitle = { icon: 'fa-list', title: 'Tag 통합 분석', subtitle: '속성 필터링 분석' }
+const cardTitle = { icon: 'fa-search-plus', title: 'Tag Type 검증', subtitle: 'Naming Rule 실시간 시뮬레이션' }
 
-const gridApi = shallowRef()
-const projectOptions = ref([])
+// --- State ---
+const projectList = ref([])
+const projectSearchKeyword = ref('')
 const selectedProjNo = ref('')
-const projSearchQuery = ref('')
-const searchKeyword = ref('')
-const localFilterQuery = ref('')
-const rawDataList = ref([])
+const tagTypes = ref([])
+const typeSearchKeyword = ref('')
+const selectedTypeId = ref('')
+const tagRules = ref([])
+const tagNoForValidator = ref('')
 
-const dynamicAttCols = ref([])      // 동적 속성 컬럼
-const dynamicRemainingCols = ref([]) // 조회 시에만 추가되는 컬럼
+const leftGridApi = shallowRef()
+const rightGridApi = shallowRef()
 
-const showDetailModal = ref(false)
-const showClassModal = ref(false)
-const selectedRow = ref(null)
-const classModalData = ref([])
-const clickedClassId = ref('')
-
-const fetchProjectList = async () => {
-  try {
-    const res = await axiosWrapper.get('/api/Project/Get')
-    projectOptions.value = (res || []).map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
-  } catch (e) { console.error(e) }
-}
-
-const filteredProjectOptions = computed(() => {
-  const query = projSearchQuery.value.toLowerCase()
-  return projectOptions.value.filter(p => p.text.toLowerCase().includes(query))
+// --- Filtering ---
+const filteredProjectList = computed(() => {
+  const kw = projectSearchKeyword.value.trim().toLowerCase()
+  return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
 })
 
-const selectProject = val => { selectedProjNo.value = val; projSearchQuery.value = val; }
+const filteredTagTypes = computed(() => {
+  const kw = typeSearchKeyword.value.trim().toLowerCase()
+  return tagTypes.value.filter(t => t.TYPE_ID.toLowerCase().includes(kw))
+})
 
-const confirmSearch = () => {
-  if (!selectedProjNo.value) return sAlert.Warning('프로젝트를 선택하세요.')
-  fetchData()
+// --- Events ---
+const selectProject = projNo => {
+  selectedProjNo.value = projNo
+  onProjectChange()
 }
 
-const highlightRenderer = params => {
-  const val = params.value === null || params.value === undefined ? '' : String(params.value)
-  const searchTerm = localFilterQuery.value.trim()
-  if (!searchTerm || val === 'null' || val === '') return val
-  const re = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
-  return val.replace(re, `<mark class="filter-highlight">$1</mark>`)
+const selectType = typeId => {
+  selectedTypeId.value = typeId
+  applyTagTypeRules()
 }
 
-const fetchData = async () => {
-  if (gridApi.value) gridApi.value.setGridOption('loading', true)
-  try {
-    const payload = { ProjectNo: selectedProjNo.value, Keyword: searchKeyword.value }
-    const [pRes, wRes] = await Promise.allSettled([
-      axiosWrapper.post('/api/Data/SearchPublishData', payload),
-      axiosWrapper.post('/api/Data/SearchWorkingData', payload),
-    ])
+const resetFilters = () => {
+  selectedProjNo.value = ''; selectedTypeId.value = ''; tagNoForValidator.value = '';
+  tagRules.value = []; tagTypes.value = [];
+}
 
-    let combined = []
-    if (pRes.status === 'fulfilled' && pRes.value) combined.push(...(Array.isArray(pRes.value) ? pRes.value : [pRes.value]).map(i => ({ ...i, Source: 'Published' })))
-    if (wRes.status === 'fulfilled' && wRes.value) combined.push(...(Array.isArray(wRes.value) ? wRes.value : [wRes.value]).map(i => ({ ...i, Source: 'Working' })))
+// --- API Calls ---
+const fetchProjects = async () => {
+  const res = await axiosWrapper.get('/api/Project/Get')
+  projectList.value = Array.isArray(res) ? res : []
+}
 
-    const allAttIds = new Set()
-    combined.forEach(item => {
-      (item.ATTRIBUTES || []).forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
-    })
+const onProjectChange = async () => {
+  selectedTypeId.value = ''; tagRules.value = []
+  const res = await axiosWrapper.post('/api/TagType/Get', { ProjectNo: selectedProjNo.value, ContainDeleted: false })
+  tagTypes.value = Array.isArray(res) ? res : []
+}
 
-    // 동적 속성 컬럼 생성
-    dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
-      headerName: id, field: `ATT_${id}`, minWidth: 140, headerClass: 'att-column-header', cellRenderer: highlightRenderer,
+const applyTagTypeRules = () => {
+  const target = tagTypes.value.find(t => t.TYPE_ID === selectedTypeId.value)
+  if (target && target.LNK_CODE) {
+    tagRules.value = target.LNK_CODE.map(item => ({
+      attId: item.ATT_ID,
+      delimiter: item.DL_VAL || '',
+      regex: item.REG_EXPS || '^.*$',
     }))
-
-    // 조회 시점에만 보여줄 상세 컬럼 설정
-    dynamicRemainingCols.value = [
-      { field: 'BF_TAG_NO', headerName: 'BF Tag No', width: 140, filter: 'agTextColumnFilter', cellRenderer: highlightRenderer },
-      { field: 'TAG_NO_PASSED', headerName: 'Passed', width: 100 },
-      { field: 'NEW_YN', headerName: 'New YN', width: 80 },
-      { field: 'DEL_YN', headerName: 'Del YN', width: 80 },
-      { field: 'PIC_NO', headerName: 'PIC No', width: 110 },
-      { field: 'CHGER_NO', headerName: 'Chger No', width: 110 },
-      { field: 'CHGE_DTM', headerName: 'Chge Dtm', width: 180 },
-      { field: 'CRTER_NO', headerName: 'Crter No', width: 110 },
-      { field: 'CRTE_DTM', headerName: 'Crte Dtm', width: 180 },
-      { field: 'PROJ_NO', headerName: 'Project No', width: 120 },
-      { field: 'DATA_SOURCE', headerName: 'Data Source', width: 120 },
-      { field: 'TAG_TYPE_ID', headerName: 'Tag Type', width: 110 },
-      { field: 'PRNT_TAG_IDX', headerName: 'Parent Idx', width: 150 },
-      { field: 'DELETED', headerName: 'Deleted', width: 90 },
-      { field: 'DSN_SKL', headerName: 'DSN SKL', width: 100 },
-      { field: '_id', headerName: 'Object ID', width: 200 },
-      { field: 'DEL_DTM', headerName: 'Del Dtm', width: 180 },
-      { field: 'DEL_USER', headerName: 'Del User', width: 110 },
-    ]
-
-    const processedData = combined.map(item => {
-      const flatItem = { ...item }
-      allAttIds.forEach(id => {
-        const target = (item.ATTRIBUTES || []).find(a => a?.ATT_ID === id)
-        flatItem[`ATT_${id}`] = target && target.VALUE !== null ? target.VALUE : 'null'
-      })
-      return flatItem
-    })
-
-    rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
-    
-    // 컬럼 변경 사항 강제 반영
-    if (gridApi.value) gridApi.value.setGridOption('columnDefs', gridOptions.value.columnDefs)
-
-  } catch (err) { sAlert.Error('조회 실패') } 
-  finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
+  }
 }
 
-const onCellClicked = async p => {
-  const colId = p.column.getColId()
-  if (colId === 'Source') {
-    selectedRow.value = p.data; showDetailModal.value = true;
-  } else if (colId === 'CLS_ID' && p.value) {
-    clickedClassId.value = p.value
+const onRuleChanged = () => {
+  const updatedData = []
+  leftGridApi.value.forEachNode(node => updatedData.push(node.data))
+  tagRules.value = [...updatedData]
+}
+
+// --- Analysis Engine ---
+const tagParts = computed(() => {
+  const results = []
+  let currentStr = tagNoForValidator.value || ''
+  let cursor = 0
+
+  for (let rule of tagRules.value) {
+    const delim = rule.delimiter
+    const pureRegex = rule.regex.replace(/^\^|\$/g, '')
+    let dOk = true, cOk = false, matchedVal = null
+
+    if (delim && delim !== '') {
+      if (currentStr.substring(cursor).startsWith(delim)) {
+        cursor += delim.length
+        dOk = true
+      } else {
+        dOk = new RegExp(`^(${pureRegex})$`).test('')
+      }
+    }
+
     try {
-      if (gridApi.value) gridApi.value.setGridOption('loading', true)
-      const res = await axiosWrapper.post('/api/Register/GetByClassIDs', { ProjectNo: selectedProjNo.value, ClassIDs: [p.value] })
-      classModalData.value = Array.isArray(res) ? res : [res]
-      showClassModal.value = true
-    } catch (e) { sAlert.Error('Class 정보 로드 실패') } 
-    finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
-  }
-}
+      const matcher = new RegExp(`^(${pureRegex})`).exec(currentStr.substring(cursor))
+      if (matcher) {
+        matchedVal = matcher[1]; cursor += matchedVal.length; cOk = true
+      } else if (new RegExp(`^(${pureRegex})$`).test('')) {
+        matchedVal = ''; cOk = true
+      }
+    } catch { cOk = false }
 
-const onClassGridCellClicked = p => {
-  if (p.column.getColId() === 'TYPE_ID' && p.value) {
-    const routeData = router.resolve({ path: '/register-mapping-setup', query: { reg_type_id: p.data.TYPE_ID, proj_no: selectedProjNo.value, ep_id: p.data.EP_ID } })
-    window.open(routeData.href, '_blank')
+    results.push({ attId: rule.attId, matchedValue: matchedVal || '', delimiter: delim || '', isValid: dOk && cOk })
+    if (!(dOk && cOk)) break
   }
-}
+  return results
+})
 
-const gridOptions = computed(() => ({
+const isTagNoValid = computed(() => {
+  if (tagRules.value.length === 0) return false
+  const allPass = tagParts.value.length === tagRules.value.length && tagParts.value.every(p => p.isValid)
+  if (!allPass) return false
+  let totalLen = 0
+  tagParts.value.forEach(p => {
+    if (p.delimiter && tagNoForValidator.value.substring(totalLen).startsWith(p.delimiter)) totalLen += p.delimiter.length
+    if (p.matchedValue) totalLen += p.matchedValue.length
+  })
+  return totalLen === tagNoForValidator.value.length
+})
+
+// --- AG Grid Config ---
+const leftGridOptions = computed(() => ({
   columnDefs: [
-    { headerName: 'Source', field: 'Source', width: 110, pinned: 'left', cellStyle: { cursor: 'pointer' },
-      cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>` },
-    { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'TAG_IDX', headerName: 'Tag Idx', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'TAG_DESC', headerName: 'Tag Desc', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'EP_IC', headerName: 'EP IC', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'CLS_ID', headerName: 'Class', width: 120, pinned: 'left', cellRenderer: highlightRenderer,
-      cellStyle: { cursor: 'pointer', textDecoration: 'underline', color: 'var(--primary-color, #0d6efd)', fontWeight: 'bold' } },
-    ...dynamicAttCols.value,
-    ...dynamicRemainingCols.value,
-    { field: 'TAG_DESC', headerName: 'Description', width: 200, cellRenderer: highlightRenderer },
+    { headerName: 'Attribute', field: 'attId', width: 140, pinned: 'left' },
+    { headerName: 'Delim', field: 'delimiter', width: 90, editable: true, cellStyle: { textAlign: 'center', fontWeight: 'bold' } },
+    { headerName: 'RegEx (Pattern)', field: 'regex', flex: 1, editable: true, cellClass: 'font-monospace' },
   ],
-  rowData: filteredData.value,
-  loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, filter: 'agTextColumnFilter', floatingFilter: true, resizable: true },
+  rowData: tagRules.value,
+  defaultColDef: { resizable: true, sortable: true },
 }))
 
-const filteredData = computed(() => {
-  const query = localFilterQuery.value.trim().toLowerCase()
-  if (!query) return rawDataList.value
-  return rawDataList.value.filter(i => Object.values(i).some(val => String(val).toLowerCase().includes(query)))
-})
+const rightGridOptions = computed(() => ({
+  columnDefs: [
+    { headerName: 'Attribute', field: 'attId', width: 140 },
+    { headerName: 'Extracted Value', field: 'matchedValue', flex: 1, cellClass: 'fw-bold font-monospace text-primary' },
+    { headerName: 'Result', field: 'isValid', width: 100,
+      cellRenderer: p => p.value ? '<b class="text-success text-center d-block">OK</b>' : '<b class="text-danger text-center d-block">ERR</b>',
+    },
+  ],
+  rowData: tagParts.value,
+  defaultColDef: { resizable: true },
+}))
 
-const onFilterInput = () => { if (gridApi.value) gridApi.value.refreshCells({ force: true }) }
-const onGridReady = params => { gridApi.value = params.api }
-const closeClassModal = () => { showClassModal.value = false; classModalData.value = []; }
-const closeDetailModal = () => { showDetailModal.value = false; selectedRow.value = null; }
+const onLeftGridReady = p => { leftGridApi.value = p.api }
+const onRightGridReady = p => { rightGridApi.value = p.api }
 
-const classModalColDefs = [
-  { headerName: 'Register No', field: 'TYPE_ID', flex: 1, cellStyle: { fontWeight: 'bold', color: 'var(--primary-color, #0d6efd)', textDecoration: 'underline', cursor: 'pointer' } },
-  { headerName: 'Description', field: 'DESC', flex: 1.5 },
-  { headerName: 'EP ID', field: 'EP_ID', width: 120 },
-]
-const detailModalColDefs = [
-  { headerName: 'Property', field: 'key', width: 220, pinned: 'left', cellStyle: { background: 'var(--tpl-table-thead-bg, #f8f9fa)', fontWeight: 'bold' } },
-  { headerName: 'Value', field: 'value', flex: 1 },
-]
-const detailModalRowData = computed(() => {
-  if (!selectedRow.value) return []
-  return Object.entries(selectedRow.value).filter(([k]) => k !== 'ATTRIBUTES').map(([k, v]) => ({ key: k, value: v ?? '-' }))
-})
-
-onMounted(async () => {
-  await fetchProjectList()
-  const urlProjNo = route.query?.proj_no || new URLSearchParams(window.location.search).get('proj_no')
-  if (urlProjNo) { selectedProjNo.value = urlProjNo; fetchData(); }
-})
+onMounted(fetchProjects)
 </script>
 
 <style scoped lang="scss">
-.grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid var(--tpl-divider); }
-.header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 10px; }
+.header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 8px; }
+.grid-header-title { background-color: var(--tpl-table-thead-bg, #f8f9fa); color: var(--tpl-body-color); }
 
-/* 테마 대응 스타일 */
 :deep(.ag-theme-custom) {
   --ag-background-color: var(--card-bg, #ffffff);
-  --ag-header-background-color: var(--tpl-table-thead-bg, #f8f9fa);
-  --ag-border-color: var(--tpl-divider, #dee2e6);
   --ag-foreground-color: var(--tpl-body-color, #212529);
-  --ag-font-size: 12px;
+  --ag-header-background-color: var(--tpl-table-thead-bg, #f8f9fa);
+  --ag-header-foreground-color: var(--tpl-body-color);
+  --ag-border-color: var(--tpl-divider, #dee2e6);
+  --ag-font-size: 11px;
 
-  .ag-header-cell { border-right: 1px solid var(--tpl-divider) !important; font-weight: 600; }
-  .ag-cell { border-right: 1px solid var(--tpl-divider) !important; display: flex; align-items: center; }
-  .filter-highlight { background-color: #ffeb3b !important; color: #000 !important; font-weight: bold; }
-  .att-column-header { background-color: rgba(255, 249, 219, 0.3) !important; color: #856404 !important; }
-  .ag-floating-filter-button { display: none; }
+  .ag-header-cell-label { justify-content: center; font-weight: 600; }
+  .font-monospace { font-family: 'Consolas', 'Monaco', monospace !important; }
+  .ag-cell { display: flex; align-items: center; color: var(--tpl-body-color); }
 }
 
-.custom-modal-overlay {
-  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-  background: rgba(0, 0, 0, 0.5); z-index: 9999; display: flex; align-items: center; justify-content: center;
+.tpl-btn {
+  height: 32px; padding: 0 10px; border-radius: 4px; display: flex; align-items: center; justify-content: center;
+  &:hover { background-color: #f1f3f5; }
 }
-.custom-modal-window { background: var(--card-bg, #fff); border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
-.modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
-.tpl-btn { height: 32px; padding: 0 16px; border-radius: 4px; font-weight: 500; &--primary { background: var(--primary-color); color: #fff; border: none; } }
+
+.dropdown-menu {
+  font-size: 12px;
+  .dropdown-item:hover { background-color: var(--tpl-table-thead-bg); }
+}
 </style>
