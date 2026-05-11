@@ -65,7 +65,48 @@
       </div>
     </DefaultCard>
 
+    <div v-if="showClassModal" class="custom-modal-overlay" @click.self="closeClassModal">
+      <div class="custom-modal-window shadow-lg" style="width: 850px; height: 60%">
+        <div class="modal-header-dark" style="background: #334155">
+          <div class="d-flex align-items-center gap-2">
+            <i class="fa fa-info-circle text-info"></i>
+            <span class="fw-bold text-white">Class Info: {{ clickedClassId }}</span>
+          </div>
+          <button @click="closeClassModal" class="btn btn-xs btn-danger">✕</button>
+        </div>
+        <div class="modal-body-content p-3 h-100 d-flex flex-column">
+          <div class="ag-theme-custom flex-grow-1">
+            <ag-grid-vue
+              style="width: 100%; height: 100%"
+              :columnDefs="classModalColDefs"
+              :rowData="classModalData"
+              :defaultColDef="{ resizable: true, sortable: true, filter: true }"
+              @cell-clicked="onClassGridCellClicked"
+            />
+          </div>
+        </div>
+      </div>
     </div>
+
+    <div v-if="showDetailModal" class="custom-modal-overlay" @click.self="closeDetailModal">
+      <div class="custom-modal-window shadow-lg" style="width: 900px; height: 80%">
+        <div class="modal-header-dark">
+          <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }}</span>
+          <button @click="closeDetailModal" class="btn btn-xs btn-danger">✕</button>
+        </div>
+        <div class="modal-body-content p-2 h-100">
+          <div class="ag-theme-custom h-100">
+            <ag-grid-vue
+              style="width: 100%; height: 100%"
+              :columnDefs="detailModalColDefs"
+              :rowData="detailModalRowData"
+              :defaultColDef="{ resizable: true }"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </template>
 
 <script setup>
@@ -83,6 +124,7 @@ const route = useRoute()
 const router = useRouter()
 const cardTitle = { icon: 'fa-list', title: 'Tag 통합 분석', subtitle: '속성 필터링 분석' }
 
+// --- 상태 관리 ---
 const gridApi = shallowRef()
 const projectOptions = ref([])
 const selectedProjNo = ref('')
@@ -99,12 +141,14 @@ const selectedRow = ref(null)
 const classModalData = ref([])
 const clickedClassId = ref('')
 
-// 프로젝트 리스트 로드
+// --- 프로젝트 리스트 API ---
 const fetchProjectList = async () => {
   try {
     const res = await axiosWrapper.get('/api/Project/Get')
     projectOptions.value = (res || []).map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
-  } catch (e) { console.error(e) }
+  } catch (e) {
+    console.error(e)
+  }
 }
 
 const filteredProjectOptions = computed(() => {
@@ -122,7 +166,7 @@ const confirmSearch = () => {
   fetchData()
 }
 
-// 데이터 조회
+// --- 메인 데이터 로드 (Working + Published) ---
 const fetchData = async () => {
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
   try {
@@ -140,11 +184,13 @@ const fetchData = async () => {
       combined.push(...(Array.isArray(wRes.value) ? wRes.value : [wRes.value]).map(i => ({ ...i, Source: 'Working' })))
     }
 
+    // 동적 컬럼(Attributes) 추출
     const allAttIds = new Set()
     combined.forEach(item => {
       (item.ATTRIBUTES || []).forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) })
     })
 
+    // 데이터 평탄화 (Flatting)
     const processedData = combined.map(item => {
       const flatItem = { ...item }
       allAttIds.forEach(id => {
@@ -154,6 +200,7 @@ const fetchData = async () => {
       return flatItem
     })
 
+    // 동적 컬럼 정의 생성
     dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
       headerName: id,
       field: `ATT_${id}`,
@@ -170,6 +217,7 @@ const fetchData = async () => {
   }
 }
 
+// --- 그리드 헬퍼 ---
 const highlightRenderer = params => {
   const val = params.value === null || params.value === undefined ? '' : String(params.value)
   const searchTerm = localFilterQuery.value.trim()
@@ -178,7 +226,9 @@ const highlightRenderer = params => {
   return val.replace(re, `<mark class="filter-highlight">$1</mark>`)
 }
 
-const onFilterInput = () => { if (gridApi.value) gridApi.value.refreshCells({ force: true }) }
+const onFilterInput = () => {
+  if (gridApi.value) gridApi.value.refreshCells({ force: true })
+}
 
 const onCellClicked = async p => {
   const colId = p.column.getColId()
@@ -195,12 +245,25 @@ const onCellClicked = async p => {
       })
       classModalData.value = Array.isArray(res) ? res : [res]
       showClassModal.value = true
-    } catch (e) { sAlert.Error('Class 정보 로드 실패') }
-    finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
+    } catch (e) {
+      sAlert.Error('Class 정보 로드 실패')
+    } finally {
+      if (gridApi.value) gridApi.value.setGridOption('loading', false)
+    }
   }
 }
 
-// 💡 AG Grid 설정 (Cell Selection 반영)
+const onClassGridCellClicked = p => {
+  if (p.column.getColId() === 'TYPE_ID' && p.value) {
+    const routeData = router.resolve({
+      path: '/register-mapping-setup',
+      query: { reg_type_id: p.data.TYPE_ID, proj_no: selectedProjNo.value, ep_id: p.data.EP_ID },
+    })
+    window.open(routeData.href, '_blank')
+  }
+}
+
+// --- 그리드 설정 (Cell Selection & StatusBar) ---
 const gridOptions = computed(() => ({
   columnDefs: [
     {
@@ -231,17 +294,15 @@ const gridOptions = computed(() => ({
     sortable: true, 
     filter: 'agTextColumnFilter', 
     floatingFilter: true, 
-    resizable: true,
-    suppressMovable: false
+    resizable: true 
   },
-
-  // 💡 핵심 옵션: 셀 단위 선택 활성화
-  cellSelection: true,             // 최신 버전 (v31+) 셀 선택 활성화
-  enableRangeSelection: true,      // 드래그 범위 선택 활성화 (Enterprise 필수)
-  suppressRowClickSelection: true, // 행 클릭 시 선택 방지 (셀만 선택되도록)
   
-  // 우클릭 메뉴 및 상태바
-  enableFillHandle: true,          // 엑셀처럼 모서리 끌어서 채우기 (필요 시)
+  // 셀 선택 모드
+  cellSelection: true,
+  enableRangeSelection: true,
+  suppressRowClickSelection: true,
+
+  // 하단 상태바
   statusBar: {
     statusPanels: [
       { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'left' },
@@ -257,8 +318,26 @@ const filteredData = computed(() => {
   return rawDataList.value.filter(i => Object.values(i).some(val => String(val).toLowerCase().includes(query)))
 })
 
-// 모달/유틸 함수들 동일하게 유지
+// --- 모달 데이터 정의 ---
+const classModalColDefs = [
+  { headerName: 'Register No', field: 'TYPE_ID', flex: 1, cellStyle: { fontWeight: 'bold', color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer' } },
+  { headerName: 'Description', field: 'DESC', flex: 1.5 },
+  { headerName: 'EP ID', field: 'EP_ID', width: 120 },
+]
+const detailModalColDefs = [
+  { headerName: 'Property', field: 'key', width: 220, pinned: 'left', cellStyle: { background: '#f8f9fa', fontWeight: 'bold' } },
+  { headerName: 'Value', field: 'value', flex: 1 },
+]
+const detailModalRowData = computed(() => {
+  if (!selectedRow.value) return []
+  return Object.entries(selectedRow.value).filter(([k]) => k !== 'ATTRIBUTES').map(([k, v]) => ({ key: k, value: v ?? '-' }))
+})
+
 const onGridReady = params => { gridApi.value = params.api }
+const closeClassModal = () => { showClassModal.value = false; classModalData.value = [] }
+const closeDetailModal = () => { showDetailModal.value = false; selectedRow.value = null }
+
+// --- 마운트 시 URL 인식 (자동 조회는 안함) ---
 onMounted(async () => {
   await fetchProjectList()
   const urlProjNo = route.query?.proj_no || new URLSearchParams(window.location.search).get('proj_no')
@@ -270,19 +349,27 @@ onMounted(async () => {
 </script>
 
 <style scoped lang="scss">
-/* 스타일 동일 유지 */
 .grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid var(--tpl-divider); }
+.header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 10px; }
+
 :deep(.ag-theme-custom) {
   --ag-border-color: #dee2e6;
   --ag-header-background-color: #f8f9fa;
+  --ag-font-size: 12px;
   .ag-header-cell { border-right: 1px solid #dee2e6 !important; font-weight: 600; }
-  .ag-cell { border-right: 1px solid #f1f3f5 !important; }
-  /* 선택된 셀 스타일 강조 (필요 시) */
-  .ag-cell-focus:not(.ag-cell-range-selected) {
-    border: 2px solid #2196f3 !important;
+  .ag-cell { border-right: 1px solid #f1f3f5 !important; display: flex; align-items: center; }
+  
+  .ag-status-bar {
+    font-weight: 500; color: #444; background-color: #f8f9fa; border-top: 1px solid #dee2e6;
+    padding: 0 15px; font-size: 11px; height: 32px;
   }
-  .ag-cell-range-selected {
-    background-color: rgba(33, 150, 243, 0.1) !important;
-  }
+  
+  .filter-highlight { background-color: #ffeb3b !important; color: #000 !important; font-weight: bold; }
+  .att-column-header { background-color: #fff9db !important; color: #856404 !important; }
 }
+
+.custom-modal-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.5); z-index: 9999; display: flex; align-items: center; justify-content: center; }
+.custom-modal-window { background: #fff; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden; }
+.modal-header-dark { background: #0f172a; color: #fff; padding: 12px 20px; display: flex; justify-content: space-between; align-items: center; }
+.tpl-btn { height: 32px; padding: 0 16px; border-radius: 4px; font-weight: 500; cursor: pointer; &--primary { background: #007bff; color: #fff; border: none; } }
 </style>
