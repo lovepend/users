@@ -34,6 +34,8 @@
       <Splitter class="h-100" layout="vertical">
         <SplitterPanel id="editorVersion" class="d-none" :size="200">
           <div class="h-100 w-100">
+            <!-- id="gc-spread"
+            hostClass="spreadHost" -->
             <gc-spread-designer
               class="h-100 w-100 text-black"
               :config="designConfig"
@@ -99,62 +101,84 @@
   import { axiosWrapper } from '@/utils/axios/axios-wrapper'
   import * as XLSX from 'xlsx'
   import { ApiCommon } from '@/utils/axios/api-common'
-  import Splitter from 'primevue/splitter'
-  import SplitterPanel from 'primevue/splitterpanel'
+  import Splitter from 'primevue/splitter' /** 영역 분할 기능 */
+  import SplitterPanel from 'primevue/splitterpanel' /** 영역 분할 기능 */
   // @ts-ignore
   import * as SEF from '@/utils/spread/spread-excel-funtions.js'
+  /** Spread List */
   import GC from '@mescius/spread-sheets-designer'
   import * as _ from 'lodash-es'
+  /** Helper List */
   import * as SIC from '@/utils/spread/spread-io-common'
   import { sAlert } from '@/utils/messages/alert-common'
 
+  /** 변수 정의 */
   const releaseNotesGrouped = ref<any[]>([])
   const isLoading = ref(true)
   const authStore = useAppAuthenticationStore()
   const fileInput = ref<HTMLInputElement | null>(null)
   const fileId = ref<string | null>(null)
   const updateOnOff = ref(false)
-  const spreadRef: any = ref()
+  const spreadRef: any = ref() // Spread Template Designer
   const filename = 'temp.xlsx'
   const urlList = { gfi: '/api/File/Get', gfr: '/api/File/Replace' }
   const sitefileIds = {
-    dev: '69aa1e6f9535f36ce196e4fd',
+    dev: '69aa1e6f9535f36ce196e4fd', //운영 DB가 개발로 복사되면 무조건 변경해줘야함
     devop: '698963e8ed2aff6e2771b20d',
     oper: '6982ac8ea605319e04771832',
   }
 
+  // 템플릿 에러 방지를 위해 computed로 권한 체크 로직 분리
   const isDeveloper = computed(() => {
     return authStore.userInfo && (authStore.userInfo as any).IsDeveloper
   })
 
   onMounted(() => {
     const baseSiteName = (import.meta as any).env.VITE_BASE_SITENAME
+
+    // 사이트 별 File Id 체크
     if (baseSiteName === 'dev') fileId.value = sitefileIds.dev
     else if (baseSiteName === 'devop') fileId.value = sitefileIds.devop
     else fileId.value = sitefileIds.oper
     fetchAndParseExcel()
   })
 
+  /**
+   * 마지막 아이템 체크
+   * @param index
+   */
   const isNotLastItem = (index: number): boolean => {
     return index < releaseNotesGrouped.value.length - 1
   }
 
+  /**
+   * 운영 환경용 날짜 계산 로직
+   * @param version
+   */
   const getUpdatedVersionForProd = (version: string): string => {
     const parts = version.split('.')
     if (parts.length < 2) return version
+
     const lastPart = parts[parts.length - 1]
     const monthPart = parts[parts.length - 2]
+
     const dayNum = parseInt(lastPart)
     const monthNum = parseInt(monthPart)
+
     if (isNaN(dayNum) || isNaN(monthNum)) return version
+
     const currentYear = new Date().getFullYear()
     const date = new Date(currentYear, monthNum - 1, dayNum)
+    date.setDate(date.getDate()) //date.setDate(date.getDate() + 1) [26.03.36: 안홍서 프로님 요청]
+
     const newMonth = String(date.getMonth() + 1).padStart(2, '0')
     const newDay = String(date.getDate()).padStart(2, '0')
+
     const prefix = parts.slice(0, parts.length - 2).join('.')
     return prefix ? `${prefix}.${newMonth}.${newDay}` : `${newMonth}.${newDay}`
   }
 
+  /** 시트 파싱 */
   const parseSheetWithHeaders = (sheet: any, skipRows: number): any[] => {
     if (!sheet) return []
     const rows: any[] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })
@@ -237,24 +261,26 @@
         arrayBuffer = await fileBlob.arrayBuffer()
       } else {
         // 서버 파일은 복호화 후 변환
-        const decrypted: any = await ApiCommon.postFileDecryptFile({ 
-          FILE: new File([fileBlob], filename) 
+        const decrypted: any = await ApiCommon.postFileDecryptFile({
+          FILE: new File([fileBlob], filename),
         })
         arrayBuffer = await decrypted.arrayBuffer()
       }
 
       const workbook = XLSX.read(arrayBuffer, { type: 'array' })
       let combined: any[] = []
-      
+
       workbook.SheetNames.forEach((name, index) => {
         // 로컬 파일의 양식이 서버와 다를 경우(예: 헤더가 1행부터라면) 이 부분을 조정해야 함
-        const skip = index === 0 ? 2 : 0 
+        const skip = index === 0 ? 2 : 0
         combined = [...combined, ...parseSheetWithHeaders(workbook.Sheets[name], skip)]
       })
 
       const grouped: Record<string, any> = {}
       combined.forEach((row: any) => {
-        const status = String(row.status || '').trim().toUpperCase()
+        const status = String(row.status || '')
+          .trim()
+          .toUpperCase()
         let version = String(row.completionVersion || '').trim()
 
         if (allowedStatus.includes(status) && version) {
@@ -279,6 +305,7 @@
     }
   }
 
+  /** 배지 클래스 */
   const getBadgeClass = (category: any) => {
     const c = String(category).toLowerCase()
     if (['오류', 'fixed'].includes(c)) return 'badge bg-gradient-orange-red'
@@ -295,17 +322,25 @@
     return 'text-gray'
   }
 
+  /**
+   * 업로드할 파일 선택 창 나타내기
+   */
   const importExcel = () => fileInput.value?.click()
 
+  /**
+   * Content를 읽어, Spread에 load하는 기능
+   */
   const loadSpreadJS = async function () {
     try {
       let spread = toRaw(spreadRef.value)
       spread.suspendPaint()
+
       const response: any = await ApiCommon.postFileGet({ id: fileId.value as string }, { blockToast: true })
       const decryptedBlob: any = await ApiCommon.postFileDecryptFile({ FILE: new File([response], response.filename) })
       const extensions = 'XLSX'
       const importFile = new File([decryptedBlob], response.filename, { type: extensions })
       const importOptions = SIC.getOpenOptions(extensions) ?? {}
+
       await new Promise((resolve, reject) => {
         spread.import(importFile, resolve, reject, importOptions)
       })
@@ -315,9 +350,14 @@
     }
   }
 
+  /**
+   * 등록되어 있는 엑셀 파일에 정보를 등록하기 위해 화면 표현
+   * @param event
+   */
   const updateVersion = async function (event: any) {
     try {
       let splitSpr: any = document.getElementById('editorVersion')
+
       if (!updateOnOff.value) {
         updateOnOff.value = true
         Object.assign(splitSpr, { className: 'd-flex align-items-center justify-content-center' })
@@ -325,6 +365,7 @@
         updateOnOff.value = false
         Object.assign(splitSpr, { className: 'd-none' })
       }
+
       loadSpreadJS()
     } catch (err) {
       SEF.setToast(`'updateVersion' 함수 오류: ${err}`)
@@ -334,14 +375,19 @@
   const saveVersion = function (event: any) {
     try {
       let splitSpr: any = document.getElementById('editorVersion')
+
       if (updateOnOff.value) {
         let uploadFile: any = { target: { files: [] } }
+
         let spread = toRaw(spreadRef.value)
         spread.export((blob: any) => {
           const file: any = new File([blob], filename)
+
           uploadFile.target.files.push(file)
+
           handleFileUpload(uploadFile)
         })
+        // 닫기
         updateOnOff.value = false
         Object.assign(splitSpr, { className: 'd-none' })
       } else {
@@ -352,8 +398,13 @@
     }
   }
 
+  /**
+   * 엑셀 업로드 처리
+   * @param event
+   */
   const handleFileUpload = async (event: any) => {
     const file = event.target.files[0]
+    console.log('do??', file, event.target.files)
     if (!file) return
     try {
       await axiosWrapper.post(
@@ -361,12 +412,16 @@
         { id: fileId.value, File: file },
         { headers: { 'Content-Type': 'multipart/form-data', FileToken: 'frontserver@sh' } }
       )
+
       fetchAndParseExcel()
     } catch (err) {
       console.error('Upload Error:', err)
     }
   }
 
+  /**
+   * 파일 내려받기
+   */
   const exportExcel = async () => {
     const response: any = await axiosWrapper.postAll(
       urlList.gfi,
@@ -375,25 +430,145 @@
     )
     const decryptedBlob: any = await ApiCommon.postFileDecryptFile({ FILE: new File([response.data], filename) })
     const workbook = XLSX.read(await decryptedBlob.arrayBuffer(), { type: 'array' })
+
+    // 엑셀 파일로 다운로드 (파일명 지정)
     XLSX.writeFile(workbook, filename)
+  }
+
+  const defConfMenu = {
+    home: { id: 'home', text: '홈' },
+    insert: { id: 'insert', text: '삽입' },
+    pageLayout: { id: 'pageLayout', text: '페이지 레이아웃' },
+    formulas: { id: 'formulas', text: '수식' },
+    data: { id: 'data', text: '데이터' },
+    view: { id: 'view', text: '보기' },
+    settings: { id: 'settings', text: '설정' },
+    tableDesign: { id: 'tableDesign', text: '테이블 디자인' },
+    pictDesign: { id: 'pictureDesign', text: '그림 서식' },
+    shapeDesign: { id: 'shapeDesign', text: '도형 서식' },
+    pictShapDesign: { id: 'pictureShapeDesign', text: '그림 서식' },
+    slicerDesign: { id: 'slicerDesign', text: '슬라이서' },
+    timelineDesign: { id: 'timelineDesign', text: '타임라인' },
+    chartDesign: { id: 'chartDesign', text: '차트 디자인' },
+    formSpaLDesign: { id: 'formulaSparkLineDesign', text: '스파크라인' },
+    sparkLineDesign: { id: 'sparkLineDesign', text: '스파크라인' },
+    barcodeDesignId: { id: 'barcodeDesignId', text: '바코드 디자인' },
+    pivTableAnalyze: { id: 'pivotTableAnalyze', text: '피벗 테이블 분석' },
+    pivTableDesign: { id: 'pivotTableDesign', text: '디자인' },
+  }
+
+  const initConfig = () => {
+    const gcSprDesigner = (GC.Spread.Sheets as any).Designer
+    const commandNames = gcSprDesigner.CommandNames
+    const templateNames = gcSprDesigner.TemplateNames
+    const config = _.cloneDeep(gcSprDesigner.DefaultConfig)
+    const ribbon = config.ribbon
+    const insertTab = ribbon.find(({ id }: any) => id === defConfMenu.insert.id)
+    const dataTab = ribbon.find(({ id }: any) => id === defConfMenu.data.id)
+    const viewTab = ribbon.find(({ id }: any) => id === defConfMenu.view.id)
+    const setTab = ribbon.find(({ id }: any) => id === defConfMenu.settings.id)
+    const sidePanels = config.sidePanels
+    const fileMenuPanel = sidePanels.find(({ command }: any) => command === commandNames.FileMenuPanel)
+
+    //////////////////////////////////////////////
+    // Ribbon - 삽입 - 버튼 삭제 ( 시트 )
+    insertTab.buttonGroups = insertTab.buttonGroups.filter(
+      ({ thumbnailClass }: any) => thumbnailClass !== 'ribbon-thumbnail-sheets'
+    )
+
+    //////////////////////////////////////////////
+    // Ribbon - 데이터 - 버튼 삭제 ( 데이터 바인딩, 쿼리 및 연결, 정렬 및 필터 )
+    dataTab.buttonGroups = dataTab.buttonGroups.filter(
+      ({ thumbnailClass }: any) =>
+        thumbnailClass !== 'ribbon-thumbnail-data-sources' &&
+        thumbnailClass !== 'ribbon-thumbnail-queriedAndConnections' &&
+        thumbnailClass !== 'ribbon-thumbnail-sortAndFilter'
+    )
+
+    //////////////////////////////////////////////
+    // Ribbon - 보기 - 버튼 삭제 ( 명령 팔레트 )
+    viewTab.buttonGroups = viewTab.buttonGroups.filter(({ thumbnailClass }: any) => thumbnailClass)
+
+    //////////////////////////////////////////////
+    // Ribbon - 설정 - 버튼 삭제 ( Spread 설정 )
+    // setTab.buttonGroups = setTab.buttonGroups.filter(({thumbnailClass}: any)=>
+    //   thumbnailClass !== "ribbon-thumbnail-spreadsettings"
+    // );
+
+    ////////////////////////////////
+    // Ribbon - 파일 - 템플릿 변경
+    const fileMenuTemplate = gcSprDesigner.getTemplate(templateNames.FileMenuPanelTemplate)
+    const fileMenuChilds = fileMenuTemplate['content'][0]['children'][0]['children']
+    const fileMenuList = fileMenuChilds[0]['children'][0]['children'] //파일 템플릿 내 좌측 메뉴 목록
+    const fileMenuRightPanel = fileMenuChilds[1] //파일 템플릿 내 우측 패널
+    for (let i = fileMenuList.length; i--; ) {
+      const fileMenu = fileMenuList[i]
+      const menuItems = fileMenu.items
+      if (!menuItems) {
+        continue
+      }
+      for (let j = menuItems.length; j--; ) {
+        const menuItem = menuItems[j]
+        const menuName = menuItem.value
+        if (
+          menuName === 'New' || // 새로 만들기
+          menuName === 'OpenSJS' || // 열기
+          menuName === 'SaveSJS' || // 저장
+          menuName === 'Import' || // 가져오기
+          menuName === 'Info' // 정보
+        ) {
+          menuItems.splice(j, 1)
+        }
+      }
+      if (menuItems.length === 0) {
+        const prevIndex = i - 1
+        const prevFileMenu = fileMenuList[prevIndex]
+        const prevMenuType = prevFileMenu?.type
+        if (prevMenuType === 'LabelLine') {
+          fileMenuList.splice(prevIndex, 1)
+          i -= 1
+        }
+      }
+    }
+    const newFileMenuPanelName = `NEW_${templateNames.FileMenuPanelTemplate}`
+    gcSprDesigner.registerTemplate(newFileMenuPanelName, fileMenuTemplate)
+    if (fileMenuPanel) {
+      fileMenuPanel.uiTemplate = newFileMenuPanelName
+    }
+
+    //////////////////////////////////////////
+    // Ribbon - 파일 - 초기 상태 변경 ( 새로 만들기 -> 내보내기 )
+    const fileMenuPanelCommand = gcSprDesigner.getCommand(commandNames.FileMenuPanel)
+    const orgGetStateCommand = fileMenuPanelCommand.getState
+    fileMenuPanelCommand.getState = function (...args: any) {
+      const options = orgGetStateCommand(...args)
+      if (options['activeCategory_main'] === 'New') {
+        options['activeCategory_main'] = 'Export'
+      }
+      return options
+    }
+
+    return config
   }
 
   const designConfig = ref(initConfig())
 
-  function initConfig() {
-    const gcSprDesigner = (GC.Spread.Sheets as any).Designer
-    const config = _.cloneDeep(gcSprDesigner.DefaultConfig)
-    // ... (기존 Designer 설정 로직 생략 - 그대로 사용하시면 됩니다)
-    return config
-  }
-
+  /**
+   * SpreadJS 초기 Loading 및 Setting
+   * @param spread : SpreadJS
+   */
   const initWorkbook = function (designer: any) {
     try {
       spreadRef.value = designer.getWorkbook()
+
+      // 첫화면 상위 메뉴 최소화
       designer.setData('isRibbonCollapse', true)
+
+      // spreadWorkbookInstance = spreadRef.value.getWorkbook();
+
       if (spreadRef.value) {
         spreadRef.value.refresh()
-      }
+      } // 초기 로드 시 SpreadJS 크기 조절
     } catch (err) {
       SEF.logMng("SPREADJS-'initWorkbook'함수 오류: ", err, 'err')
     }
