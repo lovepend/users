@@ -1,8 +1,4 @@
-결론부터 말씀드리면, @vitejs/plugin-vue는 4.5.2 이상(최신 5.x 권장)으로 올리셔도 되지만, @vitejs/plugin-vue-jsx는 버전 체계가 달라서 무작정 4.x로 올리시면 안 됩니다.두 패키지는 Vite 환경에서 Vue를 지원한다는 점은 같지만, 별개의 프로젝트로 관리되어 버전 번호가 다르게 움직입니다. 보안 취약점 해결을 위한 적절한 업데이트 방법은 다음과 같습니다.1. 패키지별 권장 버전 확인패키지명현재 버전대응 방안@vitejs/plugin-vue^4.4.1^4.5.2 이상으로 업데이트 가능 (현재 5.x 버전까지 출시됨)@vitejs/plugin-vue-jsx^3.0.2^3.1.0 이상으로 업데이트 (현재 최신은 4.x 버전까지 출시됨)주의: @vitejs/plugin-vue-jsx를 4.5.11로 바꾸려고 시도하면 해당 버전이 존재하지 않아 설치 오류가 발생하거나, 전혀 다른 메이저 버전 차이로 인해 프로젝트가 깨질 수 있습니다.2. 보안 취력점(CVE) 해결을 위한 가이드보안성 검토에서 지적된 사항이 보통 Vite 자체나 기타 종속성의 문제인 경우가 많습니다. 플러그인만 올린다고 해결되지 않을 수 있으니 아래 순서대로 진행해 보세요.방법 A: 안정적인 마이너 업데이트 (추천)기존 코드의 변경 없이 보안 패치만 적용하고 싶을 때 사용합니다.Bash# npm 사용 시
-npm install @vitejs/plugin-vue@^4.5.2 @vitejs/plugin-vue-jsx@^3.1.0 --save-dev
-
-# yarn 사용 시
-yarn add @vitejs/plugin-vue@^4.5.2 @vitejs/plugin-vue-jsx@^3.1.0 --dev
-방법 B: 최신 버전으로 업그레이드 (Vite 5 사용 시)만약 Vite 버전 자체가 5.x라면, 플러그인도 메이저 버전을 올리는 것이 보안상 가장 안전합니다.Bash# 최신 버전 설치 (Vite 5 이상 환경 권장)
-npm install @vitejs/plugin-vue@latest @vitejs/plugin-vue-jsx@latest --save-dev
-3. 왜 똑같이 4.5.11로 맞추면 안 되나요?두 플러그인은 형제 관계이지 쌍둥이가 아닙니다.@vitejs/plugin-vue: Vue의 SFC(Single File Component)를 처리합니다.@vitejs/plugin-vue-jsx: Vue에서 JSX/TSX 문법을 처리합니다.각자 개발 로드맵이 다르기 때문에 "보안 가이드라인에서 4.5.x 이상을 요구"한다면, 이는 아마 특정 라이브러리(예: Vite Core 또는 컴파일러)에 대한 지침일 가능성이 높습니다. 플러그인은 해당 메이저 버전 범위 내에서 가장 최신 것을 쓰시면 됩니다
+패키지명	설치 권장 버전	비고
+vite	4.5.11	현재 설치하려는 기준 버전
+@vitejs/plugin-vue	^4.6.2	Vite 4 환경에서 가장 안정적인 최종 버전대
+@vitejs/plugin-vue-jsx	^3.1.0	Vite 4 환경과 호환되는 3.x 계열 최신 버전
