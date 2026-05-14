@@ -1,35 +1,36 @@
+aa.vue인데 이거도 code.vue 기준으로 해줘 이전에 해준건 틀리더라.
+절대적으로 말하지만 code.vue 기준인거야 ag-grid 영역은 수정이 없구 유지인거구
+알지?
 <template>
-  <div class="adapter-compare-page panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
-    <DefaultCard
-      :title="{ icon: 'fa-adapter', title: 'Adapter Mapping 비교 분석', subtitle: '프로젝트별 어댑터 매핑 데이터 및 상세 파라미터 일치 여부를 확인합니다.' }"
-      class="w-100 h-100"
-    >
-      <template #header-right>
-        <div class="d-flex align-items-center gap-2 flex-wrap">
+  <div class="d-flex flex-column h-100 bg-white">
+    <div class="p-3 border-bottom shadow-sm bg-light">
+      <div class="d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-3">
           <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap small">대상 프로젝트</span>
+            <span class="fw-bold text-dark text-nowrap">Projects</span>
             <div class="dropdown">
-              <div
-                class="ui-tag-tab-box dropdown-toggle custom-project-dropdown"
+              <button
+                class="btn btn-sm btn-outline-secondary dropdown-toggle custom-project-dropdown text-start d-flex justify-content-between align-items-center bg-white"
+                type="button"
                 data-bs-toggle="dropdown"
                 data-bs-auto-close="outside"
               >
-                <span class="text-truncate">
-                  {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}
-                </span>
-              </div>
-              <ul class="dropdown-menu p-2 shadow-lg" style="max-height: 400px; overflow-y: auto; width: 350px; z-index: 9999;">
+                <span class="text-truncate me-2">{{
+                  selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요'
+                }}</span>
+              </button>
+              <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 350px">
                 <li class="px-2 pb-2 border-bottom mb-1">
                   <input
                     type="text"
                     class="form-control form-control-sm"
                     v-model="projectSearchKeyword"
-                    placeholder="프로젝트 번호/명 검색..."
+                    placeholder="검색..."
                     @click.stop
                   />
                 </li>
                 <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
-                  <label class="form-check-label d-flex align-items-center w-100 fw-bold cursor-pointer small">
+                  <label class="form-check-label d-flex align-items-center w-100 fw-bold" style="cursor: pointer">
                     <input
                       class="form-check-input me-2 mt-0"
                       type="checkbox"
@@ -41,77 +42,72 @@
                   </label>
                 </li>
                 <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
-                  <label class="form-check-label d-flex align-items-center w-100 cursor-pointer small">
+                  <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
                     <input
                       class="form-check-input me-2 mt-0"
                       type="checkbox"
                       :value="proj.PROJ_NO"
                       v-model="selectedProjects"
                     />
-                    <span class="text-truncate">
-                      <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
-                      <small class="text-muted ms-1">({{ proj.DESC }})</small>
-                    </span>
+                    <span class="text-truncate fw-bold text-primary"
+                      >{{ proj.PROJ_NO }} <small class="text-muted">({{ proj.DESC }})</small></span
+                    >
                   </label>
                 </li>
               </ul>
             </div>
           </div>
-
           <button
-            class="ui-tag-tab-search-btn shadow-sm"
+            class="btn btn-sm btn-primary px-3 shadow-sm"
             @click="onSearch"
             :disabled="selectedProjects.length === 0"
           >
-            <i class="fa fa-search me-1"></i>비교 조회
+            비교 조회
           </button>
 
-          <div class="header-divider"></div>
-
-          <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
-            <input type="radio" class="btn-check" id="mapModeSimple" value="simple" v-model="viewMode" />
-            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="mapModeSimple">간편</label>
-
-            <input type="radio" class="btn-check" id="mapModeDetail" value="detail" v-model="viewMode" />
-            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="mapModeDetail">상세</label>
-          </div>
-
-          <div class="header-divider"></div>
-
-          <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap small"><i class="fa fa-filter me-1"></i>결과 내 검색</span>
-            <textarea
-              class="ui-tag-tab-textarea border-success"
-              v-model="attributeFilter"
-              rows="1"
-              placeholder="MAP_ID 입력 (엔터/쉼표)"
-            ></textarea>
+          <div class="view-mode-toggle-container ms-3">
+            <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border">
+              <input type="radio" class="btn-check" id="mapModeSimple" value="simple" v-model="viewMode" />
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="mapModeSimple">간편 조회</label>
+              <input type="radio" class="btn-check" id="mapModeDetail" value="detail" v-model="viewMode" />
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="mapModeDetail">상세 조회</label>
+            </div>
           </div>
         </div>
-      </template>
-
-      <div class="flex-grow-1 overflow-hidden border-top">
-        <ag-grid-vue
-          style="width: 100%; height: 100%"
-          class="ag-theme-custom"
-          :columnDefs="mainColumnDefs"
-          :rowData="gridRowData"
-          :defaultColDef="defaultColDef"
-          :loadingOverlayComponent="AggridLoadingOverlay"
-          :isExternalFilterPresent="isExternalFilterPresent"
-          :doesExternalFilterPass="doesExternalFilterPass"
-          @grid-ready="onGridReady"
-          @cell-clicked="onCellClicked"
-        />
+        <div class="d-flex align-items-center gap-2">
+          <span class="fw-bold text-success text-nowrap">멀티 필터</span>
+          <textarea
+            class="form-control form-control-sm border-success custom-textarea-filter"
+            v-model="attributeFilter"
+            rows="1"
+            placeholder="MAP_ID 입력"
+          ></textarea>
+        </div>
       </div>
-    </DefaultCard>
+    </div>
+
+    <div class="flex-grow-1 overflow-hidden">
+      <ag-grid-vue
+        style="width: 100%; height: 100%"
+        class="ag-theme-custom"
+        :columnDefs="mainColumnDefs"
+        :rowData="gridRowData"
+        :defaultColDef="defaultColDef"
+        :loadingOverlayComponent="AggridLoadingOverlay"
+        :isExternalFilterPresent="isExternalFilterPresent"
+        :doesExternalFilterPass="doesExternalFilterPass"
+        @grid-ready="onGridReady"
+        @cell-clicked="onCellClicked"
+      />
+    </div>
 
     <div class="modal fade" id="arrayDiffModal" tabindex="-1" aria-hidden="true">
       <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 95vw">
         <div class="modal-content shadow-lg border-0">
           <div class="modal-header py-2 bg-dark text-white border-0">
-            <h6 class="modal-title small">
-              상세 데이터 비교 [<span class="text-warning">{{ selectedMapId }}</span>]
+            <h6 class="modal-title">
+              상세 데이터 비교 [<span class="text-warning">{{ selectedMapId }}</span
+              >]
             </h6>
             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
           </div>
@@ -148,7 +144,6 @@
   import { useRoute } from 'vue-router'
   import { axiosWrapper } from '@/utils/axios/axios-wrapper'
   import { sAlert } from '@/utils/messages/alert-common'
-  import DefaultCard from '@/components/default/DefaultCard.vue'
   import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
   import * as bootstrap from 'bootstrap'
 
@@ -185,6 +180,7 @@
   const ARRAY_FIELDS = ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']
   const TAB_KEY_MAP = { MAP_ATT: 'SEDP_ATT_ID', MAP_CLS: 'SEDP_OBJ_CLS_ID', MAP_TMPLS: 'TMP_ID', MAP_RELS: 'REL_ID' }
 
+  // --- Ag-Grid 기본 설정 (미니필터 포함) ---
   const defaultColDef = {
     sortable: true,
     resizable: true,
@@ -195,6 +191,7 @@
   }
   const modalDefaultColDef = { ...defaultColDef, floatingFilter: true }
 
+  // --- 프로젝트 조회 및 선택 로직 (기존 유지) ---
   const filteredProjectList = computed(() => {
     const kw = projectSearchKeyword.value.trim().toLowerCase()
     return projectList.value.filter(
@@ -229,6 +226,7 @@
 
   const areEqual = (v1, v2) => JSON.stringify(v1 || '') === JSON.stringify(v2 || '')
 
+  // --- 메인 비교 조회 로직 (기존 유지) ---
   const onSearch = async () => {
     if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
     gridApi.value?.setGridOption('loading', true)
@@ -270,6 +268,7 @@
     }
   }
 
+  // --- 메인 그리드 컬럼 정의 (상세 조회 시 배열 필드 숨김 포함) ---
   const mainColumnDefs = computed(() => {
     const cols = [
       {
@@ -325,6 +324,7 @@
     return cols
   })
 
+  // --- [수정된 모달 로직] 탭 변경 및 클릭 행 감시 ---
   const onCellClicked = p => {
     if (p.column.getColId() === 'DIFF_INFO' && p.value) {
       clickedRow.value = p.data
@@ -360,6 +360,7 @@
     })
   })
 
+  // --- [수정된 모달 로직] 동적 파라미터 헤더 생성 ---
   const modalColumnDefs = computed(() => {
     const keyField = TAB_KEY_MAP[activeTab.value]
     const cols = [
@@ -396,6 +397,7 @@
         width: 140,
         cellStyle: p => {
           const currentVal = p.data[pNo]?.[attrKey]
+          // 틀린 파라미터 값만 빨간색으로 강조
           const isDiff = dynamicCols.value.some(
             otherP => JSON.stringify(currentVal) !== JSON.stringify(p.data[otherP]?.[attrKey])
           )
@@ -407,89 +409,69 @@
     return cols
   })
 
-  const onGridReady = p => { gridApi.value = p.api }
+  const onGridReady = p => {
+    gridApi.value = p.api
+  }
   const isExternalFilterPresent = () => attributeFilter.value.trim() !== ''
   const doesExternalFilterPass = n => {
-    const kws = attributeFilter.value.split(/[\s,\n]+/).filter(k => k).map(k => k.toLowerCase())
-    return kws.length === 0 || kws.some(kw => String(n.data.MAP_ID || '').toLowerCase().includes(kw))
+    const kws = attributeFilter.value
+      .split(/[\s,\n]+/)
+      .filter(k => k)
+      .map(k => k.toLowerCase())
+    return (
+      kws.length === 0 ||
+      kws.some(kw =>
+        String(n.data.MAP_ID || '')
+          .toLowerCase()
+          .includes(kw)
+      )
+    )
   }
   watch([attributeFilter, viewMode], () => gridApi.value?.onFilterChanged())
 </script>
 
-<style scoped lang="scss">
-  .header-divider {
-    width: 1px;
-    height: 16px;
-    background-color: #dee2e6;
-    margin: 0 8px;
+<style scoped>
+  .custom-project-dropdown {
+    width: 300px !important;
   }
-
-  .ui-tag-tab-box {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    min-width: 200px;
-    max-width: 300px;
-    height: 32px;
-    padding: 0 12px;
-    background-color: #fff;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
-    font-size: 0.85rem;
-    cursor: pointer;
-    transition: border-color 0.15s ease-in-out;
-    &:hover { border-color: #0d6efd; }
-    &::after { display: none; }
-  }
-
-  .ui-tag-tab-search-btn {
-    height: 32px;
-    padding: 0 16px;
-    background-color: #0d6efd;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    font-size: 0.85rem;
-    font-weight: 600;
-    cursor: pointer;
-    &:disabled { background-color: #6c757d; opacity: 0.65; cursor: not-allowed; }
-    &:hover:not(:disabled) { background-color: #0b5ed7; }
-  }
-
-  .ui-tag-tab-textarea {
-    width: 250px;
-    height: 32px;
-    padding: 4px 12px;
+  .custom-textarea-filter {
+    width: 300px !important;
     font-size: 0.8rem;
-    border: 1px solid #ced4da;
-    border-radius: 4px;
     resize: none;
-    line-height: 22px;
-    &:focus { outline: none; border-color: #198754; box-shadow: 0 0 0 0.2rem rgba(25, 135, 84, 0.25); }
   }
-
   .toggle-label {
-    border: none !important;
-    color: #6c757d;
-    font-weight: 600;
-    transition: all 0.2s ease;
-    font-size: 0.8rem;
-    padding: 4px 12px;
     cursor: pointer;
+    font-size: 0.82rem;
+    padding: 4px 16px;
   }
-
   .btn-check:checked + .toggle-label {
-    background-color: #ffffff !important;
+    background-color: #fff !important;
     color: #0d6efd !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
-  .cursor-pointer { cursor: pointer; }
-  .transition-all { transition: all 0.2s ease; }
+  :deep(.ag-theme-custom) {
+    --ag-header-background-color: #f8f9fa;
+    --ag-font-size: 12px;
+  }
+  :deep(.ag-floating-filter-input) {
+    pointer-events: auto !important;
+  }
+  :deep(.ag-floating-filter-body input) {
+    height: 24px !important;
+    border: 1px solid #ced4da !important;
+    border-radius: 3px !important;
+    padding: 0 5px !important;
+    background-color: white !important;
+  }
 
   :deep(.ag-header-group-cell) {
-    background-color: #f8f9fa !important;
-    font-weight: bold;
+    background-color: #e9ecef !important;
+    color: #212529;
+    font-weight: 800 !important;
     border-right: 1px solid #dee2e6 !important;
+    text-align: center;
+  }
+  .transition-all {
+    transition: all 0.2s ease;
   }
 </style>
