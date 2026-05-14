@@ -9,34 +9,55 @@
           <div class="d-flex align-items-center gap-2">
             <span class="fw-bold text-dark text-nowrap small">프로젝트</span>
             <div class="dropdown">
-              <div class="ui-tag-tab-box" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+              <div
+                class="ui-tag-tab-box"
+                data-bs-toggle="dropdown"
+                data-bs-auto-close="outside"
+              >
                 <span class="text-truncate">
                   {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '선택하세요' }}
                 </span>
                 <i class="fa fa-caret-down text-muted small"></i>
               </div>
               <ul class="dropdown-menu p-2 shadow-lg" style="max-height: 400px; overflow-y: auto; width: 350px; z-index: 1060">
+                <li class="px-2 pb-2 border-bottom mb-1">
+                  <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="검색..." @click.stop />
+                </li>
                 <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
-                  <label class="form-check-label d-flex align-items-center w-100 cursor-pointer small">
-                    <input class="form-check-input me-2 mt-0" type="checkbox" :value="proj.PROJ_NO" v-model="selectedProjects" />
-                    <span class="text-truncate">{{ proj.PROJ_NO }} <small>({{ proj.DESC }})</small></span>
+                  <label class="form-check-label d-flex align-items-center w-100 cursor-pointer small fw-normal">
+                    <input
+                      class="form-check-input me-2 mt-0"
+                      type="checkbox"
+                      :value="proj.PROJ_NO"
+                      v-model="selectedProjects"
+                    />
+                    <span class="text-truncate">
+                      <span class="text-primary fw-normal">{{ proj.PROJ_NO }}</span>
+                      <small class="text-muted ms-1 fw-normal">({{ proj.DESC }})</small>
+                    </span>
                   </label>
                 </li>
               </ul>
             </div>
           </div>
 
-          <button class="tpl-btn tpl-btn--sm tpl-btn--primary" @click="onSearch" :disabled="selectedProjects.length === 0">
+          <button
+            class="ui-tag-tab-search-btn"
+            @click="onSearch"
+            :disabled="selectedProjects.length === 0"
+          >
             <i class="fa fa-search me-1"></i>조회
           </button>
 
           <div class="header-divider"></div>
 
-          <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
-            <input type="radio" class="btn-check" name="viewMode" id="modeSimple" value="simple" v-model="viewMode" />
-            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeSimple">간편</label>
-            <input type="radio" class="btn-check" name="viewMode" id="modeDetail" value="detail" v-model="viewMode" />
-            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeDetail">상세</label>
+          <div class="view-mode-toggle-container">
+            <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
+              <input type="radio" class="btn-check" name="viewMode" id="modeSimple" value="simple" v-model="viewMode" />
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeSimple">간편</label>
+              <input type="radio" class="btn-check" name="viewMode" id="modeDetail" value="detail" v-model="viewMode" />
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeDetail">상세</label>
+            </div>
           </div>
 
           <div class="header-divider"></div>
@@ -45,7 +66,12 @@
             <span class="fw-bold text-dark text-nowrap small">결과 검색</span>
             <div class="position-relative">
               <i class="fa fa-filter position-absolute text-muted" style="left: 10px; top: 50%; transform: translateY(-50%); z-index: 2"></i>
-              <textarea class="ui-tag-tab-textarea shadow-sm" v-model="attributeFilter" rows="1" placeholder="ID 입력 (엔터/쉼표)"></textarea>
+              <textarea
+                class="ui-tag-tab-textarea shadow-sm"
+                v-model="attributeFilter"
+                rows="1"
+                placeholder="ID 입력 (엔터/쉼표)"
+              ></textarea>
             </div>
           </div>
         </div>
@@ -66,12 +92,11 @@ import { sAlert } from '@/utils/messages/alert-common'
 import DefaultCard from '@/components/default/DefaultCard.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-// 엔터프라이즈 기능을 위해 라이선스 등록이 필요할 수 있습니다 (main.js 등에서 권장)
-// import { LicenseManager } from 'ag-grid-enterprise';
-// LicenseManager.setLicenseKey('YOUR_KEY');
-
 const route = useRoute()
+
+// --- State ---
 const projectList = ref([])
+const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
 const attributeFilter = ref('')
 const viewMode = ref('simple')
@@ -79,8 +104,58 @@ const gridApi = shallowRef()
 const gridRowData = ref([])
 const dynamicCols = ref([])
 
-// ... 데이터 로직 (생략 - 이전과 동일) ...
+const urlEpId = computed(() => route.query.ep_id || '')
+const urlProjNo = computed(() => route.query.project_no || '')
+const COMPARE_FIELDS = ['DESC', 'VAL_TYPE', 'CL_ID']
 
+// --- 데이터 로딩 및 조회 로직 ---
+const filteredProjectList = computed(() => {
+  const kw = projectSearchKeyword.value.trim().toLowerCase()
+  return projectList.value.filter(p => !kw || p.PROJ_NO?.toLowerCase().includes(kw) || p.DESC?.toLowerCase().includes(kw))
+})
+
+onMounted(async () => {
+  try {
+    const res = await axiosWrapper.get('/api/Project/Get', { headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value } })
+    projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
+  } catch (error) { console.error(error) }
+})
+
+const onSearch = async () => {
+  if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
+  gridApi.value?.setGridOption('loading', true)
+  try {
+    const fetchPromises = selectedProjects.value.map(projNo => 
+      axiosWrapper.post('/api/Attributes/Get', { ContainDeleted: false, ProjectNo: projNo }, { headers: { Projectno: projNo, Ep_id: urlEpId.value } }).catch(() => [])
+    )
+    const results = await Promise.all(fetchPromises)
+    const attrMap = new Map()
+    results.forEach((data, index) => {
+      const currentProjNo = selectedProjects.value[index]
+      if (Array.isArray(data)) data.forEach(item => {
+        if (!attrMap.has(item.ATT_ID)) attrMap.set(item.ATT_ID, { ATT_ID: item.ATT_ID, projects: {} })
+        attrMap.get(item.ATT_ID).projects[currentProjNo] = { EXIST: true, DESC: item.DESC || '', VAL_TYPE: item.VAL_TYPE || '', CL_ID: item.CL_ID || '' }
+      })
+    })
+    const processedData = Array.from(attrMap.values()).map(row => {
+      let isDiff = Object.keys(row.projects).length !== selectedProjects.value.length
+      if (!isDiff) {
+        COMPARE_FIELDS.forEach(field => {
+          const values = selectedProjects.value.map(p => row.projects[p][field])
+          if (new Set(values).size > 1) isDiff = true
+        })
+      }
+      const resultRow = { ATT_ID: row.ATT_ID, CONDITION: isDiff ? 'Diff' : 'Pass' }
+      selectedProjects.value.forEach(p => { resultRow[p] = row.projects[p] || { EXIST: false } })
+      return resultRow
+    })
+    dynamicCols.value = [...selectedProjects.value]
+    gridRowData.value = processedData
+  } catch (e) { sAlert.Error('조회 실패') }
+  finally { gridApi.value?.setGridOption('loading', false) }
+}
+
+// --- 그리드 정의 ---
 const columnDefs = computed(() => {
   const cols = [
     { 
@@ -118,33 +193,15 @@ const gridOptions = computed(() => ({
   columnDefs: columnDefs.value,
   rowData: gridRowData.value,
   loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { 
-    sortable: true, resizable: true, filter: true, floatingFilter: true, flex: 0 
-  },
-  
-  // 💡 [유료버전 핵심] 멀티 셀 및 범위 선택 활성화
-  enableRangeSelection: true,      // 마우스 드래그로 여러 셀 선택 가능
-  rowSelection: 'multiple',        // 여러 로우 선택 가능
-  suppressRowClickSelection: false, // 로우 클릭 시 선택되도록 함
-
-  // 💡 [하단 상태바] 로우 갯수 및 선택 정보 표시
+  defaultColDef: { sortable: true, resizable: true, filter: true, floatingFilter: true, flex: 0 },
+  enableRangeSelection: true,
+  rowSelection: 'multiple',
   statusBar: {
     statusPanels: [
-      { 
-        statusPanel: 'agTotalAndFilteredRowCountComponent', 
-        align: 'left' 
-      },
-      { 
-        statusPanel: 'agSelectedRowCountComponent', 
-        align: 'right' 
-      },
-      { 
-        statusPanel: 'agAggregationComponent', // 선택된 셀들의 합계, 평균 등 (필요 시)
-        align: 'right' 
-      }
+      { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'left' },
+      { statusPanel: 'agSelectedRowCountComponent', align: 'right' },
     ]
   },
-
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: node => {
     const inputIds = attributeFilter.value.split(/[\s,\n]+/).filter(id => id.trim() !== '').map(id => id.toLowerCase())
@@ -160,25 +217,37 @@ watch([attributeFilter, viewMode], () => { gridApi.value?.onFilterChanged() })
 .grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid #dee2e6; }
 .header-divider { width: 1px; height: 14px; background-color: #dee2e6; margin: 0 10px; }
 
-/* 상단 UI 네모박스 스타일 */
+/* 💡 프로젝트 선택 UI (Tag Tab 스타일) */
 .ui-tag-tab-box {
   display: flex; justify-content: space-between; align-items: center;
   min-width: 200px; height: 32px; padding: 0 12px;
   background-color: #fff; border: 1px solid #dee2e6; border-radius: 4px;
   font-size: 0.8rem; cursor: pointer;
+  &:hover { border-color: #adb5bd; }
 }
+
+/* 💡 조회 버튼 (Tag Tab 정식 버튼 디자인) */
+.ui-tag-tab-search-btn {
+  height: 32px; padding: 0 16px; border-radius: 4px;
+  background-color: #007bff; color: #fff; border: none;
+  font-weight: 500; font-size: 12px; cursor: pointer;
+  transition: background-color 0.2s;
+  &:hover { background-color: #0056b3; }
+  &:disabled { background: #e9ecef; color: #adb5bd; cursor: not-allowed; }
+}
+
 .ui-tag-tab-textarea {
   width: 250px !important; height: 32px; padding: 5px 10px 5px 32px;
   font-size: 0.8rem; border: 1px solid #dee2e6; border-radius: 4px;
+  background-color: #fff; resize: none;
+  &:focus { border-color: #0d6efd; outline: none; }
 }
+
+.toggle-label { border: none !important; color: #6c757d; font-weight: 600; font-size: 0.75rem; padding: 4px 14px; }
+.btn-check:checked + .toggle-label { background-color: #fff !important; color: #0d6efd !important; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
 
 :deep(.ag-theme-custom) {
   --ag-header-background-color: #f8f9fa;
-  
-  /* 선택된 셀/영역 스타일 강조 */
-  .ag-range-selected {
-    background-color: rgba(13, 110, 253, 0.1) !important;
-    border: 1px solid #0d6efd !important;
-  }
+  .ag-header-group-cell { font-weight: bold; border-right: 1px solid #dee2e6 !important; }
 }
 </style>
