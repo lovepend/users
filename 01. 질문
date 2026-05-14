@@ -30,20 +30,27 @@
               </ul>
             </div>
           </div>
+          
           <button class="ui-tag-tab-search-btn" @click="onSearch" :disabled="selectedProjects.length === 0">조회</button>
+          
           <div class="header-divider mx-2"></div>
+          
           <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border">
-            <input type="radio" class="btn-check" id="modeS" value="simple" v-model="viewMode" /><label class="btn btn-sm rounded-pill px-3" for="modeS">간편</label>
-            <input type="radio" class="btn-check" id="modeD" value="detail" v-model="viewMode" /><label class="btn btn-sm rounded-pill px-3" for="modeD">상세</label>
+            <input type="radio" class="btn-check" id="modeS" value="simple" v-model="viewMode" />
+            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeS">간편</label>
+            <input type="radio" class="btn-check" id="modeD" value="detail" v-model="viewMode" />
+            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeD">상세</label>
           </div>
+          
           <div class="header-divider mx-2"></div>
+          
           <textarea class="ui-tag-tab-textarea" v-model="attributeFilter" placeholder="MAP_ID 필터..."></textarea>
         </div>
       </template>
 
-      <div class="grid-wrapper flex-grow-1 border-top bg-white" style="position: relative; min-height: 500px;">
+      <div class="grid-wrapper flex-grow-1 border-top bg-white">
         <ag-grid-vue
-          style="width: 100%; height: 100%; position: absolute; top: 0; left: 0;"
+          style="width: 100%; height: 100%;"
           class="ag-theme-custom"
           :columnDefs="mainColumnDefs"
           :rowData="gridRowData"
@@ -57,17 +64,26 @@
       </div>
     </DefaultCard>
 
-    <div class="modal fade" id="arrayDiffModal" tabindex="-1" aria-hidden="true" style="z-index: 9999;">
-      <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 90vw;">
-        <div class="modal-content border-0 shadow-lg">
-          <div class="modal-header py-2 bg-dark text-white">
-            <h6 class="modal-title small">상세 비교: {{ selectedMapId }}</h6>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+    <div class="modal fade custom-adapter-modal" id="arrayDiffModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+      <div class="modal-dialog modal-xl shadow-lg">
+        <div class="modal-content border-0">
+          <div class="modal-header py-2 bg-dark text-white border-0">
+            <h6 class="modal-title small">
+              <i class="fa fa-search me-2"></i>상세 데이터 비교 [<span class="text-warning">{{ selectedMapId }}</span>]
+            </h6>
+            <button type="button" class="btn-close btn-close-white shadow-none" data-bs-dismiss="modal"></button>
           </div>
-          <div class="modal-body p-0 d-flex flex-column" style="height: 70vh; background: white;">
+          <div class="modal-body p-0 d-flex flex-column" style="height: 70vh; background: #fff;">
             <div class="bg-light p-2 border-bottom d-flex gap-1">
-              <button v-for="t in ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']" :key="t" 
-                class="btn btn-sm" :class="activeTab === t ? 'btn-primary' : 'btn-white border'" @click="activeTab = t">{{ t }}</button>
+              <button 
+                v-for="t in ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']" 
+                :key="t" 
+                class="btn btn-xs px-3 shadow-sm transition-all" 
+                :class="activeTab === t ? 'btn-primary fw-bold' : 'btn-white border'" 
+                @click="activeTab = t"
+              >
+                {{ t }}
+              </button>
             </div>
             <div class="flex-grow-1 position-relative">
               <ag-grid-vue
@@ -78,6 +94,9 @@
                 :defaultColDef="defaultColDef"
               />
             </div>
+          </div>
+          <div class="modal-footer py-1 bg-light">
+            <button type="button" class="btn btn-secondary btn-xs" data-bs-dismiss="modal">닫기</button>
           </div>
         </div>
       </div>
@@ -112,10 +131,14 @@ const clickedRow = ref(null)
 const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'CATEGORY', 'TOOL_ID', 'TOOL_TYPE', 'MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']
 const TAB_KEY_MAP = { MAP_ATT: 'SEDP_ATT_ID', MAP_CLS: 'SEDP_OBJ_CLS_ID', MAP_TMPLS: 'TMP_ID', MAP_RELS: 'REL_ID' }
 
-// 공통 컬럼 정의
-const defaultColDef = { sortable: true, resizable: true, filter: 'agTextColumnFilter', floatingFilter: true, minWidth: 100 }
+const defaultColDef = { 
+  sortable: true, 
+  resizable: true, 
+  filter: 'agTextColumnFilter', 
+  floatingFilter: true, 
+  minWidth: 100 
+}
 
-// 프로젝트 리스트 가져오기
 onMounted(async () => {
   const modalEl = document.getElementById('arrayDiffModal')
   diffModal = new bootstrap.Modal(modalEl)
@@ -133,7 +156,6 @@ const filteredProjectList = computed(() => {
 
 const onGridReady = (params) => {
   gridApi.value = params.api
-  // [해결] 그리드 준비 시점에 억지로라도 레이아웃을 다시 계산하게 함
   setTimeout(() => { params.api.sizeColumnsToFit(); }, 200)
 }
 
@@ -178,16 +200,25 @@ const onSearch = async () => {
 
 const mainColumnDefs = computed(() => {
   const cols = [
-    { headerName: 'Condition', field: 'CONDITION', width: 90, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? 'red' : 'green', fontWeight: 'bold', textAlign: 'center' }) },
-    { headerName: 'Diff Info', field: 'DIFF_INFO', width: 130, pinned: 'left', cellStyle: { color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer' } },
+    { headerName: 'Condition', field: 'CONDITION', width: 90, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center' }) },
+    { headerName: 'Diff Info', field: 'DIFF_INFO', width: 130, pinned: 'left', cellStyle: { color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold' } },
     { headerName: 'Mapping ID', field: 'MAP_ID', width: 220, pinned: 'left' }
   ]
   dynamicCols.value.forEach(p => {
     cols.push({
       headerName: p,
       children: [
-        { headerName: 'Exist', valueGetter: params => params.data[p]?.EXIST ? 'Y' : 'N', width: 70 },
-        ...(viewMode.value === 'detail' ? COMPARE_FIELDS.filter(f => !f.includes('MAP_')).map(f => ({ headerName: f, valueGetter: params => params.data[p]?.[f] || '', width: 120 })) : [])
+        { 
+          headerName: 'Exist', 
+          valueGetter: params => params.data[p]?.EXIST ? 'Y' : 'N', 
+          width: 70, 
+          cellStyle: params => ({ textAlign: 'center', color: params.value === 'Y' ? '#198754' : '#6c757d' }) 
+        },
+        ...(viewMode.value === 'detail' ? COMPARE_FIELDS.filter(f => !f.startsWith('MAP_')).map(f => ({ 
+          headerName: f, 
+          valueGetter: params => params.data[p]?.[f] || '', 
+          width: 120 
+        })) : [])
       ]
     })
   })
@@ -202,9 +233,72 @@ const onCellClicked = (p) => {
   }
 }
 
-// (모달 내부 데이터 변환 로직 및 컬럼 정의는 이전과 동일)
-watch([activeTab, clickedRow], () => { /* ... 상세 비교 데이터 가공 로직 ... */ })
-const modalColumnDefs = computed(() => { /* ... 모달 컬럼 정의 ... */ return [] })
+// 모달 내부 데이터 가공 로직
+watch([activeTab, clickedRow], () => {
+  if (!clickedRow.value) return
+  const keyField = TAB_KEY_MAP[activeTab.value]
+  const mergeMap = new Map()
+  
+  dynamicCols.value.forEach(pNo => {
+    const pRow = clickedRow.value[pNo]
+    if (!pRow || !pRow[activeTab.value]) return
+    let items = pRow[activeTab.value]
+    if (activeTab.value === 'MAP_CLS' && items.ITEMS) items = items.ITEMS
+    if (Array.isArray(items)) {
+      items.forEach(item => {
+        const id = item[keyField]
+        if (id) {
+          if (!mergeMap.has(id)) mergeMap.set(id, { [keyField]: id })
+          mergeMap.get(id)[pNo] = item
+        }
+      })
+    }
+  })
+  
+  modalRowData.value = Array.from(mergeMap.values()).map(row => {
+    const activePs = dynamicCols.value.filter(p => row[p])
+    let isRowDiff = activePs.length !== dynamicCols.value.length || activePs.some(p => JSON.stringify(row[p]) !== JSON.stringify(row[activePs[0]]))
+    return { ...row, CONDITION: isRowDiff ? 'Diff' : 'Pass' }
+  })
+})
+
+const modalColumnDefs = computed(() => {
+  const keyField = TAB_KEY_MAP[activeTab.value]
+  if (!keyField) return []
+
+  const cols = [
+    { headerName: keyField, field: keyField, pinned: 'left', width: 180, cellClass: 'bg-light fw-bold' },
+    { 
+      headerName: 'Condition', 
+      field: 'CONDITION', 
+      pinned: 'left', 
+      width: 90, 
+      cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center' }) 
+    },
+  ]
+
+  const allKeys = new Set()
+  modalRowData.value.forEach(row => {
+    dynamicCols.value.forEach(pNo => {
+      if (row[pNo]) Object.keys(row[pNo]).forEach(k => { if (k !== keyField) allKeys.add(k) })
+    })
+  })
+
+  dynamicCols.value.forEach(pNo => {
+    const children = Array.from(allKeys).map(attrKey => ({
+      headerName: attrKey,
+      valueGetter: p => p.data[pNo]?.[attrKey] ?? '-',
+      width: 130,
+      cellStyle: p => {
+        const val = p.data[pNo]?.[attrKey]
+        const isDiff = dynamicCols.value.some(other => JSON.stringify(val) !== JSON.stringify(p.data[other]?.[attrKey]))
+        return isDiff ? { color: '#dc3545', fontWeight: 'bold' } : null
+      }
+    }))
+    cols.push({ headerName: pNo, children })
+  })
+  return cols
+})
 
 const isExternalFilterPresent = () => attributeFilter.value !== ''
 const doesExternalFilterPass = (n) => String(n.data.MAP_ID).toLowerCase().includes(attributeFilter.value.toLowerCase())
@@ -214,18 +308,40 @@ watch(attributeFilter, () => gridApi.value?.onFilterChanged())
 <style scoped lang="scss">
 .adapter-compare-page { height: 100%; overflow: hidden; }
 
-/* [해결] 그리드가 안 나오는 것은 부모 높이가 없기 때문. absolute 배치를 위한 wrapper 설정 */
 .grid-wrapper {
   position: relative;
   width: 100%;
-  height: 100%; /* 부모(DefaultCard body)가 d-flex flex-column이므로 공간을 다 차지함 */
+  height: 100%;
 }
 
-.ui-tag-tab-box { height: 32px; border: 1px solid #ddd; padding: 0 10px; cursor: pointer; display: flex; align-items: center; background: #fff; border-radius: 4px; }
-.ui-tag-tab-search-btn { height: 32px; background: #007bff; color: #fff; border: none; border-radius: 4px; padding: 0 15px; }
-.ui-tag-tab-textarea { height: 32px; border: 1px solid #ddd; border-radius: 4px; padding: 5px; resize: none; width: 200px; }
-.header-divider { width: 1px; height: 20px; background: #eee; }
+/* UI 요소 스타일 (tagtab.vue 스타일 반영) */
+.ui-tag-tab-box { height: 32px; border: 1px solid #ddd; padding: 0 10px; cursor: pointer; display: flex; align-items: center; background: #fff; border-radius: 4px; font-size: 0.85rem; }
+.ui-tag-tab-search-btn { height: 32px; background: #0d6efd; color: #fff; border: none; border-radius: 4px; padding: 0 15px; font-weight: 600; font-size: 0.85rem; }
+.ui-tag-tab-textarea { height: 32px; border: 1px solid #ddd; border-radius: 4px; padding: 5px 10px; resize: none; width: 220px; font-size: 0.8rem; }
+.header-divider { width: 1px; height: 18px; background: #dee2e6; }
 
-/* 모달 레이어 꼬임 방지 */
-:deep(.modal-backdrop) { z-index: 9998 !important; }
+.toggle-label { cursor: pointer; font-size: 0.8rem; font-weight: 600; padding: 4px 12px; color: #6c757d; }
+.btn-check:checked + .toggle-label { background-color: #fff !important; color: #0d6efd !important; box-shadow: 0 1px 2px rgba(0,0,0,0.1); }
+
+/* [중요] 모달 위치 조정: 탭 아래에 배치 */
+.custom-adapter-modal {
+  z-index: 1060 !important;
+  .modal-dialog {
+    margin-top: 100px; /* 메인 화면의 Header(탭) 높이만큼 여백 부여 */
+  }
+}
+
+:deep(.modal-backdrop) { z-index: 1050 !important; }
+
+:deep(.ag-theme-custom) {
+  --ag-header-background-color: #f8f9fa;
+  --ag-font-size: 12px;
+  .ag-header-group-cell {
+    background-color: #e9ecef !important;
+    font-weight: 800 !important;
+    border-right: 1px solid #dee2e6 !important;
+  }
+}
+
+.btn-xs { padding: 0.2rem 0.5rem; font-size: 0.75rem; border-radius: 0.2rem; }
 </style>
