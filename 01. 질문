@@ -63,7 +63,7 @@
         </div>
       </template>
 
-      <div class="grid-wrapper w-100 h-100">
+      <div class="grid-wrapper w-100 h-100 overflow-hidden">
         <ag-grid-vue class="ag-theme-custom w-100 h-100" v-bind="gridOptions" @grid-ready="onGridReady" />
       </div>
     </DefaultCard>
@@ -80,7 +80,6 @@ import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
 const route = useRoute()
 
-// --- State ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
@@ -93,10 +92,8 @@ const dynamicCols = ref([])
 const urlEpId = computed(() => route.query.ep_id || '')
 const urlProjNo = computed(() => route.query.project_no || '')
 
-// Template 비교용 주요 필드 설정
 const COMPARE_FIELDS = ['TMPL_TYPE', 'EP_ID']
 
-// --- 프로젝트 선택 로직 ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   return projectList.value.filter(p => !kw || p.PROJ_NO?.toLowerCase().includes(kw) || p.DESC?.toLowerCase().includes(kw))
@@ -121,7 +118,6 @@ onMounted(async () => {
   } catch (e) { console.error(e) }
 })
 
-// --- 데이터 조회 및 가공 (Template) ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   gridApi.value?.setGridOption('loading', true)
@@ -138,11 +134,7 @@ const onSearch = async () => {
       const currentProjNo = selectedProjects.value[index]
       if (Array.isArray(data)) data.forEach(item => {
         if (!tmplMap.has(item.NAME)) tmplMap.set(item.NAME, { NAME: item.NAME, projects: {} })
-        tmplMap.get(item.NAME).projects[currentProjNo] = { 
-          EXIST: true, 
-          TMPL_TYPE: item.TMPL_TYPE || '', 
-          EP_ID: item.EP_ID || '' 
-        }
+        tmplMap.get(item.NAME).projects[currentProjNo] = { EXIST: true, TMPL_TYPE: item.TMPL_TYPE || '', EP_ID: item.EP_ID || '' }
       })
     })
 
@@ -167,10 +159,7 @@ const onSearch = async () => {
   finally { gridApi.value?.setGridOption('loading', false) }
 }
 
-// --- 그리드 설정 ---
-const multiFilterParams = {
-  filters: [{ filter: 'agTextColumnFilter', filterParams: { debounceMs: 0 } }, { filter: 'agSetColumnFilter' }]
-}
+const multiFilterParams = { filters: [{ filter: 'agTextColumnFilter' }, { filter: 'agSetColumnFilter' }] }
 
 const columnDefs = computed(() => {
   const cols = [
@@ -179,31 +168,19 @@ const columnDefs = computed(() => {
       filter: 'agMultiColumnFilter', filterParams: multiFilterParams,
       cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' }) 
     },
-    { 
-      headerName: 'Diff Info', field: 'DIFF_INFO', width: 140, pinned: 'left',
-      filter: 'agMultiColumnFilter', filterParams: multiFilterParams,
-      cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' }
-    },
-    { 
-      headerName: 'Template Name', field: 'NAME', width: 220, pinned: 'left',
-      filter: 'agMultiColumnFilter', filterParams: multiFilterParams
-    },
+    { headerName: 'Diff Info', field: 'DIFF_INFO', width: 140, pinned: 'left', cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' } },
+    { headerName: 'Template Name', field: 'NAME', width: 220, pinned: 'left', filter: 'agMultiColumnFilter', filterParams: multiFilterParams },
   ]
 
   dynamicCols.value.forEach(proj => {
-    const children = [
-      { 
-        headerName: 'Exist', valueGetter: p => (p.data[proj]?.EXIST ? 'Y' : '-'), width: 80, 
-        filter: 'agMultiColumnFilter', filterParams: multiFilterParams,
-        cellStyle: { textAlign: 'center' },
-        cellRenderer: p => p.value === 'Y' ? `<i class="fa fa-check-circle text-success" style="font-size: 1rem;"></i>` : `<span class="text-muted">-</span>`
-      }
-    ]
-
+    const children = [{ 
+      headerName: 'Exist', valueGetter: p => (p.data[proj]?.EXIST ? 'Y' : '-'), width: 80, cellStyle: { textAlign: 'center' },
+      cellRenderer: p => p.value === 'Y' ? `<i class="fa fa-check-circle text-success"></i>` : `<span class="text-muted">-</span>`
+    }]
     if (viewMode.value === 'detail') {
       children.push(
-        { headerName: 'Type', valueGetter: p => p.data[proj]?.TMPL_TYPE, width: 120, filter: 'agMultiColumnFilter', filterParams: multiFilterParams },
-        { headerName: 'EP ID', valueGetter: p => p.data[proj]?.EP_ID, width: 120, filter: 'agMultiColumnFilter', filterParams: multiFilterParams }
+        { headerName: 'Type', valueGetter: p => p.data[proj]?.TMPL_TYPE, width: 110 },
+        { headerName: 'EP ID', valueGetter: p => p.data[proj]?.EP_ID, width: 100 }
       )
     }
     cols.push({ headerName: proj, marryChildren: true, children })
@@ -217,8 +194,7 @@ const gridOptions = computed(() => ({
   loadingOverlayComponent: AggridLoadingOverlay,
   defaultColDef: { sortable: true, resizable: true, filter: true, floatingFilter: true },
   enableRangeSelection: true,
-  copyHeadersToClipboard: true,
-  rowSelection: 'multiple',
+  copyHeadersToClipboard: false, // ★ 헤더 복사 안 되게 수정
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: node => {
     const inputIds = attributeFilter.value.split(/[\s,\n]+/).filter(id => id.trim() !== '').map(id => id.toLowerCase())
@@ -231,43 +207,34 @@ watch([attributeFilter, viewMode], () => { gridApi.value?.onFilterChanged() })
 </script>
 
 <style scoped lang="scss">
-/* 페이지 레이아웃 공통 스타일 */
 .grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid #dee2e6; }
 .header-divider { width: 1px; height: 14px; background-color: #dee2e6; margin: 0 10px; }
 
-/* TagTab 스타일 정의 */
 .ui-tag-tab-box { 
   display: flex; justify-content: space-between; align-items: center; 
   min-width: 250px; height: 32px; padding: 0 12px; 
   background-color: #fff; border: 1px solid #dee2e6; border-radius: 4px; 
-  font-size: 0.8rem; cursor: pointer; transition: border-color 0.2s;
+  font-size: 0.8rem; cursor: pointer;
   &:hover { border-color: #b4b4b4; }
 }
 
 .ui-tag-tab-search-btn { 
-  height: 32px; padding: 0 16px; border-radius: 4px; 
-  background-color: #007bff; color: #fff; border: none; 
-  font-weight: 500; font-size: 12px; cursor: pointer;
+  height: 32px; padding: 0 16px; border-radius: 4px; background-color: #007bff; color: #fff; border: none; font-size: 12px;
   &:hover { background-color: #0056b3; }
-  &:disabled { background-color: #ccc; cursor: not-allowed; }
+  &:disabled { background-color: #ccc; }
 }
 
 .ui-tag-tab-textarea { 
-  width: 250px !important; height: 32px; padding: 5px 10px 5px 12px; 
-  font-size: 0.8rem; border: 1px solid #dee2e6; border-radius: 4px; 
-  background-color: #fff; resize: none; overflow: hidden;
-  &:focus { outline: 1px solid #007bff; border-color: #007bff; }
+  width: 250px !important; height: 32px; padding: 5px 12px; font-size: 0.8rem; 
+  border: 1px solid #dee2e6; border-radius: 4px; resize: none; overflow: hidden;
 }
 
-/* 토글 버튼 스타일 */
 .toggle-label { border: none !important; color: #6c757d; font-weight: 600; font-size: 0.75rem; padding: 4px 14px; cursor: pointer; }
 .btn-check:checked + .toggle-label { background-color: #fff !important; color: #0d6efd !important; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
 
-/* 그리드 커스텀 */
 :deep(.ag-theme-custom) {
   --ag-header-background-color: #f8f9fa;
   .ag-header-group-cell { font-weight: bold; border-right: 1px solid #dee2e6 !important; }
-  .bg-danger-light { background-color: #fff5f5 !important; }
 }
 .cursor-pointer { cursor: pointer; }
 </style>
