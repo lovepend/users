@@ -4,16 +4,17 @@
       <template #header-right>
         <div class="d-flex align-items-center gap-2 flex-wrap">
           
-          <div class="dropdown custom-multi-select" style="min-width: 280px">
+          <div class="dropdown custom-multi-select" style="min-width: 250px">
             <div 
               class="form-control form-control-sm cursor-pointer d-flex justify-content-between align-items-center bg-white"
               data-bs-toggle="dropdown" 
               data-bs-auto-close="outside"
             >
-              <span class="text-truncate" style="max-width: 220px;">
-                {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}
+              <span class="text-truncate" style="max-width: 200px;">
+                <i class="fa fa-folder-open me-1 text-warning"></i>
+                {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트 선택' }}
               </span>
-              <i class="fa fa-chevron-down ms-2 text-muted" style="font-size: 10px;"></i>
+              <i class="fa fa-caret-down ms-2 text-muted"></i>
             </div>
             
             <ul class="dropdown-menu shadow-lg p-2 w-100" style="max-height: 400px; overflow-y: auto; z-index: 1060">
@@ -55,13 +56,17 @@
             </ul>
           </div>
 
-          <div class="view-mode-toggle-container mx-2">
+          <div class="view-mode-toggle-container mx-1">
             <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
               <input type="radio" class="btn-check" name="viewMode" id="modeSimple" value="simple" v-model="viewMode" />
-              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeSimple">간편</label>
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeSimple">
+                <i class="fa fa-th-large me-1"></i>간편
+              </label>
 
               <input type="radio" class="btn-check" name="viewMode" id="modeDetail" value="detail" v-model="viewMode" />
-              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeDetail">상세</label>
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeDetail">
+                <i class="fa fa-list me-1"></i>상세
+              </label>
             </div>
           </div>
 
@@ -73,19 +78,19 @@
             @click="onSearch"
             :disabled="selectedProjects.length === 0"
           >
-            <i class="fa fa-copy me-1"></i>비교 조회
+            <i class="fa fa-search me-1"></i>조회
           </button>
 
           <div class="header-divider"></div>
 
-          <div class="d-flex align-items-center gap-2 bg-light px-2 py-1 rounded border">
-            <span class="fw-bold text-success small text-nowrap"><i class="fa fa-filter me-1"></i>필터</span>
+          <div class="d-flex align-items-center gap-2 bg-light px-2 py-1 rounded border border-success-subtle filter-box">
+            <i class="fa fa-filter text-success small"></i>
             <textarea
               class="form-control form-control-sm border-0 bg-transparent custom-textarea-filter"
               v-model="attributeFilter"
               rows="1"
-              placeholder="ID 입력 (엔터/쉼표)"
-              style="width: 180px; height: 24px; font-size: 11px; outline: none; box-shadow: none;"
+              placeholder="ID 멀티 입력..."
+              @input="adjustTextareaHeight"
             ></textarea>
           </div>
         </div>
@@ -111,9 +116,11 @@ import DefaultCard from '@/components/default/DefaultCard.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
 const route = useRoute()
-const cardTitle = { icon: 'fa-columns', title: 'Attribute 비교 분석', subtitle: '프로젝트 간 속성 정합성 체크' }
 
-// --- State (기존 로직 유지) ---
+/** 💡 아이콘 통일: fa-columns 사용 */
+const cardTitle = { icon: 'fa-columns', title: 'Attribute 비교 분석', subtitle: '속성 정합성 체크' }
+
+// --- State ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
@@ -128,7 +135,7 @@ const urlEpId = computed(() => route.query.ep_id || '')
 const urlProjNo = computed(() => route.query.project_no || '')
 const COMPARE_FIELDS = ['DESC', 'VAL_TYPE', 'CL_ID']
 
-// --- 프로젝트 필터링/선택 로직 (기존 유지) ---
+// --- 프로젝트 선택 로직 ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   if (!kw) return projectList.value
@@ -153,6 +160,15 @@ const toggleAllSelection = e => {
   selectedProjects.value = checked
     ? [...new Set([...selectedProjects.value, ...filteredIds])]
     : selectedProjects.value.filter(id => !filteredIds.includes(id))
+}
+
+// 텍스트 영역 높이 조절 (미니 필터용)
+const adjustTextareaHeight = (e) => {
+  const el = e.target
+  el.style.height = '24px'
+  if (el.scrollHeight > 24) {
+    el.style.height = el.scrollHeight + 'px'
+  }
 }
 
 onMounted(async () => {
@@ -216,7 +232,7 @@ const onSearch = async () => {
   finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
 }
 
-// --- 그리드 설정 ---
+// --- 그리드 설정 (표준 통일) ---
 const columnDefs = computed(() => {
   const multiFilterParams = { filters: [{ filter: 'agTextColumnFilter' }, { filter: 'agSetColumnFilter' }] }
   const cols = [
@@ -228,14 +244,14 @@ const columnDefs = computed(() => {
         backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8',
       }),
     },
-    { headerName: 'Diff Info', field: 'DIFF_INFO', width: 120, pinned: 'left', cellStyle: { fontSize: '11px', color: '#dc3545' } },
-    { headerName: 'Attribute ID', field: 'ATT_ID', width: 160, pinned: 'left' },
+    { headerName: 'Diff Info', field: 'DIFF_INFO', width: 120, pinned: 'left', cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: '500' } },
+    { headerName: 'Attribute ID', field: 'ATT_ID', width: 180, pinned: 'left' },
   ]
 
   dynamicCols.value.forEach(proj => {
     const children = [{
-      headerName: 'Exist', valueGetter: p => (p.data[proj]?.EXIST ? 'Alive' : '-'), width: 70,
-      cellRenderer: p => p.value === 'Alive' ? `<i class="fa fa-check-circle" style="color: #198754;"></i>` : `<span class="text-muted">-</span>`,
+      headerName: 'Exist', valueGetter: p => (p.data[proj]?.EXIST ? 'Alive' : '-'), width: 75,
+      cellRenderer: p => p.value === 'Alive' ? `<i class="fa fa-check-circle text-success"></i>` : `<span class="text-muted">-</span>`,
       cellStyle: { textAlign: 'center' },
       cellClassRules: { 'bg-danger-light': p => !p.data[proj]?.EXIST },
     }]
@@ -259,6 +275,7 @@ const gridOptions = computed(() => ({
     statusPanels: [
       { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'left' },
       { statusPanel: 'agSelectedRowCountComponent', align: 'right' },
+      { statusPanel: 'agAggregationComponent', align: 'right' },
     ],
   },
   defaultColDef: { sortable: true, resizable: true, filter: true, floatingFilter: true },
@@ -282,10 +299,23 @@ watch([attributeFilter, viewMode], () => { if (gridApi.value) gridApi.value.onFi
 .grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid var(--tpl-divider); }
 .header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 10px; }
 
-/* 토글 버튼 커스텀 */
+/* 미니 필터 박스 상세 수정 */
+.filter-box {
+  transition: border-color 0.2s;
+  &:focus-within { border-color: #198754 !important; background-color: #fff !important; }
+}
+.custom-textarea-filter {
+  width: 160px; min-height: 24px; max-height: 100px;
+  font-size: 11px; line-height: 1.2;
+  outline: none; box-shadow: none; resize: none;
+  padding: 2px 0;
+}
+
+/* 토글 버튼 스타일 통일 */
 .toggle-label {
   border: none !important; color: #6c757d; font-weight: 600; font-size: 0.75rem; 
-  padding: 2px 12px; transition: all 0.2s;
+  padding: 4px 14px; transition: all 0.2s ease;
+  i { font-size: 11px; }
 }
 .btn-check:checked + .toggle-label {
   background-color: #fff !important; color: #0d6efd !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -293,14 +323,16 @@ watch([attributeFilter, viewMode], () => { if (gridApi.value) gridApi.value.onFi
 
 :deep(.ag-theme-custom) {
   --ag-header-background-color: #f8f9fa;
-  .ag-header-group-cell { font-weight: bold; border-right: 1px solid #dee2e6 !important; }
+  --ag-header-group-cell-font-weight: 700;
+  .ag-header-group-cell { border-right: 1px solid #dee2e6 !important; }
   .ag-status-bar { font-size: 11px; height: 32px; background: #f8f9fa; border-top: 1px solid #dee2e6; }
   .bg-danger-light { background-color: #fff5f5 !important; }
 }
 
 .tpl-btn {
-  height: 30px; padding: 0 12px; border-radius: 4px; font-weight: 500; font-size: 12px;
+  height: 32px; padding: 0 14px; border-radius: 4px; font-weight: 500; font-size: 12px; transition: opacity 0.2s;
   &--primary { background: #007bff; color: #fff; border: none; }
-  &:disabled { background: #ccc; cursor: not-allowed; }
+  &:hover:not(:disabled) { opacity: 0.85; }
+  &:disabled { background: #e9ecef; color: #adb5bd; cursor: not-allowed; }
 }
 </style>
