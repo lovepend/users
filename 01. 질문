@@ -1,49 +1,54 @@
 <template>
   <div class="template__page panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
-    <DefaultCard :title="{ icon: 'fa-list', title: 'Attribute 비교 분석', subtitle: '프로젝트 간 속성 정합성 체크' }" class="w-100 h-100">
-      
+    <DefaultCard 
+      :title="{ icon: 'fa-list', title: 'Attribute 비교 분석', subtitle: '프로젝트 간 속성 정합성 체크' }" 
+      class="w-100 h-100"
+    >
       <template #header-right>
         <div class="d-flex align-items-center gap-2 flex-wrap">
           
-          <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap small">Projects</span>
-            <div class="dropdown">
-              <button
-                class="btn btn-sm btn-outline-secondary dropdown-toggle text-start d-flex justify-content-between align-items-center bg-white"
-                type="button"
-                data-bs-toggle="dropdown"
+          <div class="dropdown custom-single-select" style="min-width: 220px">
+            <div class="d-flex align-items-center gap-2">
+              <span class="fw-bold text-dark text-nowrap small">프로젝트</span>
+              <div 
+                class="form-control form-control-sm cursor-pointer d-flex justify-content-between align-items-center bg-white"
+                data-bs-toggle="dropdown" 
                 data-bs-auto-close="outside"
-                style="width: 250px"
+                style="min-width: 180px;"
               >
-                <span class="text-truncate me-2">
-                  {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}
+                <span class="text-truncate">
+                  {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '선택하세요' }}
                 </span>
-              </button>
-              <ul class="dropdown-menu p-2 shadow-lg" style="max-height: 400px; overflow-y: auto; width: 350px; z-index: 1060">
-                <li class="px-2 pb-2 border-bottom mb-1">
-                  <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="프로젝트 검색..." @click.stop />
-                </li>
-                <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
-                  <label class="form-check-label d-flex align-items-center w-100 fw-bold cursor-pointer">
-                    <input class="form-check-input me-2 mt-0" type="checkbox" :checked="isAllSelected" :indeterminate="isIndeterminate" @change="toggleAllSelection" />
-                    <span>전체 선택 / 해제</span>
-                  </label>
-                </li>
-                <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
-                  <label class="form-check-label d-flex align-items-center w-100 cursor-pointer">
-                    <input class="form-check-input me-2 mt-0" type="checkbox" :value="proj.PROJ_NO" v-model="selectedProjects" />
-                    <span class="text-truncate">
-                      <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
-                      <small class="text-muted ms-1">({{ proj.DESC }})</small>
-                    </span>
-                  </label>
-                </li>
-              </ul>
+                <i class="fa fa-caret-down ms-2 text-muted"></i>
+              </div>
             </div>
+            
+            <ul class="dropdown-menu shadow-lg p-2 w-100" style="max-height: 400px; overflow-y: auto; z-index: 1060">
+              <li class="px-2 pb-2 border-bottom mb-1">
+                <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="검색..." @click.stop />
+              </li>
+              <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
+                <label class="form-check-label d-flex align-items-center w-100 fw-bold cursor-pointer">
+                  <input class="form-check-input me-2 mt-0" type="checkbox" :checked="isAllSelected" :indeterminate="isIndeterminate" @change="toggleAllSelection" />
+                  <span>전체 선택 / 해제</span>
+                </label>
+              </li>
+              <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
+                <label class="form-check-label d-flex align-items-center w-100 cursor-pointer">
+                  <input class="form-check-input me-2 mt-0" type="checkbox" :value="proj.PROJ_NO" v-model="selectedProjects" />
+                  <span class="text-truncate">
+                    <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
+                    <small class="text-muted ms-1">({{ proj.DESC }})</small>
+                  </span>
+                </label>
+              </li>
+            </ul>
           </div>
 
-          <button class="tpl-btn tpl-btn--sm tpl-btn--primary" @click="onSearch" :disabled="selectedProjects.length === 0">
-            <i class="fa fa-search me-1"></i>비교 조회
+          <div class="header-divider"></div>
+
+          <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--primary" @click="onSearch" :disabled="selectedProjects.length === 0">
+            <i class="fa fa-search me-1"></i>조회
           </button>
 
           <div class="header-divider"></div>
@@ -60,14 +65,18 @@
           <div class="header-divider"></div>
 
           <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-success text-nowrap small"><i class="fa fa-filter me-1"></i>필터</span>
-            <textarea
-              class="form-control form-control-sm border-success custom-textarea-filter"
-              v-model="attributeFilter"
-              rows="1"
-              placeholder="ATT_ID 입력 (엔터/쉼표 구분)"
-            ></textarea>
+            <span class="fw-bold text-dark text-nowrap small">결과 검색</span>
+            <div class="position-relative">
+              <i class="fa fa-filter position-absolute text-muted" style="left: 10px; top: 50%; transform: translateY(-50%); z-index: 1;"></i>
+              <textarea
+                class="form-control form-control-sm custom-filter-input"
+                v-model="attributeFilter"
+                rows="1"
+                placeholder="ID 입력 (엔터/쉼표)"
+              ></textarea>
+            </div>
           </div>
+
         </div>
       </template>
 
@@ -88,7 +97,7 @@ import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
 const route = useRoute()
 
-// --- State (이전 안정 버전 로직 그대로) ---
+// --- State ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
@@ -129,7 +138,7 @@ onMounted(async () => {
   } catch (error) { console.error(error) }
 })
 
-// --- 검색 로직 ---
+// --- 조회 API ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   if (gridApi.value) gridApi.value.setGridOption('loading', true)
@@ -164,7 +173,7 @@ const onSearch = async () => {
   finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
 }
 
-// --- 그리드 옵션 ---
+// --- 그리드 정의 ---
 const columnDefs = computed(() => {
   const cols = [
     { headerName: 'Condition', field: 'CONDITION', width: 100, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' }) },
@@ -189,18 +198,18 @@ const gridOptions = computed(() => ({
   enableRangeSelection: true,
   cellSelection: true,
   suppressRowClickSelection: true,
+  statusBar: {
+    statusPanels: [
+      { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'left' },
+      { statusPanel: 'agSelectedRowCountComponent', align: 'right' },
+    ],
+  },
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: node => {
     const inputIds = attributeFilter.value.split(/[\s,\n]+/).filter(id => id.trim() !== '').map(id => id.toLowerCase())
     if (inputIds.length === 0) return true
     const targetId = String(node.data.ATT_ID || '').toLowerCase()
     return inputIds.some(id => targetId.includes(id))
-  },
-  statusBar: {
-    statusPanels: [
-      { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'left' },
-      { statusPanel: 'agSelectedRowCountComponent', align: 'right' },
-    ],
   },
 }))
 
@@ -212,18 +221,23 @@ watch([attributeFilter, viewMode], () => { if (gridApi.value) gridApi.value.onFi
 .grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid var(--tpl-divider); }
 .header-divider { width: 1px; height: 14px; background-color: var(--tpl-divider); margin: 0 10px; }
 
-/* 미니 필터 (Textarea) 스타일 복구 */
-.custom-textarea-filter {
-  width: 250px !important;
+/* 💡 결과 검색 (Tag Tab 디자인) */
+.custom-filter-input {
+  width: 220px !important;
+  padding-left: 28px !important; /* 아이콘 공간 */
   font-size: 0.8rem;
-  resize: none;
   height: 32px;
+  resize: none;
+  border-radius: 4px;
+  &:focus { border-color: #0d6efd; box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15); }
 }
+
+/* 프로젝트 선택 Dropdown */
+.dropdown-toggle { font-size: 0.8rem; height: 32px; }
 
 /* 토글 버튼 */
 .toggle-label {
-  border: none !important; color: #6c757d; font-weight: 600; font-size: 0.8rem;
-  padding: 4px 14px; transition: all 0.2s;
+  border: none !important; color: #6c757d; font-weight: 600; font-size: 0.75rem; padding: 4px 14px; transition: all 0.2s;
 }
 .btn-check:checked + .toggle-label {
   background-color: #fff !important; color: #0d6efd !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -232,12 +246,11 @@ watch([attributeFilter, viewMode], () => { if (gridApi.value) gridApi.value.onFi
 :deep(.ag-theme-custom) {
   --ag-header-background-color: #f8f9fa;
   .ag-header-group-cell { font-weight: bold; border-right: 1px solid #dee2e6 !important; }
-  .bg-danger-light { background-color: #fff5f5 !important; }
 }
 
 .tpl-btn {
-  height: 32px; padding: 0 12px; border-radius: 4px; font-weight: 500; font-size: 12px;
+  height: 32px; padding: 0 16px; border-radius: 4px; font-weight: 500; font-size: 12px; cursor: pointer;
   &--primary { background: #007bff; color: #fff; border: none; }
-  &:disabled { background: #ccc; cursor: not-allowed; }
+  &:disabled { background: #e9ecef; color: #adb5bd; cursor: not-allowed; }
 }
 </style>
