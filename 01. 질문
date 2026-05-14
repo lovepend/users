@@ -13,62 +13,44 @@
                 data-bs-auto-close="outside"
               >
                 <span class="text-truncate me-2">
-                  {{ selectedProjects.length > 0 ? `${selectedProjects.length}개 선택됨` : '프로젝트를 선택하세요' }}
+                  {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}
                 </span>
               </button>
-              <ul
-                class="dropdown-menu p-3 shadow-lg"
-                style="max-height: 500px; overflow-y: auto; width: 400px; border: 1px solid #ddd"
-              >
-                <li class="px-1 pb-2 border-bottom mb-2" @click.stop>
-                  <div class="input-group input-group-sm">
-                    <span class="input-group-text bg-white"><i class="fa fa-search text-muted"></i></span>
-                    <input
-                      type="text"
-                      class="form-control"
-                      v-model="projectSearchKeyword"
-                      placeholder="프로젝트 번호/명 검색..."
-                    />
-                  </div>
+              <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 350px">
+                <li class="px-2 pb-2 border-bottom mb-1">
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    v-model="projectSearchKeyword"
+                    placeholder="프로젝트 번호/명 검색..."
+                    @click.stop
+                  />
                 </li>
-                <li class="dropdown-item px-2 py-2 border-bottom mb-1 bg-light rounded" @click.stop>
-                  <div class="form-check">
+                <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
+                  <label class="form-check-label d-flex align-items-center w-100 fw-bold" style="cursor: pointer">
                     <input
-                      class="form-check-input"
+                      class="form-check-input me-2 mt-0"
                       type="checkbox"
-                      id="allCheckClass"
                       :checked="isAllSelected"
                       :indeterminate="isIndeterminate"
                       @change="toggleAllSelection"
                     />
-                    <label class="form-check-label fw-bold w-100 ms-1" for="allCheckClass" style="cursor: pointer">
-                      전체 선택 / 해제
-                    </label>
-                  </div>
+                    <span>전체 선택 / 해제</span>
+                  </label>
                 </li>
-                <li
-                  v-for="proj in filteredProjectList"
-                  :key="proj.PROJ_NO"
-                  class="dropdown-item px-2 py-1 rounded"
-                  @click.stop
-                >
-                  <div class="form-check">
+                <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
+                  <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
                     <input
-                      class="form-check-input"
+                      class="form-check-input me-2 mt-0"
                       type="checkbox"
-                      :id="'cls_proj_' + proj.PROJ_NO"
                       :value="proj.PROJ_NO"
                       v-model="selectedProjects"
                     />
-                    <label
-                      class="form-check-label w-100 ms-1"
-                      :for="'cls_proj_' + proj.PROJ_NO"
-                      style="cursor: pointer"
-                    >
+                    <span class="text-truncate">
                       <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
-                      <span class="text-muted ms-2 small">{{ proj.DESC }}</span>
-                    </label>
-                  </div>
+                      <small class="text-muted ms-1">({{ proj.DESC }})</small>
+                    </span>
+                  </label>
                 </li>
               </ul>
             </div>
@@ -87,24 +69,24 @@
               <input
                 type="radio"
                 class="btn-check"
-                name="clsViewMode"
-                id="clsModeSimple"
+                name="viewMode"
+                id="modeSimple"
                 value="simple"
                 v-model="viewMode"
                 autocomplete="off"
               />
-              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="clsModeSimple">간편 조회</label>
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeSimple">간편 조회</label>
 
               <input
                 type="radio"
                 class="btn-check"
-                name="clsViewMode"
-                id="clsModeDetail"
+                name="viewMode"
+                id="modeDetail"
                 value="detail"
                 v-model="viewMode"
                 autocomplete="off"
               />
-              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="clsModeDetail">상세 조회</label>
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeDetail">상세 조회</label>
             </div>
           </div>
         </div>
@@ -115,7 +97,7 @@
             class="form-control form-control-sm border-success custom-textarea-filter"
             v-model="attributeFilter"
             rows="1"
-            placeholder="CLS_ID 입력 (엔터/쉼표 구분)"
+            placeholder="ATT_ID 입력 (엔터/쉼표 구분)"
           ></textarea>
         </div>
       </div>
@@ -141,7 +123,7 @@
   const projectSearchKeyword = ref('')
   const selectedProjects = ref([])
   const attributeFilter = ref('')
-  const viewMode = ref('simple')
+  const viewMode = ref('simple') // 간편 조회가 기본값
 
   const gridApi = shallowRef()
   const gridRowData = ref([])
@@ -150,10 +132,9 @@
   const urlEpId = computed(() => route.query.ep_id || '')
   const urlProjNo = computed(() => route.query.project_no || '')
 
-  // 요청하신 Object Class 전용 비교 항목
-  const COMPARE_FIELDS = ['DESC', 'PRT_CLS_ID', 'TAG_TYPE_ID']
+  const COMPARE_FIELDS = ['DESC', 'VAL_TYPE', 'CL_ID']
 
-  // --- 프로젝트 선택 로직 ---
+  // --- 프로젝트 선택 관련 로직 ---
   const filteredProjectList = computed(() => {
     const kw = projectSearchKeyword.value.trim().toLowerCase()
     if (!kw) return projectList.value
@@ -192,7 +173,7 @@
     }
   })
 
-  // --- 데이터 조회 및 가공 (Object Class) ---
+  // --- 데이터 조회 로직 (Attribute) ---
   const onSearch = async () => {
     if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
     if (gridApi.value) gridApi.value.setGridOption('loading', true)
@@ -201,7 +182,7 @@
       const fetchPromises = selectedProjects.value.map(projNo =>
         axiosWrapper
           .post(
-            '/api/ObjectClass/Get', // API 경로 변경
+            '/api/Attributes/Get',
             { ContainDeleted: false, ProjectNo: projNo },
             { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
           )
@@ -209,26 +190,26 @@
       )
 
       const results = await Promise.all(fetchPromises)
-      const classMap = new Map()
+      const attrMap = new Map()
 
       results.forEach((projectData, index) => {
         const currentProjNo = selectedProjects.value[index]
         if (!Array.isArray(projectData)) return
 
         projectData.forEach(item => {
-          if (!classMap.has(item.CLS_ID)) {
-            classMap.set(item.CLS_ID, { CLS_ID: item.CLS_ID, projects: {} })
+          if (!attrMap.has(item.ATT_ID)) {
+            attrMap.set(item.ATT_ID, { ATT_ID: item.ATT_ID, projects: {} })
           }
-          classMap.get(item.CLS_ID).projects[currentProjNo] = {
+          attrMap.get(item.ATT_ID).projects[currentProjNo] = {
             EXIST: true,
             DESC: item.DESC || '',
-            PRT_CLS_ID: item.PRT_CLS_ID || '',
-            TAG_TYPE_ID: item.TAG_TYPE_ID || '',
+            VAL_TYPE: item.VAL_TYPE || '',
+            CL_ID: item.CL_ID || '',
           }
         })
       })
 
-      const processedData = Array.from(classMap.values()).map(row => {
+      const processedData = Array.from(attrMap.values()).map(row => {
         let isDiff = false
         let diffDetails = []
 
@@ -246,13 +227,13 @@
         })
 
         const resultRow = {
-          CLS_ID: row.CLS_ID,
+          ATT_ID: row.ATT_ID,
           CONDITION: isDiff ? 'Diff' : 'Pass',
           DIFF_INFO: diffDetails.join(', '),
         }
 
         selectedProjects.value.forEach(p => {
-          resultRow[p] = row.projects[p] || { EXIST: false, DESC: '', PRT_CLS_ID: '', TAG_TYPE_ID: '' }
+          resultRow[p] = row.projects[p] || { EXIST: false, DESC: '', VAL_TYPE: '', CL_ID: '' }
         })
 
         return resultRow
@@ -267,9 +248,12 @@
     }
   }
 
-  // --- 그리드 컬럼 설정 ---
+  // --- 그리드 컬럼 설정 (상세/간편 모드 동적 반영) ---
   const columnDefs = computed(() => {
-    const multiFilterParams = { filters: [{ filter: 'agTextColumnFilter' }, { filter: 'agSetColumnFilter' }] }
+    const multiFilterParams = {
+      filters: [{ filter: 'agTextColumnFilter' }, { filter: 'agSetColumnFilter' }],
+    }
+
     const cols = [
       {
         headerName: 'Condition',
@@ -295,8 +279,8 @@
         cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' },
       },
       {
-        headerName: 'Class ID',
-        field: 'CLS_ID',
+        headerName: 'Attribute ID',
+        field: 'ATT_ID',
         width: 180,
         pinned: 'left',
         filter: 'agMultiColumnFilter',
@@ -308,18 +292,20 @@
       const children = [
         {
           headerName: 'Exist',
-          valueGetter: p => (p.data[proj]?.EXIST ? 'Y' : '-'),
+          valueGetter: p => (p.data[proj]?.EXIST ? 'Alive' : '-'),
           width: 80,
           filter: 'agMultiColumnFilter',
-          cellStyle: { textAlign: 'center' },
+          filterParams: multiFilterParams,
+          cellStyle: { textAlign: 'center', display: 'flex', alignItems: 'center', justifyContent: 'center' },
           cellRenderer: p =>
-            p.value === 'Y'
+            p.value === 'Alive'
               ? `<i class="fa fa-check-circle" style="color: #198754; font-size: 1rem;"></i>`
               : `<span class="text-muted">-</span>`,
           cellClassRules: { 'bg-danger-light': p => !p.data[proj]?.EXIST },
         },
       ]
 
+      // 상세 조회 모드일 때만 추가
       if (viewMode.value === 'detail') {
         children.push(
           {
@@ -327,24 +313,33 @@
             valueGetter: p => p.data[proj]?.DESC,
             width: 200,
             filter: 'agMultiColumnFilter',
+            filterParams: multiFilterParams,
           },
           {
-            headerName: 'Parent ID',
-            valueGetter: p => p.data[proj]?.PRT_CLS_ID,
-            width: 150,
+            headerName: 'Format',
+            valueGetter: p => p.data[proj]?.VAL_TYPE,
+            width: 110,
             filter: 'agMultiColumnFilter',
+            filterParams: multiFilterParams,
           },
           {
-            headerName: 'Tag Type',
-            valueGetter: p => p.data[proj]?.TAG_TYPE_ID,
-            width: 120,
+            headerName: 'Length',
+            valueGetter: p => p.data[proj]?.CL_ID,
+            width: 90,
             filter: 'agMultiColumnFilter',
+            filterParams: multiFilterParams,
+            cellStyle: { textAlign: 'right' },
           }
         )
       }
 
-      cols.push({ headerName: `${proj}`, marryChildren: true, children: children })
+      cols.push({
+        headerName: `${proj}`,
+        marryChildren: true,
+        children: children,
+      })
     })
+
     return cols
   })
 
@@ -354,9 +349,23 @@
     style: 'width: 100%; height: 100%',
     class: 'ag-theme-custom',
     loadingOverlayComponent: AggridLoadingOverlay,
-    defaultColDef: { sortable: true, resizable: true, filter: true, floatingFilter: true },
+    sideBar: false,
+    statusBar: {
+      statusPanels: [
+        { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'right' },
+        { statusPanel: 'agSelectedRowCountComponent', align: 'right' },
+      ],
+    },
+    defaultColDef: {
+      sortable: true,
+      resizable: true,
+      filter: true,
+      floatingFilter: true,
+    },
+    popupParent: document.body,
     enableRangeSelection: true,
     copyHeadersToClipboard: true,
+    suppressRowClickSelection: true,
     isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
     doesExternalFilterPass: node => {
       const inputIds = attributeFilter.value
@@ -364,7 +373,7 @@
         .filter(id => id.trim() !== '')
         .map(id => id.toLowerCase())
       if (inputIds.length === 0) return true
-      const targetId = String(node.data.CLS_ID || '').toLowerCase()
+      const targetId = String(node.data.ATT_ID || '').toLowerCase()
       return inputIds.some(id => targetId.includes(id))
     },
   }))
@@ -388,18 +397,21 @@
     resize: none;
   }
 
+  /* 슬라이딩 토글 버튼 스타일 */
   .view-mode-toggle-container .btn-group {
     background-color: rgba(0, 0, 0, 0.05);
   }
+
   .toggle-label {
     border: none !important;
     color: #6c757d;
     font-weight: 600;
     transition: all 0.2s ease;
     font-size: 0.82rem;
-    padding: 4px 16px;
-    cursor: pointer;
+    padding-top: 4px;
+    padding-bottom: 4px;
   }
+
   .btn-check:checked + .toggle-label {
     background-color: #ffffff !important;
     color: #0d6efd !important;
@@ -411,8 +423,12 @@
     font-weight: bold;
     border-right: 1px solid #dee2e6 !important;
   }
+
   :deep(.bg-danger-light) {
     background-color: #fff5f5 !important;
-    color: #fa5252 !important;
+  }
+
+  :deep(.ag-floating-filter-input) {
+    background-color: #fff !important;
   }
 </style>
