@@ -9,11 +9,7 @@
           <div class="d-flex align-items-center gap-2">
             <span class="fw-bold text-dark text-nowrap small">프로젝트</span>
             <div class="dropdown">
-              <div
-                class="ui-tag-tab-box"
-                data-bs-toggle="dropdown"
-                data-bs-auto-close="outside"
-              >
+              <div class="ui-tag-tab-box" data-bs-toggle="dropdown" data-bs-auto-close="outside">
                 <span class="text-truncate">
                   {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '선택하세요' }}
                 </span>
@@ -22,12 +18,6 @@
               <ul class="dropdown-menu p-2 shadow-lg" style="max-height: 400px; overflow-y: auto; width: 350px; z-index: 1060">
                 <li class="px-2 pb-2 border-bottom mb-1">
                   <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="검색..." @click.stop />
-                </li>
-                <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
-                  <label class="form-check-label d-flex align-items-center w-100 fw-bold cursor-pointer">
-                    <input class="form-check-input me-2 mt-0" type="checkbox" :checked="isAllSelected" :indeterminate="isIndeterminate" @change="toggleAllSelection" />
-                    <span>전체 선택 / 해제</span>
-                  </label>
                 </li>
                 <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
                   <label class="form-check-label d-flex align-items-center w-100 cursor-pointer small">
@@ -61,12 +51,7 @@
             <span class="fw-bold text-dark text-nowrap small">결과 검색</span>
             <div class="position-relative">
               <i class="fa fa-filter position-absolute text-muted" style="left: 10px; top: 50%; transform: translateY(-50%); z-index: 2"></i>
-              <textarea
-                class="ui-tag-tab-textarea shadow-sm"
-                v-model="attributeFilter"
-                rows="1"
-                placeholder="ID 입력 (엔터/쉼표)"
-              ></textarea>
+              <textarea class="ui-tag-tab-textarea shadow-sm" v-model="attributeFilter" rows="1" placeholder="ID 입력 (엔터/쉼표)"></textarea>
             </div>
           </div>
         </div>
@@ -88,8 +73,6 @@ import DefaultCard from '@/components/default/DefaultCard.vue'
 import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
 const route = useRoute()
-
-// --- State ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
@@ -103,31 +86,19 @@ const urlEpId = computed(() => route.query.ep_id || '')
 const urlProjNo = computed(() => route.query.project_no || '')
 const COMPARE_FIELDS = ['DESC', 'VAL_TYPE', 'CL_ID']
 
-// --- 프로젝트 선택 로직 ---
+// --- 프로젝트 리스트/조회 로직 (중략 - 기존과 동일) ---
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   return projectList.value.filter(p => !kw || p.PROJ_NO?.toLowerCase().includes(kw) || p.DESC?.toLowerCase().includes(kw))
 })
 
-const isAllSelected = computed(() => filteredProjectList.value.length > 0 && filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO)))
-const isIndeterminate = computed(() => {
-  const selInFil = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
-  return selInFil > 0 && selInFil < filteredProjectList.value.length
-})
-
-const toggleAllSelection = e => {
-  const ids = filteredProjectList.value.map(p => p.PROJ_NO)
-  selectedProjects.value = e.target.checked ? [...new Set([...selectedProjects.value, ...ids])] : selectedProjects.value.filter(id => !ids.includes(id))
-}
-
 onMounted(async () => {
   try {
     const res = await axiosWrapper.get('/api/Project/Get', { headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value } })
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
-  } catch (error) { console.error(error) }
+  } catch (e) { console.error(e) }
 })
 
-// --- 조회 로직 ---
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   gridApi.value?.setGridOption('loading', true)
@@ -166,17 +137,28 @@ const columnDefs = computed(() => {
     { 
       headerName: 'Condition', 
       field: 'CONDITION', 
-      width: 100, 
+      width: 110, 
       pinned: 'left',
-      cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8' }) 
+      filter: 'agTextColumnFilter', // 💡 필터 타입 명시
+      filterParams: { 
+        debounceMs: 0,
+        suppressAndOrCondition: true
+      },
+      cellStyle: p => ({ 
+        color: p.value === 'Diff' ? '#dc3545' : '#198754', 
+        fontWeight: 'bold', 
+        textAlign: 'center', 
+        backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8',
+        cursor: 'pointer' // 클릭 가능하게 표시
+      }) 
     },
     { 
       headerName: 'Attribute ID', 
       field: 'ATT_ID', 
       width: 180, 
       pinned: 'left',
-      filter: 'agTextColumnFilter', // 텍스트 필터 활성화
-      filterParams: { debounceMs: 0 } // 타이핑 즉시 적용!
+      filter: 'agTextColumnFilter',
+      filterParams: { debounceMs: 0 }
     },
   ]
   dynamicCols.value.forEach(proj => {
@@ -209,9 +191,10 @@ const gridOptions = computed(() => ({
     sortable: true, 
     resizable: true, 
     filter: true, 
-    floatingFilter: true, // 헤더 밑에 미니필터 박스 노출
+    floatingFilter: true,
     flex: 0 
   },
+  // 외부 필터 로직 (결과 검색용)
   isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
   doesExternalFilterPass: node => {
     const inputIds = attributeFilter.value.split(/[\s,\n]+/).filter(id => id.trim() !== '').map(id => id.toLowerCase())
@@ -227,7 +210,7 @@ watch([attributeFilter, viewMode], () => { gridApi.value?.onFilterChanged() })
 .grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid #dee2e6; }
 .header-divider { width: 1px; height: 14px; background-color: #dee2e6; margin: 0 10px; }
 
-/* 💡 프로젝트 선택/검색 Tag Tab 스타일 네모박스 */
+/* 상단 UI 네모박스 스타일 유지 */
 .ui-tag-tab-box {
   display: flex; justify-content: space-between; align-items: center;
   min-width: 200px; max-width: 250px; height: 32px; padding: 0 12px;
@@ -235,49 +218,19 @@ watch([attributeFilter, viewMode], () => { gridApi.value?.onFilterChanged() })
   font-size: 0.8rem; cursor: pointer;
   &:hover { border-color: #adb5bd; }
 }
-
 .ui-tag-tab-textarea {
   width: 250px !important; height: 32px; padding: 5px 10px 5px 32px;
   font-size: 0.8rem; border: 1px solid #dee2e6; border-radius: 4px;
   background-color: #fff; resize: none;
-  &:focus { border-color: #0d6efd; outline: none; box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1); }
+  &:focus { border-color: #0d6efd; outline: none; }
 }
 
-/* 토글 버튼 */
+/* 토글 및 공통 버튼 */
 .toggle-label { border: none !important; color: #6c757d; font-weight: 600; font-size: 0.75rem; padding: 4px 14px; }
 .btn-check:checked + .toggle-label { background-color: #fff !important; color: #0d6efd !important; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); }
 
-/* 💡 [핵심] Ag-Grid 헤더 밑 미니필터(Floating Filter) 커스텀 */
 :deep(.ag-theme-custom) {
   --ag-header-background-color: #f8f9fa;
-
-  /* 필터 행 전체를 흰색으로 */
-  .ag-header-row-floating-filter {
-    background-color: #ffffff !important;
-  }
-
-  /* 돋보기 등 버튼 제거 (텍스트 입력만 바로 하도록) */
-  .ag-floating-filter-button {
-    display: none !important;
-  }
-
-  /* 입력창을 명확한 '흰색 네모 에디터' 스타일로 */
-  .ag-floating-filter-body input {
-    background-color: #ffffff !important;
-    border: 1px solid #ced4da !important;
-    border-radius: 4px !important;
-    height: 26px !important;
-    padding: 0 8px !important;
-    font-size: 12px !important;
-    color: #333 !important;
-    
-    &:focus {
-      border-color: #0d6efd !important;
-      outline: none !important;
-      box-shadow: 0 0 0 2px rgba(13, 110, 253, 0.1) !important;
-    }
-  }
-
   .ag-header-group-cell { font-weight: bold; border-right: 1px solid #dee2e6 !important; }
 }
 
