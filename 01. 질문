@@ -1,14 +1,13 @@
 <template>
-  <div class="adapter-compare-page h-100 w-100 d-flex flex-column bg-white overflow-hidden">
-    
+  <div class="adapter-compare-page h-100 w-100 d-flex flex-column bg-white">
     <DefaultCard
       :title="{ 
         icon: 'fa-project-diagram', 
         title: 'Adapter Mapping 비교 분석', 
-        subtitle: '여러 프로젝트의 매핑 데이터를 한눈에 대조하고 상세 차이를 확인합니다.' 
+        subtitle: '프로젝트 간 매핑 차이를 분석하고 상세 내역을 대조합니다.' 
       }"
       class="flex-grow-1"
-      body-class="p-0 d-flex flex-column overflow-hidden"
+      body-class="p-0 d-flex flex-column"
     >
       <template #header-right>
         <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -24,50 +23,27 @@
                   {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}
                 </span>
               </div>
-              <ul class="dropdown-menu p-2 shadow-lg border-0" style="max-height: 400px; overflow-y: auto; width: 350px; z-index: 9999;">
+              <ul class="dropdown-menu p-2 shadow-lg border-0 custom-z-modal" style="max-height: 400px; overflow-y: auto; width: 350px;">
                 <li class="px-2 pb-2 border-bottom mb-1">
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    v-model="projectSearchKeyword"
-                    placeholder="검색..."
-                    @click.stop
-                  />
+                  <input type="text" class="form-control form-control-sm" v-model="projectSearchKeyword" placeholder="검색..." @click.stop />
                 </li>
                 <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
                   <label class="form-check-label d-flex align-items-center w-100 fw-bold cursor-pointer small">
-                    <input
-                      class="form-check-input me-2 mt-0"
-                      type="checkbox"
-                      :checked="isAllSelected"
-                      :indeterminate="isIndeterminate"
-                      @change="toggleAllSelection"
-                    />
+                    <input class="form-check-input me-2 mt-0" type="checkbox" :checked="isAllSelected" :indeterminate="isIndeterminate" @change="toggleAllSelection" />
                     <span>전체 선택 / 해제</span>
                   </label>
                 </li>
                 <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
                   <label class="form-check-label d-flex align-items-center w-100 cursor-pointer small">
-                    <input
-                      class="form-check-input me-2 mt-0"
-                      type="checkbox"
-                      :value="proj.PROJ_NO"
-                      v-model="selectedProjects"
-                    />
-                    <span class="text-truncate fw-bold text-primary">
-                      {{ proj.PROJ_NO }} <small class="text-muted">({{ proj.DESC }})</small>
-                    </span>
+                    <input class="form-check-input me-2 mt-0" type="checkbox" :value="proj.PROJ_NO" v-model="selectedProjects" />
+                    <span class="text-truncate fw-bold text-primary">{{ proj.PROJ_NO }} <small class="text-muted">({{ proj.DESC }})</small></span>
                   </label>
                 </li>
               </ul>
             </div>
           </div>
 
-          <button
-            class="ui-tag-tab-search-btn shadow-sm"
-            @click="onSearch"
-            :disabled="selectedProjects.length === 0"
-          >
+          <button class="ui-tag-tab-search-btn shadow-sm" @click="onSearch" :disabled="selectedProjects.length === 0">
             <i class="fa fa-search me-1"></i>비교 조회
           </button>
 
@@ -84,17 +60,12 @@
 
           <div class="d-flex align-items-center gap-2">
             <span class="fw-bold text-success text-nowrap small"><i class="fa fa-filter me-1"></i>멀티 필터</span>
-            <textarea
-              class="ui-tag-tab-textarea border-success"
-              v-model="attributeFilter"
-              rows="1"
-              placeholder="MAP_ID 입력"
-            ></textarea>
+            <textarea class="ui-tag-tab-textarea border-success" v-model="attributeFilter" rows="1" placeholder="MAP_ID 입력"></textarea>
           </div>
         </div>
       </template>
 
-      <div class="flex-grow-1 h-100 w-100 border-top overflow-hidden bg-light">
+      <div class="flex-grow-1 border-top bg-white relative-container" style="height: 0;">
         <ag-grid-vue
           style="width: 100%; height: 100%"
           class="ag-theme-custom"
@@ -110,21 +81,21 @@
       </div>
     </DefaultCard>
 
-    <div class="modal fade" id="arrayDiffModal" tabindex="-1" aria-hidden="true">
-      <div class="modal-dialog modal-xl modal-dialog-centered" style="max-width: 95vw">
-        <div class="modal-content shadow-lg border-0">
+    <div class="modal fade" id="arrayDiffModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+      <div class="modal-dialog modal-xl modal-dialog-centered shadow-lg" style="max-width: 90vw; z-index: 1060;">
+        <div class="modal-content border-0 overflow-hidden">
           <div class="modal-header py-2 bg-dark text-white border-0">
             <h6 class="modal-title small">
               상세 데이터 비교 [<span class="text-warning">{{ selectedMapId }}</span>]
             </h6>
-            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            <button type="button" class="btn-close btn-close-white shadow-none" data-bs-dismiss="modal"></button>
           </div>
-          <div class="modal-body p-0 d-flex flex-column" style="height: 80vh">
+          <div class="modal-body p-0 d-flex flex-column" style="height: 75vh; background: #fff;">
             <div class="bg-light p-2 border-bottom d-flex gap-2">
               <button
                 v-for="tab in ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']"
                 :key="tab"
-                class="btn btn-sm px-3 shadow-sm transition-all"
+                class="btn btn-xs px-3 shadow-sm transition-all"
                 :class="activeTab === tab ? 'btn-primary fw-bold' : 'btn-white border'"
                 @click="activeTab = tab"
               >
@@ -159,7 +130,6 @@ import * as bootstrap from 'bootstrap'
 const route = useRoute()
 let diffModal = null
 
-// --- 상태 변수 ---
 const projectList = ref([])
 const projectSearchKeyword = ref('')
 const selectedProjects = ref([])
@@ -177,19 +147,20 @@ const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'CATEGORY', 'TOOL_ID', 'TOOL_TYPE
 const ARRAY_FIELDS = ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']
 const TAB_KEY_MAP = { MAP_ATT: 'SEDP_ATT_ID', MAP_CLS: 'SEDP_OBJ_CLS_ID', MAP_TMPLS: 'TMP_ID', MAP_RELS: 'REL_ID' }
 
+// --- 기본 컬럼 정의 (code.vue 스타일로 조정) ---
 const defaultColDef = {
   sortable: true,
   resizable: true,
   filter: 'agTextColumnFilter',
   floatingFilter: true,
-  flex: 1, // 초기 접속 시 컬럼이 꽉 차게 보이도록 설정
   minWidth: 100,
   filterParams: { debounceMs: 200, suppressAndOrCondition: true },
   suppressFloatingFilterButton: true,
 }
-const modalDefaultColDef = { ...defaultColDef, flex: 0 }
 
-// 프로젝트 필터링 로직
+const modalDefaultColDef = { ...defaultColDef, floatingFilter: true }
+
+// 프로젝트 필터 및 선택 로직
 const filteredProjectList = computed(() => {
   const kw = projectSearchKeyword.value.trim().toLowerCase()
   return projectList.value.filter(p => !kw || p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw)))
@@ -205,7 +176,10 @@ const toggleAllSelection = e => {
 }
 
 onMounted(async () => {
-  diffModal = new bootstrap.Modal(document.getElementById('arrayDiffModal'))
+  // 모달 초기화
+  const modalEl = document.getElementById('arrayDiffModal');
+  diffModal = new bootstrap.Modal(modalEl);
+  
   try {
     const res = await axiosWrapper.get('/api/Project/Get', { headers: { Projectno: route.query.project_no } })
     projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
@@ -219,7 +193,6 @@ const areEqual = (v1, v2) => JSON.stringify(v1 || '') === JSON.stringify(v2 || '
 const onSearch = async () => {
   if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
   gridApi.value?.setGridOption('loading', true)
-  
   try {
     const results = await Promise.all(
       selectedProjects.value.map(p =>
@@ -252,35 +225,34 @@ const onSearch = async () => {
       return res
     })
     dynamicCols.value = [...selectedProjects.value]
-
-    // 데이터 렌더링 후 그리드 크기 재조정
-    nextTick(() => {
-      gridApi.value?.sizeColumnsToFit()
-    })
+    nextTick(() => gridApi.value?.sizeColumnsToFit())
   } finally {
     gridApi.value?.setGridOption('loading', false)
   }
 }
 
+// --- 컬럼 정의: code.vue와 유사하게 너비 최적화 ---
 const mainColumnDefs = computed(() => {
   const cols = [
     {
-      headerName: 'Condition', field: 'CONDITION', width: 110, pinned: 'left',
+      headerName: 'Condition', field: 'CONDITION', 
+      width: 90, pinned: 'left', // code.vue 스타일: 슬림하게
       cellStyle: p => ({
         color: p.value === 'Diff' ? '#dc3545' : '#198754',
         fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8',
       }),
     },
     {
-      headerName: 'Diff Info (Click)', field: 'DIFF_INFO', width: 150, pinned: 'left',
+      headerName: 'Diff Info (Click)', field: 'DIFF_INFO', 
+      width: 130, pinned: 'left', // 너비 조정
       cellStyle: { color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold' },
     },
-    { headerName: 'Mapping ID', field: 'MAP_ID', width: 200, pinned: 'left' },
+    { headerName: 'Mapping ID', field: 'MAP_ID', width: 220, pinned: 'left' }, // ID는 조금 넓게
   ]
   dynamicCols.value.forEach(proj => {
     const children = [
       {
-        headerName: 'Exist', valueGetter: p => (p.data[proj]?.EXIST ? 'Alive' : '-'), width: 80,
+        headerName: 'Exist', valueGetter: p => (p.data[proj]?.EXIST ? 'Alive' : '-'), width: 70,
         cellStyle: { textAlign: 'center' },
         cellRenderer: p => p.value === 'Alive' ? `<i class="fa fa-check-circle text-success"></i>` : `<span class="text-muted">-</span>`,
       },
@@ -293,7 +265,7 @@ const mainColumnDefs = computed(() => {
             const v = p.data[proj]?.[f]
             return typeof v === 'object' ? JSON.stringify(v) : v ?? ''
           },
-          width: 150, tooltipValueGetter: p => p.value, hide: ARRAY_FIELDS.includes(f),
+          width: 140, tooltipValueGetter: p => p.value, hide: ARRAY_FIELDS.includes(f),
         })
       })
     }
@@ -304,10 +276,10 @@ const mainColumnDefs = computed(() => {
 
 const onGridReady = p => { 
   gridApi.value = p.api 
-  p.api.sizeColumnsToFit() // 초기 로딩 시 컬럼 맞춤
 }
 
 const onCellClicked = p => {
+  // DIFF_INFO 컬럼을 클릭했을 때만 모달 열림
   if (p.column.getColId() === 'DIFF_INFO' && p.value) {
     clickedRow.value = p.data
     selectedMapId.value = p.data.MAP_ID
@@ -345,7 +317,7 @@ const modalColumnDefs = computed(() => {
   const cols = [
     { headerName: keyField, field: keyField, pinned: 'left', width: 180, cellClass: 'bg-light fw-bold' },
     {
-      headerName: 'Condition', field: 'CONDITION', pinned: 'left', width: 100,
+      headerName: 'Condition', field: 'CONDITION', pinned: 'left', width: 90,
       cellStyle: p => ({
         color: p.value === 'Diff' ? '#dc3545' : '#198754',
         fontWeight: 'bold', textAlign: 'center', backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8',
@@ -363,14 +335,14 @@ const modalColumnDefs = computed(() => {
     const children = propertyKeys.map(attrKey => ({
       headerName: attrKey,
       valueGetter: p => p.data[pNo]?.[attrKey] ?? '-',
-      width: 140,
+      width: 130,
       cellStyle: p => {
         const currentVal = p.data[pNo]?.[attrKey]
         const isDiff = dynamicCols.value.some(otherP => JSON.stringify(currentVal) !== JSON.stringify(p.data[otherP]?.[attrKey]))
         return isDiff ? { color: '#dc3545', fontWeight: 'bold' } : null
       },
     }))
-    cols.push({ headerName: `Project: ${pNo}`, children: children })
+    cols.push({ headerName: `${pNo}`, children: children })
   })
   return cols
 })
@@ -385,21 +357,18 @@ watch([attributeFilter, viewMode], () => gridApi.value?.onFilterChanged())
 
 <style scoped lang="scss">
 .adapter-compare-page {
-  /* 상단 네비게이션 등을 제외한 실제 가용 높이 설정 */
   height: 100%;
+  background-color: #f4f7f9;
 }
 
-.header-divider {
-  width: 1px;
-  height: 16px;
-  background-color: #dee2e6;
-}
+/* code.vue 스타일 컴포넌트 */
+.header-divider { width: 1px; height: 16px; background-color: #dee2e6; }
 
 .ui-tag-tab-box {
   display: flex;
   align-items: center;
-  min-width: 150px;
-  max-width: 250px;
+  min-width: 160px;
+  max-width: 280px;
   height: 32px;
   padding: 0 12px;
   background-color: #fff;
@@ -407,6 +376,7 @@ watch([attributeFilter, viewMode], () => gridApi.value?.onFilterChanged())
   border-radius: 4px;
   font-size: 0.85rem;
   cursor: pointer;
+  transition: border-color 0.2s;
   &:hover { border-color: #0d6efd; }
 }
 
@@ -419,9 +389,8 @@ watch([attributeFilter, viewMode], () => gridApi.value?.onFilterChanged())
   border-radius: 4px;
   font-size: 0.85rem;
   font-weight: 600;
-  transition: background-color 0.2s;
   &:hover:not(:disabled) { background-color: #0b5ed7; }
-  &:disabled { opacity: 0.6; cursor: not-allowed; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
 .ui-tag-tab-textarea {
@@ -432,7 +401,7 @@ watch([attributeFilter, viewMode], () => gridApi.value?.onFilterChanged())
   border: 1px solid #ced4da;
   border-radius: 4px;
   resize: none;
-  &:focus { outline: none; border-color: #198754; box-shadow: 0 0 0 0.1rem rgba(25, 135, 84, 0.2); }
+  &:focus { outline: none; border-color: #198754; }
 }
 
 .toggle-label {
@@ -445,21 +414,26 @@ watch([attributeFilter, viewMode], () => gridApi.value?.onFilterChanged())
 .btn-check:checked + .toggle-label {
   background-color: #fff !important;
   color: #0d6efd !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
 }
 
-.cursor-pointer { cursor: pointer; }
+.custom-z-modal { z-index: 1070 !important; }
+
+/* 회색 화면 해결을 위한 CSS */
+.modal-backdrop {
+  z-index: 1050 !important;
+}
+.modal {
+  z-index: 1060 !important;
+}
 
 :deep(.ag-theme-custom) {
   --ag-header-background-color: #f8f9fa;
   --ag-font-size: 12px;
-  flex: 1;
   .ag-header-group-cell {
     background-color: #e9ecef !important;
-    color: #212529;
     font-weight: 800 !important;
     border-right: 1px solid #dee2e6 !important;
-    text-align: center;
   }
 }
 </style>
