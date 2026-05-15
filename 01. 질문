@@ -21,7 +21,7 @@
               </div>
               <ul
                 class="dropdown-menu p-2 shadow-lg border-0"
-                style="width: 300px; max-height: 400px; overflow-y: auto"
+                style="width: 300px; max-height: 400px; overflow-y: auto; z-index: 1060"
               >
                 <li class="px-2 pb-2 border-bottom mb-1">
                   <input
@@ -82,47 +82,43 @@
       </div>
     </DefaultCard>
 
-    <div
-      class="modal fade custom-top-modal"
-      id="arrayDiffModal"
-      tabindex="-1"
-      aria-hidden="true"
-      data-bs-backdrop="static"
-    >
-      <div class="modal-dialog modal-xl shadow-lg border-0">
-        <div class="modal-content border-0 overflow-hidden">
-          <div class="modal-header py-2 bg-dark text-white border-0">
-            <h6 class="modal-title small">
-              <i class="fa fa-copy me-2"></i>상세 비교 분석 [<span class="text-warning">{{ selectedMapId }}</span
-              >]
-            </h6>
-            <button type="button" class="btn-close btn-close-white shadow-none" data-bs-dismiss="modal"></button>
+    <div v-if="showDiffModal" class="custom-modal-overlay" @click.self="closeDiffModal">
+      <div 
+        class="custom-modal-window shadow-lg draggable-modal" 
+        :style="modalPos"
+      >
+        <div class="modal-header-dark cursor-move" @mousedown="startDrag">
+          <h6 class="modal-title small mb-0">
+            <i class="fa fa-copy me-2"></i>상세 비교 분석 [<span class="text-warning">{{ selectedMapId }}</span>] (이동 가능)
+          </h6>
+          <button @click="closeDiffModal" class="btn btn-xs btn-danger shadow-none">✕</button>
+        </div>
+        
+        <div class="modal-body p-0 d-flex flex-column" style="height: 60vh; background: #fff">
+          <div class="bg-light p-2 border-bottom d-flex gap-1">
+            <button
+              v-for="t in ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']"
+              :key="t"
+              class="btn btn-xs px-3"
+              :class="activeTab === t ? 'btn-primary fw-bold' : 'btn-white border'"
+              @click="activeTab = t"
+            >
+              {{ t }}
+            </button>
           </div>
-          <div class="modal-body p-0 d-flex flex-column" style="height: 60vh; background: #fff">
-            <div class="bg-light p-2 border-bottom d-flex gap-1">
-              <button
-                v-for="t in ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']"
-                :key="t"
-                class="btn btn-xs px-3"
-                :class="activeTab === t ? 'btn-primary fw-bold' : 'btn-white border'"
-                @click="activeTab = t"
-              >
-                {{ t }}
-              </button>
-            </div>
-            <div class="flex-grow-1 position-relative">
-              <ag-grid-vue
-                style="width: 100%; height: 100%; position: absolute"
-                class="ag-theme-custom"
-                :columnDefs="modalColumnDefs"
-                :rowData="modalRowData"
-                :defaultColDef="defaultColDef"
-              />
-            </div>
+          <div class="flex-grow-1 position-relative">
+            <ag-grid-vue
+              style="width: 100%; height: 100%; position: absolute"
+              class="ag-theme-custom"
+              :columnDefs="modalColumnDefs"
+              :rowData="modalRowData"
+              :defaultColDef="defaultColDef"
+            />
           </div>
-          <div class="modal-footer py-1 bg-light border-top text-end">
-            <button type="button" class="btn btn-secondary btn-xs px-3" data-bs-dismiss="modal">닫기</button>
-          </div>
+        </div>
+        
+        <div class="modal-footer py-1 bg-light border-top text-end">
+          <button type="button" class="btn btn-secondary btn-xs px-3" @click="closeDiffModal">닫기</button>
         </div>
       </div>
     </div>
@@ -130,338 +126,239 @@
 </template>
 
 <script setup>
-  import { ref, computed, shallowRef, onMounted, watch, nextTick } from 'vue'
-  import { useRoute } from 'vue-router'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sAlert } from '@/utils/messages/alert-common'
-  import DefaultCard from '@/components/default/DefaultCard.vue'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-  import * as bootstrap from 'bootstrap'
+import { ref, computed, shallowRef, onMounted, watch, nextTick, reactive } from 'vue'
+import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+import { sAlert } from '@/utils/messages/alert-common'
+import DefaultCard from '@/components/default/DefaultCard.vue'
+import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-  const route = useRoute()
-  let diffModal = null
-  const gridApi = shallowRef()
-  const gridRowData = ref([])
-  const dynamicCols = ref([])
-  const selectedProjects = ref([])
-  const projectList = ref([])
-  const projectSearchKeyword = ref('')
-  const attributeFilter = ref('')
-  const viewMode = ref('simple')
-  const selectedMapId = ref('')
-  const activeTab = ref('MAP_ATT')
-  const modalRowData = ref([])
-  const clickedRow = ref(null)
+// --- 모달 위치 및 드래그 상태 ---
+const showDiffModal = ref(false)
+const modalPos = reactive({
+  top: '200px',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  width: '1200px',
+  position: 'absolute'
+})
 
-  const COMPARE_FIELDS = [
-    'DESC',
-    'REG_TYPE_ID',
-    'CATEGORY',
-    'TOOL_ID',
-    'TOOL_TYPE',
-    'MAP_ATT',
-    'MAP_CLS',
-    'MAP_TMPLS',
-    'MAP_RELS',
-  ]
-  const TAB_KEY_MAP = { MAP_ATT: 'SEDP_ATT_ID', MAP_CLS: 'SEDP_OBJ_CLS_ID', MAP_TMPLS: 'TMP_ID', MAP_RELS: 'REL_ID' }
+const startDrag = (event) => {
+  const modal = event.currentTarget.parentElement
+  let shiftX = event.clientX - modal.getBoundingClientRect().left
+  let shiftY = event.clientY - modal.getBoundingClientRect().top
 
-  const defaultColDef = {
-    sortable: true,
-    resizable: true,
-    filter: 'agTextColumnFilter',
-    floatingFilter: true,
-    minWidth: 100,
+  const moveAt = (pageX, pageY) => {
+    modalPos.left = (pageX - shiftX) + 'px'
+    modalPos.top = (pageY - shiftY) + 'px'
+    modalPos.transform = 'none'
   }
 
-  onMounted(async () => {
-    const modalEl = document.getElementById('arrayDiffModal')
-    diffModal = new bootstrap.Modal(modalEl)
-    try {
-      const res = await axiosWrapper.get('/api/Project/Get')
-      projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
-    } catch (e) {
-      console.error(e)
-    }
-  })
-
-  const filteredProjectList = computed(() => {
-    const kw = projectSearchKeyword.value.toLowerCase()
-    return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw))
-  })
-
-  const onGridReady = params => {
-    gridApi.value = params.api
-    setTimeout(() => {
-      params.api.sizeColumnsToFit()
-    }, 200)
+  const onMouseMove = (e) => moveAt(e.pageX, e.pageY)
+  document.addEventListener('mousemove', onMouseMove)
+  document.onmouseup = () => {
+    document.removeEventListener('mousemove', onMouseMove)
+    document.onmouseup = null
   }
+}
 
-  // [로직 복구] 메인 조회 로직
-  const onSearch = async () => {
-    if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
-    gridApi.value?.setGridOption('loading', true)
+const closeDiffModal = () => {
+  showDiffModal.value = false
+  modalPos.top = '200px'
+  modalPos.left = '50%'
+  modalPos.transform = 'translateX(-50%)'
+}
 
-    try {
-      const results = await Promise.all(
-        selectedProjects.value.map(p =>
-          axiosWrapper
-            .post('/api/AdapterDataMapping/Get', { ProjectNo: p }, { headers: { Projectno: p } })
-            .catch(() => [])
-        )
-      )
+// --- 기존 로직 상태 관리 ---
+const gridApi = shallowRef()
+const gridRowData = ref([])
+const dynamicCols = ref([])
+const selectedProjects = ref([])
+const projectList = ref([])
+const projectSearchKeyword = ref('')
+const attributeFilter = ref('')
+const viewMode = ref('simple')
+const selectedMapId = ref('')
+const activeTab = ref('MAP_ATT')
+const modalRowData = ref([])
+const clickedRow = ref(null)
 
-      const dataMap = new Map()
-      results.forEach((data, idx) => {
-        const pNo = selectedProjects.value[idx]
-        data.forEach(item => {
-          if (!dataMap.has(item.MAP_ID)) dataMap.set(item.MAP_ID, { MAP_ID: item.MAP_ID, projects: {} })
-          dataMap.get(item.MAP_ID).projects[pNo] = { EXIST: true, ...item }
-        })
-      })
+const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'CATEGORY', 'TOOL_ID', 'TOOL_TYPE', 'MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']
+const TAB_KEY_MAP = { MAP_ATT: 'SEDP_ATT_ID', MAP_CLS: 'SEDP_OBJ_CLS_ID', MAP_TMPLS: 'TMP_ID', MAP_RELS: 'REL_ID' }
 
-      gridRowData.value = Array.from(dataMap.values()).map(row => {
-        let diffFields = []
-        const activePs = selectedProjects.value.filter(p => row.projects[p])
-        if (activePs.length > 1) {
-          COMPARE_FIELDS.forEach(f => {
-            const firstVal = JSON.stringify(row.projects[activePs[0]][f] || '')
-            if (activePs.some(p => JSON.stringify(row.projects[p][f] || '') !== firstVal)) diffFields.push(f)
-          })
-        }
-        const res = {
-          MAP_ID: row.MAP_ID,
-          CONDITION: diffFields.length > 0 ? 'Diff' : 'Pass',
-          DIFF_INFO: diffFields.join(', '),
-        }
-        selectedProjects.value.forEach(p => (res[p] = row.projects[p] || { EXIST: false }))
-        return res
-      })
+const defaultColDef = { sortable: true, resizable: true, filter: 'agTextColumnFilter', floatingFilter: true, minWidth: 100 }
 
-      dynamicCols.value = [...selectedProjects.value]
-      nextTick(() => {
-        gridApi.value?.sizeColumnsToFit()
-      })
-    } finally {
-      gridApi.value?.setGridOption('loading', false)
-    }
-  }
+onMounted(async () => {
+  try {
+    const res = await axiosWrapper.get('/api/Project/Get')
+    projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
+  } catch (e) { console.error(e) }
+})
 
-  const mainColumnDefs = computed(() => {
-    const cols = [
-      {
-        headerName: 'Condition',
-        field: 'CONDITION',
-        width: 90,
-        pinned: 'left',
-        cellStyle: p => ({
-          color: p.value === 'Diff' ? '#dc3545' : '#198754',
-          fontWeight: 'bold',
-          textAlign: 'center',
-        }),
-      },
-      {
-        headerName: 'Diff Info',
-        field: 'DIFF_INFO',
-        width: 130,
-        pinned: 'left',
-        cellStyle: { color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold' },
-      },
-      { headerName: 'Mapping ID', field: 'MAP_ID', width: 220, pinned: 'left' },
-    ]
-    dynamicCols.value.forEach(p => {
-      cols.push({
-        headerName: p,
-        children: [
-          {
-            headerName: 'Exist',
-            valueGetter: params => (params.data[p]?.EXIST ? 'Y' : 'N'),
-            width: 70,
-            cellStyle: { textAlign: 'center' },
-          },
-          ...(viewMode.value === 'detail'
-            ? COMPARE_FIELDS.filter(f => !f.includes('MAP_')).map(f => ({
-                headerName: f,
-                valueGetter: params => params.data[p]?.[f] || '',
-                width: 120,
-              }))
-            : []),
-        ],
+const filteredProjectList = computed(() => {
+  const kw = projectSearchKeyword.value.toLowerCase()
+  return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw))
+})
+
+const onGridReady = params => {
+  gridApi.value = params.api
+  setTimeout(() => { params.api.sizeColumnsToFit() }, 200)
+}
+
+const onSearch = async () => {
+  if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
+  gridApi.value?.setGridOption('loading', true)
+  try {
+    const results = await Promise.all(
+      selectedProjects.value.map(p => axiosWrapper.post('/api/AdapterDataMapping/Get', { ProjectNo: p }, { headers: { Projectno: p } }).catch(() => []))
+    )
+    const dataMap = new Map()
+    results.forEach((data, idx) => {
+      const pNo = selectedProjects.value[idx]
+      data.forEach(item => {
+        if (!dataMap.has(item.MAP_ID)) dataMap.set(item.MAP_ID, { MAP_ID: item.MAP_ID, projects: {} })
+        dataMap.get(item.MAP_ID).projects[pNo] = { EXIST: true, ...item }
       })
     })
-    return cols
-  })
-
-  const onCellClicked = p => {
-    if (p.column.getColId() === 'DIFF_INFO' && p.value) {
-      clickedRow.value = p.data
-      selectedMapId.value = p.data.MAP_ID
-      diffModal.show()
-    }
-  }
-
-  // [로직 복구] 모달 내 상세 비교 로직
-  watch([activeTab, clickedRow], () => {
-    if (!clickedRow.value) return
-    const keyField = TAB_KEY_MAP[activeTab.value]
-    const mergeMap = new Map()
-
-    dynamicCols.value.forEach(pNo => {
-      const pRow = clickedRow.value[pNo]
-      if (!pRow || !pRow[activeTab.value]) return
-      let items = pRow[activeTab.value]
-      if (activeTab.value === 'MAP_CLS' && items.ITEMS) items = items.ITEMS
-      if (Array.isArray(items)) {
-        items.forEach(item => {
-          const id = item[keyField]
-          if (id) {
-            if (!mergeMap.has(id)) mergeMap.set(id, { [keyField]: id })
-            mergeMap.get(id)[pNo] = item
-          }
+    gridRowData.value = Array.from(dataMap.values()).map(row => {
+      let diffFields = []
+      const activePs = selectedProjects.value.filter(p => row.projects[p])
+      if (activePs.length > 1) {
+        COMPARE_FIELDS.forEach(f => {
+          const firstVal = JSON.stringify(row.projects[activePs[0]][f] || '')
+          if (activePs.some(p => JSON.stringify(row.projects[p][f] || '') !== firstVal)) diffFields.push(f)
         })
       }
+      const res = { MAP_ID: row.MAP_ID, CONDITION: diffFields.length > 0 ? 'Diff' : 'Pass', DIFF_INFO: diffFields.join(', ') }
+      selectedProjects.value.forEach(p => (res[p] = row.projects[p] || { EXIST: false }))
+      return res
     })
+    dynamicCols.value = [...selectedProjects.value]
+    nextTick(() => { gridApi.value?.sizeColumnsToFit() })
+  } finally { gridApi.value?.setGridOption('loading', false) }
+}
 
-    modalRowData.value = Array.from(mergeMap.values()).map(row => {
-      const activePs = dynamicCols.value.filter(p => row[p])
-      const isRowDiff =
-        activePs.length !== dynamicCols.value.length ||
-        activePs.some(p => JSON.stringify(row[p]) !== JSON.stringify(row[activePs[0]]))
-      return { ...row, CONDITION: isRowDiff ? 'Diff' : 'Pass' }
+const mainColumnDefs = computed(() => {
+  const cols = [
+    { headerName: 'Condition', field: 'CONDITION', width: 90, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center' }) },
+    { headerName: 'Diff Info', field: 'DIFF_INFO', width: 130, pinned: 'left', cellStyle: { color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold' } },
+    { headerName: 'Mapping ID', field: 'MAP_ID', width: 220, pinned: 'left' },
+  ]
+  dynamicCols.value.forEach(p => {
+    cols.push({
+      headerName: p,
+      children: [
+        { headerName: 'Exist', valueGetter: params => (params.data[p]?.EXIST ? 'Y' : 'N'), width: 70, cellStyle: { textAlign: 'center' } },
+        ...(viewMode.value === 'detail' ? COMPARE_FIELDS.filter(f => !f.includes('MAP_')).map(f => ({ headerName: f, valueGetter: params => params.data[p]?.[f] || '', width: 120 })) : []),
+      ],
     })
   })
+  return cols
+})
 
-  const modalColumnDefs = computed(() => {
-    const keyField = TAB_KEY_MAP[activeTab.value]
-    if (!keyField) return []
-    const cols = [
-      { headerName: keyField, field: keyField, pinned: 'left', width: 180, cellClass: 'bg-light fw-bold' },
-      {
-        headerName: 'Condition',
-        field: 'CONDITION',
-        pinned: 'left',
-        width: 90,
-        cellStyle: p => ({
-          color: p.value === 'Diff' ? '#dc3545' : '#198754',
-          fontWeight: 'bold',
-          textAlign: 'center',
-        }),
-      },
-    ]
-    const allKeys = new Set()
-    modalRowData.value.forEach(row => {
-      dynamicCols.value.forEach(pNo => {
-        if (row[pNo])
-          Object.keys(row[pNo]).forEach(k => {
-            if (k !== keyField) allKeys.add(k)
-          })
+const onCellClicked = p => {
+  if (p.column.getColId() === 'DIFF_INFO' && p.value) {
+    clickedRow.value = p.data
+    selectedMapId.value = p.data.MAP_ID
+    showDiffModal.value = true // 부트스트랩 대신 커스텀 모달 노출
+  }
+}
+
+watch([activeTab, clickedRow], () => {
+  if (!clickedRow.value) return
+  const keyField = TAB_KEY_MAP[activeTab.value]
+  const mergeMap = new Map()
+  dynamicCols.value.forEach(pNo => {
+    const pRow = clickedRow.value[pNo]
+    if (!pRow || !pRow[activeTab.value]) return
+    let items = pRow[activeTab.value]
+    if (activeTab.value === 'MAP_CLS' && items.ITEMS) items = items.ITEMS
+    if (Array.isArray(items)) {
+      items.forEach(item => {
+        const id = item[keyField]
+        if (id) {
+          if (!mergeMap.has(id)) mergeMap.set(id, { [keyField]: id })
+          mergeMap.get(id)[pNo] = item
+        }
       })
-    })
-    dynamicCols.value.forEach(pNo => {
-      const children = Array.from(allKeys).map(attrKey => ({
-        headerName: attrKey,
-        valueGetter: p => p.data[pNo]?.[attrKey] ?? '-',
-        width: 130,
-        cellStyle: p => {
-          const val = p.data[pNo]?.[attrKey]
-          const isDiff = dynamicCols.value.some(
-            other => JSON.stringify(val) !== JSON.stringify(p.data[other]?.[attrKey])
-          )
-          return isDiff ? { color: '#dc3545', fontWeight: 'bold' } : null
-        },
-      }))
-      cols.push({ headerName: pNo, children })
-    })
-    return cols
+    }
   })
+  modalRowData.value = Array.from(mergeMap.values()).map(row => {
+    const activePs = dynamicCols.value.filter(p => row[p])
+    const isRowDiff = activePs.length !== dynamicCols.value.length || activePs.some(p => JSON.stringify(row[p]) !== JSON.stringify(row[activePs[0]]))
+    return { ...row, CONDITION: isRowDiff ? 'Diff' : 'Pass' }
+  })
+})
 
-  const isExternalFilterPresent = () => attributeFilter.value !== ''
-  const doesExternalFilterPass = n => String(n.data.MAP_ID).toLowerCase().includes(attributeFilter.value.toLowerCase())
-  watch(attributeFilter, () => gridApi.value?.onFilterChanged())
+const modalColumnDefs = computed(() => {
+  const keyField = TAB_KEY_MAP[activeTab.value]
+  if (!keyField) return []
+  const cols = [
+    { headerName: keyField, field: keyField, pinned: 'left', width: 180, cellClass: 'bg-light fw-bold' },
+    { headerName: 'Condition', field: 'CONDITION', pinned: 'left', width: 90, cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center' }) },
+  ]
+  const allKeys = new Set()
+  modalRowData.value.forEach(row => {
+    dynamicCols.value.forEach(pNo => {
+      if (row[pNo]) Object.keys(row[pNo]).forEach(k => { if (k !== keyField) allKeys.add(k) })
+    })
+  })
+  dynamicCols.value.forEach(pNo => {
+    const children = Array.from(allKeys).map(attrKey => ({
+      headerName: attrKey, valueGetter: p => p.data[pNo]?.[attrKey] ?? '-', width: 130,
+      cellStyle: p => {
+        const val = p.data[pNo]?.[attrKey]
+        const isDiff = dynamicCols.value.some(other => JSON.stringify(val) !== JSON.stringify(p.data[other]?.[attrKey]))
+        return isDiff ? { color: '#dc3545', fontWeight: 'bold' } : null
+      },
+    }))
+    cols.push({ headerName: pNo, children })
+  })
+  return cols
+})
+
+const isExternalFilterPresent = () => attributeFilter.value !== ''
+const doesExternalFilterPass = n => String(n.data.MAP_ID).toLowerCase().includes(attributeFilter.value.toLowerCase())
+watch(attributeFilter, () => gridApi.value?.onFilterChanged())
 </script>
 
 <style scoped lang="scss">
-  .adapter-compare-page {
-    height: 100%;
-    overflow: hidden;
-  }
-  .grid-wrapper {
-    position: relative;
-    width: 100%;
-    height: 100%;
-  }
+.adapter-compare-page { height: 100%; overflow: hidden; }
+.grid-wrapper { position: relative; width: 100%; height: 100%; }
 
-  .ui-tag-tab-box {
-    height: 32px;
-    border: 1px solid #ddd;
-    padding: 0 10px;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    background: #fff;
-    border-radius: 4px;
-    font-size: 0.85rem;
-  }
-  .ui-tag-tab-search-btn {
-    height: 32px;
-    background: #0d6efd;
-    color: #fff;
-    border: none;
-    border-radius: 4px;
-    padding: 0 15px;
-    font-weight: 600;
-    font-size: 0.85rem;
-  }
-  .ui-tag-tab-textarea {
-    height: 32px;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    padding: 5px 10px;
-    resize: none;
-    width: 220px;
-    font-size: 0.8rem;
-  }
-  .header-divider {
-    width: 1px;
-    height: 18px;
-    background: #dee2e6;
-  }
-  .toggle-label {
-    cursor: pointer;
-    font-size: 0.8rem;
-    font-weight: 600;
-    padding: 4px 12px;
-    color: #6c757d;
-  }
-  .btn-check:checked + .toggle-label {
-    background-color: #fff !important;
-    color: #0d6efd !important;
-    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
-  }
+.ui-tag-tab-box {
+  height: 32px; border: 1px solid #ddd; padding: 0 10px; cursor: pointer; display: flex; align-items: center; background: #fff; border-radius: 4px; font-size: 0.85rem;
+}
+.ui-tag-tab-search-btn {
+  height: 32px; background: #0d6efd; color: #fff; border: none; border-radius: 4px; padding: 0 15px; font-weight: 600; font-size: 0.85rem;
+}
+.ui-tag-tab-textarea {
+  height: 32px; border: 1px solid #ddd; border-radius: 4px; padding: 5px 10px; resize: none; width: 220px; font-size: 0.8rem;
+}
+.header-divider { width: 1px; height: 18px; background: #dee2e6; }
 
-  /* 모달 레이어 및 위치 수정 */
-  .custom-top-modal {
-    z-index: 9990000 !important;
-    .modal-dialog {
-      margin-top: 200px !important;
-    }
-  }
-  :deep(.modal-backdrop) {
-    z-index: 9980000 !important;
-  }
+/* [해결] 모달 레이어 및 이동 가능 스타일 */
+.custom-modal-overlay {
+  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.4); 
+  z-index: 9999; /* 오버레이보다 무조건 위로 */
+}
 
-  :deep(.ag-theme-custom) {
-    --ag-header-background-color: #f8f9fa;
-    --ag-font-size: 12px;
-    .ag-header-group-cell {
-      background-color: #e9ecef !important;
-      font-weight: 800 !important;
-      border-right: 1px solid #dee2e6 !important;
-    }
-  }
-  .btn-xs {
-    padding: 0.25rem 0.6rem;
-    font-size: 0.75rem;
-    border-radius: 4px;
-  }
+.custom-modal-window {
+  background: #fff; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden;
+  user-select: none; /* 드래그 중 텍스트 선택 방지 */
+  border: 1px solid #334155;
+}
+
+.modal-header-dark {
+  background: #0f172a; color: #fff; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center;
+}
+
+.cursor-move { cursor: move; }
+
+:deep(.ag-theme-custom) {
+  --ag-header-background-color: #f8f9fa;
+  --ag-font-size: 12px;
+  .ag-header-group-cell { background-color: #e9ecef !important; font-weight: 800 !important; border-right: 1px solid #dee2e6 !important; }
+}
+
+.btn-xs { padding: 0.25rem 0.6rem; font-size: 0.75rem; border-radius: 4px; }
 </style>
