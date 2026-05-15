@@ -1,364 +1,354 @@
 <template>
-  <div class="adapter-compare-page h-100 w-100 d-flex flex-column bg-white">
-    <DefaultCard
-      :title="{
-        icon: 'fa-project-diagram',
-        title: 'Adapter Mapping 비교 분석',
-        subtitle: '프로젝트 간 매핑 차이를 분석하고 상세 내역을 대조합니다.',
-      }"
-      class="flex-grow-1"
-      body-class="p-0 d-flex flex-column"
-    >
-      <template #header-right>
-        <div class="d-flex align-items-center gap-2 flex-wrap">
+  <div class="d-flex flex-column h-100 bg-white">
+    <div class="p-3 border-bottom shadow-sm bg-light">
+      <div class="d-flex align-items-center justify-content-between">
+        <div class="d-flex align-items-center gap-3">
           <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap small">대상 프로젝트</span>
+            <span class="fw-bold text-dark text-nowrap">Projects</span>
             <div class="dropdown">
-              <div class="ui-tag-tab-box dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">
-                <span class="text-truncate">{{
-                  selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트 선택'
-                }}</span>
-              </div>
-              <ul
-                class="dropdown-menu p-2 shadow-lg border-0"
-                style="width: 300px; max-height: 400px; overflow-y: auto; z-index: 1060"
+              <button
+                class="btn btn-sm btn-outline-secondary dropdown-toggle custom-project-dropdown text-start d-flex justify-content-between align-items-center bg-white"
+                type="button"
+                data-bs-toggle="dropdown"
+                data-bs-auto-close="outside"
               >
+                <span class="text-truncate me-2">
+                  {{ selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트를 선택하세요' }}
+                </span>
+              </button>
+              <ul class="dropdown-menu p-2 shadow-sm" style="max-height: 400px; overflow-y: auto; width: 350px">
                 <li class="px-2 pb-2 border-bottom mb-1">
                   <input
                     type="text"
                     class="form-control form-control-sm"
                     v-model="projectSearchKeyword"
-                    placeholder="검색..."
+                    placeholder="프로젝트 번호/명 검색..."
                     @click.stop
                   />
                 </li>
+                <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
+                  <label class="form-check-label d-flex align-items-center w-100 fw-bold" style="cursor: pointer">
+                    <input
+                      class="form-check-input me-2 mt-0"
+                      type="checkbox"
+                      :checked="isAllSelected"
+                      :indeterminate="isIndeterminate"
+                      @change="toggleAllSelection"
+                    />
+                    <span>전체 선택 / 해제</span>
+                  </label>
+                </li>
                 <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
-                  <label class="form-check-label d-flex align-items-center w-100 cursor-pointer small">
+                  <label class="form-check-label d-flex align-items-center w-100" style="cursor: pointer">
                     <input
                       class="form-check-input me-2 mt-0"
                       type="checkbox"
                       :value="proj.PROJ_NO"
                       v-model="selectedProjects"
                     />
-                    <span>{{ proj.PROJ_NO }}</span>
+                    <span class="text-truncate">
+                      <span class="fw-bold text-primary">{{ proj.PROJ_NO }}</span>
+                      <small class="text-muted ms-1">({{ proj.DESC }})</small>
+                    </span>
                   </label>
                 </li>
               </ul>
             </div>
           </div>
 
-          <button class="ui-tag-tab-search-btn" @click="onSearch" :disabled="selectedProjects.length === 0">
-            조회
+          <button
+            class="btn btn-sm btn-primary px-3 shadow-sm"
+            @click="onSearch"
+            :disabled="selectedProjects.length === 0"
+          >
+            <i class="fa fa-search me-1"></i>비교 조회
           </button>
 
-          <div class="header-divider mx-2"></div>
+          <div class="view-mode-toggle-container ms-3">
+            <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
+              <input type="radio" class="btn-check" id="uomModeSimple" value="simple" v-model="viewMode" />
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="uomModeSimple">간편 조회</label>
 
-          <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border">
-            <input type="radio" class="btn-check" id="modeS" value="simple" v-model="viewMode" />
-            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeS">간편</label>
-            <input type="radio" class="btn-check" id="modeD" value="detail" v-model="viewMode" />
-            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeD">상세</label>
-          </div>
-
-          <div class="header-divider mx-2"></div>
-
-          <textarea class="ui-tag-tab-textarea" v-model="attributeFilter" placeholder="MAP_ID 필터..."></textarea>
-        </div>
-      </template>
-
-      <div class="grid-wrapper flex-grow-1 border-top bg-white">
-        <ag-grid-vue
-          style="width: 100%; height: 100%; position: absolute"
-          class="ag-theme-custom"
-          :columnDefs="mainColumnDefs"
-          :rowData="gridRowData"
-          :defaultColDef="defaultColDef"
-          :loadingOverlayComponent="AggridLoadingOverlay"
-          :isExternalFilterPresent="isExternalFilterPresent"
-          :doesExternalFilterPass="doesExternalFilterPass"
-          @grid-ready="onGridReady"
-          @cell-clicked="onCellClicked"
-        />
-      </div>
-    </DefaultCard>
-
-    <div v-if="showDiffModal" class="custom-modal-overlay" @click.self="closeDiffModal">
-      <div 
-        class="custom-modal-window shadow-lg draggable-modal" 
-        :style="modalPos"
-      >
-        <div class="modal-header-dark cursor-move" @mousedown="startDrag">
-          <h6 class="modal-title small mb-0">
-            <i class="fa fa-copy me-2"></i>상세 비교 분석 [<span class="text-warning">{{ selectedMapId }}</span>] (이동 가능)
-          </h6>
-          <button @click="closeDiffModal" class="btn btn-xs btn-danger shadow-none">✕</button>
-        </div>
-        
-        <div class="modal-body p-0 d-flex flex-column" style="height: 60vh; background: #fff">
-          <div class="bg-light p-2 border-bottom d-flex gap-1">
-            <button
-              v-for="t in ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']"
-              :key="t"
-              class="btn btn-xs px-3"
-              :class="activeTab === t ? 'btn-primary fw-bold' : 'btn-white border'"
-              @click="activeTab = t"
-            >
-              {{ t }}
-            </button>
-          </div>
-          <div class="flex-grow-1 position-relative">
-            <ag-grid-vue
-              style="width: 100%; height: 100%; position: absolute"
-              class="ag-theme-custom"
-              :columnDefs="modalColumnDefs"
-              :rowData="modalRowData"
-              :defaultColDef="defaultColDef"
-            />
+              <input type="radio" class="btn-check" id="uomModeDetail" value="detail" v-model="viewMode" />
+              <label class="btn btn-sm rounded-pill px-3 toggle-label" for="uomModeDetail">상세 조회</label>
+            </div>
           </div>
         </div>
-        
-        <div class="modal-footer py-1 bg-light border-top text-end">
-          <button type="button" class="btn btn-secondary btn-xs px-3" @click="closeDiffModal">닫기</button>
+
+        <div class="d-flex align-items-center gap-2">
+          <span class="fw-bold text-success text-nowrap"><i class="fa fa-filter me-1"></i>멀티 필터</span>
+          <textarea
+            class="form-control form-control-sm border-success custom-textarea-filter"
+            v-model="attributeFilter"
+            rows="1"
+            placeholder="TYPE_ID 입력 (엔터/쉼표 구분)"
+          ></textarea>
         </div>
       </div>
+    </div>
+
+    <div class="flex-grow-1 overflow-hidden">
+      <ag-grid-vue v-bind="gridOptions" @grid-ready="onGridReady" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, shallowRef, onMounted, watch, nextTick, reactive } from 'vue'
-import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import { sAlert } from '@/utils/messages/alert-common'
-import DefaultCard from '@/components/default/DefaultCard.vue'
-import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+  import { ref, computed, shallowRef, onMounted, watch } from 'vue'
+  import { useRoute } from 'vue-router'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import { sAlert } from '@/utils/messages/alert-common'
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
 
-// --- 모달 위치 및 드래그 상태 ---
-const showDiffModal = ref(false)
-const modalPos = reactive({
-  top: '200px',
-  left: '50%',
-  transform: 'translateX(-50%)',
-  width: '1200px',
-  position: 'absolute'
-})
+  const route = useRoute()
 
-const startDrag = (event) => {
-  const modal = event.currentTarget.parentElement
-  let shiftX = event.clientX - modal.getBoundingClientRect().left
-  let shiftY = event.clientY - modal.getBoundingClientRect().top
+  // --- State ---
+  const projectList = ref([])
+  const projectSearchKeyword = ref('')
+  const selectedProjects = ref([])
+  const attributeFilter = ref('')
+  const viewMode = ref('simple')
 
-  const moveAt = (pageX, pageY) => {
-    modalPos.left = (pageX - shiftX) + 'px'
-    modalPos.top = (pageY - shiftY) + 'px'
-    modalPos.transform = 'none'
-  }
+  const gridApi = shallowRef()
+  const gridRowData = ref([])
+  const dynamicCols = ref([]) // 프로젝트별 동적 컬럼 관리를 위함
 
-  const onMouseMove = (e) => moveAt(e.pageX, e.pageY)
-  document.addEventListener('mousemove', onMouseMove)
-  document.onmouseup = () => {
-    document.removeEventListener('mousemove', onMouseMove)
-    document.onmouseup = null
-  }
-}
+  const urlEpId = computed(() => route.query.ep_id || '')
+  const urlProjNo = computed(() => route.query.project_no || '')
 
-const closeDiffModal = () => {
-  showDiffModal.value = false
-  modalPos.top = '200px'
-  modalPos.left = '50%'
-  modalPos.transform = 'translateX(-50%)'
-}
-
-// --- 기존 로직 상태 관리 ---
-const gridApi = shallowRef()
-const gridRowData = ref([])
-const dynamicCols = ref([])
-const selectedProjects = ref([])
-const projectList = ref([])
-const projectSearchKeyword = ref('')
-const attributeFilter = ref('')
-const viewMode = ref('simple')
-const selectedMapId = ref('')
-const activeTab = ref('MAP_ATT')
-const modalRowData = ref([])
-const clickedRow = ref(null)
-
-const COMPARE_FIELDS = ['DESC', 'REG_TYPE_ID', 'CATEGORY', 'TOOL_ID', 'TOOL_TYPE', 'MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']
-const TAB_KEY_MAP = { MAP_ATT: 'SEDP_ATT_ID', MAP_CLS: 'SEDP_OBJ_CLS_ID', MAP_TMPLS: 'TMP_ID', MAP_RELS: 'REL_ID' }
-
-const defaultColDef = { sortable: true, resizable: true, filter: 'agTextColumnFilter', floatingFilter: true, minWidth: 100 }
-
-onMounted(async () => {
-  try {
-    const res = await axiosWrapper.get('/api/Project/Get')
-    projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
-  } catch (e) { console.error(e) }
-})
-
-const filteredProjectList = computed(() => {
-  const kw = projectSearchKeyword.value.toLowerCase()
-  return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw))
-})
-
-const onGridReady = params => {
-  gridApi.value = params.api
-  setTimeout(() => { params.api.sizeColumnsToFit() }, 200)
-}
-
-const onSearch = async () => {
-  if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
-  gridApi.value?.setGridOption('loading', true)
-  try {
-    const results = await Promise.all(
-      selectedProjects.value.map(p => axiosWrapper.post('/api/AdapterDataMapping/Get', { ProjectNo: p }, { headers: { Projectno: p } }).catch(() => []))
+  // --- 프로젝트 선택 로직 ---
+  const filteredProjectList = computed(() => {
+    const kw = projectSearchKeyword.value.trim().toLowerCase()
+    return projectList.value.filter(
+      p => !kw || p.PROJ_NO.toLowerCase().includes(kw) || (p.DESC && p.DESC.toLowerCase().includes(kw))
     )
-    const dataMap = new Map()
-    results.forEach((data, idx) => {
-      const pNo = selectedProjects.value[idx]
-      data.forEach(item => {
-        if (!dataMap.has(item.MAP_ID)) dataMap.set(item.MAP_ID, { MAP_ID: item.MAP_ID, projects: {} })
-        dataMap.get(item.MAP_ID).projects[pNo] = { EXIST: true, ...item }
-      })
-    })
-    gridRowData.value = Array.from(dataMap.values()).map(row => {
-      let diffFields = []
-      const activePs = selectedProjects.value.filter(p => row.projects[p])
-      if (activePs.length > 1) {
-        COMPARE_FIELDS.forEach(f => {
-          const firstVal = JSON.stringify(row.projects[activePs[0]][f] || '')
-          if (activePs.some(p => JSON.stringify(row.projects[p][f] || '') !== firstVal)) diffFields.push(f)
-        })
-      }
-      const res = { MAP_ID: row.MAP_ID, CONDITION: diffFields.length > 0 ? 'Diff' : 'Pass', DIFF_INFO: diffFields.join(', ') }
-      selectedProjects.value.forEach(p => (res[p] = row.projects[p] || { EXIST: false }))
-      return res
-    })
-    dynamicCols.value = [...selectedProjects.value]
-    nextTick(() => { gridApi.value?.sizeColumnsToFit() })
-  } finally { gridApi.value?.setGridOption('loading', false) }
-}
-
-const mainColumnDefs = computed(() => {
-  const cols = [
-    { headerName: 'Condition', field: 'CONDITION', width: 90, pinned: 'left', cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center' }) },
-    { headerName: 'Diff Info', field: 'DIFF_INFO', width: 130, pinned: 'left', cellStyle: { color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold' } },
-    { headerName: 'Mapping ID', field: 'MAP_ID', width: 220, pinned: 'left' },
-  ]
-  dynamicCols.value.forEach(p => {
-    cols.push({
-      headerName: p,
-      children: [
-        { headerName: 'Exist', valueGetter: params => (params.data[p]?.EXIST ? 'Y' : 'N'), width: 70, cellStyle: { textAlign: 'center' } },
-        ...(viewMode.value === 'detail' ? COMPARE_FIELDS.filter(f => !f.includes('MAP_')).map(f => ({ headerName: f, valueGetter: params => params.data[p]?.[f] || '', width: 120 })) : []),
-      ],
-    })
   })
-  return cols
-})
 
-const onCellClicked = p => {
-  if (p.column.getColId() === 'DIFF_INFO' && p.value) {
-    clickedRow.value = p.data
-    selectedMapId.value = p.data.MAP_ID
-    showDiffModal.value = true // 부트스트랩 대신 커스텀 모달 노출
+  const isAllSelected = computed(
+    () =>
+      filteredProjectList.value.length > 0 &&
+      filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+  )
+
+  const isIndeterminate = computed(() => {
+    const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
+    return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
+  })
+
+  const toggleAllSelection = e => {
+    const checked = e.target.checked
+    const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
+    selectedProjects.value = checked
+      ? [...new Set([...selectedProjects.value, ...filteredIds])]
+      : selectedProjects.value.filter(id => !filteredIds.includes(id))
   }
-}
 
-watch([activeTab, clickedRow], () => {
-  if (!clickedRow.value) return
-  const keyField = TAB_KEY_MAP[activeTab.value]
-  const mergeMap = new Map()
-  dynamicCols.value.forEach(pNo => {
-    const pRow = clickedRow.value[pNo]
-    if (!pRow || !pRow[activeTab.value]) return
-    let items = pRow[activeTab.value]
-    if (activeTab.value === 'MAP_CLS' && items.ITEMS) items = items.ITEMS
-    if (Array.isArray(items)) {
-      items.forEach(item => {
-        const id = item[keyField]
-        if (id) {
-          if (!mergeMap.has(id)) mergeMap.set(id, { [keyField]: id })
-          mergeMap.get(id)[pNo] = item
-        }
+  onMounted(async () => {
+    try {
+      const res = await axiosWrapper.get('/api/Project/Get', {
+        headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value },
       })
+      projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
+    } catch (e) {
+      console.error(e)
     }
   })
-  modalRowData.value = Array.from(mergeMap.values()).map(row => {
-    const activePs = dynamicCols.value.filter(p => row[p])
-    const isRowDiff = activePs.length !== dynamicCols.value.length || activePs.some(p => JSON.stringify(row[p]) !== JSON.stringify(row[activePs[0]]))
-    return { ...row, CONDITION: isRowDiff ? 'Diff' : 'Pass' }
-  })
-})
 
-const modalColumnDefs = computed(() => {
-  const keyField = TAB_KEY_MAP[activeTab.value]
-  if (!keyField) return []
-  const cols = [
-    { headerName: keyField, field: keyField, pinned: 'left', width: 180, cellClass: 'bg-light fw-bold' },
-    { headerName: 'Condition', field: 'CONDITION', pinned: 'left', width: 90, cellStyle: p => ({ color: p.value === 'Diff' ? '#dc3545' : '#198754', fontWeight: 'bold', textAlign: 'center' }) },
-  ]
-  const allKeys = new Set()
-  modalRowData.value.forEach(row => {
-    dynamicCols.value.forEach(pNo => {
-      if (row[pNo]) Object.keys(row[pNo]).forEach(k => { if (k !== keyField) allKeys.add(k) })
-    })
-  })
-  dynamicCols.value.forEach(pNo => {
-    const children = Array.from(allKeys).map(attrKey => ({
-      headerName: attrKey, valueGetter: p => p.data[pNo]?.[attrKey] ?? '-', width: 130,
-      cellStyle: p => {
-        const val = p.data[pNo]?.[attrKey]
-        const isDiff = dynamicCols.value.some(other => JSON.stringify(val) !== JSON.stringify(p.data[other]?.[attrKey]))
-        return isDiff ? { color: '#dc3545', fontWeight: 'bold' } : null
+  // --- 데이터 조회 로직 (다중 프로젝트 UOM 누락 비교) ---
+  const onSearch = async () => {
+    if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
+    if (gridApi.value) gridApi.value.setGridOption('loading', true)
+
+    try {
+      const fetchPromises = selectedProjects.value.map(async projNo => {
+        const config = { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
+        const [regRes, attrRes] = await Promise.all([
+          axiosWrapper.post('/api/Register/Get', { ProjectNo: projNo }, config).catch(() => []),
+          axiosWrapper.post('/api/Attributes/Get', { ProjectNo: projNo }, config).catch(() => []),
+        ])
+        return { projNo, regData: regRes || [], attrData: attrRes || [] }
+      })
+
+      const allProjectResults = await Promise.all(fetchPromises)
+      const typeMap = new Map()
+
+      allProjectResults.forEach(({ projNo, regData, attrData }) => {
+        const masterMap = new Map(attrData.map(a => [a.ATT_ID, a]))
+
+        regData.forEach(reg => {
+          if (!typeMap.has(reg.TYPE_ID)) {
+            typeMap.set(reg.TYPE_ID, { TYPE_ID: reg.TYPE_ID, projects: {} })
+          }
+
+          let diffDetails = []
+          reg.LNK_ATT?.forEach(lnk => {
+            const mst = masterMap.get(lnk.ATT_ID)
+            // NUMBER 타입인데 UOM_ID가 Master Attribute에 있고 Register에 없는 경우
+            if (mst?.VAL_TYPE === 'NUMBER' && mst.UOM_ID?.trim() && !lnk.UOM_ID?.trim()) {
+              diffDetails.push(`${lnk.ATT_ID}(${mst.UOM_ID})`)
+            }
+          })
+
+          typeMap.get(reg.TYPE_ID).projects[projNo] = {
+            EXIST: true,
+            IS_DIFF: diffDetails.length > 0,
+            MISSING_INFO: diffDetails.join(', '),
+          }
+        })
+      })
+
+      const processedData = Array.from(typeMap.values()).map(row => {
+        let isAnyDiff = false
+        selectedProjects.value.forEach(p => {
+          if (row.projects[p]?.IS_DIFF) isAnyDiff = true
+        })
+
+        const resultRow = {
+          TYPE_ID: row.TYPE_ID,
+          CONDITION: isAnyDiff ? 'Diff' : 'Pass',
+        }
+
+        selectedProjects.value.forEach(p => {
+          resultRow[p] = row.projects[p] || { EXIST: false, IS_DIFF: false, MISSING_INFO: '' }
+        })
+
+        return resultRow
+      })
+
+      dynamicCols.value = [...selectedProjects.value]
+      gridRowData.value = processedData
+    } catch (e) {
+      sAlert.Error('조회 실패')
+    } finally {
+      if (gridApi.value) gridApi.value.setGridOption('loading', false)
+    }
+  }
+
+  const columnDefs = computed(() => {
+    const multiFilterParams = { filters: [{ filter: 'agTextColumnFilter' }, { filter: 'agSetColumnFilter' }] }
+
+    const cols = [
+      {
+        headerName: 'Condition',
+        field: 'CONDITION',
+        width: 110,
+        pinned: 'left',
+        filter: 'agMultiColumnFilter',
+        cellStyle: p => ({
+          color: p.value === 'Diff' ? '#dc3545' : '#198754',
+          fontWeight: 'bold',
+          textAlign: 'center',
+          backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8',
+        }),
       },
-    }))
-    cols.push({ headerName: pNo, children })
-  })
-  return cols
-})
+      {
+        headerName: 'Register TYPE_ID',
+        field: 'TYPE_ID',
+        width: 200,
+        pinned: 'left',
+        filter: 'agMultiColumnFilter',
+        filterParams: multiFilterParams,
+      },
+    ]
 
-const isExternalFilterPresent = () => attributeFilter.value !== ''
-const doesExternalFilterPass = n => String(n.data.MAP_ID).toLowerCase().includes(attributeFilter.value.toLowerCase())
-watch(attributeFilter, () => gridApi.value?.onFilterChanged())
+    dynamicCols.value.forEach(proj => {
+      const children = [
+        {
+          headerName: 'UOM Status',
+          valueGetter: p => {
+            const target = p.data[proj]
+            if (!target?.EXIST) return '-'
+            return target.IS_DIFF ? 'Missing' : 'OK'
+          },
+          width: 110,
+          cellStyle: p => ({
+            textAlign: 'center',
+            fontWeight: 'bold',
+            color: p.value === 'Missing' ? '#dc3545' : p.value === 'OK' ? '#198754' : '#ccc',
+          }),
+        },
+      ]
+
+      if (viewMode.value === 'detail') {
+        children.push({
+          headerName: 'Missing Details',
+          valueGetter: p => p.data[proj]?.MISSING_INFO || '',
+          width: 250,
+          cellStyle: { fontSize: '11px', color: '#dc3545' },
+        })
+      }
+
+      cols.push({
+        headerName: `${proj}`,
+        marryChildren: true,
+        children: children,
+      })
+    })
+
+    return cols
+  })
+
+  const gridOptions = computed(() => ({
+    columnDefs: columnDefs.value,
+    rowData: gridRowData.value,
+    style: 'width: 100%; height: 100%',
+    class: 'ag-theme-custom',
+    loadingOverlayComponent: AggridLoadingOverlay,
+    defaultColDef: { sortable: true, resizable: true, filter: true, floatingFilter: true },
+    isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
+    doesExternalFilterPass: node => {
+      const kws = attributeFilter.value
+        .split(/[\s,\n]+/)
+        .filter(k => k)
+        .map(k => k.toLowerCase())
+      const target = String(node.data.TYPE_ID || '').toLowerCase()
+      return kws.length === 0 || kws.some(kw => target.includes(kw))
+    },
+  }))
+
+  const onGridReady = p => {
+    gridApi.value = p.api
+  }
+
+  watch([attributeFilter, viewMode], () => {
+    if (gridApi.value) gridApi.value.onFilterChanged()
+  })
 </script>
 
-<style scoped lang="scss">
-.adapter-compare-page { height: 100%; overflow: hidden; }
-.grid-wrapper { position: relative; width: 100%; height: 100%; }
+<style scoped>
+  .custom-project-dropdown {
+    width: 300px !important;
+  }
+  .custom-textarea-filter {
+    width: 300px !important;
+    font-size: 0.8rem;
+    resize: none;
+  }
 
-.ui-tag-tab-box {
-  height: 32px; border: 1px solid #ddd; padding: 0 10px; cursor: pointer; display: flex; align-items: center; background: #fff; border-radius: 4px; font-size: 0.85rem;
-}
-.ui-tag-tab-search-btn {
-  height: 32px; background: #0d6efd; color: #fff; border: none; border-radius: 4px; padding: 0 15px; font-weight: 600; font-size: 0.85rem;
-}
-.ui-tag-tab-textarea {
-  height: 32px; border: 1px solid #ddd; border-radius: 4px; padding: 5px 10px; resize: none; width: 220px; font-size: 0.8rem;
-}
-.header-divider { width: 1px; height: 18px; background: #dee2e6; }
+  .view-mode-toggle-container .btn-group {
+    background-color: rgba(0, 0, 0, 0.05);
+  }
+  .toggle-label {
+    border: none !important;
+    color: #6c757d;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    font-size: 0.82rem;
+    padding: 4px 16px;
+    cursor: pointer;
+  }
+  .btn-check:checked + .toggle-label {
+    background-color: #ffffff !important;
+    color: #0d6efd !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
 
-/* [해결] 모달 레이어 및 이동 가능 스타일 */
-.custom-modal-overlay {
-  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.4); 
-  z-index: 9999; /* 오버레이보다 무조건 위로 */
-}
-
-.custom-modal-window {
-  background: #fff; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden;
-  user-select: none; /* 드래그 중 텍스트 선택 방지 */
-  border: 1px solid #334155;
-}
-
-.modal-header-dark {
-  background: #0f172a; color: #fff; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center;
-}
-
-.cursor-move { cursor: move; }
-
-:deep(.ag-theme-custom) {
-  --ag-header-background-color: #f8f9fa;
-  --ag-font-size: 12px;
-  .ag-header-group-cell { background-color: #e9ecef !important; font-weight: 800 !important; border-right: 1px solid #dee2e6 !important; }
-}
-
-.btn-xs { padding: 0.25rem 0.6rem; font-size: 0.75rem; border-radius: 4px; }
+  :deep(.ag-header-group-cell) {
+    background-color: #f8f9fa !important;
+    font-weight: bold;
+    border-right: 1px solid #dee2e6 !important;
+  }
+  :deep(.ag-theme-custom) {
+    --ag-header-background-color: #f8f9fa;
+  }
 </style>
