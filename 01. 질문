@@ -1,85 +1,127 @@
 <template>
-  <div class="template__page panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
-    <DefaultCard :title="cardTitle" class="w-100 h-100">
+  <div class="adapter-compare-page h-100 w-100 d-flex flex-column bg-white">
+    <DefaultCard
+      :title="{
+        icon: 'fa-project-diagram',
+        title: 'Adapter Mapping 비교 분석',
+        subtitle: '프로젝트 간 매핑 차이를 분석하고 상세 내역을 대조합니다.',
+      }"
+      class="flex-grow-1"
+      body-class="p-0 d-flex flex-column"
+    >
       <template #header-right>
         <div class="d-flex align-items-center gap-2 flex-wrap">
-          <div class="dropdown custom-single-select" style="min-width: 220px">
-            <InputBox
-              id="input-proj"
-              label="프로젝트"
-              v-model:value="selectedProjNo"
-              placeholder="프로젝트 선택/입력"
-              data-bs-toggle="dropdown"
-              @input="projSearchQuery = selectedProjNo"
-              style="width: 100%"
-            />
-            <ul class="dropdown-menu shadow-lg p-0 w-100" style="max-height: 300px; overflow-y: auto; z-index: 1060">
-              <li v-for="proj in filteredProjectOptions" :key="proj.value">
-                <a class="dropdown-item py-2 px-3 cursor-pointer" :class="{ 'active-proj': selectedProjNo === proj.value }" @click="selectProject(proj.value)">
-                  {{ proj.text }}
-                </a>
-              </li>
-            </ul>
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-dark text-nowrap small">대상 프로젝트</span>
+            <div class="dropdown">
+              <div class="ui-tag-tab-box dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                <span class="text-truncate">{{
+                  selectedProjects.length > 0 ? selectedProjects.join(', ') : '프로젝트 선택'
+                }}</span>
+              </div>
+              <ul
+                class="dropdown-menu p-2 shadow-lg border-0"
+                style="width: 300px; max-height: 400px; overflow-y: auto"
+              >
+                <li class="px-2 pb-2 border-bottom mb-1">
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    v-model="projectSearchKeyword"
+                    placeholder="검색..."
+                    @click.stop
+                  />
+                </li>
+                <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
+                  <label class="form-check-label d-flex align-items-center w-100 cursor-pointer small">
+                    <input
+                      class="form-check-input me-2 mt-0"
+                      type="checkbox"
+                      :value="proj.PROJ_NO"
+                      v-model="selectedProjects"
+                    />
+                    <span>{{ proj.PROJ_NO }}</span>
+                  </label>
+                </li>
+              </ul>
+            </div>
           </div>
 
-          <InputBox id="input-keyword" label="키워드" v-model:value="searchKeyword" placeholder="Tag No 입력" style="width: 220px" />
-          <div class="header-divider"></div>
-          <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--primary" @click="confirmSearch">
-            <i class="fa fa-search me-1"></i>조회
+          <button class="ui-tag-tab-search-btn" @click="onSearch" :disabled="selectedProjects.length === 0">
+            조회
           </button>
-          <div class="header-divider"></div>
-          <InputBox id="input-filter" label="결과 검색" v-model:value="localFilterQuery" icon="fa-filter" placeholder="결과 내 찾기" style="width: 220px" @input="onFilterInput" />
+
+          <div class="header-divider mx-2"></div>
+
+          <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border">
+            <input type="radio" class="btn-check" id="modeS" value="simple" v-model="viewMode" />
+            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeS">간편</label>
+            <input type="radio" class="btn-check" id="modeD" value="detail" v-model="viewMode" />
+            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeD">상세</label>
+          </div>
+
+          <div class="header-divider mx-2"></div>
+
+          <textarea class="ui-tag-tab-textarea" v-model="attributeFilter" placeholder="MAP_ID 필터..."></textarea>
         </div>
       </template>
 
-      <div class="grid-wrapper w-100 h-100">
-        <ag-grid-vue class="ag-theme-custom w-100 h-100" v-bind="gridOptions" @grid-ready="onGridReady" @cell-clicked="onCellClicked" />
+      <div class="grid-wrapper flex-grow-1 border-top bg-white">
+        <ag-grid-vue
+          style="width: 100%; height: 100%; position: absolute"
+          class="ag-theme-custom"
+          :columnDefs="mainColumnDefs"
+          :rowData="gridRowData"
+          :defaultColDef="defaultColDef"
+          :loadingOverlayComponent="AggridLoadingOverlay"
+          :isExternalFilterPresent="isExternalFilterPresent"
+          :doesExternalFilterPass="doesExternalFilterPass"
+          @grid-ready="onGridReady"
+          @cell-clicked="onCellClicked"
+        />
       </div>
     </DefaultCard>
 
-    <div v-if="showClassModal" class="custom-modal-overlay" @click.self="closeClassModal">
-      <div 
-        class="custom-modal-window shadow-lg draggable-modal" 
-        :style="modalPos.class"
-      >
-        <div class="modal-header-dark cursor-move" @mousedown="startDrag($event, 'class')">
-          <div class="d-flex align-items-center gap-2">
-            <i class="fa fa-info-circle text-info"></i>
-            <span class="fw-bold text-white">Class Info: {{ clickedClassId }} (이동 가능)</span>
+    <div
+      class="modal fade custom-top-modal"
+      id="arrayDiffModal"
+      tabindex="-1"
+      aria-hidden="true"
+      data-bs-backdrop="static"
+    >
+      <div class="modal-dialog modal-xl shadow-lg border-0">
+        <div class="modal-content border-0 overflow-hidden">
+          <div class="modal-header py-2 bg-dark text-white border-0">
+            <h6 class="modal-title small">
+              <i class="fa fa-copy me-2"></i>상세 비교 분석 [<span class="text-warning">{{ selectedMapId }}</span
+              >]
+            </h6>
+            <button type="button" class="btn-close btn-close-white shadow-none" data-bs-dismiss="modal"></button>
           </div>
-          <button @click="closeClassModal" class="btn btn-xs btn-danger">✕</button>
-        </div>
-        <div class="modal-body-content p-3 h-100 d-flex flex-column">
-          <div class="ag-theme-custom flex-grow-1">
-            <ag-grid-vue
-              style="width: 100%; height: 100%"
-              :columnDefs="classModalColDefs"
-              :rowData="classModalData"
-              :defaultColDef="{ resizable: true, sortable: true, filter: true }"
-              @cell-clicked="onClassGridCellClicked"
-            />
+          <div class="modal-body p-0 d-flex flex-column" style="height: 60vh; background: #fff">
+            <div class="bg-light p-2 border-bottom d-flex gap-1">
+              <button
+                v-for="t in ['MAP_ATT', 'MAP_CLS', 'MAP_TMPLS', 'MAP_RELS']"
+                :key="t"
+                class="btn btn-xs px-3"
+                :class="activeTab === t ? 'btn-primary fw-bold' : 'btn-white border'"
+                @click="activeTab = t"
+              >
+                {{ t }}
+              </button>
+            </div>
+            <div class="flex-grow-1 position-relative">
+              <ag-grid-vue
+                style="width: 100%; height: 100%; position: absolute"
+                class="ag-theme-custom"
+                :columnDefs="modalColumnDefs"
+                :rowData="modalRowData"
+                :defaultColDef="defaultColDef"
+              />
+            </div>
           </div>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showDetailModal" class="custom-modal-overlay" @click.self="closeDetailModal">
-      <div 
-        class="custom-modal-window shadow-lg draggable-modal" 
-        :style="modalPos.detail"
-      >
-        <div class="modal-header-dark cursor-move" @mousedown="startDrag($event, 'detail')">
-          <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }} (이동 가능)</span>
-          <button @click="closeDetailModal" class="btn btn-xs btn-danger">✕</button>
-        </div>
-        <div class="modal-body-content p-2 h-100">
-          <div class="ag-theme-custom h-100">
-            <ag-grid-vue
-              style="width: 100%; height: 100%"
-              :columnDefs="detailModalColDefs"
-              :rowData="detailModalRowData"
-              :defaultColDef="{ resizable: true }"
-            />
+          <div class="modal-footer py-1 bg-light border-top text-end">
+            <button type="button" class="btn btn-secondary btn-xs px-3" data-bs-dismiss="modal">닫기</button>
           </div>
         </div>
       </div>
@@ -88,241 +130,338 @@
 </template>
 
 <script setup>
-import { ref, computed, shallowRef, onMounted, reactive } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-import { sAlert } from '@/utils/messages/alert-common'
-import { sortBy } from 'lodash-es'
-import DefaultCard from '@/components/default/DefaultCard.vue'
-import InputBox from '@/components/default/editors/InputBox.vue'
-import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+  import { ref, computed, shallowRef, onMounted, watch, nextTick } from 'vue'
+  import { useRoute } from 'vue-router'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import { sAlert } from '@/utils/messages/alert-common'
+  import DefaultCard from '@/components/default/DefaultCard.vue'
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+  import * as bootstrap from 'bootstrap'
 
-const route = useRoute()
-const router = useRouter()
-const cardTitle = { icon: 'fa-list', title: 'Tag 통합 분석', subtitle: '속성 필터링 분석' }
+  const route = useRoute()
+  let diffModal = null
+  const gridApi = shallowRef()
+  const gridRowData = ref([])
+  const dynamicCols = ref([])
+  const selectedProjects = ref([])
+  const projectList = ref([])
+  const projectSearchKeyword = ref('')
+  const attributeFilter = ref('')
+  const viewMode = ref('simple')
+  const selectedMapId = ref('')
+  const activeTab = ref('MAP_ATT')
+  const modalRowData = ref([])
+  const clickedRow = ref(null)
 
-// --- 모달 드래그 및 위치 상태 ---
-const modalPos = reactive({
-  class: { top: '200px', left: '50%', transform: 'translateX(-50%)', width: '850px', height: '60%', position: 'absolute' },
-  detail: { top: '200px', left: '50%', transform: 'translateX(-50%)', width: '900px', height: '80%', position: 'absolute' }
-})
+  const COMPARE_FIELDS = [
+    'DESC',
+    'REG_TYPE_ID',
+    'CATEGORY',
+    'TOOL_ID',
+    'TOOL_TYPE',
+    'MAP_ATT',
+    'MAP_CLS',
+    'MAP_TMPLS',
+    'MAP_RELS',
+  ]
+  const TAB_KEY_MAP = { MAP_ATT: 'SEDP_ATT_ID', MAP_CLS: 'SEDP_OBJ_CLS_ID', MAP_TMPLS: 'TMP_ID', MAP_RELS: 'REL_ID' }
 
-// --- 상태 관리 ---
-const gridApi = shallowRef()
-const projectOptions = ref([])
-const selectedProjNo = ref('')
-const projSearchQuery = ref('')
-const searchKeyword = ref('')
-const localFilterQuery = ref('')
-const rawDataList = ref([])
-const dynamicAttCols = ref([])
-const showDetailModal = ref(false)
-const showClassModal = ref(false)
-const selectedRow = ref(null)
-const classModalData = ref([])
-const clickedClassId = ref('')
-
-// --- [추가] 드래그 로직 ---
-const startDrag = (event, type) => {
-  const modal = event.currentTarget.parentElement
-  let shiftX = event.clientX - modal.getBoundingClientRect().left
-  let shiftY = event.clientY - modal.getBoundingClientRect().top
-
-  const moveAt = (pageX, pageY) => {
-    modalPos[type].left = (pageX - shiftX) + 'px'
-    modalPos[type].top = (pageY - shiftY) + 'px'
-    modalPos[type].transform = 'none' // 드래그 시작 시 중앙정렬 해제
+  const defaultColDef = {
+    sortable: true,
+    resizable: true,
+    filter: 'agTextColumnFilter',
+    floatingFilter: true,
+    minWidth: 100,
   }
 
-  const onMouseMove = (e) => moveAt(e.pageX, e.pageY)
-  document.addEventListener('mousemove', onMouseMove)
-  document.onmouseup = () => {
-    document.removeEventListener('mousemove', onMouseMove)
-    document.onmouseup = null
+  onMounted(async () => {
+    const modalEl = document.getElementById('arrayDiffModal')
+    diffModal = new bootstrap.Modal(modalEl)
+    try {
+      const res = await axiosWrapper.get('/api/Project/Get')
+      projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
+    } catch (e) {
+      console.error(e)
+    }
+  })
+
+  const filteredProjectList = computed(() => {
+    const kw = projectSearchKeyword.value.toLowerCase()
+    return projectList.value.filter(p => p.PROJ_NO.toLowerCase().includes(kw))
+  })
+
+  const onGridReady = params => {
+    gridApi.value = params.api
+    setTimeout(() => {
+      params.api.sizeColumnsToFit()
+    }, 200)
   }
-}
 
-// --- 기존 로직 (100% 복구) ---
-const fetchProjectList = async () => {
-  try {
-    const res = await axiosWrapper.get('/api/Project/Get')
-    projectOptions.value = (res || []).map(p => ({ text: p.PROJ_NO, value: p.PROJ_NO }))
-  } catch (e) { console.error(e) }
-}
+  // [로직 복구] 메인 조회 로직
+  const onSearch = async () => {
+    if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
+    gridApi.value?.setGridOption('loading', true)
 
-const filteredProjectOptions = computed(() => {
-  const query = projSearchQuery.value.toLowerCase()
-  return projectOptions.value.filter(p => p.text.toLowerCase().includes(query))
-})
+    try {
+      const results = await Promise.all(
+        selectedProjects.value.map(p =>
+          axiosWrapper
+            .post('/api/AdapterDataMapping/Get', { ProjectNo: p }, { headers: { Projectno: p } })
+            .catch(() => [])
+        )
+      )
 
-const selectProject = val => {
-  selectedProjNo.value = val
-  projSearchQuery.value = val
-}
-
-const confirmSearch = () => {
-  if (!selectedProjNo.value) return sAlert.Warning('프로젝트를 선택하세요.')
-  fetchData()
-}
-
-const fetchData = async () => {
-  if (gridApi.value) gridApi.value.setGridOption('loading', true)
-  try {
-    const payload = { ProjectNo: selectedProjNo.value, Keyword: searchKeyword.value }
-    const [pRes, wRes] = await Promise.allSettled([
-      axiosWrapper.post('/api/Data/SearchPublishData', payload),
-      axiosWrapper.post('/api/Data/SearchWorkingData', payload),
-    ])
-
-    let combined = []
-    if (pRes.status === 'fulfilled' && pRes.value) {
-      combined.push(...(Array.isArray(pRes.value) ? pRes.value : [pRes.value]).map(i => ({ ...i, Source: 'Published' })))
-    }
-    if (wRes.status === 'fulfilled' && wRes.value) {
-      combined.push(...(Array.isArray(wRes.value) ? wRes.value : [wRes.value]).map(i => ({ ...i, Source: 'Working' })))
-    }
-
-    const allAttIds = new Set()
-    combined.forEach(item => { (item.ATTRIBUTES || []).forEach(a => { if (a?.ATT_ID) allAttIds.add(a.ATT_ID) }) })
-
-    const processedData = combined.map(item => {
-      const flatItem = { ...item }
-      allAttIds.forEach(id => {
-        const target = (item.ATTRIBUTES || []).find(a => a?.ATT_ID === id)
-        flatItem[`ATT_${id}`] = target && target.VALUE !== null ? target.VALUE : 'null'
+      const dataMap = new Map()
+      results.forEach((data, idx) => {
+        const pNo = selectedProjects.value[idx]
+        data.forEach(item => {
+          if (!dataMap.has(item.MAP_ID)) dataMap.set(item.MAP_ID, { MAP_ID: item.MAP_ID, projects: {} })
+          dataMap.get(item.MAP_ID).projects[pNo] = { EXIST: true, ...item }
+        })
       })
-      return flatItem
+
+      gridRowData.value = Array.from(dataMap.values()).map(row => {
+        let diffFields = []
+        const activePs = selectedProjects.value.filter(p => row.projects[p])
+        if (activePs.length > 1) {
+          COMPARE_FIELDS.forEach(f => {
+            const firstVal = JSON.stringify(row.projects[activePs[0]][f] || '')
+            if (activePs.some(p => JSON.stringify(row.projects[p][f] || '') !== firstVal)) diffFields.push(f)
+          })
+        }
+        const res = {
+          MAP_ID: row.MAP_ID,
+          CONDITION: diffFields.length > 0 ? 'Diff' : 'Pass',
+          DIFF_INFO: diffFields.join(', '),
+        }
+        selectedProjects.value.forEach(p => (res[p] = row.projects[p] || { EXIST: false }))
+        return res
+      })
+
+      dynamicCols.value = [...selectedProjects.value]
+      nextTick(() => {
+        gridApi.value?.sizeColumnsToFit()
+      })
+    } finally {
+      gridApi.value?.setGridOption('loading', false)
+    }
+  }
+
+  const mainColumnDefs = computed(() => {
+    const cols = [
+      {
+        headerName: 'Condition',
+        field: 'CONDITION',
+        width: 90,
+        pinned: 'left',
+        cellStyle: p => ({
+          color: p.value === 'Diff' ? '#dc3545' : '#198754',
+          fontWeight: 'bold',
+          textAlign: 'center',
+        }),
+      },
+      {
+        headerName: 'Diff Info',
+        field: 'DIFF_INFO',
+        width: 130,
+        pinned: 'left',
+        cellStyle: { color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer', fontWeight: 'bold' },
+      },
+      { headerName: 'Mapping ID', field: 'MAP_ID', width: 220, pinned: 'left' },
+    ]
+    dynamicCols.value.forEach(p => {
+      cols.push({
+        headerName: p,
+        children: [
+          {
+            headerName: 'Exist',
+            valueGetter: params => (params.data[p]?.EXIST ? 'Y' : 'N'),
+            width: 70,
+            cellStyle: { textAlign: 'center' },
+          },
+          ...(viewMode.value === 'detail'
+            ? COMPARE_FIELDS.filter(f => !f.includes('MAP_')).map(f => ({
+                headerName: f,
+                valueGetter: params => params.data[p]?.[f] || '',
+                width: 120,
+              }))
+            : []),
+        ],
+      })
+    })
+    return cols
+  })
+
+  const onCellClicked = p => {
+    if (p.column.getColId() === 'DIFF_INFO' && p.value) {
+      clickedRow.value = p.data
+      selectedMapId.value = p.data.MAP_ID
+      diffModal.show()
+    }
+  }
+
+  // [로직 복구] 모달 내 상세 비교 로직
+  watch([activeTab, clickedRow], () => {
+    if (!clickedRow.value) return
+    const keyField = TAB_KEY_MAP[activeTab.value]
+    const mergeMap = new Map()
+
+    dynamicCols.value.forEach(pNo => {
+      const pRow = clickedRow.value[pNo]
+      if (!pRow || !pRow[activeTab.value]) return
+      let items = pRow[activeTab.value]
+      if (activeTab.value === 'MAP_CLS' && items.ITEMS) items = items.ITEMS
+      if (Array.isArray(items)) {
+        items.forEach(item => {
+          const id = item[keyField]
+          if (id) {
+            if (!mergeMap.has(id)) mergeMap.set(id, { [keyField]: id })
+            mergeMap.get(id)[pNo] = item
+          }
+        })
+      }
     })
 
-    dynamicAttCols.value = Array.from(allAttIds).sort().map(id => ({
-      headerName: id, field: `ATT_${id}`, minWidth: 140, headerClass: 'att-column-header', cellRenderer: highlightRenderer,
-    }))
+    modalRowData.value = Array.from(mergeMap.values()).map(row => {
+      const activePs = dynamicCols.value.filter(p => row[p])
+      const isRowDiff =
+        activePs.length !== dynamicCols.value.length ||
+        activePs.some(p => JSON.stringify(row[p]) !== JSON.stringify(row[activePs[0]]))
+      return { ...row, CONDITION: isRowDiff ? 'Diff' : 'Pass' }
+    })
+  })
 
-    rawDataList.value = sortBy(processedData, ['TAG_NO', 'Source'])
-  } catch (err) { sAlert.Error('조회 실패') } finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
-}
+  const modalColumnDefs = computed(() => {
+    const keyField = TAB_KEY_MAP[activeTab.value]
+    if (!keyField) return []
+    const cols = [
+      { headerName: keyField, field: keyField, pinned: 'left', width: 180, cellClass: 'bg-light fw-bold' },
+      {
+        headerName: 'Condition',
+        field: 'CONDITION',
+        pinned: 'left',
+        width: 90,
+        cellStyle: p => ({
+          color: p.value === 'Diff' ? '#dc3545' : '#198754',
+          fontWeight: 'bold',
+          textAlign: 'center',
+        }),
+      },
+    ]
+    const allKeys = new Set()
+    modalRowData.value.forEach(row => {
+      dynamicCols.value.forEach(pNo => {
+        if (row[pNo])
+          Object.keys(row[pNo]).forEach(k => {
+            if (k !== keyField) allKeys.add(k)
+          })
+      })
+    })
+    dynamicCols.value.forEach(pNo => {
+      const children = Array.from(allKeys).map(attrKey => ({
+        headerName: attrKey,
+        valueGetter: p => p.data[pNo]?.[attrKey] ?? '-',
+        width: 130,
+        cellStyle: p => {
+          const val = p.data[pNo]?.[attrKey]
+          const isDiff = dynamicCols.value.some(
+            other => JSON.stringify(val) !== JSON.stringify(p.data[other]?.[attrKey])
+          )
+          return isDiff ? { color: '#dc3545', fontWeight: 'bold' } : null
+        },
+      }))
+      cols.push({ headerName: pNo, children })
+    })
+    return cols
+  })
 
-const highlightRenderer = params => {
-  const val = params.value === null || params.value === undefined ? '' : String(params.value)
-  const searchTerm = localFilterQuery.value.trim()
-  if (!searchTerm || val === 'null' || val === '') return val
-  const re = new RegExp(`(${searchTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'gi')
-  return val.replace(re, `<mark class="filter-highlight">$1</mark>`)
-}
-
-const onFilterInput = () => { if (gridApi.value) gridApi.value.refreshCells({ force: true }) }
-
-const onCellClicked = async p => {
-  const colId = p.column.getColId()
-  if (colId === 'Source') {
-    selectedRow.value = p.data
-    showDetailModal.value = true
-  } else if (colId === 'CLS_ID' && p.value) {
-    clickedClassId.value = p.value
-    try {
-      if (gridApi.value) gridApi.value.setGridOption('loading', true)
-      const res = await axiosWrapper.post('/api/Register/GetByClassIDs', { ProjectNo: selectedProjNo.value, ClassIDs: [p.value] })
-      classModalData.value = Array.isArray(res) ? res : [res]
-      showClassModal.value = true
-    } catch (e) { sAlert.Error('Class 정보 로드 실패') } finally { if (gridApi.value) gridApi.value.setGridOption('loading', false) }
-  }
-}
-
-const onClassGridCellClicked = p => {
-  if (p.column.getColId() === 'TYPE_ID' && p.value) {
-    const routeData = router.resolve({ path: '/register-mapping-setup', query: { reg_type_id: p.data.TYPE_ID, proj_no: selectedProjNo.value, ep_id: p.data.EP_ID } })
-    window.open(routeData.href, '_blank')
-  }
-}
-
-const gridOptions = computed(() => ({
-  columnDefs: [
-    { headerName: 'Source', field: 'Source', width: 110, pinned: 'left', cellStyle: { cursor: 'pointer' }, cellRenderer: p => `<span class="badge" style="background-color:${p.value === 'Working' ? '#ed6c02' : '#0288d1'}; color:white;">${p.value}</span>` },
-    { field: 'TAG_NO', headerName: 'Tag No', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'TAG_IDX', headerName: 'Tag Idx', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'TAG_DESC', headerName: 'Tag Desc', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'EP_IC', headerName: 'EP IC', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'EP_ID', headerName: 'EP ID', width: 180, pinned: 'left', cellRenderer: highlightRenderer },
-    { field: 'CLS_ID', headerName: 'Class', width: 120, pinned: 'left', cellRenderer: highlightRenderer, cellStyle: { cursor: 'pointer', textDecoration: 'underline', color: '#0d6efd', fontWeight: 'bold' } },
-    ...dynamicAttCols.value,
-  ],
-  rowData: filteredData.value,
-  loadingOverlayComponent: AggridLoadingOverlay,
-  defaultColDef: { sortable: true, filter: 'agTextColumnFilter', floatingFilter: true, resizable: true },
-  cellSelection: true,
-  enableRangeSelection: true,
-  suppressRowClickSelection: true,
-  statusBar: { statusPanels: [{ statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'right' }, { statusPanel: 'agSelectedRowCountComponent', align: 'right' }, { statusPanel: 'agAggregationComponent', align: 'right' }] },
-}))
-
-const filteredData = computed(() => {
-  const query = localFilterQuery.value.trim().toLowerCase()
-  if (!query) return rawDataList.value
-  return rawDataList.value.filter(i => Object.values(i).some(val => String(val).toLowerCase().includes(query)))
-})
-
-const classModalColDefs = [
-  { headerName: 'Register No', field: 'TYPE_ID', flex: 1, cellStyle: { fontWeight: 'bold', color: '#0d6efd', textDecoration: 'underline', cursor: 'pointer' } },
-  { headerName: 'Description', field: 'DESC', flex: 1.5 },
-  { headerName: 'EP ID', field: 'EP_ID', width: 120 },
-]
-
-const detailModalColDefs = [
-  { headerName: 'Property', field: 'key', width: 220, pinned: 'left', cellStyle: { background: '#f8f9fa', fontWeight: 'bold' } },
-  { headerName: 'Value', field: 'value', flex: 1 },
-]
-
-const detailModalRowData = computed(() => {
-  if (!selectedRow.value) return []
-  return Object.entries(selectedRow.value).filter(([k]) => k !== 'ATTRIBUTES').map(([k, v]) => ({ key: k, value: v ?? '-' }))
-})
-
-const onGridReady = params => { gridApi.value = params.api }
-const closeClassModal = () => { showClassModal.value = false; classModalData.value = []; resetPos('class'); }
-const closeDetailModal = () => { showDetailModal.value = false; selectedRow.value = null; resetPos('detail'); }
-
-const resetPos = (type) => {
-  modalPos[type].top = '200px'; modalPos[type].left = '50%'; modalPos[type].transform = 'translateX(-50%)';
-}
-
-onMounted(async () => {
-  await fetchProjectList()
-  const urlProjNo = route.query?.proj_no || new URLSearchParams(window.location.search).get('proj_no')
-  if (urlProjNo) { selectedProjNo.value = urlProjNo; projSearchQuery.value = urlProjNo; }
-})
+  const isExternalFilterPresent = () => attributeFilter.value !== ''
+  const doesExternalFilterPass = n => String(n.data.MAP_ID).toLowerCase().includes(attributeFilter.value.toLowerCase())
+  watch(attributeFilter, () => gridApi.value?.onFilterChanged())
 </script>
 
 <style scoped lang="scss">
-.grid-wrapper { flex: 1; min-height: 0; border-top: 1px solid #dee2e6; }
-.header-divider { width: 1px; height: 14px; background-color: #dee2e6; margin: 0 10px; }
+  .adapter-compare-page {
+    height: 100%;
+    overflow: hidden;
+  }
+  .grid-wrapper {
+    position: relative;
+    width: 100%;
+    height: 100%;
+  }
 
-:deep(.ag-theme-custom) {
-  --ag-border-color: #dee2e6;
-  --ag-header-background-color: #f8f9fa;
-  --ag-font-size: 12px;
-  .ag-header-cell { border-right: 1px solid #dee2e6 !important; font-weight: 600; }
-  .ag-cell { border-right: 1px solid #f1f3f5 !important; display: flex; align-items: center; }
-  .filter-highlight { background-color: #ffeb3b !important; color: #000 !important; font-weight: bold; }
-  .att-column-header { background-color: #fff9db !important; color: #856404 !important; }
-}
+  .ui-tag-tab-box {
+    height: 32px;
+    border: 1px solid #ddd;
+    padding: 0 10px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    background: #fff;
+    border-radius: 4px;
+    font-size: 0.85rem;
+  }
+  .ui-tag-tab-search-btn {
+    height: 32px;
+    background: #0d6efd;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 0 15px;
+    font-weight: 600;
+    font-size: 0.85rem;
+  }
+  .ui-tag-tab-textarea {
+    height: 32px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 5px 10px;
+    resize: none;
+    width: 220px;
+    font-size: 0.8rem;
+  }
+  .header-divider {
+    width: 1px;
+    height: 18px;
+    background: #dee2e6;
+  }
+  .toggle-label {
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 4px 12px;
+    color: #6c757d;
+  }
+  .btn-check:checked + .toggle-label {
+    background-color: #fff !important;
+    color: #0d6efd !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+  }
 
-.custom-modal-overlay {
-  position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.4); z-index: 9999;
-}
+  /* 모달 레이어 및 위치 수정 */
+  .custom-top-modal {
+    z-index: 9990000 !important;
+    .modal-dialog {
+      margin-top: 200px !important;
+    }
+  }
+  :deep(.modal-backdrop) {
+    z-index: 9980000 !important;
+  }
 
-.custom-modal-window {
-  background: #fff; border-radius: 8px; display: flex; flex-direction: column; overflow: hidden;
-  user-select: none; /* 드래그 시 텍스트 선택 방지 */
-}
-
-.modal-header-dark {
-  background: #0f172a; color: #fff; padding: 10px 15px; display: flex; justify-content: space-between; align-items: center;
-}
-
-.cursor-move { cursor: move; }
-
-.tpl-btn {
-  height: 32px; padding: 0 16px; border-radius: 4px; font-weight: 500; cursor: pointer;
-  &--primary { background: #007bff; color: #fff; border: none; }
-}
+  :deep(.ag-theme-custom) {
+    --ag-header-background-color: #f8f9fa;
+    --ag-font-size: 12px;
+    .ag-header-group-cell {
+      background-color: #e9ecef !important;
+      font-weight: 800 !important;
+      border-right: 1px solid #dee2e6 !important;
+    }
+  }
+  .btn-xs {
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    border-radius: 4px;
+  }
 </style>
