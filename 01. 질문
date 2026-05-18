@@ -1,11 +1,20 @@
-  onMounted(() => {
-    const baseSiteName = (import.meta as any).env.VITE_BASE_SITENAME
+onMounted(() => {
+  const baseSiteName = import.meta.env.VITE_BASE_SITENAME
 
-    // 사이트 별 File Id 체크
-    if (baseSiteName === 'dev') fileId.value = sitefileIds.dev
-    if (baseSiteName === 'portal-dev') fileId.value = sitefileIds.dev
-    if (baseSiteName === 'devop') fileId.value = sitefileIds.devop
-    else if (baseSiteName === 'portal-devop') fileId.value = sitefileIds.devop
-    else fileId.value = sitefileIds.oper
-    fetchAndParseExcel()
-  })
+  // 사이트 별 File Id 체크
+  switch (baseSiteName) {
+    case 'dev':
+    case 'portal-dev':
+      fileId.value = sitefileIds.dev
+      break
+    case 'devop':
+    case 'portal-devop':
+      fileId.value = sitefileIds.devop
+      break
+    default:
+      fileId.value = sitefileIds.oper
+      break
+  }
+
+  fetchAndParseExcel()
+})
