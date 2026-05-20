@@ -1,3 +1,5 @@
+:getContextMenuItems="getContextMenuItems"
+
 // 우클릭 메뉴 제어 함수
 const getContextMenuItems = (params) => {
   const defaultItems = params.defaultItems || []
