@@ -1,8 +1,84 @@
-:getContextMenuItems="getContextMenuItems"
+코드 스니펫
+<template>
+  <ag-grid-vue
+    :columnDefs="columnDefs"
+    :rowData="rowData"
+    :getContextMenuItems="getContextMenuItems"
+    @grid-ready="onGridReady"
+    class="ag-theme-alpine"
+    style="width: 100%; height: 500px;"
+  />
+</template>
 
-// 우클릭 메뉴 제어 함수
-const getContextMenuItems = (params) => {
-  const defaultItems = params.defaultItems || []
-  // 'excelExport'와 하위 자식 메뉴를 포함한 'export' 묶음 통째로 제거
-  return defaultItems.filter(item => item !== 'excelExport' && item !== 'export')
+<script setup>
+import { ref } from 'vue'
+import { AgGridVue } from 'ag-grid-vue3'
+import api from '@/api' // 앞서 세팅한 X-Signature 인터셉터가 적용된 Axios 인스턴스
+
+const gridApi = ref(null)
+const columnDefs = ref([/* 컬럼 정의 */])
+const rowData = ref([/* 데이터 정의 */])
+
+const onGridReady = (params) => {
+  gridApi.value = params.api
 }
+
+// 컨텍스트 메뉴 커스터마이징
+const getContextMenuItems = (params) => {
+  // 1. 기존 기본 메뉴 가져오기 (기본 excelExport는 제외 처리)
+  const defaultItems = params.defaultItems || []
+  const filteredItems = defaultItems.filter(item => item !== 'excelExport' && item !== 'export')
+
+  // 2. 우리가 만든 DRM 다운로드 커스텀 메뉴 정의
+  const customDrmMenu = {
+    name: 'Excel 다운로드 (DRM 암호화)',
+    action: () => {
+      exportDrmExcel()
+    },
+    icon: '<span class="ag-icon ag-icon-excel" style="color: #1f7246;"></span>' // 엑셀 아이콘 모양 내기
+  }
+
+  // 3. 기존 메뉴 맨 위에 커스텀 메뉴를 추가해서 반환
+  return [customDrmMenu, 'separator', ...filteredItems]
+}
+
+// 백엔드 API를 호출하여 DRM 파일을 다운로드하는 함수
+const exportDrmExcel = async () => {
+  if (!gridApi.value) return
+
+  try {
+    // [선택 1] 현재 그리드 화면에 보이는 데이터(정렬, 필터링 반영)만 JSON으로 추출
+    const rowDataToExport = []
+    gridApi.value.forEachNodeAfterFilterAndSort((node) => {
+      rowDataToExport.push(node.data)
+    })
+
+    // 만약 컬럼 순서나 헤더 명칭까지 백엔드에 맞춰 보내야 한다면 아래와 같이 구성하여 전송합니다.
+    const exportPayload = {
+      title: '사용자_목록_리포트',
+      columns: gridApi.value.getAllGridColumns().map(col => ({
+        header: col.getColDef().headerName,
+        field: col.getColDef().field
+      })),
+      data: rowDataToExport
+    }
+
+    // 4. 보안 헤더(X-Signature 등)가 적용된 API로 요청 (파일 다운로드를 위해 responseType: 'blob' 필수)
+    const response = await api.post('/api/excel/download-drm', exportPayload, {
+      responseType: 'blob' 
+    })
+
+    // 5. 백엔드에서 보낸 DRM 암호화 파일(.xlsx) 다운로드 처리
+    const blob = new Blob([response.data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+    const link = document.createElement('a')
+    link.href = window.URL.createObjectURL(blob)
+    link.download = `Report_${Date.now()}.xlsx` // 다운로드될 파일명
+    link.click()
+    window.URL.revokeObjectURL(link.href)
+
+  } catch (error) {
+    console.error('DRM 엑셀 다운로드 실패:', error)
+    alert('엑셀 다운로드 중 오류가 발생했습니다.')
+  }
+}
+</script>
