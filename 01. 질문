@@ -1,7 +1,7 @@
 <script setup>
   import { ref, computed, shallowRef, onMounted, reactive } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper' // 👈 이미 프로젝트 공통 모듈이 정의되어 있었습니다!
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper' 
   import { sAlert } from '@/utils/messages/alert-common'
   import { sortBy } from 'lodash-es'
   import DefaultCard from '@/components/default/DefaultCard.vue'
@@ -197,11 +197,8 @@
    */
   const getContextMenuItems = params => {
     const defaultItems = params.defaultItems || []
-
-    // Ag-Grid 기본 순정 내보내기 메뉴 제거
     const filteredItems = defaultItems.filter(item => item !== 'excelExport' && item !== 'export')
 
-    // 커스텀 인터셉트 엑셀 다운로드 추가
     const myCustomExcelMenu = {
       name: 'Excel 다운로드',
       action: () => {
@@ -214,7 +211,7 @@
   }
 
   /**
-   * 핵심 로직: 프로젝트 공통 axiosWrapper를 사용하도록 전면 수정
+   * 엑셀 파일 다운로드 가로채기 핵심 로직 (정밀 교정)
    */
   const handleAgGridExcelIntercept = async () => {
     if (!gridApi.value) {
@@ -226,7 +223,6 @@
       console.log('🔄 [Excel Intercept] 1단계: 데이터 추출 시도')
       let agExcelBlob = null
 
-      // [1안] Ag-Grid 순정 데이터 추출 체크
       if (typeof gridApi.value.getDataAsExcel === 'function') {
         try {
           agExcelBlob = gridApi.value.getDataAsExcel({})
@@ -235,7 +231,6 @@
         }
       }
 
-      // [2안] CSV 백업 우회 가공
       if (!agExcelBlob && typeof gridApi.value.getDataAsCsv === 'function') {
         console.log('🔄 [Excel Intercept] 2단계: CSV 가공 우회 진행')
         try {
@@ -250,7 +245,6 @@
         }
       }
 
-      // [3안] JSON 데이터 강제 덤프화
       if (!agExcelBlob) {
         console.log('🔄 [Excel Intercept] 3단계: 화면 JSON 덤프 데이터 구축')
         const fallbackData = []
@@ -268,14 +262,11 @@
 
       console.log('✅ [Excel Intercept] 파일 데이터화 완료. 크기:', agExcelBlob.size, 'bytes')
 
-      // Multipart 보낼 폼 객체 준비
       const formData = new FormData()
       formData.append('file', agExcelBlob, `Grid_Export_${Date.now()}.xlsx`)
 
-      console.log('🚀 [Excel Intercept] 백엔드 API 요청 전송 (axiosWrapper 활용) -> URL: /api/File/File')
+      console.log('🚀 [Excel Intercept] 백엔드 API 요청 전송 -> URL: /api/File/File')
 
-      // ⭐ [변경 핵심]: axios 대신 프로젝트 내부의 공통 공구인 axiosWrapper.post를 호출합니다.
-      // 파일 스트림 데이터(Blob)가 가로채지거나 오염되지 않도록 세번째 인자에 responseType 옵션을 올바르게 바인딩합니다.
       const response = await axiosWrapper.post('/api/File/File', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
@@ -285,14 +276,13 @@
 
       console.log('🎉 [Excel Intercept] 백엔드 응답 성공. 최종 다운로드 처리 시작')
 
-      // 💡 개발 팁: axiosWrapper가 인터셉터 내부에서 결과의 res.data만 주는지, response 통째를 리턴하는지에 따라 분기 처리
+      // 공통 wrapper 통과 시 데이터가 한 번 벗겨져서 오는지 통째로 오는지 검증 분기
       const fileData = response?.data ? response.data : response;
 
       if (!fileData) {
         throw new Error('서버로부터 반환된 파일 데이터가 비어 있습니다.');
       }
 
-      // 최종 브라우저 스트림 다운로드 처리
       const returnBlob = new Blob([fileData], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       })
@@ -317,7 +307,14 @@
     }
   }
 
-  // --- 하단 기존 상태값 및 옵션 정의 로직 ---
+  // ⭐ [교정 핵심]: gridOptions 상단에서 참조하는 데이터 가공용 computed를 위로 순서 정렬했습니다.
+  const filteredData = computed(() => {
+    const query = localFilterQuery.value.trim().toLowerCase()
+    if (!query) return rawDataList.value
+    return rawDataList.value.filter(i => Object.values(i).some(val => String(val).toLowerCase().includes(query)))
+  })
+
+  // --- 옵션 정의 로직 ---
   const gridOptions = computed(() => ({
     columnDefs: [
       {
@@ -344,7 +341,7 @@
       },
       ...dynamicAttCols.value,
     ],
-    rowData: filteredData.value,
+    rowData: filteredData.value, // 👈 여기서 computed 값을 가져와 정상 주입합니다.
     loadingOverlayComponent: AggridLoadingOverlay,
     defaultColDef: { sortable: true, filter: 'agTextColumnFilter', floatingFilter: true, resizable: true },
     cellSelection: true,
@@ -358,12 +355,6 @@
       ],
     },
   }))
-
-  const filteredData = computed(() => {
-    const query = localFilterQuery.value.trim().toLowerCase()
-    if (!query) return rawDataList.value
-    return rawDataList.value.filter(i => Object.values(i).some(val => String(val).toLowerCase().includes(query)))
-  })
 
   const classModalColDefs = [
     {
