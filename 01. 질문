@@ -1,114 +1,7 @@
-<template>
-  <div class="template__page panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
-    <DefaultCard :title="cardTitle" class="w-100 h-100">
-      <template #header-right>
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-          <div class="dropdown custom-single-select" style="min-width: 220px">
-            <InputBox
-              id="input-proj"
-              label="프로젝트"
-              v-model:value="selectedProjNo"
-              placeholder="프로젝트 선택/입력"
-              data-bs-toggle="dropdown"
-              @input="projSearchQuery = selectedProjNo"
-              style="width: 100%"
-            />
-            <ul class="dropdown-menu shadow-lg p-0 w-100" style="max-height: 300px; overflow-y: auto; z-index: 1060">
-              <li v-for="proj in filteredProjectOptions" :key="proj.value">
-                <a
-                  class="dropdown-item py-2 px-3 cursor-pointer"
-                  :class="{ 'active-proj': selectedProjNo === proj.value }"
-                  @click="selectProject(proj.value)"
-                >
-                  {{ proj.text }}
-                </a>
-              </li>
-            </ul>
-          </div>
-
-          <InputBox
-            id="input-keyword"
-            label="키워드"
-            v-model:value="searchKeyword"
-            placeholder="Tag No 입력"
-            style="width: 220px"
-          />
-          <div class="header-divider"></div>
-          <button type="button" class="tpl-btn tpl-btn--sm tpl-btn--primary" @click="confirmSearch">
-            <i class="fa fa-search me-1"></i>조회
-          </button>
-          <div class="header-divider"></div>
-          <InputBox
-            id="input-filter"
-            label="결과 검색"
-            v-model:value="localFilterQuery"
-            icon="fa-filter"
-            placeholder="결과 내 찾기"
-            style="width: 220px"
-            @input="onFilterInput"
-          />
-        </div>
-      </template>
-
-      <div class="grid-wrapper w-100 h-100">
-        <ag-grid-vue
-          class="ag-theme-custom w-100 h-100"
-          v-bind="gridOptions"
-          :getContextMenuItems="getContextMenuItems"
-          @grid-ready="onGridReady"
-          @cell-clicked="onCellClicked"
-        />
-      </div>
-    </DefaultCard>
-
-    <div v-if="showClassModal" class="custom-modal-overlay" @click.self="closeClassModal">
-      <div class="custom-modal-window shadow-lg draggable-modal" :style="modalPos.class">
-        <div class="modal-header-dark cursor-move" @mousedown="startDrag($event, 'class')">
-          <div class="d-flex align-items-center gap-2">
-            <i class="fa fa-info-circle text-info"></i>
-            <span class="fw-bold text-white">Class Info: {{ clickedClassId }} (이동 가능)</span>
-          </div>
-          <button @click="closeClassModal" class="btn btn-xs btn-danger">✕</button>
-        </div>
-        <div class="modal-body-content p-3 h-100 d-flex flex-column">
-          <div class="ag-theme-custom flex-grow-1">
-            <ag-grid-vue
-              style="width: 100%; height: 100%"
-              :columnDefs="classModalColDefs"
-              :rowData="classModalData"
-              :defaultColDef="{ resizable: true, sortable: true, filter: true }"
-              @cell-clicked="onClassGridCellClicked"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="showDetailModal" class="custom-modal-overlay" @click.self="closeDetailModal">
-      <div class="custom-modal-window shadow-lg draggable-modal" :style="modalPos.detail">
-        <div class="modal-header-dark cursor-move" @mousedown="startDrag($event, 'detail')">
-          <span class="fw-bold text-white">Detail View: {{ selectedRow?.TAG_NO }} (이동 가능)</span>
-          <button @click="closeDetailModal" class="btn btn-xs btn-danger">✕</button>
-        </div>
-        <div class="modal-body-content p-2 h-100">
-          <div class="ag-theme-custom h-100">
-            <ag-grid-vue
-              style="width: 100%; height: 100%"
-              :columnDefs="detailModalColDefs"
-              :rowData="detailModalRowData"
-              :defaultColDef="{ resizable: true }"
-            />
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</template>
-
 <script setup>
   import { ref, computed, shallowRef, onMounted, reactive } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper' // 👈 이미 프로젝트 공통 모듈이 정의되어 있었습니다!
   import { sAlert } from '@/utils/messages/alert-common'
   import { sortBy } from 'lodash-es'
   import DefaultCard from '@/components/default/DefaultCard.vue'
@@ -154,7 +47,7 @@
   const classModalData = ref([])
   const clickedClassId = ref('')
 
-  // --- [추가] 드래그 로직 ---
+  // --- 드래그 로직 ---
   const startDrag = (event, type) => {
     const modal = event.currentTarget.parentElement
     let shiftX = event.clientX - modal.getBoundingClientRect().left
@@ -163,7 +56,7 @@
     const moveAt = (pageX, pageY) => {
       modalPos[type].left = pageX - shiftX + 'px'
       modalPos[type].top = pageY - shiftY + 'px'
-      modalPos[type].transform = 'none' // 드래그 시작 시 중앙정렬 해제
+      modalPos[type].transform = 'none'
     }
 
     const onMouseMove = e => moveAt(e.pageX, e.pageY)
@@ -174,7 +67,7 @@
     }
   }
 
-  // --- 기존 로직 (100% 복구) ---
+  // --- API 조회 로직 ---
   const fetchProjectList = async () => {
     try {
       const res = await axiosWrapper.get('/api/Project/Get')
@@ -300,33 +193,28 @@
   }
 
   /**
-   * 2. 마우스 우클릭 메뉴 커스터마이징 함수
-   * (템플릿의 :getContextMenuItems="getContextMenuItems" 와 연결되어야 함)
+   * 우클릭 메뉴 정의
    */
   const getContextMenuItems = params => {
-    // 기본 제공 메뉴 배열 (없으면 빈 배열로 방어)
     const defaultItems = params.defaultItems || []
 
-    // 🚫 원래 Ag-Grid가 제공하는 기본 다운로드 메뉴 숨기기 ('excelExport', 'export')
+    // Ag-Grid 기본 순정 내보내기 메뉴 제거
     const filteredItems = defaultItems.filter(item => item !== 'excelExport' && item !== 'export')
 
-    // ✨ 우리가 만든 백엔드 토스용 커스텀 메뉴 정의
+    // 커스텀 인터셉트 엑셀 다운로드 추가
     const myCustomExcelMenu = {
       name: 'Excel 다운로드',
       action: () => {
-        // 메뉴 클릭 시 파일 가로채기 실행
         handleAgGridExcelIntercept()
       },
-      // Ag-Grid 순정 스타일의 녹색 엑셀 아이콘 주입
       icon: '<span class="ag-icon ag-icon-excel" style="color: #1f7246;"></span>',
     }
 
-    // 🤝 새 메뉴를 맨 위에 올리고 구분선(separator)과 함께 나머지 메뉴 병합
     return [myCustomExcelMenu, 'separator', ...filteredItems]
   }
 
   /**
-   * 3. Ag-Grid 엑셀 바이너리를 가로채서 백엔드로 토스하고 결과 파일을 다운받는 핵심 함수
+   * 핵심 로직: 프로젝트 공통 axiosWrapper를 사용하도록 전면 수정
    */
   const handleAgGridExcelIntercept = async () => {
     if (!gridApi.value) {
@@ -335,25 +223,24 @@
     }
 
     try {
-      console.log('🔄 [Excel Intercept] 1단계: Ag-Grid 내장 데이터 추출 시도')
+      console.log('🔄 [Excel Intercept] 1단계: 데이터 추출 시도')
       let agExcelBlob = null
 
-      // [1단계 차선책] Ag-Grid 최신 버전 기능 체크
+      // [1안] Ag-Grid 순정 데이터 추출 체크
       if (typeof gridApi.value.getDataAsExcel === 'function') {
         try {
           agExcelBlob = gridApi.value.getDataAsExcel({})
         } catch (e) {
-          console.warn('⚠️ [Excel Intercept] getDataAsExcel 실패 (모듈 등록 누락 의심):', e.message)
+          console.warn('⚠️ [Excel Intercept] getDataAsExcel 실패:', e.message)
         }
       }
 
-      // [2단계 차선책] 모듈 문제로 Blob 추출 안 될 시 내장 CSV 함수로 가공해서 우회
+      // [2안] CSV 백업 우회 가공
       if (!agExcelBlob && typeof gridApi.value.getDataAsCsv === 'function') {
         console.log('🔄 [Excel Intercept] 2단계: CSV 가공 우회 진행')
         try {
           const csvContent = gridApi.value.getDataAsCsv({})
           if (csvContent) {
-            // 한글 깨짐 방지용 UTF-8 BOM 주입
             agExcelBlob = new Blob([new Uint8Array([0xef, 0xbb, 0xbf]), csvContent], {
               type: 'text/csv;charset=utf-8;',
             })
@@ -363,7 +250,7 @@
         }
       }
 
-      // [3단계 차선책] 최후의 보루: 화면 JSON 데이터를 강제로 Blob 파일화
+      // [3안] JSON 데이터 강제 덤프화
       if (!agExcelBlob) {
         console.log('🔄 [Excel Intercept] 3단계: 화면 JSON 덤프 데이터 구축')
         const fallbackData = []
@@ -374,7 +261,6 @@
         agExcelBlob = new Blob([jsonStr], { type: 'application/json' })
       }
 
-      // 최종 데이터 추출 검증
       if (!agExcelBlob || agExcelBlob.size === 0) {
         alert('그리드에서 데이터를 추출할 수 없습니다.')
         return
@@ -382,37 +268,43 @@
 
       console.log('✅ [Excel Intercept] 파일 데이터화 완료. 크기:', agExcelBlob.size, 'bytes')
 
-      // Multipart FormData 객체 생성 및 파일 바인딩
+      // Multipart 보낼 폼 객체 준비
       const formData = new FormData()
-      // 💡 백엔드 파일 수신 Controller 변수명이 'file'인지 확인 필요!
       formData.append('file', agExcelBlob, `Grid_Export_${Date.now()}.xlsx`)
 
-      console.log('🚀 [Excel Intercept] 백엔드 API 요청 전송 -> URL: /api/File/File')
+      console.log('🚀 [Excel Intercept] 백엔드 API 요청 전송 (axiosWrapper 활용) -> URL: /api/File/File')
 
-      // 💡 네트워크 탭 추적용 실제 API 호출부
-      const response = await axios.post('/api/File/File', formData, {
+      // ⭐ [변경 핵심]: axios 대신 프로젝트 내부의 공통 공구인 axiosWrapper.post를 호출합니다.
+      // 파일 스트림 데이터(Blob)가 가로채지거나 오염되지 않도록 세번째 인자에 responseType 옵션을 올바르게 바인딩합니다.
+      const response = await axiosWrapper.post('/api/File/File', formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
-        responseType: 'blob', // 바이너리 파일 스트림 보존을 위해 절대 필수!
+        responseType: 'blob', 
       })
 
       console.log('🎉 [Excel Intercept] 백엔드 응답 성공. 최종 다운로드 처리 시작')
 
-      // 서버가 돌려준 가공 완료 파일(DRM 등 적용됨)을 브라우저에 다운로드 다운로드 처리
-      const returnBlob = new Blob([response.data], {
+      // 💡 개발 팁: axiosWrapper가 인터셉터 내부에서 결과의 res.data만 주는지, response 통째를 리턴하는지에 따라 분기 처리
+      const fileData = response?.data ? response.data : response;
+
+      if (!fileData) {
+        throw new Error('서버로부터 반환된 파일 데이터가 비어 있습니다.');
+      }
+
+      // 최종 브라우저 스트림 다운로드 처리
+      const returnBlob = new Blob([fileData], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       })
 
       const downloadUrl = window.URL.createObjectURL(returnBlob)
       const linkElement = document.createElement('a')
       linkElement.href = downloadUrl
-      linkElement.download = `Excel_Report_${Date.now()}.xlsx` // 최종 파일명
+      linkElement.download = `Excel_Report_${Date.now()}.xlsx`
 
       document.body.appendChild(linkElement)
       linkElement.click()
 
-      // 사용 완료된 가비지 메모리 회수
       document.body.removeChild(linkElement)
       window.URL.revokeObjectURL(downloadUrl)
       console.log('🏁 [Excel Intercept] 전체 다운로드 프로세스 정상 종료')
@@ -420,16 +312,12 @@
       console.error('====================================================')
       console.error('🚨 [Excel Intercept Catch Error] 예외 발생')
       console.error('❌ 메시지:', error.message)
-      console.error('❌ 상세 객체:', error)
-      if (error.response) {
-        console.error('❌ HTTP 에러 코드:', error.response.status)
-        console.error('❌ 서버 리턴 에러 본문:', error.response.data)
-      }
       console.error('====================================================')
       alert(`엑셀 처리 중 오류가 발생했습니다.\n원인: ${error.message}`)
     }
   }
 
+  // --- 하단 기존 상태값 및 옵션 정의 로직 ---
   const gridOptions = computed(() => ({
     columnDefs: [
       {
@@ -535,86 +423,3 @@
     }
   })
 </script>
-
-<style scoped lang="scss">
-  .grid-wrapper {
-    flex: 1;
-    min-height: 0;
-    border-top: 1px solid #dee2e6;
-  }
-  .header-divider {
-    width: 1px;
-    height: 14px;
-    background-color: #dee2e6;
-    margin: 0 10px;
-  }
-
-  :deep(.ag-theme-custom) {
-    --ag-border-color: #dee2e6;
-    --ag-header-background-color: #f8f9fa;
-    --ag-font-size: 12px;
-    .ag-header-cell {
-      border-right: 1px solid #dee2e6 !important;
-      font-weight: 600;
-    }
-    .ag-cell {
-      border-right: 1px solid #f1f3f5 !important;
-      display: flex;
-      align-items: center;
-    }
-    .filter-highlight {
-      background-color: #ffeb3b !important;
-      color: #000 !important;
-      font-weight: bold;
-    }
-    .att-column-header {
-      background-color: #fff9db !important;
-      color: #856404 !important;
-    }
-  }
-
-  .custom-modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.4);
-    z-index: 9999;
-  }
-
-  .custom-modal-window {
-    background: #fff;
-    border-radius: 8px;
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-    user-select: none; /* 드래그 시 텍스트 선택 방지 */
-  }
-
-  .modal-header-dark {
-    background: #0f172a;
-    color: #fff;
-    padding: 10px 15px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  }
-
-  .cursor-move {
-    cursor: move;
-  }
-
-  .tpl-btn {
-    height: 32px;
-    padding: 0 16px;
-    border-radius: 4px;
-    font-weight: 500;
-    cursor: pointer;
-    &--primary {
-      background: #007bff;
-      color: #fff;
-      border: none;
-    }
-  }
-</style>
