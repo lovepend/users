@@ -1,65 +1,25 @@
-HTML
-<div class="h-auto mb-1 pt-1 text-white" :class="getBadgeClass(item.category)">
-  {{ item.category }}
-</div>
-수정 후 코드:
-
-HTML
-    <div class="h-auto mb-1 pt-1 text-white" :class="getBadgeClass(item.category)">
-      {{ ['오류', 'fixed', 'fix'].includes(String(item.category).toLowerCase()) ? 'FIX' : item.category }}
-    </div>
-    ```
-
----
-
-### 2. Script 영역 (배지 배경색 및 글자색 함수)
-
-배지 텍스트가 'FIX'로 바뀌거나 데이터가 'fix'로 들어와도 기존 '오류' 스타일(주황-빨강 그라데이션 및 빨간 글씨)이 깨지지 않고 정상 적용되도록 조건문 배열에 `'fix'`를 추가했습니다.
-
-#### ◼️ 배경색 클래스 함수 (`getBadgeClass`)
-*   **기존 코드:**
-    
-```typescript
-    const getBadgeClass = (category: any) => {
-      const c = String(category).toLowerCase()
-      if (['오류', 'fixed'].includes(c)) return 'badge bg-gradient-orange-red'
-      if (['기능개선', 'changed'].includes(c)) return 'badge bg-gradient-yellow-orange'
-      if (['신규기능', 'added'].includes(c)) return 'badge bg-gradient-teal-green'
-      return 'badge'
-    }
-    ```
-*   **수정 후 코드:**
-    
-```typescript
-    const getBadgeClass = (category: any) => {
-      const c = String(category).toLowerCase()
-      if (['오류', 'fixed', 'fix'].includes(c)) return 'badge bg-gradient-orange-red' // ← 'fix' 추가
-      if (['기능개선', 'changed'].includes(c)) return 'badge bg-gradient-yellow-orange'
-      if (['신규기능', 'added'].includes(c)) return 'badge bg-gradient-teal-green'
-      return 'badge'
-    }
-    ```
-
-#### ◼️ 글자색 클래스 함수 (`getBadgeTextColorClass`)
-*   **기존 코드:**
-    
-```typescript
-    const getBadgeTextColorClass = (category: any) => {
-      const c = String(category).toLowerCase()
-      if (['오류', 'fixed'].includes(c)) return 'text-danger'
-      if (['기능개선', 'changed'].includes(c)) return 'text-warning'
-      if (['신규기능', 'added'].includes(c)) return 'text-success'
-      return 'text-gray'
-    }
-    ```
-*   **수정 후 코드:**
-    
-```typescript
-    const getBadgeTextColorClass = (category: any) => {
-      const c = String(category).toLowerCase()
-      if (['오류', 'fixed', 'fix'].includes(c)) return 'text-danger' // ← 'fix' 추가
-      if (['기능개선', 'changed'].includes(c)) return 'text-warning'
-      if (['신규기능', 'added'].includes(c)) return 'text-success'
-      return 'text-gray'
-    }
-    ```
+AxiosError: Request failed with status code 504 (<html>
+<head><title>504 Gateway Time-out</title></head>
+<body>
+<center><h1>504 Gateway Time-out</h1></center>
+<hr><center>nginx/1.28.2</center>
+</body>
+</html>
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+<!-- a padding to disable MSIE and Chrome friendly error page -->
+)
+    at settle$1 (vendor.2026.5.21.17.54.js:48:242910)
+    at XMLHttpRequest.m (vendor.2026.5.21.17.54.js:48:248968)
+    at Axios.request (vendor.2026.5.21.17.54.js:48:261907)
+    at async Object.post (index.2026.5.21.17.54.js:1:16388)
+    at async index.2026.5.21.17.54.js:1:33576
+    at async nt (index.2026.5.21.17.54.js:1:16634)
+    at async lt.postUOMGet (index.2026.5.21.17.54.js:1:33558)
+    at async base-attribute.2026.5.21.17.54.js:1:15318
+    at async Object.getBaseInformation (base-attribute.2026.5.21.17.54.js:1:15190)
+    at async Object.setBaseCommon (base-common.2026.5.21.17.54.js:1:24838)
+    at async Fe (index.2026.5.21.17.5426.js:1:4566)
