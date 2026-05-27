@@ -1,25 +1,33 @@
-AxiosError: Request failed with status code 504 (<html>
-<head><title>504 Gateway Time-out</title></head>
-<body>
-<center><h1>504 Gateway Time-out</h1></center>
-<hr><center>nginx/1.28.2</center>
-</body>
-</html>
-<!-- a padding to disable MSIE and Chrome friendly error page -->
-<!-- a padding to disable MSIE and Chrome friendly error page -->
-<!-- a padding to disable MSIE and Chrome friendly error page -->
-<!-- a padding to disable MSIE and Chrome friendly error page -->
-<!-- a padding to disable MSIE and Chrome friendly error page -->
-<!-- a padding to disable MSIE and Chrome friendly error page -->
-)
-    at settle$1 (vendor.2026.5.21.17.54.js:48:242910)
-    at XMLHttpRequest.m (vendor.2026.5.21.17.54.js:48:248968)
-    at Axios.request (vendor.2026.5.21.17.54.js:48:261907)
-    at async Object.post (index.2026.5.21.17.54.js:1:16388)
-    at async index.2026.5.21.17.54.js:1:33576
-    at async nt (index.2026.5.21.17.54.js:1:16634)
-    at async lt.postUOMGet (index.2026.5.21.17.54.js:1:33558)
-    at async base-attribute.2026.5.21.17.54.js:1:15318
-    at async Object.getBaseInformation (base-attribute.2026.5.21.17.54.js:1:15190)
-    at async Object.setBaseCommon (base-common.2026.5.21.17.54.js:1:24838)
-    at async Fe (index.2026.5.21.17.5426.js:1:4566)
+🛠️ 실제 의심되는 상황과 해결 방법
+원인 1. 데이터 급증으로 인한 DB 병목 (가장 유력)
+postUOMGet이나 기초 정보를 가져오는 과정에서 조회해야 할 데이터양이 갑자기 많아졌거나, 인덱스(Index)가 타지 않아 DB 쿼리가 수십 초 이상 돌고 있을 가능성입니다.
+
+해결책: 백엔드 서버 로그를 열어 해당 API가 호출될 때 실행되는 SQL 쿼리를 확인하고, EXPLAIN 등을 통해 슬로우 쿼리(Slow Query)나 인덱스 누락이 없는지 체크해야 합니다.
+
+원인 2. Nginx의 타임아웃 설정이 너무 짧음
+서버가 정상적으로 열심히 일하고 있는데, 처리해야 할 양이 많아 Nginx가 지정한 시간보다 아주 조금 더 걸리는 경우입니다.
+
+해결책: Nginx 설정 파일(nginx.conf 또는 sites-available/default)에서 뒷단 서버와의 대기 시간을 늘려줍니다.
+
+Nginx
+location /api/ {
+    proxy_pass http://backend_server;
+    proxy_read_timeout 300s;  # 기존 설정보다 대폭 늘림 (예: 5분)
+    proxy_connect_timeout 300s;
+    proxy_send_timeout 300s;
+}
+    *설정을 바꾼 후 `nginx -s reload`로 반영해야 합니다.*
+
+#### 원인 3. 백엔드 애플리케이션의 교착 상태(Deadlock) 또는 무한 루프
+데이터를 파싱하거나 공통 코드를 매핑하는 프론트엔드/백엔드 로직(`setBaseCommon` 등) 어딘가에서 무한 루프가 돌거나, DB 커넥션 풀이 가득 차서 서버가 응답 불능 상태에 빠졌을 수 있습니다.
+*   **해결책:** 백엔드 서버가 살아있는지(Health Check), CPU 점유율이 100%를 치고 있지 않은지 확인하고 백엔드 프로세스를 재시작해 봅니다.
+
+---
+
+### 💡 요약 및 추천 조치 순서
+
+현재 프론트엔드 코드는 정상적으로 요청을 보냈기 때문에, 프론트 단을 고치기보다는 **백엔드/인프라 담당자에게 이 에러 로그를 전달**하셔야 합니다. 
+
+1.  **백엔드 에러 로그**에서 `postUOMGet` 처리 중 에러나 타임아웃이 났는지 확인
+2.  해당 API가 찌르는 **DB 쿼리의 속도** 확인
+3.  단순 시간 부족이라면 **Nginx의 `proxy_read_timeout`** 상향 조정
