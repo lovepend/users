@@ -1,7 +1,87 @@
-<recoveryLog xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
-<logFileName>error359840_01.xml</logFileName>
-<summary>'C:\Users\Z3100002\AppData\Local\Temp\MicrosoftEdgeDownloads\3b8a6069-84f1-449f-acc5-123d93bd39ca\131313.xlsx' 파일에 오류가 있습니다.</summary>
-<repairedParts>
-<repairedPart xml:space="preserve">복구된 요소: /xl/worksheets/sheet1.xml 요소 </repairedPart>
-</repairedParts>
-</recoveryLog>
+// UNIQUE 컬럼 정의 안의 editable 함수 수정
+field: 'UNIQUE',
+headerName: 'Unique',
+cellDataType: 'boolean',
+// ... 기존 속성 유지
+editable: params => {
+  // 프로젝트 권한 검사 기본 유지
+  if (!params.node || !params.data || params.data?.PROJ_NO !== currentProjNo.value) {
+    return false; [cite: 27]
+  }
+
+  // 부모 노드들을 위로 탐색하면서 UNIQUE가 true인 부모가 있는지 체크
+  let parent = params.node.parent;
+  while (parent) {
+    // 최상위 루트 노드 패스 조건 (ag-grid의 내부 root 노드 제외)
+    if (parent.level < 0) break; 
+
+    if (parent.data && parent.data.UNIQUE === true) {
+      // 부모 중 하나라도 UNIQUE가 true면 자식은 편집 불가 (false)
+      return false;
+    }
+    parent = parent.parent;
+  }
+  return true; // 상위에 체크된 부모가 없다면 편집 가능
+},
+
+
+
+
+
+
+
+
+// 자식 노드들을 재귀적으로 모두 true 처리하는 함수 (스크립트 내부에 선언)
+const updateChildNodesUnique = (node, isUniqueEnabled) => {
+  if (!node.childrenAfterGroup || !node.childrenAfterGroup.length) return;
+
+  node.childrenAfterGroup.forEach(childNode => {
+    if (childNode.data) {
+      if (isUniqueEnabled) {
+        // 1. 부모가 true가 되면 자식들은 강제로 true 체크
+        childNode.setDataValue('UNIQUE', true);
+        
+        // 2. 맨 앞 선택 컬럼에도 true 체크 처리 (Row 선택 활성화)
+        childNode.setSelected(true);
+      } else {
+        // 부모가 false가 되면 자식의 UNIQUE도 풀어줄지 유지할지 기획에 맞춰 선택 가능
+        // 만약 부모가 해제될 때 자식들도 같이 풀리게 하려면 아래 주석 해제:
+        // childNode.setDataValue('UNIQUE', false);
+      }
+    }
+    // 하위의 하위 자식까지 계속 탐색
+    updateChildNodesUnique(childNode, isUniqueEnabled);
+  });
+};
+
+
+
+
+
+checkbox.onclick = e => {
+  e.preventDefault()
+  e.stopPropagation()
+  if (!editable) { return; [cite: 36, 37] }
+
+  setTimeout(() => {
+    const newValue = !checkbox.checked; // 현재 체크 상태의 반대값
+    
+    // 1. 현재 선택한 본인 노드의 값을 바꿈
+    params.node.setDataValue(params.colDef.field, newValue); [cite: 37]
+    
+    // 본인이 선택(true)되면 본인 Row도 맨 앞 체크박스 true 처리
+    if (newValue) {
+      params.node.setSelected(true);
+    }
+
+    // 2. 하위 자식 노드들에게 전파 (재귀 함수 호출)
+    updateChildNodesUnique(params.node, newValue);
+
+    // 3. Grid 상태 새로고침 (editable 변경사항 반영을 위해 전체 리프레시)
+    params.api.refreshCells({ force: true });
+  }, 0);
+}
+
+
+
+
