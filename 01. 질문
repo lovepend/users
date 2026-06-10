@@ -85,3 +85,53 @@ checkbox.onclick = e => {
 
 
 
+
+// [추가] 하위 자식들을 재귀적으로 탐색하여 동시 변경하는 헬퍼 함수
+const updateChildNodesUnique = (node, isUniqueEnabled) => {
+  // ag-grid 트리 구조에서 자식 노드 배열을 가져옵니다.
+  if (!node.childrenAfterGroup || !node.childrenAfterGroup.length) return;
+
+  node.childrenAfterGroup.forEach(childNode => {
+    if (childNode.data) {
+      if (isUniqueEnabled) {
+        // 1. 부모가 true가 되면 자식들은 강제로 UNIQUE = true 설정
+        childNode.setDataValue('UNIQUE', true);
+        // 2. 맨 앞 선택 컬럼에도 true 체크 처리 (Row 선택 활성화)
+        childNode.setSelected(true);
+      } else {
+        // 부모가 false가 되면 자식들의 UNIQUE도 해제 처리 (기획에 맞춤)
+        childNode.setDataValue('UNIQUE', false);
+      }
+    }
+    // 하위 자식의 자식 노드까지 타고 내려가서 처리 (재귀 호출)
+    updateChildNodesUnique(childNode, isUniqueEnabled);
+  });
+};
+
+// [수정] 기존 UNIQUE 컬럼의 checkbox.onclick 이벤트 핸들러
+checkbox.onclick = e => {
+  e.preventDefault()
+  e.stopPropagation()
+  if (!editable) { return; }
+
+  setTimeout(() => {
+    const newValue = !checkbox.checked // 바뀔 체크박스 상태값
+    
+    // 1. 현재 클릭한 본인 노드의 UNIQUE 값을 변경
+    params.node.setDataValue(params.colDef.field, newValue);
+    
+    // 본인이 선택(true)되면 본인의 맨 앞 체크박스(Row 선택)도 true 처리
+    if (newValue) {
+      params.node.setSelected(true);
+    }
+
+    // 2. [핵심] 하위 자식 노드들을 추적해 전부 세팅해주는 함수 호출
+    updateChildNodesUnique(params.node, newValue);
+
+    // 3. 자식들의 editable 상태(활성/비활성)를 즉시 그리드에 반영하기 위해 리프레시
+    params.api.refreshCells({ force: true });
+  }, 0);
+}
+
+
+
