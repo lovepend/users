@@ -1,472 +1,325 @@
+다음 코드에서
+화면 좌우 슬플릿 해서 보여줄수 있겠어? 데이터를 양쪽에 Revisio 비교해서 뿌려줄거거든??
+
+<script setup>
+  import { shallowRef } from 'vue'
+  import { saveAs } from 'file-saver'
+  import GC from '@mescius/spread-sheets-designer'
+
+  import GCLangResKO from '@/lang/spread/spread_language_KO'
+  import GCLangResEN from '@/lang/spread/spread_language_EN'
+  import GCLangResJA from '@/lang/spread/spread_language_JA'
+  import GCLangResCN from '@/lang/spread/spread_language_CN'
+  window.GC = GC
+
+  /* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
+  import SpreadComboEditor from '@/components/editors/spreadJsEditor/SpreadComboEditor'
+  import SpreadComboTestEditor from '@/components/editors/spreadJsEditor/SpreadComboTestEditor'
+
+  import Switch from '@/components/default/editors/Switch.vue'
+  /* !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! */
+
+  const exportFileEncryptRef = shallowRef(true)
+  const DesignerRef = shallowRef(null)
+  const SpreadRef = shallowRef(null)
+  const initDesigner = function (designer) {
+    DesignerRef.value = designer
+    SpreadRef.value = designer.getWorkbook()
+  }
+
+  const _SpreadVersion = '18.0.7'
+  const DownloadTypeRef = shallowRef('KO')
+  const LanguageTypeRef = shallowRef('KO')
+  const _LangType = {
+    KO: 'KO',
+    EN: 'EN',
+    JA: 'JA',
+    CN: 'CN',
+  }
+
+  /**
+   * @description
+   * main.ts에 resource를 다운받고자 하는 언어로 import
+   * languageType을 동일 언어로 설정후 다운로드 실행
+   *
+   * 파일 가장위 버전으로 변경 여부 확인
+   */
+  const onDownloadLocaleResource = function () {
+    const languageType = DownloadTypeRef.value
+    if (!languageType || !_LangType[languageType]) {
+      return
+    }
+    try {
+      let version = _SpreadVersion
+      const spread = SpreadRef.value
+      if (spread) {
+        const spreadInfo = spread.toJSON()
+        const spreadVersion = spreadInfo?.version
+        if (spreadVersion) {
+          version = spreadVersion
+        }
+      }
+      const resource = GC.Spread.Sheets.Designer.getResources()
+      const resourceJson = JSON.stringify(resource)
+      let sourceJson = `const version = "${version}";`
+      sourceJson += `const locale = "${languageType}";`
+      sourceJson += 'export default ' + '`' + resourceJson + '`;'
+      switch (languageType) {
+        case _LangType.KO:
+          sourceJson = sourceJson.replaceAll('\\', '\\\\')
+          sourceJson = sourceJson.replaceAll('${', '&#36;{')
+          break
+        case _LangType.EN:
+          sourceJson = sourceJson.replaceAll('\\', '\\\\')
+          sourceJson = sourceJson.replaceAll('${', '&#36;{')
+          break
+        case _LangType.JA:
+          sourceJson = sourceJson.replaceAll('\\', '\\\\')
+          sourceJson = sourceJson.replaceAll('${', '&#36;{')
+          break
+        case _LangType.CN:
+          sourceJson = sourceJson.replaceAll('\\', '\\\\')
+          sourceJson = sourceJson.replaceAll('${', '&#36;{')
+          break
+        default:
+          return
+      }
+      saveAs(new Blob([sourceJson], { type: 'text/javascript;charset=utf-8' }), `spread_language_${languageType}.js`)
+    } catch (error) {
+      console.error(error)
+      alert(error.message)
+    }
+  }
+  const spreadLocalization = function (LOCALE) {
+    const _Locale = LOCALE
+    switch (_Locale) {
+      case 'KO':
+        GC.Spread.Sheets.Designer.setResources(JSON.parse(GCLangResKO))
+        GC.Spread.Common.CultureManager.culture('ko-kr')
+        break
+      case 'JA':
+        GC.Spread.Sheets.Designer.setResources(JSON.parse(GCLangResJA))
+        GC.Spread.Common.CultureManager.culture('ja-jp')
+        break
+      case 'CN':
+        GC.Spread.Sheets.Designer.setResources(JSON.parse(GCLangResCN))
+        GC.Spread.Common.CultureManager.culture('zh-cn')
+        break
+      case 'EN':
+        GC.Spread.Sheets.Designer.setResources(JSON.parse(GCLangResEN))
+        GC.Spread.Common.CultureManager.culture('en-us')
+        break
+      default:
+        GC.Spread.Sheets.Designer.setResources(JSON.parse(GCLangResEN))
+        GC.Spread.Common.CultureManager.culture('en-us')
+        break
+    }
+    return GC.Spread.Sheets.Designer.DefaultConfig
+  }
+  const onChangeLocale = function () {
+    const languageType = LanguageTypeRef.value
+    if (!languageType || !_LangType[languageType]) {
+      return
+    }
+
+    const config = spreadLocalization(languageType)
+    if (config) {
+      const designer = DesignerRef.value
+      designer.setConfig(config)
+    }
+  }
+
+  /////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
+  /////////////////////////////////////////////////////////////////////////////
+  const highlightFormulaRef = shallowRef()
+  const highlightRangesRef = shallowRef()
+  const keyRef = shallowRef(0)
+  const onReset = () => (keyRef.value += 1)
+  // prettier-ignore
+  const onDefault = function () {
+    const spread = SpreadRef.value
+    const sheet = spread?.getActiveSheet()
+    if (!sheet) { return; }
+    sheet.bind(GC.Spread.Sheets.Events.LeaveCell, function (e, args) {
+      const cell = args.sheet.getCell(args.row, args.col)
+      const cellType = cell.cellType()
+      if (cellType?.focusOut) {
+        cellType?.focusOut(args)
+      }
+    })
+    const cellType1 = new SpreadComboTestEditor({ showAllOptionButton: true, isPaintLabel: false, closeOnSelect: false, code: 'value', label: 'text', })
+    const cellType2 = new SpreadComboEditor({ showAllOptionButton: true, applySelected: false, placeholer: 'PLACE_HOLDER', code: 'code', label: 'label', })
+    const cellType3 = new SpreadComboEditor({ showAllOptionButton: true, deselectFromDropdown: true, multipleCheck: true, closeOnSelect: false, code: 'value', label: 'text', })
+    const cellType4 = new SpreadComboEditor({ showAllOptionButton: true, multiple: true, code: 'value', label: 'text', })
+    const cellType5 = new SpreadComboEditor({ showAllOptionButton: true, multiple: true, multipleCheck: true, closeOnSelect: false, code: 'value', label: 'text', })
+    const cellType6 = new SpreadComboEditor({ showAllOptionButton: true, treeSelect: true, code: 'value', label: 'text', })
+    const cellType7 = new SpreadComboEditor({ showAllOptionButton: true, treeSelect: true, multiple: true, code: 'value', label: 'text', })
+    const cellType8 = new SpreadComboEditor({ showAllOptionButton: true, treeSelect: true, multiple: true, multipleCheck: true, code: 'value', label: 'text', })
+    // cellType1.editorValueType(GC.Spread.Sheets.CellTypes.EditorValueType.value)
+    const items = [
+      { value: 'a_val', text: 'A_TEXT', code: 'a_code', label: 'A_LABEL', seq: 1, children:
+        [
+          { value: 'a_child_1_val', text: 'A_CHILD_1_TEXT', code: 'a_child_1_code', label: 'A_CHILD_1_LABEL', SEQ: 1 },
+          { value: 'a_child_2_val', text: 'A_CHILD_2_TEXT', code: 'a_child_2_code', label: 'A_CHILD_2_LABEL', SEQ: 2 },
+          { value: 'a_child_3_val', text: 'A_CHILD_3_TEXT', code: 'a_child_3_code', label: 'A_CHILD_3_LABEL', SEQ: 3 },
+        ],
+      },
+      { value: 'b_val', text: 'B_TEXT', code: 'b_code', label: 'B_LABEL', seq: 2, selectable: false, },
+      { value: 'c_val', text: 'C_TEXT', code: 'c_code', label: 'C_LABEL', seq: 3, selectable: false, children:
+        [
+          { value: 'c_child_1_val', text: 'C_CHILD_1_TEXT', code: 'c_child_1_code', label: 'C_CHILD_1_LABEL', SEQ: 1 },
+          { value: 'c_child_2_val', text: 'C_CHILD_2_TEXT', code: 'c_child_2_code', label: 'C_CHILD_2_LABEL', SEQ: 2 },
+          { value: 'c_child_3_val', text: 'C_CHILD_3_TEXT', code: 'c_child_3_code', label: 'C_CHILD_3_LABEL', SEQ: 3 },
+        ],
+      },
+      { value: 'd_val', text: 'D_TEXT', code: 'd_code', label: 'D_LABEL', seq: 4 },
+      { value: 'e_val', text: 'E_TEXT', code: 'e_code', label: 'E_LABEL', seq: 5, children:
+        [
+          { value: 'e_child_1_val', text: 'E_CHILD_1_TEXT', code: 'e_child_1_code', label: 'E_CHILD_1_LABEL', SEQ: 1 },
+          { value: 'e_child_2_val', text: 'E_CHILD_2_TEXT', code: 'e_child_2_code', label: 'E_CHILD_2_LABEL', SEQ: 2 },
+          { value: 'e_child_3_val', text: 'E_CHILD_3_TEXT', code: 'e_child_3_code', label: 'E_CHILD_3_LABEL', SEQ: 3 },
+        ],
+      },
+    ]
+    cellType1.items(items)
+    cellType2.items(items)
+    cellType3.items(items)
+    cellType4.items(items)
+    cellType5.items(items)
+    cellType6.items(items)
+    cellType7.items(items)
+    cellType8.items(items)
+    sheet.setColumnWidth(1, 140)
+    sheet.setColumnWidth(2, 140)
+    sheet.setColumnWidth(3, 140)
+    sheet.setColumnWidth(4, 140)
+    sheet.setColumnWidth(5, 140)
+    sheet.setColumnWidth(6, 140)
+    sheet.setColumnWidth(7, 140)
+    sheet.setColumnWidth(8, 140)
+    sheet.getCell(1, 1).hAlign(1)
+    sheet.getCell(1, 2).hAlign(1)
+    sheet.getCell(1, 3).hAlign(1)
+    sheet.getCell(1, 4).hAlign(1)
+    sheet.getCell(1, 5).hAlign(1)
+    sheet.getCell(1, 6).hAlign(1)
+    sheet.getCell(1, 7).hAlign(1)
+    sheet.getCell(1, 8).hAlign(1)
+    sheet.setValue(1, 1, 'BASE')
+    sheet.setValue(1, 2, 'CODE_LABEL')
+    sheet.setValue(1, 3, 'DESELECT')
+    sheet.setValue(1, 4, 'MULTIPLE')
+    sheet.setValue(1, 5, 'MULTI_CHECK')
+    sheet.setValue(1, 6, 'TREE')
+    sheet.setValue(1, 7, 'TREE_MULTIPLE')
+    sheet.setValue(1, 8, 'TREE_MULTI_CHECK')
+    sheet.getRange(2, 1, 10, 1).cellType(cellType1)
+    sheet.getRange(2, 2, 10, 1).cellType(cellType2)
+    sheet.getRange(2, 3, 10, 1).cellType(cellType3)
+    sheet.getRange(2, 4, 10, 1).cellType(cellType4)
+    sheet.getRange(2, 5, 10, 1).cellType(cellType5)
+    sheet.getRange(2, 6, 10, 1).cellType(cellType6)
+    sheet.getRange(2, 7, 10, 1).cellType(cellType7)
+    sheet.getRange(2, 8, 10, 1).cellType(cellType8)
+    // sheet.getCell(0, 0).cellType(cellType)
+    // sheet.getCell(0, 1).cellType(cellType)
+    // sheet.getCell(1, 0).cellType(cellType)
+    // sheet.getCell(1, 1).cellType(cellType)
+  }
+  const onWhite = function () {
+    const spread = SpreadRef.value
+    const sheet = spread?.getActiveSheet()
+    const ranges = sheet?.getSelections()
+    // prettier-ignore
+    const text = !ranges?.length ? '' : (
+      GC.Spread.Sheets.CalcEngine.rangesToFormula(
+        ranges,
+        0,
+        0,
+        GC.Spread.Sheets.CalcEngine.RangeReferenceRelative.allRelative,
+      )
+    )
+    sheet.setValue(0, 0, text)
+    sheet.setSelection(0, 0, 1, 1)
+  }
+  const onGray = function () {
+    const spread = SpreadRef.value
+    const sheet = spread?.getActiveSheet()
+    const row = sheet?.getActiveRowIndex()
+    const col = sheet?.getActiveColumnIndex()
+    const text = sheet?.getText(row, col)
+    // highlightFormulaRef.value = text
+    if (text) {
+      const allRange = GC.Spread.Sheets.CalcEngine.formulaToRanges(sheet, text, 0, 0)
+      highlightRangesRef.value = allRange?.[0]?.ranges
+    } else {
+      highlightRangesRef.value = null
+    }
+  }
+  const onPurple = function () {}
+  const onIndigo = function () {}
+  const onYellow = function () {}
+  const onPink = function () {}
+  const onGreen = function () {}
+  const onLime = function () {}
+  const onDark = function () {}
+  const onInfo = function () {}
+  const onWarning = function () {}
+  const onDanger = function () {}
+  const onSuccess = function () {}
+</script>
+
 <template>
-  <div class="template__page panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
-    <DefaultCard
-      :title="{ icon: 'fa-tags', title: 'Tag No 비교 분석', subtitle: '프로젝트 간 태그 정합성 체크' }"
-      class="w-100 h-100"
-    >
-      <template #header-right>
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-          <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap small">프로젝트</span>
-            <div class="dropdown">
-              <div class="ui-tag-tab-box" data-bs-toggle="dropdown" data-bs-auto-close="outside">
-                <span class="text-truncate">{{
-                  selectedProjects.length > 0 ? selectedProjects.join(', ') : '선택하세요'
-                }}</span>
-                <i class="fa fa-caret-down text-muted small"></i>
-              </div>
-              <ul
-                class="dropdown-menu p-2 shadow-lg"
-                style="max-height: 400px; overflow-y: auto; width: 350px; z-index: 1060"
-              >
-                <li class="px-2 pb-2 border-bottom mb-1">
-                  <input
-                    type="text"
-                    class="form-control form-control-sm"
-                    v-model="projectSearchKeyword"
-                    placeholder="검색..."
-                    @click.stop
-                  />
-                </li>
-                <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
-                  <label class="form-check-label d-flex align-items-center w-100 fw-bold cursor-pointer small">
-                    <input
-                      class="form-check-input me-2 mt-0"
-                      type="checkbox"
-                      :checked="isAllSelected"
-                      :indeterminate="isIndeterminate"
-                      @change="toggleAllSelection"
-                    />
-                    <span>전체 선택 / 해제</span>
-                  </label>
-                </li>
-                <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
-                  <label class="form-check-label d-flex align-items-center w-100 cursor-pointer small fw-normal">
-                    <input
-                      class="form-check-input me-2 mt-0"
-                      type="checkbox"
-                      :value="proj.PROJ_NO"
-                      v-model="selectedProjects"
-                    />
-                    <span class="text-primary">{{ proj.PROJ_NO }}</span>
-                    <small class="text-muted ms-1">({{ proj.DESC }})</small>
-                  </label>
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap small">조회 Keyword</span>
-            <input
-              type="text"
-              class="form-control form-control-sm"
-              style="width: 180px; height: 32px;"
-              v-model="searchKeyword"
-              placeholder="검색 키워드 입력..."
-              @keyup.enter="onSearch"
-            />
-          </div>
-
-          <button class="ui-tag-tab-search-btn" @click="onSearch" :disabled="selectedProjects.length === 0">
-            <i class="fa fa-search me-1"></i>조회
-          </button>
-
-          <div class="header-divider"></div>
-
-          <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
-            <input type="radio" class="btn-check" name="viewMode" id="modeSimple" value="simple" v-model="viewMode" />
-            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeSimple">간편 조회</label>
-            <input type="radio" class="btn-check" name="viewMode" id="modeDetail" value="detail" v-model="viewMode" />
-            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeDetail">상세 조회</label>
-          </div>
-
-          <div class="header-divider"></div>
-
-          <div class="d-flex align-items-center gap-2">
-            <span class="fw-bold text-dark text-nowrap small">결과 검색</span>
-            <textarea
-              class="ui-tag-tab-textarea shadow-sm"
-              v-model="attributeFilter"
-              rows="1"
-              placeholder="Tag No 입력 (엔터/쉼표)"
-            ></textarea>
-          </div>
-        </div>
-      </template>
-
-      <div class="grid-wrapper w-100 h-100">
-        <ag-grid-vue class="ag-theme-custom w-100 h-100" v-bind="gridOptions" @grid-ready="onGridReady" />
+  <div class="w-100 h-100" style="display: flex; flex-direction: column">
+    <div class="d-flex justify-content-between">
+      <label class="d-inline-block p-2 bg-indigo-200 me-2 h-35px">
+        <span class="me-2">Language </span>
+        <select v-model="LanguageTypeRef" @change="onChangeLocale">
+          <option :value="_LangType.KO">한국어</option>
+          <option :value="_LangType.EN">English</option>
+          <option :value="_LangType.JA">日本語</option>
+          <option :value="_LangType.CN">中文</option>
+        </select>
+      </label>
+      <label style="align-self: center; user-select: none">
+        <Switch label="Export With Encrypt" v-model:value="exportFileEncryptRef" />
+      </label>
+      <button class="btn btn-default" @click="onDefault">Default</button>
+      <button class="btn btn-white" @click="onWhite">White</button>
+      <button class="btn btn-gray" @click="onGray">Gray</button>
+      <button class="btn btn-purple" @click="onPurple">Purple</button>
+      <button class="btn btn-indigo" @click="onIndigo">Indigo</button>
+      <button class="btn btn-yellow" @click="onYellow">Yellow</button>
+      <button class="btn btn-pink" @click="onPink">Pink</button>
+      <button class="btn btn-green" @click="onGreen">Green</button>
+      <button class="btn btn-lime" @click="onLime">Lime</button>
+      <button class="btn btn-dark" @click="onDark">Dark</button>
+      <button class="btn btn-info" @click="onInfo">Info</button>
+      <button class="btn btn-warning" @click="onWarning">Warning</button>
+      <button class="btn btn-danger" @click="onDanger">Danger</button>
+      <button class="btn btn-success" @click="onSuccess">Success</button>
+      <button class="btn btn-primary" @click="onReset">Reset</button>
+      <div class="d-inline-block p-2 bg-indigo-200 h-35px">
+        <select v-model="DownloadTypeRef" class="me-2">
+          <option :value="_LangType.KO">한국어</option>
+          <option :value="_LangType.EN">English</option>
+          <option :value="_LangType.JA">日本語</option>
+          <option :value="_LangType.CN">中文</option>
+        </select>
+        <button class="p-0 px-2" style="font-size: 12px" @click="onDownloadLocaleResource">언어 리소스 다운로드</button>
       </div>
-    </DefaultCard>
+    </div>
+    <!-- highlightFormula: 사용 X -->
+    <gc-spread-designer
+      class="h-100"
+      @designer-initialized="initDesigner"
+      :key="keyRef"
+      :EXPORT_FILE_ENCRYPT="exportFileEncryptRef"
+      :highlightFormula="highlightFormulaRef"
+      :highlightRanges="highlightRangesRef"
+    />
   </div>
 </template>
 
-<script setup>
-  import { ref, computed, shallowRef, onMounted, watch } from 'vue'
-  import { useRoute } from 'vue-router'
-  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
-  import { sAlert } from '@/utils/messages/alert-common'
-  import DefaultCard from '@/components/default/DefaultCard.vue'
-  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
-
-  const route = useRoute()
-
-  // --- State ---
-  const projectList = ref([])
-  const projectSearchKeyword = ref('')
-  const selectedProjects = ref([])
-  const searchKeyword = ref('') // 백엔드 API 통신용 검색 키워드
-  const attributeFilter = ref('') // 화면 정렬/필터용 외부 텍스트필드
-  const viewMode = ref('simple')
-  const gridApi = shallowRef()
-  const gridRowData = ref([])
-  const dynamicCols = ref([])
-
-  const urlEpId = computed(() => route.query.ep_id || '')
-  const urlProjNo = computed(() => route.query.project_no || '')
-
-  // 조건에 따른 비교군 필드 세팅 정의
-  const COMPARE_FIELDS = computed(() => {
-    if (viewMode.value === 'simple') {
-      return ['CLS_ID']
-    }
-    return ['CLS_ID', 'TAG_IDX', 'TAG_DESC', 'EP_IC', 'EP_ID', 'DELETED']
-  })
-
-  // --- 프로젝트 동적 선택 연산 로직 ---
-  const filteredProjectList = computed(() => {
-    const kw = projectSearchKeyword.value.trim().toLowerCase()
-    return projectList.value.filter(
-      p => !kw || p.PROJ_NO?.toLowerCase().includes(kw) || p.DESC?.toLowerCase().includes(kw)
-    )
-  })
-
-  const isAllSelected = computed(
-    () =>
-      filteredProjectList.value.length > 0 &&
-      filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
-  )
-  const isIndeterminate = computed(() => {
-    const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
-    return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
-  })
-
-  const toggleAllSelection = e => {
-    const checked = e.target.checked
-    const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
-    selectedProjects.value = checked
-      ? [...new Set([...selectedProjects.value, ...filteredIds])]
-      : selectedProjects.value.filter(id => !filteredIds.includes(id))
-  }
-
-  onMounted(async () => {
-    try {
-      const res = await axiosWrapper.get('/api/Project/Get', {
-        headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value },
-      })
-      projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
-    } catch (e) {
-      console.error(e)
-    }
-  })
-
-  // --- 데이터 조회 및 Tag No 매핑/비교 분석 로직 ---
-  const onSearch = async () => {
-    if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
-    gridApi.value?.setGridOption('loading', true)
-    try {
-      const fetchPromises = selectedProjects.value.map(projNo =>
-        axiosWrapper
-          .post(
-            '/api/Data/SearchPublishData',
-            { Keyword: searchKeyword.value.trim(), ProjectNo: projNo },
-            { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
-          )
-          .catch(() => [])
-      )
-      const results = await Promise.all(fetchPromises)
-      const tagMap = new Map()
-
-      // 수집된 배열 데이터를 TAG_NO 단일 키 기준으로 취합 구조화
-      results.forEach((data, index) => {
-        const currentProjNo = selectedProjects.value[index]
-        if (Array.isArray(data)) {
-          data.forEach(item => {
-            if (!item.TAG_NO) return // 고유 식별자가 없는 행은 스킵
-            if (!tagMap.has(item.TAG_NO)) {
-              tagMap.set(item.TAG_NO, { TAG_NO: item.TAG_NO, projects: {} })
-            }
-            tagMap.get(item.TAG_NO).projects[currentProjNo] = {
-              EXIST: true,
-              CLS_ID: item.CLS_ID || '',
-              TAG_IDX: item.TAG_IDX ?? '',
-              TAG_DESC: item.TAG_DESC || '',
-              EP_IC: item.EP_IC || '',
-              EP_ID: item.EP_ID || '',
-              DELETED: item.DELETED ?? '',
-            }
-          })
-        }
-      })
-
-      // 각 로우 데이터 별 일치 여부 체크 가공 처리
-      const processedData = Array.from(tagMap.values()).map(row => {
-        let isDiff = Object.keys(row.projects).length !== selectedProjects.value.length
-        let diffDetails = []
-        if (isDiff) diffDetails.push('Exist')
-
-        COMPARE_FIELDS.value.forEach(field => {
-          const values = selectedProjects.value
-            .filter(p => row.projects[p])
-            .map(p => row.projects[p][field])
-          
-          if (new Set(values).size > 1) {
-            isDiff = true
-            diffDetails.push(field)
-          }
-        })
-
-        const resultRow = { 
-          TAG_NO: row.TAG_NO, 
-          CONDITION: isDiff ? 'Diff' : 'Pass', 
-          DIFF_INFO: diffDetails.join(', ') 
-        }
-
-        selectedProjects.value.forEach(p => {
-          resultRow[p] = row.projects[p] || { EXIST: false }
-        })
-        return resultRow
-      })
-
-      dynamicCols.value = [...selectedProjects.value]
-      gridRowData.value = processedData
-    } catch (e) {
-      sAlert.Error('조회 실패')
-    } finally {
-      gridApi.value?.setGridOption('loading', false)
-    }
-  }
-
-  // --- Ag Grid 설정 정의 ---
-  const setFilterParams = {
-    filters: [{ filter: 'agTextColumnFilter', filterParams: { debounceMs: 0 } }, { filter: 'agSetColumnFilter' }],
-  }
-
-  const columnDefs = computed(() => {
-    const cols = [
-      {
-        headerName: 'Condition',
-        field: 'CONDITION',
-        width: 110,
-        pinned: 'left',
-        filter: 'agMultiColumnFilter',
-        filterParams: setFilterParams,
-        cellStyle: p => ({
-          color: p.value === 'Diff' ? '#dc3545' : '#198754',
-          fontWeight: 'bold',
-          textAlign: 'center',
-          backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8',
-        }),
-      },
-      {
-        headerName: 'Diff Info',
-        field: 'DIFF_INFO',
-        width: 140,
-        pinned: 'left',
-        filter: 'agMultiColumnFilter',
-        filterParams: setFilterParams,
-        cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' },
-      },
-      {
-        headerName: 'Tag No',
-        field: 'TAG_NO',
-        width: 220,
-        pinned: 'left',
-        filter: 'agMultiColumnFilter',
-        filterParams: setFilterParams,
-      },
-    ]
-
-    dynamicCols.value.forEach(proj => {
-      const children = [
-        {
-          headerName: 'Exist',
-          valueGetter: p => (p.data[proj]?.EXIST ? 'Alive' : '-'),
-          width: 85,
-          filter: 'agMultiColumnFilter',
-          filterParams: setFilterParams,
-          cellStyle: { textAlign: 'center' },
-          cellRenderer: p =>
-            p.value === 'Alive'
-              ? `<i class="fa fa-check-circle text-success"></i>`
-              : `<span class="text-muted">-</span>`,
-        },
-        {
-          headerName: 'Class ID',
-          valueGetter: p => p.data[proj]?.CLS_ID,
-          width: 120,
-          filter: 'agMultiColumnFilter',
-          filterParams: setFilterParams,
-        }
-      ]
-
-      // 상세 조회 시 추가 컬럼 확장 구조 바인딩
-      if (viewMode.value === 'detail') {
-        children.push(
-          {
-            headerName: 'Tag Idx',
-            valueGetter: p => p.data[proj]?.TAG_IDX,
-            width: 90,
-            filter: 'agMultiColumnFilter',
-            filterParams: setFilterParams,
-          },
-          {
-            headerName: 'Tag Desc',
-            valueGetter: p => p.data[proj]?.TAG_DESC,
-            width: 150,
-            filter: 'agMultiColumnFilter',
-            filterParams: setFilterParams,
-          },
-          {
-            headerName: 'EP IC',
-            valueGetter: p => p.data[proj]?.EP_IC,
-            width: 90,
-            filter: 'agMultiColumnFilter',
-            filterParams: setFilterParams,
-          },
-          {
-            headerName: 'EP ID',
-            valueGetter: p => p.data[proj]?.EP_ID,
-            width: 90,
-            filter: 'agMultiColumnFilter',
-            filterParams: setFilterParams,
-          },
-          {
-            headerName: 'Deleted',
-            valueGetter: p => p.data[proj]?.DELETED,
-            width: 90,
-            filter: 'agMultiColumnFilter',
-            filterParams: setFilterParams,
-          }
-        )
-      }
-      cols.push({ headerName: proj, children })
-    })
-    return cols
-  })
-
-  const gridOptions = computed(() => ({
-    columnDefs: columnDefs.value,
-    rowData: gridRowData.value,
-    loadingOverlayComponent: AggridLoadingOverlay,
-    defaultColDef: { sortable: true, resizable: true, filter: true, floatingFilter: true, flex: 0 },
-    enableRangeSelection: true,
-    copyHeadersToClipboard: false,
-    rowSelection: 'multiple',
-    statusBar: {
-      statusPanels: [
-        { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'left' },
-        { statusPanel: 'agSelectedRowCountComponent', align: 'right' },
-      ],
-    },
-    isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
-    doesExternalFilterPass: node => {
-      const inputIds = attributeFilter.value
-        .split(/[\s,\n]+/)
-        .filter(id => id.trim() !== '')
-        .map(id => id.toLowerCase())
-      return (
-        inputIds.length === 0 ||
-        inputIds.some(id =>
-          String(node.data.TAG_NO || '')
-            .toLowerCase()
-            .includes(id)
-        )
-      )
-    },
-  }))
-
-  const onGridReady = p => {
-    gridApi.value = p.api
-  }
-
-  // 뷰모드나 결과검색 키워드 변경 감지 및 그리드 렌더 업데이트 리스너
-  watch(viewMode, () => {
-    gridApi.value?.setGridOption('columnDefs', columnDefs.value)
-  })
-  watch(attributeFilter, () => {
-    gridApi.value?.onFilterChanged()
-  })
-</script>
-
-<style scoped lang="scss">
-  .grid-wrapper {
-    flex: 1;
-    min-height: 0;
-    border-top: 1px solid #dee2e6;
-  }
-  .header-divider {
-    width: 1px;
-    height: 14px;
-    background-color: #dee2e6;
-    margin: 0 10px;
-  }
-  .ui-tag-tab-box {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    min-width: 250px;
-    height: 32px;
-    padding: 0 12px;
-    background-color: #fff;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    font-size: 0.8rem;
-    cursor: pointer;
-  }
-  .ui-tag-tab-search-btn {
-    height: 32px;
-    padding: 0 16px;
-    border-radius: 4px;
-    background-color: #007bff;
-    color: #fff;
-    border: none;
-    font-weight: 500;
-    font-size: 12px;
-    cursor: pointer;
-    &:hover {
-      background-color: #0056b3;
-    }
-  }
-  .ui-tag-tab-textarea {
-    width: 250px !important;
-    height: 32px;
-    padding: 5px 10px 5px 12px;
-    font-size: 0.8rem;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-    background-color: #fff;
-    resize: none;
-  }
-  .toggle-label {
-    border: none !important;
-    color: #6c757d;
-    font-weight: 600;
-    font-size: 0.75rem;
-    padding: 4px 14px;
-    cursor: pointer;
-  }
-  .btn-check:checked + .toggle-label {
-    background-color: #fff !important;
-    color: #0d6efd !important;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-  }
-  :deep(.ag-theme-custom) {
-    --ag-header-background-color: #f8f9fa;
-    .ag-header-group-cell {
-      font-weight: bold;
-      border-right: 1px solid #dee2e6 !important;
-    }
-  }
-</style>
+<style scoped></style>
