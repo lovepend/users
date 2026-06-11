@@ -1,137 +1,422 @@
-// UNIQUE 컬럼 정의 안의 editable 함수 수정
-field: 'UNIQUE',
-headerName: 'Unique',
-cellDataType: 'boolean',
-// ... 기존 속성 유지
-editable: params => {
-  // 프로젝트 권한 검사 기본 유지
-  if (!params.node || !params.data || params.data?.PROJ_NO !== currentProjNo.value) {
-    return false; [cite: 27]
+이번에는 프로젝트별 Tag No 비교할거야 
+
+/api/Attributes/Get 대신 /api/Data/SearchPublishData을 쓸꺼야
+프로젝트 선택은 같은데 그 뒤에 keyword 입력하는 UI 만들어서 입력된 값을 그대로 다시 payload에 전달하는 방식으로 할꺼야
+{ ContainDeleted: false, ProjectNo: projNo }, 대신에 아마도 { Keyword: 이건 UI에서 입력되는 값을 그대로 입력 해서 전달, ProjectNo: projNo },
+그리고 반환 되는 데이터를 비교해서 틀린값을 찾으면 되는거야 
+간편 조회 TAG_NO,CLS_ID 두개 보여주면 되고 
+상세 조회 눌렀을떄는 TAG_IDX,TAG_DESC,EP_IC,EP_ID,DELETED 보여주면 될것 같아
+이해했지? 
+아래가 원래는 attribute.vue였는데 여기서 수정해서 난 tagtab.vue로 쓸꺼야 
+
+
+<template>
+  <div class="template__page panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
+    <DefaultCard
+      :title="{ icon: 'fa-list', title: 'Attribute 비교 분석', subtitle: '프로젝트 간 속성 정합성 체크' }"
+      class="w-100 h-100"
+    >
+      <template #header-right>
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-dark text-nowrap small">프로젝트</span>
+            <div class="dropdown">
+              <div class="ui-tag-tab-box" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+                <span class="text-truncate">{{
+                  selectedProjects.length > 0 ? selectedProjects.join(', ') : '선택하세요'
+                }}</span>
+                <i class="fa fa-caret-down text-muted small"></i>
+              </div>
+              <ul
+                class="dropdown-menu p-2 shadow-lg"
+                style="max-height: 400px; overflow-y: auto; width: 350px; z-index: 1060"
+              >
+                <li class="px-2 pb-2 border-bottom mb-1">
+                  <input
+                    type="text"
+                    class="form-control form-control-sm"
+                    v-model="projectSearchKeyword"
+                    placeholder="검색..."
+                    @click.stop
+                  />
+                </li>
+                <li class="dropdown-item px-2 py-1 border-bottom mb-1 bg-light">
+                  <label class="form-check-label d-flex align-items-center w-100 fw-bold cursor-pointer small">
+                    <input
+                      class="form-check-input me-2 mt-0"
+                      type="checkbox"
+                      :checked="isAllSelected"
+                      :indeterminate="isIndeterminate"
+                      @change="toggleAllSelection"
+                    />
+                    <span>전체 선택 / 해제</span>
+                  </label>
+                </li>
+                <li v-for="proj in filteredProjectList" :key="proj.PROJ_NO" class="dropdown-item px-2 py-1">
+                  <label class="form-check-label d-flex align-items-center w-100 cursor-pointer small fw-normal">
+                    <input
+                      class="form-check-input me-2 mt-0"
+                      type="checkbox"
+                      :value="proj.PROJ_NO"
+                      v-model="selectedProjects"
+                    />
+                    <span class="text-primary">{{ proj.PROJ_NO }}</span>
+                    <small class="text-muted ms-1">({{ proj.DESC }})</small>
+                  </label>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <button class="ui-tag-tab-search-btn" @click="onSearch" :disabled="selectedProjects.length === 0">
+            <i class="fa fa-search me-1"></i>조회
+          </button>
+
+          <div class="header-divider"></div>
+
+          <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
+            <input type="radio" class="btn-check" name="viewMode" id="modeSimple" value="simple" v-model="viewMode" />
+            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeSimple">간편 조회</label>
+            <input type="radio" class="btn-check" name="viewMode" id="modeDetail" value="detail" v-model="viewMode" />
+            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeDetail">상세 조회</label>
+          </div>
+
+          <div class="header-divider"></div>
+
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-dark text-nowrap small">결과 검색</span>
+            <textarea
+              class="ui-tag-tab-textarea shadow-sm"
+              v-model="attributeFilter"
+              rows="1"
+              placeholder="ID 입력 (엔터/쉼표)"
+            ></textarea>
+          </div>
+        </div>
+      </template>
+
+      <div class="grid-wrapper w-100 h-100">
+        <ag-grid-vue class="ag-theme-custom w-100 h-100" v-bind="gridOptions" @grid-ready="onGridReady" />
+      </div>
+    </DefaultCard>
+  </div>
+</template>
+
+<script setup>
+  import { ref, computed, shallowRef, onMounted, watch } from 'vue'
+  import { useRoute } from 'vue-router'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import { sAlert } from '@/utils/messages/alert-common'
+  import DefaultCard from '@/components/default/DefaultCard.vue'
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+
+  const route = useRoute()
+
+  // --- State ---
+  const projectList = ref([])
+  const projectSearchKeyword = ref('')
+  const selectedProjects = ref([])
+  const attributeFilter = ref('')
+  const viewMode = ref('simple')
+  const gridApi = shallowRef()
+  const gridRowData = ref([])
+  const dynamicCols = ref([])
+
+  const urlEpId = computed(() => route.query.ep_id || '')
+  const urlProjNo = computed(() => route.query.project_no || '')
+  const COMPARE_FIELDS = ['DESC', 'VAL_TYPE', 'CL_ID']
+
+  // --- 프로젝트 선택 로직 (code.vue 기준 동기화) ---
+  const filteredProjectList = computed(() => {
+    const kw = projectSearchKeyword.value.trim().toLowerCase()
+    return projectList.value.filter(
+      p => !kw || p.PROJ_NO?.toLowerCase().includes(kw) || p.DESC?.toLowerCase().includes(kw)
+    )
+  })
+
+  const isAllSelected = computed(
+    () =>
+      filteredProjectList.value.length > 0 &&
+      filteredProjectList.value.every(p => selectedProjects.value.includes(p.PROJ_NO))
+  )
+  const isIndeterminate = computed(() => {
+    const selectedInFiltered = filteredProjectList.value.filter(p => selectedProjects.value.includes(p.PROJ_NO)).length
+    return selectedInFiltered > 0 && selectedInFiltered < filteredProjectList.value.length
+  })
+
+  const toggleAllSelection = e => {
+    const checked = e.target.checked
+    const filteredIds = filteredProjectList.value.map(p => p.PROJ_NO)
+    selectedProjects.value = checked
+      ? [...new Set([...selectedProjects.value, ...filteredIds])]
+      : selectedProjects.value.filter(id => !filteredIds.includes(id))
   }
 
-  // 부모 노드들을 위로 탐색하면서 UNIQUE가 true인 부모가 있는지 체크
-  let parent = params.node.parent;
-  while (parent) {
-    // 최상위 루트 노드 패스 조건 (ag-grid의 내부 root 노드 제외)
-    if (parent.level < 0) break; 
-
-    if (parent.data && parent.data.UNIQUE === true) {
-      // 부모 중 하나라도 UNIQUE가 true면 자식은 편집 불가 (false)
-      return false;
+  onMounted(async () => {
+    try {
+      const res = await axiosWrapper.get('/api/Project/Get', {
+        headers: { Projectno: urlProjNo.value, Ep_id: urlEpId.value },
+      })
+      projectList.value = Array.isArray(res) ? res.filter(p => p.USE_YN) : []
+    } catch (e) {
+      console.error(e)
     }
-    parent = parent.parent;
+  })
+
+  // --- 데이터 조회 로직 ---
+  const onSearch = async () => {
+    if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
+    gridApi.value?.setGridOption('loading', true)
+    try {
+      const fetchPromises = selectedProjects.value.map(projNo =>
+        axiosWrapper
+          .post(
+            '/api/Attributes/Get',
+            { ContainDeleted: false, ProjectNo: projNo },
+            { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
+          )
+          .catch(() => [])
+      )
+      const results = await Promise.all(fetchPromises)
+      const attrMap = new Map()
+
+      results.forEach((data, index) => {
+        const currentProjNo = selectedProjects.value[index]
+        if (Array.isArray(data))
+          data.forEach(item => {
+            if (!attrMap.has(item.ATT_ID)) attrMap.set(item.ATT_ID, { ATT_ID: item.ATT_ID, projects: {} })
+            attrMap.get(item.ATT_ID).projects[currentProjNo] = {
+              EXIST: true,
+              DESC: item.DESC || '',
+              VAL_TYPE: item.VAL_TYPE || '',
+              CL_ID: item.CL_ID || '',
+            }
+          })
+      })
+
+      const processedData = Array.from(attrMap.values()).map(row => {
+        let isDiff = Object.keys(row.projects).length !== selectedProjects.value.length
+        let diffDetails = []
+        if (isDiff) diffDetails.push('Exist')
+
+        COMPARE_FIELDS.forEach(field => {
+          const values = selectedProjects.value.filter(p => row.projects[p]).map(p => row.projects[p][field])
+          if (new Set(values).size > 1) {
+            isDiff = true
+            diffDetails.push(field)
+          }
+        })
+
+        const resultRow = { ATT_ID: row.ATT_ID, CONDITION: isDiff ? 'Diff' : 'Pass', DIFF_INFO: diffDetails.join(', ') }
+        selectedProjects.value.forEach(p => {
+          resultRow[p] = row.projects[p] || { EXIST: false }
+        })
+        return resultRow
+      })
+
+      dynamicCols.value = [...selectedProjects.value]
+      gridRowData.value = processedData
+    } catch (e) {
+      sAlert.Error('조회 실패')
+    } finally {
+      gridApi.value?.setGridOption('loading', false)
+    }
   }
-  return true; // 상위에 체크된 부모가 없다면 편집 가능
-},
 
+  // --- Ag Grid 설정 (기존 로직 유지 + UI 정합성) ---
+  const setFilterParams = {
+    filters: [{ filter: 'agTextColumnFilter', filterParams: { debounceMs: 0 } }, { filter: 'agSetColumnFilter' }],
+  }
 
+  const columnDefs = computed(() => {
+    const cols = [
+      {
+        headerName: 'Condition',
+        field: 'CONDITION',
+        width: 110,
+        pinned: 'left',
+        filter: 'agMultiColumnFilter',
+        filterParams: setFilterParams,
+        cellStyle: p => ({
+          color: p.value === 'Diff' ? '#dc3545' : '#198754',
+          fontWeight: 'bold',
+          textAlign: 'center',
+          backgroundColor: p.value === 'Diff' ? '#fff5f5' : '#f6fff8',
+        }),
+      },
+      {
+        headerName: 'Diff Info',
+        field: 'DIFF_INFO',
+        width: 140,
+        pinned: 'left',
+        filter: 'agMultiColumnFilter',
+        filterParams: setFilterParams,
+        cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' },
+      },
+      {
+        headerName: 'Attribute ID',
+        field: 'ATT_ID',
+        width: 200,
+        pinned: 'left',
+        filter: 'agMultiColumnFilter',
+        filterParams: setFilterParams,
+      },
+    ]
 
-
-
-
-
-
-// 자식 노드들을 재귀적으로 모두 true 처리하는 함수 (스크립트 내부에 선언)
-const updateChildNodesUnique = (node, isUniqueEnabled) => {
-  if (!node.childrenAfterGroup || !node.childrenAfterGroup.length) return;
-
-  node.childrenAfterGroup.forEach(childNode => {
-    if (childNode.data) {
-      if (isUniqueEnabled) {
-        // 1. 부모가 true가 되면 자식들은 강제로 true 체크
-        childNode.setDataValue('UNIQUE', true);
-        
-        // 2. 맨 앞 선택 컬럼에도 true 체크 처리 (Row 선택 활성화)
-        childNode.setSelected(true);
-      } else {
-        // 부모가 false가 되면 자식의 UNIQUE도 풀어줄지 유지할지 기획에 맞춰 선택 가능
-        // 만약 부모가 해제될 때 자식들도 같이 풀리게 하려면 아래 주석 해제:
-        // childNode.setDataValue('UNIQUE', false);
+    dynamicCols.value.forEach(proj => {
+      const children = [
+        {
+          headerName: 'Exist',
+          valueGetter: p => (p.data[proj]?.EXIST ? 'Alive' : '-'),
+          width: 90,
+          filter: 'agMultiColumnFilter',
+          filterParams: setFilterParams,
+          cellStyle: { textAlign: 'center' },
+          cellRenderer: p =>
+            p.value === 'Alive'
+              ? `<i class="fa fa-check-circle text-success"></i>`
+              : `<span class="text-muted">-</span>`,
+        },
+      ]
+      if (viewMode.value === 'detail') {
+        children.push(
+          {
+            headerName: 'Desc',
+            valueGetter: p => p.data[proj]?.DESC,
+            width: 150,
+            filter: 'agMultiColumnFilter',
+            filterParams: setFilterParams,
+          },
+          {
+            headerName: 'Type',
+            valueGetter: p => p.data[proj]?.VAL_TYPE,
+            width: 90,
+            filter: 'agMultiColumnFilter',
+            filterParams: setFilterParams,
+          },
+          {
+            headerName: 'Code',
+            valueGetter: p => p.data[proj]?.CL_ID,
+            width: 70,
+            filter: 'agMultiColumnFilter',
+            filterParams: setFilterParams,
+          }
+        )
       }
+      cols.push({ headerName: proj, children })
+    })
+    return cols
+  })
+
+  const gridOptions = computed(() => ({
+    columnDefs: columnDefs.value,
+    rowData: gridRowData.value,
+    loadingOverlayComponent: AggridLoadingOverlay,
+    defaultColDef: { sortable: true, resizable: true, filter: true, floatingFilter: true, flex: 0 },
+    enableRangeSelection: true,
+    copyHeadersToClipboard: false, // 헤더 복사 방지
+    rowSelection: 'multiple',
+    statusBar: {
+      statusPanels: [
+        { statusPanel: 'agTotalAndFilteredRowCountComponent', align: 'left' },
+        { statusPanel: 'agSelectedRowCountComponent', align: 'right' },
+      ],
+    },
+    isExternalFilterPresent: () => attributeFilter.value.trim() !== '',
+    doesExternalFilterPass: node => {
+      const inputIds = attributeFilter.value
+        .split(/[\s,\n]+/)
+        .filter(id => id.trim() !== '')
+        .map(id => id.toLowerCase())
+      return (
+        inputIds.length === 0 ||
+        inputIds.some(id =>
+          String(node.data.ATT_ID || '')
+            .toLowerCase()
+            .includes(id)
+        )
+      )
+    },
+  }))
+
+  const onGridReady = p => {
+    gridApi.value = p.api
+  }
+  watch(viewMode, () => {
+    gridApi.value?.setGridOption('columnDefs', columnDefs.value)
+  })
+  watch(attributeFilter, () => {
+    gridApi.value?.onFilterChanged()
+  })
+</script>
+
+<style scoped lang="scss">
+  .grid-wrapper {
+    flex: 1;
+    min-height: 0;
+    border-top: 1px solid #dee2e6;
+  }
+  .header-divider {
+    width: 1px;
+    height: 14px;
+    background-color: #dee2e6;
+    margin: 0 10px;
+  }
+  .ui-tag-tab-box {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    min-width: 250px; // code.vue 기준 250px로 변경
+    height: 32px;
+    padding: 0 12px;
+    background-color: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+  }
+  .ui-tag-tab-search-btn {
+    height: 32px;
+    padding: 0 16px;
+    border-radius: 4px;
+    background-color: #007bff;
+    color: #fff;
+    border: none;
+    font-weight: 500;
+    font-size: 12px;
+    cursor: pointer;
+    &:hover {
+      background-color: #0056b3;
     }
-    // 하위의 하위 자식까지 계속 탐색
-    updateChildNodesUnique(childNode, isUniqueEnabled);
-  });
-};
-
-
-
-
-
-checkbox.onclick = e => {
-  e.preventDefault()
-  e.stopPropagation()
-  if (!editable) { return; [cite: 36, 37] }
-
-  setTimeout(() => {
-    const newValue = !checkbox.checked; // 현재 체크 상태의 반대값
-    
-    // 1. 현재 선택한 본인 노드의 값을 바꿈
-    params.node.setDataValue(params.colDef.field, newValue); [cite: 37]
-    
-    // 본인이 선택(true)되면 본인 Row도 맨 앞 체크박스 true 처리
-    if (newValue) {
-      params.node.setSelected(true);
+  }
+  .ui-tag-tab-textarea {
+    width: 250px !important; // code.vue 기준 250px
+    height: 32px;
+    padding: 5px 10px 5px 12px; // code.vue 기준 패딩 조정
+    font-size: 0.8rem;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    background-color: #fff;
+    resize: none;
+  }
+  .toggle-label {
+    border: none !important;
+    color: #6c757d;
+    font-weight: 600;
+    font-size: 0.75rem;
+    padding: 4px 14px;
+    cursor: pointer;
+  }
+  .btn-check:checked + .toggle-label {
+    background-color: #fff !important;
+    color: #0d6efd !important;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+  :deep(.ag-theme-custom) {
+    --ag-header-background-color: #f8f9fa;
+    .ag-header-group-cell {
+      font-weight: bold;
+      border-right: 1px solid #dee2e6 !important;
     }
-
-    // 2. 하위 자식 노드들에게 전파 (재귀 함수 호출)
-    updateChildNodesUnique(params.node, newValue);
-
-    // 3. Grid 상태 새로고침 (editable 변경사항 반영을 위해 전체 리프레시)
-    params.api.refreshCells({ force: true });
-  }, 0);
-}
-
-
-
-
-
-// [추가] 하위 자식들을 재귀적으로 탐색하여 동시 변경하는 헬퍼 함수
-const updateChildNodesUnique = (node, isUniqueEnabled) => {
-  // ag-grid 트리 구조에서 자식 노드 배열을 가져옵니다.
-  if (!node.childrenAfterGroup || !node.childrenAfterGroup.length) return;
-
-  node.childrenAfterGroup.forEach(childNode => {
-    if (childNode.data) {
-      if (isUniqueEnabled) {
-        // 1. 부모가 true가 되면 자식들은 강제로 UNIQUE = true 설정
-        childNode.setDataValue('UNIQUE', true);
-        // 2. 맨 앞 선택 컬럼에도 true 체크 처리 (Row 선택 활성화)
-        childNode.setSelected(true);
-      } else {
-        // 부모가 false가 되면 자식들의 UNIQUE도 해제 처리 (기획에 맞춤)
-        childNode.setDataValue('UNIQUE', false);
-      }
-    }
-    // 하위 자식의 자식 노드까지 타고 내려가서 처리 (재귀 호출)
-    updateChildNodesUnique(childNode, isUniqueEnabled);
-  });
-};
-
-// [수정] 기존 UNIQUE 컬럼의 checkbox.onclick 이벤트 핸들러
-checkbox.onclick = e => {
-  e.preventDefault()
-  e.stopPropagation()
-  if (!editable) { return; }
-
-  setTimeout(() => {
-    const newValue = !checkbox.checked // 바뀔 체크박스 상태값
-    
-    // 1. 현재 클릭한 본인 노드의 UNIQUE 값을 변경
-    params.node.setDataValue(params.colDef.field, newValue);
-    
-    // 본인이 선택(true)되면 본인의 맨 앞 체크박스(Row 선택)도 true 처리
-    if (newValue) {
-      params.node.setSelected(true);
-    }
-
-    // 2. [핵심] 하위 자식 노드들을 추적해 전부 세팅해주는 함수 호출
-    updateChildNodesUnique(params.node, newValue);
-
-    // 3. 자식들의 editable 상태(활성/비활성)를 즉시 그리드에 반영하기 위해 리프레시
-    params.api.refreshCells({ force: true });
-  }, 0);
-}
-
-
-
+  }
+</style>
