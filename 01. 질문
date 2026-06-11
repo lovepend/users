@@ -1,19 +1,7 @@
-이번에는 프로젝트별 Tag No 비교할거야 
-
-/api/Attributes/Get 대신 /api/Data/SearchPublishData을 쓸꺼야
-프로젝트 선택은 같은데 그 뒤에 keyword 입력하는 UI 만들어서 입력된 값을 그대로 다시 payload에 전달하는 방식으로 할꺼야
-{ ContainDeleted: false, ProjectNo: projNo }, 대신에 아마도 { Keyword: 이건 UI에서 입력되는 값을 그대로 입력 해서 전달, ProjectNo: projNo },
-그리고 반환 되는 데이터를 비교해서 틀린값을 찾으면 되는거야 
-간편 조회 TAG_NO,CLS_ID 두개 보여주면 되고 
-상세 조회 눌렀을떄는 TAG_IDX,TAG_DESC,EP_IC,EP_ID,DELETED 보여주면 될것 같아
-이해했지? 
-아래가 원래는 attribute.vue였는데 여기서 수정해서 난 tagtab.vue로 쓸꺼야 
-
-
 <template>
   <div class="template__page panel panel-expandable m-0 p-0 h-100 d-flex flex-column bg-white">
     <DefaultCard
-      :title="{ icon: 'fa-list', title: 'Attribute 비교 분석', subtitle: '프로젝트 간 속성 정합성 체크' }"
+      :title="{ icon: 'fa-tags', title: 'Tag No 비교 분석', subtitle: '프로젝트 간 태그 정합성 체크' }"
       class="w-100 h-100"
     >
       <template #header-right>
@@ -68,6 +56,18 @@
             </div>
           </div>
 
+          <div class="d-flex align-items-center gap-2">
+            <span class="fw-bold text-dark text-nowrap small">조회 Keyword</span>
+            <input
+              type="text"
+              class="form-control form-control-sm"
+              style="width: 180px; height: 32px;"
+              v-model="searchKeyword"
+              placeholder="검색 키워드 입력..."
+              @keyup.enter="onSearch"
+            />
+          </div>
+
           <button class="ui-tag-tab-search-btn" @click="onSearch" :disabled="selectedProjects.length === 0">
             <i class="fa fa-search me-1"></i>조회
           </button>
@@ -89,7 +89,7 @@
               class="ui-tag-tab-textarea shadow-sm"
               v-model="attributeFilter"
               rows="1"
-              placeholder="ID 입력 (엔터/쉼표)"
+              placeholder="Tag No 입력 (엔터/쉼표)"
             ></textarea>
           </div>
         </div>
@@ -116,7 +116,8 @@
   const projectList = ref([])
   const projectSearchKeyword = ref('')
   const selectedProjects = ref([])
-  const attributeFilter = ref('')
+  const searchKeyword = ref('') // 백엔드 API 통신용 검색 키워드
+  const attributeFilter = ref('') // 화면 정렬/필터용 외부 텍스트필드
   const viewMode = ref('simple')
   const gridApi = shallowRef()
   const gridRowData = ref([])
@@ -124,9 +125,16 @@
 
   const urlEpId = computed(() => route.query.ep_id || '')
   const urlProjNo = computed(() => route.query.project_no || '')
-  const COMPARE_FIELDS = ['DESC', 'VAL_TYPE', 'CL_ID']
 
-  // --- 프로젝트 선택 로직 (code.vue 기준 동기화) ---
+  // 조건에 따른 비교군 필드 세팅 정의
+  const COMPARE_FIELDS = computed(() => {
+    if (viewMode.value === 'simple') {
+      return ['CLS_ID']
+    }
+    return ['CLS_ID', 'TAG_IDX', 'TAG_DESC', 'EP_IC', 'EP_ID', 'DELETED']
+  })
+
+  // --- 프로젝트 동적 선택 연산 로직 ---
   const filteredProjectList = computed(() => {
     const kw = projectSearchKeyword.value.trim().toLowerCase()
     return projectList.value.filter(
@@ -163,7 +171,7 @@
     }
   })
 
-  // --- 데이터 조회 로직 ---
+  // --- 데이터 조회 및 Tag No 매핑/비교 분석 로직 ---
   const onSearch = async () => {
     if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
     gridApi.value?.setGridOption('loading', true)
@@ -171,43 +179,60 @@
       const fetchPromises = selectedProjects.value.map(projNo =>
         axiosWrapper
           .post(
-            '/api/Attributes/Get',
-            { ContainDeleted: false, ProjectNo: projNo },
+            '/api/Data/SearchPublishData',
+            { Keyword: searchKeyword.value.trim(), ProjectNo: projNo },
             { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
           )
           .catch(() => [])
       )
       const results = await Promise.all(fetchPromises)
-      const attrMap = new Map()
+      const tagMap = new Map()
 
+      // 수집된 배열 데이터를 TAG_NO 단일 키 기준으로 취합 구조화
       results.forEach((data, index) => {
         const currentProjNo = selectedProjects.value[index]
-        if (Array.isArray(data))
+        if (Array.isArray(data)) {
           data.forEach(item => {
-            if (!attrMap.has(item.ATT_ID)) attrMap.set(item.ATT_ID, { ATT_ID: item.ATT_ID, projects: {} })
-            attrMap.get(item.ATT_ID).projects[currentProjNo] = {
+            if (!item.TAG_NO) return // 고유 식별자가 없는 행은 스킵
+            if (!tagMap.has(item.TAG_NO)) {
+              tagMap.set(item.TAG_NO, { TAG_NO: item.TAG_NO, projects: {} })
+            }
+            tagMap.get(item.TAG_NO).projects[currentProjNo] = {
               EXIST: true,
-              DESC: item.DESC || '',
-              VAL_TYPE: item.VAL_TYPE || '',
-              CL_ID: item.CL_ID || '',
+              CLS_ID: item.CLS_ID || '',
+              TAG_IDX: item.TAG_IDX ?? '',
+              TAG_DESC: item.TAG_DESC || '',
+              EP_IC: item.EP_IC || '',
+              EP_ID: item.EP_ID || '',
+              DELETED: item.DELETED ?? '',
             }
           })
+        }
       })
 
-      const processedData = Array.from(attrMap.values()).map(row => {
+      // 각 로우 데이터 별 일치 여부 체크 가공 처리
+      const processedData = Array.from(tagMap.values()).map(row => {
         let isDiff = Object.keys(row.projects).length !== selectedProjects.value.length
         let diffDetails = []
         if (isDiff) diffDetails.push('Exist')
 
-        COMPARE_FIELDS.forEach(field => {
-          const values = selectedProjects.value.filter(p => row.projects[p]).map(p => row.projects[p][field])
+        COMPARE_FIELDS.value.forEach(field => {
+          const values = selectedProjects.value
+            .filter(p => row.projects[p])
+            .map(p => row.projects[p][field])
+          
           if (new Set(values).size > 1) {
             isDiff = true
             diffDetails.push(field)
           }
         })
 
-        const resultRow = { ATT_ID: row.ATT_ID, CONDITION: isDiff ? 'Diff' : 'Pass', DIFF_INFO: diffDetails.join(', ') }
+        const resultRow = { 
+          TAG_NO: row.TAG_NO, 
+          CONDITION: isDiff ? 'Diff' : 'Pass', 
+          DIFF_INFO: diffDetails.join(', ') 
+        }
+
         selectedProjects.value.forEach(p => {
           resultRow[p] = row.projects[p] || { EXIST: false }
         })
@@ -223,7 +248,7 @@
     }
   }
 
-  // --- Ag Grid 설정 (기존 로직 유지 + UI 정합성) ---
+  // --- Ag Grid 설정 정의 ---
   const setFilterParams = {
     filters: [{ filter: 'agTextColumnFilter', filterParams: { debounceMs: 0 } }, { filter: 'agSetColumnFilter' }],
   }
@@ -254,9 +279,9 @@
         cellStyle: { fontSize: '11px', color: '#dc3545', fontWeight: 'bold' },
       },
       {
-        headerName: 'Attribute ID',
-        field: 'ATT_ID',
-        width: 200,
+        headerName: 'Tag No',
+        field: 'TAG_NO',
+        width: 220,
         pinned: 'left',
         filter: 'agMultiColumnFilter',
         filterParams: setFilterParams,
@@ -268,7 +293,7 @@
         {
           headerName: 'Exist',
           valueGetter: p => (p.data[proj]?.EXIST ? 'Alive' : '-'),
-          width: 90,
+          width: 85,
           filter: 'agMultiColumnFilter',
           filterParams: setFilterParams,
           cellStyle: { textAlign: 'center' },
@@ -277,27 +302,50 @@
               ? `<i class="fa fa-check-circle text-success"></i>`
               : `<span class="text-muted">-</span>`,
         },
+        {
+          headerName: 'Class ID',
+          valueGetter: p => p.data[proj]?.CLS_ID,
+          width: 120,
+          filter: 'agMultiColumnFilter',
+          filterParams: setFilterParams,
+        }
       ]
+
+      // 상세 조회 시 추가 컬럼 확장 구조 바인딩
       if (viewMode.value === 'detail') {
         children.push(
           {
-            headerName: 'Desc',
-            valueGetter: p => p.data[proj]?.DESC,
-            width: 150,
-            filter: 'agMultiColumnFilter',
-            filterParams: setFilterParams,
-          },
-          {
-            headerName: 'Type',
-            valueGetter: p => p.data[proj]?.VAL_TYPE,
+            headerName: 'Tag Idx',
+            valueGetter: p => p.data[proj]?.TAG_IDX,
             width: 90,
             filter: 'agMultiColumnFilter',
             filterParams: setFilterParams,
           },
           {
-            headerName: 'Code',
-            valueGetter: p => p.data[proj]?.CL_ID,
-            width: 70,
+            headerName: 'Tag Desc',
+            valueGetter: p => p.data[proj]?.TAG_DESC,
+            width: 150,
+            filter: 'agMultiColumnFilter',
+            filterParams: setFilterParams,
+          },
+          {
+            headerName: 'EP IC',
+            valueGetter: p => p.data[proj]?.EP_IC,
+            width: 90,
+            filter: 'agMultiColumnFilter',
+            filterParams: setFilterParams,
+          },
+          {
+            headerName: 'EP ID',
+            valueGetter: p => p.data[proj]?.EP_ID,
+            width: 90,
+            filter: 'agMultiColumnFilter',
+            filterParams: setFilterParams,
+          },
+          {
+            headerName: 'Deleted',
+            valueGetter: p => p.data[proj]?.DELETED,
+            width: 90,
             filter: 'agMultiColumnFilter',
             filterParams: setFilterParams,
           }
@@ -314,7 +362,7 @@
     loadingOverlayComponent: AggridLoadingOverlay,
     defaultColDef: { sortable: true, resizable: true, filter: true, floatingFilter: true, flex: 0 },
     enableRangeSelection: true,
-    copyHeadersToClipboard: false, // 헤더 복사 방지
+    copyHeadersToClipboard: false,
     rowSelection: 'multiple',
     statusBar: {
       statusPanels: [
@@ -331,7 +379,7 @@
       return (
         inputIds.length === 0 ||
         inputIds.some(id =>
-          String(node.data.ATT_ID || '')
+          String(node.data.TAG_NO || '')
             .toLowerCase()
             .includes(id)
         )
@@ -342,6 +390,8 @@
   const onGridReady = p => {
     gridApi.value = p.api
   }
+
+  // 뷰모드나 결과검색 키워드 변경 감지 및 그리드 렌더 업데이트 리스너
   watch(viewMode, () => {
     gridApi.value?.setGridOption('columnDefs', columnDefs.value)
   })
@@ -366,7 +416,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    min-width: 250px; // code.vue 기준 250px로 변경
+    min-width: 250px;
     height: 32px;
     padding: 0 12px;
     background-color: #fff;
@@ -390,9 +440,9 @@
     }
   }
   .ui-tag-tab-textarea {
-    width: 250px !important; // code.vue 기준 250px
+    width: 250px !important;
     height: 32px;
-    padding: 5px 10px 5px 12px; // code.vue 기준 패딩 조정
+    padding: 5px 10px 5px 12px;
     font-size: 0.8rem;
     border: 1px solid #dee2e6;
     border-radius: 4px;
