@@ -1,1 +1,21 @@
-=IFS(F2="-",50,F2<=50,50,F2>50,F2,TRUE,"OPE_TEMP 재확인")
+[{
+	"resource": "/d:/03. Dev/SEDP_Front_portal_dev/FrontEnd/src/views/common/test-compare/components/TagCompareTab.vue",
+	"owner": "eslint2",
+	"code": {
+		"value": "vue/no-template-shadow",
+		"target": {
+			"$mid": 1,
+			"path": "/rules/no-template-shadow.html",
+			"scheme": "https",
+			"authority": "eslint.vuejs.org"
+		}
+	},
+	"severity": 4,
+	"message": "Variable 'node' is already declared in the upper scope.",
+	"source": "eslint",
+	"startLineNumber": 87,
+	"startColumn": 28,
+	"endLineNumber": 87,
+	"endColumn": 32,
+	"origin": "extHost1"
+}]
