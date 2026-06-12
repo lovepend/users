@@ -96,6 +96,13 @@
             </div>
           </div>
 
+          <div class="btn-group p-1 bg-secondary bg-opacity-10 rounded-pill border" role="group">
+            <input type="radio" class="btn-check" name="dataMode" id="modePub" value="PUB" v-model="dataMode" />
+            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modePub">PUB</label>
+            <input type="radio" class="btn-check" name="dataMode" id="modeWork" value="WORK" v-model="dataMode" />
+            <label class="btn btn-sm rounded-pill px-3 toggle-label" for="modeWork">WORK</label>
+          </div>
+
           <button class="ui-tag-tab-search-btn" @click="onSearch" :disabled="selectedProjects.length === 0 || !selectedClassId">
             <i class="fa fa-search me-1"></i>조회
           </button>
@@ -145,10 +152,11 @@
   const projectSearchKeyword = ref('')
   const selectedProjects = ref([])
   
-  const rawClassList = ref([])      // 백엔드 수신 오리지널 일차원 배열
-  const classSearchKeyword = ref('') // 클래스 트리 필터용 검색어
-  const selectedClassId = ref('')   // 사용자가 클릭해서 활성화시킨 클래스 ID
+  const rawClassList = ref([])      
+  const classSearchKeyword = ref('') 
+  const selectedClassId = ref('')   
   
+  const dataMode = ref('PUB')        // PUB 또는 WORK 상태 관리용 밸류 변수 추가
   const attributeFilter = ref('')
   const viewMode = ref('simple')
   const gridApi = shallowRef()
@@ -164,7 +172,14 @@
       : ['CLS_ID', 'TAG_IDX', 'TAG_DESC', 'EP_IC', 'EP_ID', 'DELETED']
   })
 
-  // --- [1] 깔끔한 텍스트 트리 컴포넌트 재구성 (체크박스 완전 제거 및 들여쓰기 최적화) ---
+  // 데이터 모드 상태에 따른 동적 타겟 엔드포인트 URL 분기 처리식
+  const targetApiUrl = computed(() => {
+    return dataMode.value === 'PUB' 
+      ? '/api/Data/SearchPublishData' 
+      : '/api/Data/SearchWorkingData'
+  })
+
+  // --- [1] 순수 텍스트 트리 자식 노드 컴포넌트 구성 ---
   const TreeItem = defineComponent({
     name: 'TreeItem',
     props: {
@@ -191,17 +206,15 @@
 
         return h('div', { class: 'tree-item-node', style: { paddingLeft: '16px' } }, [
           h('div', { 
-            // 체크박스 없이 로우 한 칸을 시원하게 클릭 타겟으로 바인딩
             class: `tree-node-label d-flex align-items-center gap-1 py-1 my-1 rounded cursor-pointer transition-all ${
               isCurrentSelected ? 'bg-primary text-white px-2 fw-bold shadow-sm' : 'text-dark px-1'
             }`,
             onClick: selectNode
           }, [
-            // 자식이 있으면 토글 아이콘 배치, 없으면 정렬용 투명 공간 확보
             hasChildren 
               ? h('i', { 
                   class: `fa ${isOpen.value ? 'fa-caret-down' : 'fa-caret-right'} me-1 p-1 text-muted`, 
-                  style: { cursor: 'pointer', color: isCurrentSelected ? '#ffffff !important' : '' },
+                  style: { color: isCurrentSelected ? '#ffffff !important' : '' },
                   onClick: toggleOpen 
                 })
               : h('span', { style: { display: 'inline-block', width: '16px' } }),
@@ -227,7 +240,7 @@
     }
   })
 
-  // --- [2] 첫 번째 프로젝트 변경 시 클래스 리스트 실시간 조회 ---
+  // --- [2] 기준 프로젝트 변경에 따른 클래스 트리 갱신 ---
   const baseProjectNo = computed(() => selectedProjects.value[0] || '')
 
   const fetchObjectClassTree = async (projNo) => {
@@ -249,17 +262,15 @@
     fetchObjectClassTree(newProjNo)
   })
 
-  // --- [3] 상단 검색어 키워드 매칭 트리기반 필터 연산 파이프라인 ---
+  // --- [3] 검색 키워드 필터 트리기반 데이터 셋 변환 ---
   const filteredTreeData = computed(() => {
     const searchKw = classSearchKeyword.value.trim().toLowerCase()
     
-    // 1차원 데이터 계층 Map 셋업
     const map = {}
     rawClassList.value.forEach(item => {
       map[item.CLS_ID] = { ...item, children: [] }
     })
 
-    // 관계 매핑 연결 구조 정의
     const roots = []
     rawClassList.value.forEach(item => {
       const parentId = item.PRT_CLS_ID
@@ -272,7 +283,6 @@
 
     if (!searchKw) return roots
 
-    // 키워드가 존재할 경우 트리를 재귀 수색하며 노드 필터링 진행
     const filterTree = (nodes) => {
       return nodes
         .map(node => {
@@ -294,7 +304,7 @@
     selectedClassId.value = clsId
   }
 
-  // --- [4] 부모-자식 노드 계층 싹 다 추적해서 일원화하는 재귀 함수 ---
+  // --- [4] 클래스 자식 포함 다단계 하위 추출 재귀함수 ---
   const getAllChildClassIds = (targetId) => {
     const targetNode = rawClassList.value.find(c => c.CLS_ID === targetId)
     if (!targetNode) return [targetId]
@@ -312,7 +322,7 @@
     return [...new Set(collected)]
   }
 
-  // --- 프로젝트 선택 가공 처리단 ---
+  // --- 프로젝트 셀렉트 핸들링 구역 ---
   const filteredProjectList = computed(() => {
     const kw = projectSearchKeyword.value.trim().toLowerCase()
     return projectList.value.filter(
@@ -347,25 +357,22 @@
     }
   })
 
-  // --- [5] 태그 데이터 수집 대조 엔진 비즈니스 처리 파트 ---
+  // --- [5] 태그 데이터 통합 비동기 조회 코어 엔진 ---
   const onSearch = async () => {
     if (selectedProjects.value.length === 0) return sAlert.Warning('프로젝트를 선택하세요.')
     if (!selectedClassId.value) return sAlert.Warning('대조할 Object Class를 선택하세요.')
     
     gridApi.value?.setGridOption('loading', true)
-    
-    // 본인 클래스 포함 모든 연관 하위 자식 노드 배열 추출 (ex: ['A', 'B', 'C'])
     const allTargetClassIds = getAllChildClassIds(selectedClassId.value)
 
     try {
       const fetchPromises = []
 
-      // 각 프로젝트 별 하위 취합 클래스 아이디 리스트만큼 분기형 병렬 비동기 요청 예약 생성
       selectedProjects.value.forEach(projNo => {
         allTargetClassIds.forEach(clsId => {
           const promise = axiosWrapper
             .post(
-              '/api/Data/SearchPublishData',
+              targetApiUrl.value, // 동적 타겟 API 라우터 반영 적용
               { Keyword: clsId, ProjectNo: projNo },
               { headers: { Projectno: projNo, Ep_id: urlEpId.value } }
             )
@@ -609,7 +616,6 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   }
 
-  /* 클래스 트리 커스텀 UI 정렬 스타일 지정 */
   .tree-node-label {
     transition: all 0.15s ease-in-out;
     &:hover {
