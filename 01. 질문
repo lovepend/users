@@ -3,12 +3,26 @@
   headerName: 'EP',
   minWidth: 60,
   flex: 1,
-  editable: params => { ... },
+  editable: params => {
+    return projectPermissions.value.some(
+      el =>
+        isProjectAdmin.value ||
+        ((params.data.EP_ID === '' || el.EP_ID === params.data.EP_ID) && el.Role === 'Manager')
+    )
+  },
   cellEditor: 'agRichSelectCellEditor',
-  // 에디터가 열려있을 때 그리드 본체의 키보드 이벤트를 제어
-  suppressKeyboardEvent: params => {
-    // 편집 모드(editing)일 때는 그리드 자체의 위아래 이동 기본 동작을 막아줌
-    return params.editing; 
+  // 👇 이 부분을 반드시 추가해주셔야 키보드 위아래로 리스트 선택이 가능해집니다!
+  cellEditorParams: params => {
+    return {
+      // 1. 드롭다운 리스트에 보여줄 실제 데이터 배열 (본인 데이터에 맞게 매핑)
+      values: projectPermissions.value.map(el => el.EP_ID), 
+      
+      // 2. 중요: 에디터 팝업이 열릴 때 포커스를 리스트로 강제 이동시킵니다.
+      focusOnOpen: true, 
+      
+      // 3. 만약 리스트 안의 텍스트도 렌더링하고 싶다면 에디터용 렌더러 지정 (선택)
+      // cellRenderer: params => makeComboRender(params)
+    };
   },
   cellRenderer: params => makeComboRender(params),
-}
+},
