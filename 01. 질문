@@ -1,38 +1,30 @@
-cellEditorParams: params => {
-  return {
-    values: projectPermissions.value.map(el => el.EP_ID), 
-    focusOnOpen: true, 
-    // 👇 에디터 내부 아이템 렌더러에도 동일하게 지정하거나 ag-Grid 기본형을 따르게 합니다.
-    cellRenderer: params => makeComboRender(params) 
-  };
-},
-
-
-
-cellEditorParams: params => {
-  return {
-    values: projectPermissions.value.map(el => el.EP_ID), 
-    focusOnOpen: true,
-    
-    // 1. 혹시 내부 검색창 때문에 포커스가 씹히는 걸 방지하기 위해 검색 기능 꺼보기
-    searchDebounceDelay: 0, 
-    
-    // 2. 렌더러가 꼬이지 않도록 셀 에디터 전용 렌더러도 명시 (원인 1 해결)
-    cellRenderer: params => makeComboRender(params)
-  };
-},
-
-
-
-// 테스트용 코드로 잠깐 바꿔보세요
-{
-  field: 'EP_ID',
-  headerName: 'EP',
-  editable: true, // 테스트를 위해 심플하게 true
-  cellEditor: 'agRichSelectCellEditor',
-  cellEditorParams: {
-    values: ['Value1', 'Value2', 'Value3'], // 임시 하드코딩 데이터
-    focusOnOpen: true
-  },
-  // cellRenderer: params => makeComboRender(params), 👈 이 줄을 주석 처리하고 F2를 눌러보세요!
-}
+    {
+      field: 'INOUT',
+      headerName: 'In/Out',
+      suppressHeaderMenuButton: true,
+      editable: params => {
+        return projectPermissions.value.some(
+          el => isProjectAdmin.value || (el.EP_ID === selectedRegEp.value && el.Role === 'Manager')
+        )
+      },
+      flex: 0.8,
+      cellEditor: 'agRichSelectCellEditor',
+      cellEditorParams: function (params) {
+        return {
+          values: ['BOTH', 'IN', 'OUT'],
+          valueListGap: 5,
+          allowTyping: true,
+          filterList: true,
+          highlightMatch: true,
+          valueListMaxHeight: 220,
+        }
+      },
+      cellStyle: params => {
+        if (typeof params.data._id === 'string') {
+          if (params.data._id.indexOf('get_') > -1) {
+            return { backgroundColor: 'rgb(221 229 181 / 50%)' }
+          }
+        }
+        return null
+      },
+    },
