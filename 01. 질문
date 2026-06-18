@@ -1,30 +1,53 @@
-    {
-      field: 'INOUT',
-      headerName: 'In/Out',
-      suppressHeaderMenuButton: true,
-      editable: params => {
-        return projectPermissions.value.some(
-          el => isProjectAdmin.value || (el.EP_ID === selectedRegEp.value && el.Role === 'Manager')
-        )
-      },
-      flex: 0.8,
-      cellEditor: 'agRichSelectCellEditor',
-      cellEditorParams: function (params) {
-        return {
-          values: ['BOTH', 'IN', 'OUT'],
-          valueListGap: 5,
-          allowTyping: true,
-          filterList: true,
-          highlightMatch: true,
-          valueListMaxHeight: 220,
-        }
-      },
-      cellStyle: params => {
-        if (typeof params.data._id === 'string') {
-          if (params.data._id.indexOf('get_') > -1) {
-            return { backgroundColor: 'rgb(221 229 181 / 50%)' }
-          }
-        }
-        return null
-      },
-    },
+{
+  field: 'INOUT',
+  headerName: 'In/Out',
+  suppressHeaderMenuButton: true,
+  editable: params => {
+    return projectPermissions.value.some(
+      el => isProjectAdmin.value || (el.EP_ID === selectedRegEp.value && el.Role === 'Manager')
+    )
+  },
+  flex: 0.8,
+  cellEditor: 'agRichSelectCellEditor',
+  cellEditorParams: function (params) {
+    return {
+      values: ['BOTH', 'IN', 'OUT'],
+      valueListGap: 5,
+      allowTyping: true,
+      filterList: true,
+      highlightMatch: true,
+      valueListMaxHeight: 220,
+      // 👇 1. 에디터가 팝업될 때 리스트/입력창에 포커스를 확실하게 잡아줍니다.
+      focusOnOpen: true, 
+    }
+  },
+  cellStyle: params => {
+    if (typeof params.data._id === 'string') {
+      if (params.data._id.indexOf('get_') > -1) {
+        return { backgroundColor: 'rgb(221 229 181 / 50%)' }
+      }
+    }
+    return null
+  },
+  
+  // 👇 2. 이 이벤트를 추가하여 키보드 방향키 내비게이션을 보장합니다.
+  suppressKeyboardEvent: params => {
+    const { event, editing } = params;
+    
+    // 에디터 모드(편집 중)일 때만 작동하도록 제한
+    if (editing) {
+      const key = event.key;
+      
+      // 위/아래 방향키나 엔터키가 입력되었을 때
+      if (key === 'ArrowUp' || key === 'ArrowDown' || key === 'Enter') {
+        // ag-Grid 기본 그리드 셀 격자가 움직이는 이벤트를 중단시키고, 
+        // 키보드 이벤트를 콤보박스(리치 셀렉트) 팝업 내부로 온전히 전달합니다.
+        event.stopPropagation();
+        
+        // 그리드 자체 내비게이션을 막기 위해 true 리턴
+        return true; 
+      }
+    }
+    return false;
+  }
+},
