@@ -4,26 +4,48 @@
       minWidth: 160,
       flex: 2,
       editable: true,
-      cellDataType: 'object',
+      cellDataType: 'object', // 내부 데이터 타입을 object(배열)로 다루고 있음
       valueParser: params => {
-        // Start면 텍스트 그대로, 아니면 기존처럼 콤마 분리
-        return params.data.OPER === 'Start' ? params.newValue : (params.newValue ? params.newValue.split(',') : null)
+        const { newValue } = params
+        // ★ OPER가 Start일 때도 cellDataType이 object이므로 
+        // 텍스트를 배열 형태(['입력값'])로 감싸서 반환해야 안전합니다.
+        if (params.data.OPER === 'Start') {
+          return newValue ? [newValue.trim()] : null
+        }
+        return newValue ? newValue.split(',') : null
       },
       valueFormatter: params => {
-        // Start면 포맷팅 없이 문자열 그대로 출력
-        if (params.data.OPER === 'Start') return params.value
-        
+        // ★ OPER가 Start일 경우, 배열에 담긴 첫 번째 텍스트를 그대로 꺼내서 보여줍니다.
+        if (params.data.OPER === 'Start') {
+          return Array.isArray(params.value) ? params.value[0] : params.value
+        }
+
         const isPbsField = params.data.ATT_ID === 'ASSEMBLY_NAME' || params.data.ATT_ID === 'SYSTEM_NAME'
         if (isPbsField) {
-          if (!params.value || (typeof params.value === 'string' && params.value.trim() === '')) return ''
-          let tagIdxsToConvert = typeof params.value === 'string' ? params.value.split(',').map(item => item.trim()) : (Array.isArray(params.value) ? params.value.map(item => String(item).trim()) : [String(params.value).trim()])
-          const transformedCodes = tagIdxsToConvert.map(tagIdx => getCodeByTagIdx(tagIdx)).filter(code => code !== undefined && code !== null)
+          if (!params.value || (typeof params.value === 'string' && params.value.trim() === '')) {
+            return ''
+          }
+
+          let tagIdxsToConvert = []
+          if (typeof params.value === 'string') {
+            tagIdxsToConvert = params.value.split(',').map(item => item.trim())
+          } else if (Array.isArray(params.value)) {
+            tagIdxsToConvert = params.value.map(item => String(item).trim())
+          } else {
+            tagIdxsToConvert = [String(params.value).trim()]
+          }
+
+          const transformedCodes = tagIdxsToConvert
+            .map(tagIdx => getCodeByTagIdx(tagIdx))
+            .filter(code => code !== undefined && code !== null)
+
           return transformedCodes.join(', ')
         }
+
         return Array.isArray(params.value) ? params.value.join(', ') : params.value
       },
       cellEditorSelector: params => {
-        // ★ 핵심: OPER가 Start면 복잡한 리스트 조건 다 무시하고 텍스트 에디터 끝!
+        // OPER가 Start면 뒤쪽의 복잡한 콤보박스 데이터 추출 로직은 아예 실행 안 됨 (원하셨던 심플한 구조 적용)
         if (params.data.OPER === 'Start') {
           return { component: 'agTextCellEditor' }
         }
@@ -38,21 +60,36 @@
 
         let editorSourceData = []
         if (isPbsField) {
-          editorSourceData = Object.values(params.data.ATT_ID === 'ASSEMBLY_NAME' ? assemblyPbsComboData.value : systemPbsComboData.value).map(item => item.display)
+          if (params.data.ATT_ID === 'ASSEMBLY_NAME') {
+            editorSourceData = Object.values(assemblyPbsComboData.value).map(item => item.display)
+          } else if (params.data.ATT_ID === 'SYSTEM_NAME') {
+            editorSourceData = Object.values(systemPbsComboData.value).map(item => item.display)
+          }
         } else if (isEpField) {
           editorSourceData = epOfProjectCombo.value
         } else if (clIdExists) {
           editorSourceData = getValueFromCode(params.data.CL_ID)
+        } else {
+          editorSourceData = []
         }
 
         if ((isEpField || clIdExists || isPbsField) && operatorIsIN) {
-          let pvMapListData = isPbsField ? Object.values(params.data.ATT_ID === 'ASSEMBLY_NAME' ? assemblyPbsComboData.value : systemPbsComboData.value).map(item => item.display) : (isEpField ? epOfProjectCombo.value : getValueFromCode(params.data.CL_ID))
+          let pvMapListData = []
+          if (isPbsField) {
+            pvMapListData = Object.values(params.data.ATT_ID === 'ASSEMBLY_NAME' ? assemblyPbsComboData.value : systemPbsComboData.value).map(item => item.display)
+          } else if (isEpField) {
+            pvMapListData = epOfProjectCombo.value
+          } else if (clIdExists) {
+            pvMapListData = getValueFromCode(params.data.CL_ID)
+          }
+
           let initialPvMapValue = null
           if (params.value) {
             const tagIdxs = String(params.value).split(',').map(s => s.trim())
             const codes = tagIdxs.map(tagIdx => getCodeByTagIdx(tagIdx)).filter(c => c !== undefined && c !== null)
             initialPvMapValue = codes.join(',')
           }
+
           return {
             component: 'PvMapAttEditor',
             params: { listData: pvMapListData, isMultiple: true, isPushNew: true, placeholder: 'Select VALUE', value: initialPvMapValue },
@@ -81,18 +118,27 @@
           return true
         }
 
-        // ★ Start면 복잡한 맵핑/배열 변환 건너뛰고 입력값 그대로 저장 후 끝!
-        if (params.data.OPER === 'Start') {
-          params.data.VALUE = params.newValue
+        const { newValue, data } = params
+
+        // ★ OPER가 Start일 경우 valueParser가 정제해준 데이터 형식을 그대로 담고 통과
+        if (data.OPER === 'Start') {
+          data.VALUE = newValue
           return true
         }
 
-        const { newValue, data } = params
         const isPbsField = data.ATT_ID === 'ASSEMBLY_NAME' || data.ATT_ID === 'SYSTEM_NAME'
         let valueToStore = newValue
 
         if (isPbsField) {
-          let codesToConvert = typeof newValue === 'string' && newValue.trim() !== '' ? newValue.split(',').map(item => item.trim()) : (Array.isArray(newValue) ? newValue.map(item => String(item).trim()) : [])
+          let codesToConvert = []
+          if (typeof newValue === 'string' && newValue.trim() !== '') {
+            codesToConvert = newValue.split(',').map(item => item.trim())
+          } else if (Array.isArray(newValue)) {
+            codesToConvert = newValue.map(item => String(item).trim())
+          } else if (newValue === null || newValue === undefined) {
+            codesToConvert = []
+          }
+
           if (codesToConvert.length > 0) {
             const targetComboData = data.ATT_ID === 'ASSEMBLY_NAME' ? assemblyPbsComboData.value : systemPbsComboData.value
             const tagIdxArray = codesToConvert.map(code => {
@@ -112,9 +158,9 @@
         return true
       },
       cellRenderer: params => {
-        // ★ Start면 공통 콤보 렌더러(makeComboRender) 타지 않고 텍스트 노출
+        // ★ Start일 때는 콤보박스용 공통 렌더러(makeComboRender)를 거치지 않고 화면에 바로 드로잉
         if (params.data.OPER === 'Start') {
-          return params.value ? `<div>${params.value}</div>` : undefined
+          return params.valueFormatted ? `<div>${params.valueFormatted}</div>` : (params.value ? `<div>${params.value}</div>` : undefined)
         }
 
         const isEpField = params.data.ATT_ID === 'EP_IC' || params.data.ATT_ID === 'EP_ID'
@@ -129,7 +175,9 @@
       },
       cellRendererSelector: params => {
         const val_type = LinkedAttrListRef.value.find(elem => elem.ATT_ID == params.data.ATT_ID)?.VAL_TYPE
-        if (val_type === 'BOOL') return { component: 'agCheckboxCellRenderer' }
+        if (val_type === 'BOOL') {
+          return { component: 'agCheckboxCellRenderer' }
+        }
       },
       singleClickEdit: true,
     },
