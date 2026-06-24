@@ -1,3 +1,6 @@
+electron bulid 하면 아래와 같이 에러가 뜨는데 머가 원인이야?
+여기 내부망 쓰긴해서 그런거 같긴해
+
 S D:\Project\_test_elec> npm run build
 
 > my-electron-app@1.0.0 build
