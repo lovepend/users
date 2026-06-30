@@ -1,91 +1,80 @@
-import { defineConfig } from 'vite';
-import vue from '@vitejs/api-vue';
-import fs from 'fs';
-import path from 'path';
+/**
+ * @module stores/app-version-check
+ * @desc 배포 버전 확인용 Store ( Store기능 X - 버전 반복 확인용 )
+ */
 
-export default defineConfig({
-  plugins: [
-    vue(),
-    {
-      name: 'generate-version-json',
-      apply: 'build', // 빌드할 때만 실행
-      closeBundle() {
-        const versionData = { version: new Date().getTime().toString() }; // 타임스탬프를 버전으로 사용
-        fs.writeFileSync(
-          path.resolve(__dirname, 'dist/version.json'), // public 폴더가 아닌 빌드 완료 폴더에 생성
-          JSON.stringify(versionData)
-        );
-      }
+import { defineStore } from 'pinia'
+import { ref, readonly } from 'vue'
+
+export const useVersionCheck = defineStore('appVersionCheck', () => {
+  const isLocal = import.meta.env.MODE === 'development'
+  const version = ref(null)
+  const delayMin = 1000 * 60
+  const delayMax = 1000 * 60 * 5
+  let delayMS = delayMin
+  let interID = undefined as undefined | number
+  let isPend = false as boolean
+  let isStop = false as boolean
+  let isNews = true as boolean
+  const checkVersion = async function () {
+    if (isLocal) {
+      return
     }
-  ]
-});
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-<script setup>
-import { onMounted, onUnmounted, ref } from 'vue';
-
-const currentVersion = ref(null);
-const isAlerted = ref(false); // 알람을 딱 한 번만 띄우기 위한 플래그
-let versionCheckInterval = null;
-
-// 버전 체크 함수
-const checkVersion = async () => {
-  try {
-    // 브라우저 캐시를 방지하기 위해 쿼리스트링에 타임스탬프를 붙여 요청합니다.
-    const response = await fetch(`/version.json?v=${new Date().getTime()}`);
-    const data = await response.json();
-
-    if (!currentVersion.value) {
-      // 처음 접속했을 때는 현재 버전을 저장만 합니다.
-      currentVersion.value = data.version;
-      // 로컬 스토리지에 저장해서 세션 간 유지하고 싶다면 활용 가능합니다.
-      localStorage.setItem('app_version', data.version);
-    } else if (currentVersion.value !== data.version && !isAlerted.value) {
-      // 배포되어 버전이 바뀌었고, 아직 알람을 띄운 적이 없다면!
-      isAlerted.value = true;
-      clearInterval(versionCheckInterval); // 알람을 띄웠으니 더 이상 체크하지 않음
-
-      // 알람 띄우기 (직접 만든 Modal이나 UI 컴포넌트로 대체 가능)
-      if (confirm('새로운 버전이 배포되었습니다. 최신 화면으로 업데이트하시겠습니까?')) {
-        // 확인을 누르면 브라우저를 강제 새로고침하여 새 버전을 반영합니다.
-        window.location.reload(true);
+    isPend = true
+    window.clearInterval(interID)
+    try {
+      if (isNews) {
+        const res = await fetch('./build-meta.json')
+        const data = await res.json()
+        const newVersion = data.buildTime
+        const oldVersion = version.value
+        if (!oldVersion) {
+          isNews = true
+          version.value = newVersion
+        } else if (oldVersion !== newVersion) {
+          version.value = newVersion
+          const isRefresh = confirm('The new Version has been deployed. The page will now refresh.')
+          if (isRefresh) {
+            isNews = true
+            ;(location.reload as any)(true)
+          } else {
+            isNews = false
+          }
+        } else {
+          isNews = true
+          // console.log('Matching versions!', newVersion)
+        }
+        delayMS = isNews ? delayMin : delayMax
+      } else {
+        const isRefresh = confirm('The new Version has been deployed. The page will now refresh.')
+        if (isRefresh) {
+          isNews = true
+          ;(location.reload as any)(true)
+        }
       }
+    } catch (error) {
+      // console.warn('Failed to check versions!')
+      delayMS = delayMax
+    } finally {
+      if (!isStop) {
+        interID = window.setInterval(checkVersion, delayMS)
+      }
+      isPend = false
     }
-  } catch (error) {
-    console.error('버전 체크 중 오류 발생:', error);
   }
-};
-
-onMounted(() => {
-  // 앱에 접속하자마자 최초 1회 체크
-  checkVersion();
-
-  // 이후 5분(300000ms)마다 주기적으로 서버의 버전을 체크 (시간은 조절 가능)
-  versionCheckInterval = setInterval(checkVersion, 300000);
-});
-
-onUnmounted(() => {
-  // 컴포넌트 해제 시 인터벌 제거
-  if (versionCheckInterval) clearInterval(versionCheckInterval);
-});
-</script>
-
-<template>
-  <router-view />
-</template>
+  const stop = function () {
+    isStop = true
+    window.clearInterval(interID)
+  }
+  const start = function () {
+    if (!isPend) {
+      isStop = false
+      checkVersion()
+    }
+  }
+  return {
+    stop,
+    start,
+    version: readonly(version),
+  }
+})
