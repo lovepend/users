@@ -1,152 +1,20 @@
-{
-      field: 'VALUE',
-      headerName: 'VALUE',
-      minWidth: 160,
-      flex: 2,
-      editable: true,
-      cellDataType: 'object',
-      
-      // 1. cellEditor를 selector와 함께 동적 배치하여 캐시나 기본 컴포넌트 설정을 덮어씁니다.
-      cellEditor: params => {
-        return params.data.OPER === 'Start' ? 'agTextCellEditor' : undefined
-      },
+fetch('https://jsonplaceholder.typicode.com/posts/1')
+  .then(response => response.json())
+  .then(data => console.log(data))
+  .catch(error => console.error('에러 발생:', error));
 
-      valueParser: params => {
-        const { newValue } = params
-        if (params.data.OPER === 'Start') {
-          // 문자열인지 검사 후 배열로 래핑 (cellDataType: 'object' 대응)
-          return typeof newValue === 'string' ? [newValue.trim()] : (Array.isArray(newValue) ? newValue : null)
-        }
-        return newValue ? newValue.split(',') : null
-      },
 
-      valueFormatter: params => {
-        if (params.data.OPER === 'Start') {
-          return Array.isArray(params.value) ? params.value[0] : params.value
-        }
 
-        const isPbsField = params.data.ATT_ID === 'ASSEMBLY_NAME' || params.data.ATT_ID === 'SYSTEM_NAME'
-        if (isPbsField) {
-          if (!params.value || (typeof params.value === 'string' && params.value.trim() === '')) return ''
-          let tagIdxsToConvert = typeof params.value === 'string' ? params.value.split(',').map(item => item.trim()) : (Array.isArray(params.value) ? params.value.map(item => String(item).trim()) : [String(params.value).trim()])
-          const transformedCodes = tagIdxsToConvert.map(tagIdx => getCodeByTagIdx(tagIdx)).filter(code => code !== undefined && code !== null)
-          return transformedCodes.join(', ')
-        }
-        return Array.isArray(params.value) ? params.value.join(', ') : params.value
-      },
-
-      cellEditorSelector: params => {
-        // 2. 여기서 확실하게 타임아웃이나 리스트 관련 컴포넌트가 침범하지 못하도록 차단
-        if (params.data.OPER === 'Start') {
-          return { 
-            component: 'agTextCellEditor',
-            params: { useFormatter: false } // 포맷터 간섭 방지 옵션 추가
-          }
-        }
-
-        const val_type = LinkedAttrListRef.value.find(elem => elem.ATT_ID == params.data.ATT_ID)?.VAL_TYPE
-        if (val_type === 'BOOL') return undefined
-
-        const clIdExists = !!params.data.CL_ID
-        const operatorIsIN = params.data.OPER === 'IN'
-        const isEpField = params.data.ATT_ID === 'EP_IC' || params.data.ATT_ID === 'EP_ID'
-        const isPbsField = params.data.ATT_ID === 'ASSEMBLY_NAME' || params.data.ATT_ID === 'SYSTEM_NAME'
-
-        let editorSourceData = []
-        if (isPbsField) {
-          editorSourceData = Object.values(params.data.ATT_ID === 'ASSEMBLY_NAME' ? assemblyPbsComboData.value : systemPbsComboData.value).map(item => item.display)
-        } else if (isEpField) {
-          editorSourceData = epOfProjectCombo.value
-        } else if (clIdExists) {
-          editorSourceData = getValueFromCode(params.data.CL_ID)
-        }
-
-        if ((isEpField || clIdExists || isPbsField) && operatorIsIN) {
-          let pvMapListData = isPbsField ? Object.values(params.data.ATT_ID === 'ASSEMBLY_NAME' ? assemblyPbsComboData.value : systemPbsComboData.value).map(item => item.display) : (isEpField ? epOfProjectCombo.value : getValueFromCode(params.data.CL_ID))
-          let initialPvMapValue = null
-          if (params.value) {
-            const tagIdxs = String(params.value).split(',').map(s => s.trim())
-            const codes = tagIdxs.map(tagIdx => getCodeByTagIdx(tagIdx)).filter(c => c !== undefined && c !== null)
-            initialPvMapValue = codes.join(',')
-          }
-          return {
-            component: 'PvMapAttEditor',
-            params: { listData: pvMapListData, isMultiple: true, isPushNew: true, placeholder: 'Select VALUE', value: initialPvMapValue },
-          }
-        } else if (isEpField || clIdExists || isPbsField) {
-          return {
-            component: 'agRichSelectCellEditor',
-            params: {
-              values: editorSourceData,
-              valueListGap: 5,
-              allowTyping: true,
-              filterList: true,
-              highlightMatch: true,
-              valueListMaxHeight: 220,
-              formatValue: value => isPbsField ? (getCodeByTagIdx(value) || value) : value,
-            },
-          }
-        } else {
-          return { component: 'agTextCellEditor' }
-        }
-      },
-
-      valueSetter: params => {
-        const val_type = LinkedAttrListRef.value.find(elem => elem.ATT_ID == params.data.ATT_ID)?.VAL_TYPE
-        if (val_type === 'BOOL') {
-          params.data.VALUE = params.newValue
-          return true
-        }
-
-        if (params.data.OPER === 'Start') {
-          params.data.VALUE = params.newValue
-          return true
-        }
-
-        const { newValue, data } = params
-        const isPbsField = data.ATT_ID === 'ASSEMBLY_NAME' || data.ATT_ID === 'SYSTEM_NAME'
-        let valueToStore = newValue
-
-        if (isPbsField) {
-          let codesToConvert = typeof newValue === 'string' && newValue.trim() !== '' ? newValue.split(',').map(item => item.trim()) : (Array.isArray(newValue) ? newValue.map(item => String(item).trim()) : [])
-          if (codesToConvert.length > 0) {
-            const targetComboData = data.ATT_ID === 'ASSEMBLY_NAME' ? assemblyPbsComboData.value : systemPbsComboData.value
-            const tagIdxArray = codesToConvert.map(code => {
-              const found = Object.values(targetComboData).find(item => item.display === code)
-              return found ? found.value : code
-            })
-            valueToStore = tagIdxArray.join(',')
-          } else {
-            valueToStore = ''
-          }
-        }
-
-        if (typeof valueToStore === 'string') {
-          valueToStore = valueToStore.split(',').map(s => s.trim()).filter(s => s.length > 0).join(',')
-        }
-        data.VALUE = valueToStore
-        return true
-      },
-
-      cellRenderer: params => {
-        if (params.data.OPER === 'Start') {
-          return params.valueFormatted ? `<div>${params.valueFormatted}</div>` : (params.value ? `<div>${params.value}</div>` : undefined)
-        }
-
-        const isEpField = params.data.ATT_ID === 'EP_IC' || params.data.ATT_ID === 'EP_ID'
-        const isPbsField = params.data.ATT_ID === 'ASSEMBLY_NAME' || params.data.ATT_ID === 'SYSTEM_NAME'
-        const isCodeListField = params.data.CL_ID
-
-        if (isPbsField || isEpField || isCodeListField) {
-          return makeComboRender({ ...params, value: params.valueFormatted })
-        } else {
-          return params.value ? `<div>${params.value}</div>` : undefined
-        }
-      },
-
-      cellRendererSelector: params => {
-        const val_type = LinkedAttrListRef.value.find(elem => elem.ATT_ID == params.data.ATT_ID)?.VAL_TYPE
-        if (val_type === 'BOOL') return { component: 'agCheckboxCellRenderer' }
-      },
-      singleClickEdit: true,
-    },
+fetch('https://jsonplaceholder.typicode.com/posts', {
+  method: 'POST',
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    title: '테스트 제목',
+    body: '테스트 내용',
+    userId: 1
+  })
+})
+  .then(response => response.json())
+  .then(data => console.log('성공:', data));
