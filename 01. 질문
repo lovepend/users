@@ -1,3 +1,23 @@
+아래 알람 뜨는 원인이 머야   
+===============================
+const onCreateRows = function () {
+    if (!currentProjNo.value) {
+      sAlert.Warning(`Project를  선택해주세요`)
+    } else {
+      insertRows(1)
+    }
+  }
+
+  const onCreateMultiRows = function (rowCount) {
+    if (!currentProjNo.value) {
+      sAlert.Warning(`Project를  선택해주세요`)
+    } else {
+      insertRows(rowCount)
+    }
+  }
+===================================
+아래 코드 참고해서 찾아줘
+
 <template>
   <DefaultCard
     :title="{
