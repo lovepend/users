@@ -1,17 +1,577 @@
-// AS-IS: 프로젝트 선택 여부를 무조건 체크함
-const onCreateRows = function () {
-  if (!currentProjNo.value) {
-    sAlert.Warning(`Project를  선택해주세요`)
-  } else {
-    insertRows(1)
-  }
-}
-
-// TO-BE: 체크 조건을 지우고 바로 행 추가가 가능하도록 변경
-const onCreateRows = function () {
-  insertRows(1)
-}
-
-const onCreateMultiRows = function (rowCount) {
-  insertRows(rowCount)
+{
+    "MSEP_706": {
+        "PubData": [
+            {
+                "EP_ID": "MSEP",
+                "EP_IC": "MSEP",
+                "DELETED": false,
+                "DEL_USER": null,
+                "DEL_DTM": null,
+                "PROJ_NO": "SN2711",
+                "TAG_IDX": "69c4d5d08b26862ead40bccf",
+                "TAG_NO": "VA111",
+                "TAG_TYPE_ID": null,
+                "CLS_ID": "PIPE_CLAS",
+                "TAG_DESC": null,
+                "BF_TAG_NO": "",
+                "PIC_NO": "S13609",
+                "DSN_SKL": null,
+                "PRNT_TAG_IDX": null,
+                "DATA_SOURCE": "SEDH",
+                "MODIFY_DATA_SOURCE": "SEDH",
+                "ATTRIBUTES": [
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5011",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5247",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD0014",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD0015",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5228",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 1,
+                        "ATT_ID": "PD5229",
+                        "VALUE": "1"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5230",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5231",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5232",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5233",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5094",
+                        "VALUE": "F/S"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "CM2001",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 125,
+                        "ATT_ID": "PD5004",
+                        "VALUE": "125"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5005",
+                        "VALUE": "-"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5006",
+                        "VALUE": "-"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5007",
+                        "VALUE": "-"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5008",
+                        "VALUE": "Ⅲ"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5009",
+                        "VALUE": "-"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5010",
+                        "VALUE": "Working Cond."
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5015",
+                        "VALUE": "S25"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5021",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5022",
+                        "VALUE": "5K-SPP"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5023",
+                        "VALUE": "SPP"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5025",
+                        "VALUE": "Pipe Table"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5026",
+                        "VALUE": "AG"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5027",
+                        "VALUE": "AG"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5029",
+                        "VALUE": "-"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5092",
+                        "VALUE": "11. VENT, OVERFLOW & SOUNDING SYSTEM"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5093",
+                        "VALUE": "AIR VENT & OVERFLOW (OIL TANK OUTSIDE AND OTHERS)"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5095",
+                        "VALUE": "SS400"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5096",
+                        "VALUE": "5K"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5118",
+                        "VALUE": "≥100"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5202",
+                        "VALUE": "VA100-149"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5223",
+                        "VALUE": "OUTFITTING"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5224",
+                        "VALUE": "MACHINERY"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5225",
+                        "VALUE": "PIPING"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5226",
+                        "VALUE": "PIPING"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5242",
+                        "VALUE": "5K-SPP"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5243",
+                        "VALUE": "N"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5244",
+                        "VALUE": "N"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5245",
+                        "VALUE": "N"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5255",
+                        "VALUE": null
+                    }
+                ],
+                "CRTER_NO": "205806",
+                "CRTE_DTM": "2026-03-26T15:44:32+09:00",
+                "CHGER_NO": "52593271",
+                "CHGE_DTM": "2026-07-14T10:05:46.201+09:00",
+                "_id": "69c5f1858b26862ead55d729"
+            }
+        ],
+        "WrkData": [
+            {
+                "TAG_NO_PASSED": "Passed",
+                "NEW_YN": false,
+                "DEL_YN": false,
+                "EP_ID": "MSEP",
+                "EP_IC": "MSEP",
+                "DELETED": false,
+                "DEL_USER": null,
+                "DEL_DTM": null,
+                "PROJ_NO": "SN2711",
+                "TAG_IDX": "69c4d5d08b26862ead40bccf",
+                "TAG_NO": "VA111",
+                "TAG_TYPE_ID": null,
+                "CLS_ID": "PIPE_CLAS",
+                "TAG_DESC": null,
+                "BF_TAG_NO": "",
+                "PIC_NO": "S13609",
+                "DSN_SKL": null,
+                "PRNT_TAG_IDX": null,
+                "DATA_SOURCE": "EB",
+                "MODIFY_DATA_SOURCE": "SEDH",
+                "ATTRIBUTES": [
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "CM2001",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 125,
+                        "ATT_ID": "PD5004",
+                        "VALUE": "125"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5005",
+                        "VALUE": "-"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5006",
+                        "VALUE": "-"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5007",
+                        "VALUE": "-"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5008",
+                        "VALUE": "Ⅲ"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5009",
+                        "VALUE": "-"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5010",
+                        "VALUE": "Working Cond."
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5015",
+                        "VALUE": "S25"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5021",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5022",
+                        "VALUE": "5K-SPP"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5023",
+                        "VALUE": "SPP"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5025",
+                        "VALUE": "Pipe Table"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5026",
+                        "VALUE": "AG"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5027",
+                        "VALUE": "AG"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5029",
+                        "VALUE": "-"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5092",
+                        "VALUE": "11. VENT, OVERFLOW & SOUNDING SYSTEM"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5093",
+                        "VALUE": "AIR VENT & OVERFLOW (OIL TANK OUTSIDE AND OTHERS)"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5095",
+                        "VALUE": "SS400"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5096",
+                        "VALUE": "5K"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5118",
+                        "VALUE": "≥100"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5202",
+                        "VALUE": "VA100-149"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5223",
+                        "VALUE": "OUTFITTING"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5224",
+                        "VALUE": "MACHINERY"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5225",
+                        "VALUE": "PIPING"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5226",
+                        "VALUE": "PIPING"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5242",
+                        "VALUE": "5K-SPP"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5243",
+                        "VALUE": "N"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5244",
+                        "VALUE": "N"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5245",
+                        "VALUE": "N"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5255",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5011",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5247",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5228",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 1,
+                        "ATT_ID": "PD5229",
+                        "VALUE": "1"
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5230",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5231",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5232",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5233",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD0015",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD0014",
+                        "VALUE": null
+                    },
+                    {
+                        "UOM_ID": null,
+                        "VALUE_DBL": 0,
+                        "ATT_ID": "PD5094",
+                        "VALUE": "F/S"
+                    }
+                ],
+                "CRTER_NO": "205806",
+                "CRTE_DTM": "2026-03-26T15:44:32+09:00",
+                "CHGER_NO": "52593271",
+                "CHGE_DTM": "2026-07-14T10:11:22.595+09:00",
+                "_id": "69c4d5d08b26862ead40bcd7"
+            }
+        ],
+        "DiffData": [
+            {
+                "TAG_IDX": "69c4d5d08b26862ead40bccf",
+                "EP_ID": "MSEP",
+                "Status": "",
+                "EditType": "P",
+                "Property": [],
+                "ErrorMessage": "JoinValue Not Matched"
+            }
+        ]
+    }
 }
