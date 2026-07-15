@@ -1,577 +1,235 @@
-{
-    "MSEP_706": {
-        "PubData": [
-            {
-                "EP_ID": "MSEP",
-                "EP_IC": "MSEP",
-                "DELETED": false,
-                "DEL_USER": null,
-                "DEL_DTM": null,
-                "PROJ_NO": "SN2711",
-                "TAG_IDX": "69c4d5d08b26862ead40bccf",
-                "TAG_NO": "VA111",
-                "TAG_TYPE_ID": null,
-                "CLS_ID": "PIPE_CLAS",
-                "TAG_DESC": null,
-                "BF_TAG_NO": "",
-                "PIC_NO": "S13609",
-                "DSN_SKL": null,
-                "PRNT_TAG_IDX": null,
-                "DATA_SOURCE": "SEDH",
-                "MODIFY_DATA_SOURCE": "SEDH",
-                "ATTRIBUTES": [
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5011",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5247",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD0014",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD0015",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5228",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 1,
-                        "ATT_ID": "PD5229",
-                        "VALUE": "1"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5230",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5231",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5232",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5233",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5094",
-                        "VALUE": "F/S"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "CM2001",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 125,
-                        "ATT_ID": "PD5004",
-                        "VALUE": "125"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5005",
-                        "VALUE": "-"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5006",
-                        "VALUE": "-"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5007",
-                        "VALUE": "-"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5008",
-                        "VALUE": "Ⅲ"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5009",
-                        "VALUE": "-"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5010",
-                        "VALUE": "Working Cond."
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5015",
-                        "VALUE": "S25"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5021",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5022",
-                        "VALUE": "5K-SPP"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5023",
-                        "VALUE": "SPP"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5025",
-                        "VALUE": "Pipe Table"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5026",
-                        "VALUE": "AG"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5027",
-                        "VALUE": "AG"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5029",
-                        "VALUE": "-"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5092",
-                        "VALUE": "11. VENT, OVERFLOW & SOUNDING SYSTEM"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5093",
-                        "VALUE": "AIR VENT & OVERFLOW (OIL TANK OUTSIDE AND OTHERS)"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5095",
-                        "VALUE": "SS400"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5096",
-                        "VALUE": "5K"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5118",
-                        "VALUE": "≥100"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5202",
-                        "VALUE": "VA100-149"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5223",
-                        "VALUE": "OUTFITTING"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5224",
-                        "VALUE": "MACHINERY"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5225",
-                        "VALUE": "PIPING"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5226",
-                        "VALUE": "PIPING"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5242",
-                        "VALUE": "5K-SPP"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5243",
-                        "VALUE": "N"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5244",
-                        "VALUE": "N"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5245",
-                        "VALUE": "N"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5255",
-                        "VALUE": null
-                    }
-                ],
-                "CRTER_NO": "205806",
-                "CRTE_DTM": "2026-03-26T15:44:32+09:00",
-                "CHGER_NO": "52593271",
-                "CHGE_DTM": "2026-07-14T10:05:46.201+09:00",
-                "_id": "69c5f1858b26862ead55d729"
-            }
-        ],
-        "WrkData": [
-            {
-                "TAG_NO_PASSED": "Passed",
-                "NEW_YN": false,
-                "DEL_YN": false,
-                "EP_ID": "MSEP",
-                "EP_IC": "MSEP",
-                "DELETED": false,
-                "DEL_USER": null,
-                "DEL_DTM": null,
-                "PROJ_NO": "SN2711",
-                "TAG_IDX": "69c4d5d08b26862ead40bccf",
-                "TAG_NO": "VA111",
-                "TAG_TYPE_ID": null,
-                "CLS_ID": "PIPE_CLAS",
-                "TAG_DESC": null,
-                "BF_TAG_NO": "",
-                "PIC_NO": "S13609",
-                "DSN_SKL": null,
-                "PRNT_TAG_IDX": null,
-                "DATA_SOURCE": "EB",
-                "MODIFY_DATA_SOURCE": "SEDH",
-                "ATTRIBUTES": [
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "CM2001",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 125,
-                        "ATT_ID": "PD5004",
-                        "VALUE": "125"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5005",
-                        "VALUE": "-"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5006",
-                        "VALUE": "-"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5007",
-                        "VALUE": "-"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5008",
-                        "VALUE": "Ⅲ"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5009",
-                        "VALUE": "-"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5010",
-                        "VALUE": "Working Cond."
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5015",
-                        "VALUE": "S25"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5021",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5022",
-                        "VALUE": "5K-SPP"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5023",
-                        "VALUE": "SPP"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5025",
-                        "VALUE": "Pipe Table"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5026",
-                        "VALUE": "AG"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5027",
-                        "VALUE": "AG"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5029",
-                        "VALUE": "-"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5092",
-                        "VALUE": "11. VENT, OVERFLOW & SOUNDING SYSTEM"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5093",
-                        "VALUE": "AIR VENT & OVERFLOW (OIL TANK OUTSIDE AND OTHERS)"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5095",
-                        "VALUE": "SS400"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5096",
-                        "VALUE": "5K"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5118",
-                        "VALUE": "≥100"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5202",
-                        "VALUE": "VA100-149"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5223",
-                        "VALUE": "OUTFITTING"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5224",
-                        "VALUE": "MACHINERY"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5225",
-                        "VALUE": "PIPING"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5226",
-                        "VALUE": "PIPING"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5242",
-                        "VALUE": "5K-SPP"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5243",
-                        "VALUE": "N"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5244",
-                        "VALUE": "N"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5245",
-                        "VALUE": "N"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5255",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5011",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5247",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5228",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 1,
-                        "ATT_ID": "PD5229",
-                        "VALUE": "1"
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5230",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5231",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5232",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5233",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD0015",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD0014",
-                        "VALUE": null
-                    },
-                    {
-                        "UOM_ID": null,
-                        "VALUE_DBL": 0,
-                        "ATT_ID": "PD5094",
-                        "VALUE": "F/S"
-                    }
-                ],
-                "CRTER_NO": "205806",
-                "CRTE_DTM": "2026-03-26T15:44:32+09:00",
-                "CHGER_NO": "52593271",
-                "CHGE_DTM": "2026-07-14T10:11:22.595+09:00",
-                "_id": "69c4d5d08b26862ead40bcd7"
-            }
-        ],
-        "DiffData": [
-            {
-                "TAG_IDX": "69c4d5d08b26862ead40bccf",
-                "EP_ID": "MSEP",
-                "Status": "",
-                "EditType": "P",
-                "Property": [],
-                "ErrorMessage": "JoinValue Not Matched"
-            }
-        ]
-    }
-}
+#### common/layout/main/index.vue
+#### common/layout/main/components/AuthTestSwitch.vue
+#### common/layout/main/components/BackgroundVideo.vue
+#### common/layout/main/components/PermissionModal.vue
+#### common/layout/user-login/index.vue
+#### common/layout/user-login/QRCode.vue
+#### common/layout/user-login/ConsentRequiredModal.vue
+#### common/layout/my-page/index.vue
+#### common/layout/error/index.vue
+#### common/layout/error-ep/index.vue
+#### common/layout/error-menu/index.vue
+#### common/layout/error-project/index.vue
+#### common/layout/join-membership/index.vue
+#### common/calendar/index.vue
+#### common/ag-grid-wrapper/AgGridWrapper.vue
+#### common/docs-module/index.vue
+#### common/errorcode/index.vue
+#### common/helper-css/index.vue
+#### common/manuals/index.vue
+#### common/noData/index.vue
+#### common/noPermission/index.vue
+#### common/release-note/index.vue
+#### common/shortcut/index.vue
+#### common/spread-js-wrapper/SpreadJSDesignerWrapper.vue
+- **test-compare/index.vue** — 8개 비교탭 컨테이너, 알람 없음
+- **OtherCompareTab.vue** — 코드(Class/CL_ID) 프로젝트간 비교. 프로젝트미선택/조회실패 경고
+- **AttrCompareTab.vue** — Attribute 정합성 비교. 동일 패턴 경고
+- **ClassCompareTab.vue** — Object Class 정합성 비교. 동일 패턴
+- **CodeCompareTab.vue** — Code List 정합성 비교. 동일 패턴
+- **RegisterCompareTab.vue** — Register 정합성 비교. 동일 패턴
+- **TemplateCompareTab.vue** — Template 정합성 비교. 동일 패턴
+- **UOMCompareTab.vue** — NUMBER타입 속성의 UOM_ID 누락 대조. 동일 패턴+상세모달
+- **AdapterCompareTab.vue** — Adapter Data Mapping 차이 비교+상세모달(4서브탭). 프로젝트미선택 경고만
+- **TagCompareTab.vue** — Object Class 기준 Tag No 데이터 비교(PUB/WORK). 프로젝트/클래스 미선택 경고, 조회 에러
+- **test-tag/index.vue** — 5개 태그 테스트탭 컨테이너, 알람 없음
+- **TagTypeTab.vue** — TagType 규칙 실시간 검증 시뮬레이터. 알람 없음
+- **TagTab.vue** — Publish/Working 태그 통합조회+필터+상세모달. 프로젝트미선택/조회실패/Class정보로드실패 경고
+- **TestTab.vue** — GcSpread 디자이너 기본/비교모드 테스트화면. alert(네이티브, 언어리소스 다운로드 실패시)
+- **GMergeTab.vue** — Working/Publish/Merged 데이터 AG Grid 확인. 필수값미선택/데이터없음/조회완료/로드실패 안내
+- **SMergeTab.vue** — 동일 데이터를 GcSpread+세로상세뷰+담당자지정으로 관리. 동일 패턴 경고
+- **tab-manager/index.vue** — 메뉴별 동적탭(코드리스트/템플릿/스프레드시트/필터링탭/피벗탭) 조립+설정모달. 코드조회실패 경고, 프로젝트미선택 경고, 코드 전체공백시 타프로젝트 임포트 confirm, 탭구성없음 경고
+- **FilteringTabPage.vue** — 컬럼값 기준 필터링 그리드. 알람 없음(console.warn만)
+- **PivotTabPage.vue** — AG Grid 피벗/그룹핑 자동전환. 알람 없음
+- **SetTabsModal.vue** — 메뉴별 탭구성(DynamicData) 관리자 편집 모달. 조회실패 다수, 프로젝트미선택, 선택없음, 저장성공/실패, 중복이름 경고, 필수값 검증
+- **FilteringTab.vue** — Register 속성값별 필터링탭 자동생성. 탭구성없음 경고
+#### custom/linkPortal/components/CabinetItem.vue
+#### custom/linkPortal/components/CabinetList.vue
+#### custom/linkPortal/components/CabinetMarket.vue
+#### custom/linkPortal/components/FolderItem.vue, FolderSelect.vue
+#### custom/linkPortal/components/FormLayer.vue
+#### custom/linkPortal/components/GridView.vue
+#### custom/linkPortal/components/LinkContextMenu.vue, MarketCabinetItem.vue, MySharedCabinet.vue, LinkItem.vue
+#### custom/linkPortal/link-portal-basic/index.vue
+#### custom/linkPortal/link-portal-edit/index.vue
+#### custom/linkPortal/link-portal-setting/index.vue
+#### custom/linkPortal/link-portal-detail/index.vue
+- **mms-code-list/index.vue** — 코드리스트 관리 부모 컨테이너(탭+CodeSetup.vue). 알람: 프로젝트미선택, 코드전체공백시 타프로젝트 임포트 confirm, 조회실패
+- **mms-code-list/components/CodeCopyOtherProject.vue** — 타프로젝트 코드 복사 모달. 알람: 임포트성공, 조회실패(2곳)
+- **mms-code-list/components/CodeSetup.vue** — 코드값+LNK_ATT 동적컬럼 편집기(공통 재사용). 알람: 중복데이터없음, 중복이름, 프로젝트미선택, 조회실패, 선택없음(4곳), 저장데이터없음, 속성저장성공/실패, 검증실패, 저장실패, 값목록저장성공
+- **mms-setthickness-view/index.vue** — Pipe Min Thickness 코드리스트 탭관리. 알람: 방대 — 탭데이터없음/비어있음, 생성/복사/설명변경 성공/실패, 검증실패, 삭제(선택없음/부모참조중/확인/성공), 프로젝트미선택, 데이터없음, 조회실패
+- **mms-setthickness-view/components/MMS-SettingThicknessPage.vue** — CodeSetup.vue와 동일 패턴 벽두께 편집기. 알람: CodeSetup.vue와 동일 세트
+- **mms 공통 DescriptionCodesModal.vue** — 메뉴별 연결관리(동적데이터 Key/JSON 이중그리드). 알람: 탭명중복, 저장성공/실패, 저장대상없음, 프로젝트미선택(4곳), 조회실패
+- **mms-pipe-calreport-view/components/modal/SheetManageModal.vue** — 시트 활성/비활성 듀얼리스트. 알람: 삭제대상 비활성목록 이동 필요 경고
+- **mms 공통 CreateMmsReportFileBox.vue** — 생성 리포트파일을 문서관리 리비전에 업로드. 알람: DocNo미선택, 리비전값없음, PDF생성취소/실패, 저장성공, 리비전생성실패
+- **mms-grid-view/index.vue** — Branch Table 탭관리+PDF/DOCX 일괄생성. 알람: 방대(20개 이상) — 탭데이터없음, 생성/복사/설명변경 성공/실패, 검증실패, 삭제검증/확인/성공, 조회실패, 탭선택없음
+- **mms-grid-view/components/GridView-Page.vue** — Branch Table 탭 상세(BRLEGEND/PIPND/매트릭스 4연동그리드). 알람: 방대 — 중복데이터없음/중복이름, 초기생성실패(2곳), 조회실패, 프로젝트미선택(3곳), 선택없음, 검증실패(3곳), 저장성공/실패(다수)
+- **mms-desc-code-view-table/index.vue** — Description&Code 파생데이터 경량 뷰어(개발자 검증용). 알람: 조회실패(2곳)
+- **mms-desc-code-view/index.vue** — 전체기능판(GridTemplate 통합)+PDF보고서 생성. 알람: PDF대상미선택, 그리드미준비, 데이터없음, 문서생성오류, 조회실패(2곳)
+- **mms-pipe-calreport/index.vue** — 배관두께 계산리포트 탭컨테이너+통합엑셀/리포트저장. 알람: 조회실패(6곳), 프로젝트미선택(2곳), 항목미선택, 저장성공/실패(2곳), 엑셀다운로드 관련(alert)
+- **mms-pipe-calreport/components/PipeCalculationReportPage.vue** — 계산값을 SpreadJS 템플릿에 채움. 알람: 프로젝트미선택, 조회실패(2곳), 필수옵션(STARTCELL/SCHEDULE_COL/Min thickness) 누락(3곳)
+- **mms-pipe-calreport-view/index.vue** — 계산리포트 다중시트 조회+시트관리+통합Excel/PDF. 알람: 프로젝트미선택, 데이터없음(alert 2곳), 삭제선택안내, 영구삭제확인/성공, 업로드파일없음, 조회실패(2곳), 추출대상없음(다수)
+- **mms-pipe-calreport-view/components/PipeCalReportsViewPage.vue** — 개별 objClass 계산시트 렌더링. 알람: 업로드파일없음(2곳), 조회실패(2곳)
+- **mms-custom-grid-view/index.vue** — GridTemplate 래퍼+리포트조회/계산/파일관리/문서번호설정 툴바. 알람: 선택없음, 저장실패(용량초과 alert), 데이터없음(alert 2곳), 업로드파일없음(2곳), 조회실패, 디버그잔여 alert('test1')
+- **mms-custom-grid-view/components/DocumentNumberSetupModal.vue** — 프로젝트 문서번호 정보 입력폼. 알람: 저장성공/실패
+- **mms-custom-grid-view/components/ManageReportFiles.vue** — 리포트용 엑셀파일 관리(파일목록+속성매핑+SpreadJS). 알람: 방대 — 조회실패, 저장성공/실패, 선택없음, 프로젝트미선택(5곳), 파일선택필요(3곳), 중복검증, 임포트시 파일미선택
+- equip-modeling/testDocViewer.vue — 문서뷰어 테스트화면. 알람: sAlert import누락 버그 가능성
+- equip/components/CommonDocWrap.vue — 장비문서 편집/발췌·태그연결 팝업(Dolce 연동, PDFNet 병합). 알람: 선택없음/파일정보없음/저장실패 다수
+- equip/components/TeleportTooltip.vue — 툴팁 유틸. 알람 없음
+- equip/components/modal/ConnectEquipLinkTagsBox.vue — 연결대상 태그선택 모달. 알람: 선택없음, 조회실패(2곳)
+- equip/components/modal/CopyCatalogModal.vue — 타프로젝트 카탈로그 검색 모달. 알람: 필수값없음
+- equip-evcp/equip-modeling/equip-partlist index.vue (3파일 완전동일) — 장비마스터 그리드+S3D Cata Manager/PLM/Dolce 연동. 알람: 방대 — Cata Manager로드실패, 브로커조회실패, 필드매핑누락, 선택없음, 재신청불가, 신청실패, 연결제한 등
+- FileImportCellRenderer.vue — 파일업로드 셀렌더러. 알람 없음
+- index.vue — SPS 5탭(PIPING SPEC/PIPELINE/VALVE/VALVE COMPARE/SENSOR) 컨테이너. 알람 없음
+- components/modals/POSModal.vue — 포지션시트 템플릿 SpreadJS 편집. 알람: confirm(미저장/저장), 템플릿미선택(다수), 파일명검증, 저장성공/실패
+- components/modals/CheckListModal.vue — EP별 자동검증 규칙 설정. 알람: 선택없음, 비엑셀파일, 저장성공/실패, 옵션없음
+- components/modals/SpecNameModal.vue — Spec Name-Final 자동결정 규칙. 알람: 유사 패턴
+- components/SubPages.vue — SPS 5탭 실제 그리드+툴바(대형, ~4300줄). 알람: 방대 — 입력완료, 컬럼부재, 선택없음, 결재반영완료, PLM전송 성공/실패, Spec name 유효성 경고
+- components/modals/DevelopSetup.vue — SPS Admin Setup(탭순서/TAG BASE/메일컬럼 설정). 알람: 초기화안내, 변경없음, 조회/저장실패, 재조회/저장 확인, 성공
+- components/CableList.vue — 케이블 리스트(BOM/AM Length Load, Work/Publish비교). 알람: Work Scope 필수, 로드성공/실패, 비교성공/실패
+- index.vue — CSM 4탭 컨테이너+권한게이트. 알람 없음
+- components/EquipList.vue — 전장장비 리스트+Typical 자동생성. 알람: 선택없음, feeder누락, 참조데이터없음, 저장성공/실패
+- components/CableCategory.vue — 공종별 카테고리+PLM 자재코드 매핑. 알람: 방대 — 매핑정보없음, 취소, 완료, 실패, 필수값누락
+- components/TypicalSetup.vue — Elec/Inst Typical 템플릿 관리. 알람: 필수필드 검증(발행시)
+- components/modals/HierarchyTreeModal.vue — 카탈로그 계층트리 선택 모달. 알람: 인라인 에러텍스트(트리로드실패)
+- index.vue — 카탈로그/템플릿 신규·수정·삭제 요청 관리(대형, ~4200줄, AMCATA 브로커). 알람: 매우 방대 — 상태조회실패, 매핑실패, 필수필드누락, 선택없음, 타입불일치, 완료상태아님, 삭제확인/완료, 업로드실패
+- index.vue — GridTemplate 커스터마이징 데모(모달/사이드바 예시). 알람: 조회실패, 선택값없음, 예외메시지
+- board-file-setting/index.vue — 게시판 첨부파일 관리(정적 목업). 알람 없음
+- board-post-detail/index.vue — 좌 게시판트리+우 게시글상세 조합(로직없음)
+- board-post-preview/index.vue — 글쓰기폼 본문 미리보기 팝업(localStorage 기반 v-html)
+- board-post/index.vue — 글쓰기/수정/답글/메일전송 팝업 진입점(WritingForm 래퍼)
+- board-setting/index.vue — 게시판 설정(좌 BoardList+우 BoardManager, Splitter)
+- components/BoardTreeItem.vue — 게시판/폴더 트리 재귀 노드. 알람 없음
+- components/Comment.vue — 댓글/대댓글 표시·수정·삭제·답글. 알람: confirm(댓글 삭제)
+- components/CommentInput.vue — 댓글/답글 작성 입력창. 알람: alert(내용 미입력), alert(로그인 필요)
+- components/ForderInSelect.vue — 게시판 폴더이동 대상 선택 모달. 알람: alert(폴더 미선택)
+- components/CommentManager.vue — 내 댓글 관리(조회/일괄삭제). 알람: 삭제성공, 선택없음 Warning, confirm
+- components/PostManager.vue — 내 게시물 관리(조회/일괄삭제, 서버페이지네이션). 알람: 선택없음, confirm, 성공/실패
+- components/PostDetail.vue — 게시글 상세(본문/첨부/PDF·비디오뷰어/댓글), 수정·삭제·답글·메일전송 진입점. 알람: 비디오/뷰어 포함시 메일전송 불가 경고, 삭제 confirm/alert, 파일선택 저장 경고/실패
+- solution-board/components/SearchDetail.vue — 상세검색 필터 패널(조회로직 미구현). 알람 없음
+- solution-board/solution-board-list/index.vue — 문제등록 게시판 목록(하드코딩 목업, API 미연동). 알람 없음
+- board/index.vue — 일반 게시판 메인(좌 BoardList+우 PostList/PostDetail 동적전환). 알람 없음
+- components/BoardManager.vue — 게시판/폴더 상세설정 편집. 알람: 다수 인라인 검증 에러, 폴더중첩제한 안내, 저장성공 alert, 삭제 이중confirm
+- components/WritingForm.vue — 게시글 작성/수정/답글/메일전송 대형 팝업(Quill+비디오/PDF+첨부파일+메일수신자). 알람: 매우 방대(40개 이상) — 파일크기/개수/확장자 검증, 이미지/비디오/PDF 업로드 검증(DRM감지), 개인정보 노출 경고, 등록/수정/삭제/메일전송 성공·실패
+- board-post-setting/index.vue — PostManager+CommentManager 조합
+- components/BoardInSelect.vue — 게시글 이동대상 게시판 선택 모달. 알람: 게시판 미선택 경고
+- components/BoardList.vue — 좌측 게시판/폴더 트리(탐색+관리자 재정렬/폴더이동). 알람: 게시판 미선택/폴더만 가능/미저장 이동제한 경고
+- components/MailingForm.vue — 단체메일링 팝업(권한그룹 트리 사용자 선택). 알람: 선택없음 에러, 권한그룹 조회실패 에러
+- components/PostList.vue — 게시판 게시글 목록(검색/정렬/공지고정/커스텀필드/이동/글쓰기). 알람: 이동대상 미선택 경고
+#### main/report/kpi-dashboard/index.vue
+#### main/report/report-dashboard-data/index.vue
+#### main/report/report-progress/index.vue
+#### main/report/report-batch-setup/index.vue
+#### main/report/report-consistency-summary/index.vue
+#### main/report/report-validation/index.vue
+#### main/report/report-validation-data/index.vue
+#### main/report/report-validation-data-detail/index.vue
+#### main/report/report-validation-schema/index.vue
+#### main/report/tag-validation/index.vue
+#### main/report/report-mls-todo (index.vue, LeftPanel, RightPanel, todoList/TodoList, components/calendar/*)
+#### main/report/report-mls-attribute/index.vue
+#### main/report/report-mls-mail-setup/index.vue
+#### main/report/report-milestone/report-milestone-attribute/index.vue
+#### main/report/report-milestone/report-milestone-mail-setup/index.vue
+#### main/report/report-milestone/report-milestone-register/index.vue
+#### main/report/report-milestone/report-milestone-todo/(index.vue, LeftPanel, RightPanel, TodoList)
+#### main/milestone/milestone-setup/index.vue
+조선 엔지니어링 데이터 포털의 "기준정보(마스터 데이터) 설정" 영역. 프로젝트별 속성(Attribute)·코드(Code)·객체클래스(Object Class)·관계(Relation)·단위(UOM)·태그타입(Tag Type)·사전(Dictionary)·커스텀페이지(Dynamic Data)·리비전(Revision) 정의를 관리자가 CRUD. 대부분 index.vue(컨테이너)→components/XxxSetup.vue(메인그리드)→XxxNav.vue(하위탭) 구조, index_ORG_*.vue는 구버전 백업. 공통: _STATUS(New/Mod/Del) 뱃지, 변경셀 하이라이트, Ctrl+S, 중복/필수값 검증+sAlert, 삭제확인.
+- index.vue — 컨테이너(좌 AttributeSetup+우 AttributeNav). 알람 없음
+- index_ORG_260120.vue — 구버전 단일화면. 알람: 다수(프로젝트미선택/중복/정규식오류/삭제/검증/저장)
+- components/AttributeCode.vue — 연결코드값 조회전용 탭. 알람: 조회실패
+- components/AttributeNav.vue — 탭 내비게이션. 알람 없음
+- components/AttributeRefer.vue — 참조(Register/Class/TagType) 패널. 알람: 조회실패(3곳)
+- components/AttributeSetup.vue — Attribute 마스터그리드(핵심). 알람: 방대 — 시스템예약어사용중, 중복, 정규식오류, 숫자타입값오류, 삭제확인/성공, 검증실패다수, 저장성공/실패
+- index.vue — 컨테이너(좌 CodeSetup+우 CodeNav). 알람 없음
+- index_ORG_260119.vue — 구버전 2분할화면. 알람: 매우방대(중복/필수값/속성모달검증/저장/삭제 다수)
+- components/CodeNav.vue — 탭 내비게이션. 알람 없음
+- components/CodeRefer.vue — 참조(Attribute/Project Revision) 패널. 알람: 조회실패(2곳)
+- components/CodeSetup.vue — Code 마스터그리드. 알람: 부모코드사용중삭제불가, 삭제확인, 검증실패, 저장, 중복, 미저장이동확인
+- components/CodeValues.vue — 코드값+동적속성컬럼 그리드. 알람: 상위미선택, 삭제, 값중복, 조합중복, 속성관리모달검증 다수
+- index_ORG_260225.vue — 구버전(Code+Value+JSON에디터 단일화면). 알람: 방대(프로젝트미선택/중복/검증/저장/삭제)
+- components/CustompageDataJson.vue — JSON 에디터. 알람 없음
+- components/CustompageDataMain.vue — 값목록+JSON에디터 컨테이너. 알람 없음
+- components/CustompageData.vue — 값목록(KEY/JSON) 관리. 알람: 상위미선택, 삭제, 값중복
+- components/CustompageSetup.vue — Name(Code) 목록 좌측그리드. 알람: 조회/삭제/저장실패, 검증실패(변수 미정의 버그 가능성), 미저장이동확인, 중복
+- index.vue — 컨테이너. 알람 없음
+- components/DictionaryValuesMain.vue — 값목록+JSON에디터 컨테이너. 알람 없음
+- components/DictionaryValueJson.vue — JSON 에디터. 알람 없음
+- index_ORG_260225.vue — 구버전. 알람: "한번 생성된 키는 수정 불가" 안내, 중복, 검증, 저장/삭제
+- components/DictionarySetup.vue — Key 목록 좌측그리드(신규). 알람: 미저장이동확인, 프로젝트미선택, 생성프롬프트, 검증실패, 저장/삭제
+- components/DictionaryValues.vue — 값목록. 알람: 상위미선택, 삭제, 값중복
+- index.vue — 컨테이너. 알람 없음
+- index.vue — 컨테이너(신규). 알람 없음
+- index_ORG_260205.vue — 구버전 단일화면. 알람: 매우방대(생성/삭제/검증/OOTB제약 등)
+- components/ObjectClassRefer.vue — 참조(Register/Adapter/Relation) 패널. 알람: Adapter조회실패
+- components/ObjectClassNav.vue — 탭 내비게이션. 알람 없음
+- components/ObjectClassLnkAtt.vue — 연결속성 그리드. 알람: 상위미선택, 삭제, 예약어/미존재속성/중복 거부, 그룹추가검증
+- components/ObjectClassSetup.vue — Class 계층 트리 마스터그리드(핵심). 알람: 매우방대 — 부모선택/생성프롬프트, OOTB제약, 하위존재/Register·Relation할당 삭제차단, 검증다수, 프로젝트간생성확인, 저장
+- index.vue — 컨테이너(신규). 알람 없음
+- index_ORG_260205.vue — 구버전. 알람: 방대(중복/삭제/검증/저장)
+- components/RelationSetup.vue — Relation 마스터그리드(신규). 알람: 생성/삭제/검증(Relation ID·Class ID·설명 필수)/저장/중복
+- index.vue — 컨테이너(신규, 좌 UomSetup 75%+우 UomRefer 25%). 알람 없음
+- index_ORG_230120.vue — 구버전. 알람: 방대(형식검증/중복/저장/삭제, "Tag Type" 문구 오류 버그)
+- components/UomSetup.vue — UOM 마스터그리드. 알람: 형식검증(UOM_ID/GROUP), 프로젝트미선택, 삭제, 검증, Group+SYMBOL조합중복, 저장
+- components/UomRefer.vue — 참조(Attribute/Register/Class) 패널. 알람: sAlert import 누락 버그(런타임오류 가능성)
+- index.vue — 4분할 컨테이너(RevisionRevs/Vers/Project/Reason). 알람 없음
+- components/RevisionReason.vue — Reason코드값 읽기전용. 알람: 조회실패
+- components/RevisionRevs.vue — Revision번호 관리. 알람: 삭제(발행이력없을때만), 검증, 저장/중복
+- components/RevisionVers.vue — Version 관리(Revs와 거의 동일). 알람: 동일 패턴(변수 오타 버그 존재)
+- components/RevisionProject.vue — Delimiter/UseVersion/ReasonCodeList 설정. 알람: 유효하지않은프로젝트, 저장성공, 조회/저장실패
+- index_ORG_260204.vue — 구버전 3분할(TagType+LnkAttribute+CodeValue). 알람: 매우방대(정규식/검증/저장/삭제, 오타 다수)
+- components/TagTypeRefer.vue — 참조(Object Class) 패널. 알람: 조회실패
+- components/TagTypeLnkMain.vue — LnkCode+LnkValues 컨테이너. 알람 없음
+- components/TagTypeLnkValues.vue — 코드값 읽기전용. 알람: 조회실패
+- components/TagTypeNav.vue — 탭 내비게이션. 알람 없음
+- components/TagTypeSetup.vue — TagType 마스터그리드. 알람: 생성/삭제/검증/저장/중복/미저장이동확인
+- index.vue — 컨테이너(신규). 알람 없음
+- components/TagTypeLnkCode.vue — 연결속성 그리드. 알람: 상위미선택, 삭제, 예약어/미존재/중복거부, 정규식오류
+- index.vue(신버전) — EP 메뉴 설정 최상위 컨테이너(좌 MenuManagement 트리+우 MenuManagementDetail 상세). 알람 없음
+- index_ORG_260630.vue(구버전) — 리팩토링 이전 단일파일 메뉴관리. 알람: 방대(30개 이상) — 권한없음, 이름미입력, 자식존재삭제불가, 삭제확인, EP ID변경검증/성공, 저장확인/성공/실패, 매뉴얼 업로드/삭제, 기본권한설정 확인/완료
+- components/MenuManagement.vue(신버전 좌측 트리) — EP/폴더/메뉴 트리 CRUD(약 1997줄). 알람: 방대(20개 이상) — 권한없음, 선택없음, 유효하지않음, 삭제확인, EP ID검증/성공, 저장확인/성공, 기본권한설정
+- components/MenuManagementDetail.vue(신버전 우측 상세) — 노드 속성 편집. 알람: 선택없음(3곳), 매뉴얼없음(2곳), 삭제확인, API실패 에러
+- components/modals/MenuCreate.vue — 신규 EP/폴더/메뉴 생성 입력 모달. 알람: 이름 필수 검증
+- index.vue — Register 매핑 설정(Class Map/Attributes Map/Attributes Value Map/Join Table/Relation Map/Reference 6탭). 알람: 중복 검사(TYPE_ID/REL_ID/REG_TYPE_ID), 프로젝트 미선택, 조회 실패, Copy Register 검증, 삭제 확인/성공/실패, 다수의 저장 전 검증 실패(BOOL타입 값, Class Map 루트 상이, 연산자별 값 형식 등)
+- components/RegisterMappingSetup.vue — 좌측 Register 마스터 그리드. 알람: 조회 실패, 프로젝트 미선택, 삭제 선택없음/권한없음/확인/결과, 저장 검증 실패 다수, 복사 검증, 중복 이름, 미저장 이동 확인
+- components/RegisterNav.vue — 6개 탭 전환+탭간 데이터 중계. 알람 없음(하위에 위임)
+- index.vue(구버전) — 복합 레지스터 3단 그리드 메인 페이지. 알람: 프로젝트미선택, 조회실패, 중복ID, 복사검증, 삭제확인/결과, 저장검증(필수값/MAP_OPER 논리식), 저장성공/실패
+- index_comp_TEST.vue(신버전) — 컴포넌트 분리 리팩토링판(ComplexRegisterMappingSetup+ComplexRegisterNav). 알람: 신규ID중복, 복사 성공/실패
+- components/ComplexRegisterMappingSetup.vue — 복합 레지스터 목록 좌측 그리드. 알람: 삭제확인/성공/실패, 필수값 누락, 저장성공
+- components/ComplexRegisterNav.vue — Linked Registers/Reference 탭 래퍼. 알람 없음
+- components/ComplexRegisterLinkedMain.vue — 연결레지스터+속성 세로분할 컨테이너. 알람 없음
+- components/ComplexRegisterLinkedRegister.vue — 연결된 일반 Register 목록(추가/삭제/순서변경). 알람 없음
+- components/ComplexRegisterLinkedAttribute.vue — 선택 Register의 연결 어트리뷰트 읽기전용 목록. 알람 없음
+- components/ComplexRegisterRefer.vue — 참조 Template/Adapter/Menu 목록. 알람: 조회 실패(각 API별)
+- index.vue — Grid/Spread(단일)/Spread Composite 인쇄·조회 템플릿을 SpreadJS 디자이너+AG-Grid로 생성·구성·저장하는 관리자용 대형 화면(9,372줄). 주요기능: 템플릿 목록 CRUD/복사, SpreadJS 디자이너 편집, Set Sheets 탭, Map Attributes 탭(셀-속성 자동/수동 매핑), Grid 템플릿 Attribute 설정, Print Setup 탭. 알람: 권한 없음(Manager 아님), 신규템플릿 중복 생성 방지, 필수값 누락 경고, 매핑 미완료/PUB_YN 불일치 경고, 엑셀 파일 형식 검증, 속성 동기화 성공/실패 등 30개 이상의 세분화된 메시지
+- index.vue — 이름과 달리 실제로는 Register 문서(Doc/Rev/DataSet)를 트리로 조회·생성·발행·결재하는 문서관리 화면(main/document-management 컴포넌트 재사용 실험용 사본). 알람: 40개 이상의 세분화된 메시지(조회/생성/삭제/발행/결재 실패, 선택없음/상태불일치 경고, 삭제확인, 성공 안내 등)
+- index.vue — 프로젝트별 권한그룹(부서/사용자, EP권한, 메뉴상세) CRUD 및 권한신청 승인/거절. 알람: 그룹명 필수, Project Admin 삭제불가, 삭제확인/성공/실패, 복사 검증, 이름중복, EP조회실패, 마이그레이션 확인
+- components/UserListTab.vue — 권한그룹 소속 부서/사용자 편집. 알람: 사번중복, 그룹미선택, 신규그룹 저장필요, 삭제확인/대상없음
+- components/EpPermissionTab.vue — Project/Setup Admin 및 EP별 권한 카드 편집. 알람: 그룹미선택 경고, Admin권한 수정불가 안내
+- components/MenuDetailTab.vue — 메뉴트리 단위 조회/편집 및 기능버튼 권한 설정(가장 복잡). 알람: EP권한 변경시 메뉴 재설정 안내, 비활성 툴팁 안내
+- components/PermissionRequest.vue — 권한 신청자 목록 조회 및 다건 승인/거절+결과메일 발송. 알람: 거절시 코멘트 필수(alert), 처리결과 성공/일부실패/전체실패 안내
+- components/UserSelectPermission.vue — 이름으로 사용자 검색 후 소속된 모든 권한그룹 조회/삭제. 알람 없음(상위로 이벤트 위임)
+- milestone-stage-setup/index.vue — 프로젝트별 절점 Stage 및 Attribute 마스터 관리(3단: Project→Stage→Attribute). 알람: 삭제/저장 확인·성공·실패, 복사 검증, 중복이름 경고
+- adapter-project-copy-data-mapping-setup/index.vue — 프로젝트 내 Register간 데이터 복사용 속성/클래스 매핑 설정. 알람: DB-스키마 불일치 경고, EP권한없음 삭제제한, 삭제확인/실패, 저장검증, 저장성공/실패
+- register-data-mapping-setup/index.vue — 프로젝트 내 Register간(카탈로그 매니저용) 데이터 매핑 설정. 알람: MAP_ID/옵션조합 중복, 삭제확인/성공, 저장검증/성공/실패
+- adapter-data-mapping-setup/index.vue — 외부 CAD/설계 Tool과 EP Register간 속성/클래스/템플릿/관계 매핑(4탭, 가장 포괄적). 알람: 다른 매핑화면과 동일 계열 메시지 체계
+- adapter-broker-setup/index.vue — Adapter Broker 설정/스키마 정의, 브로커 처리이력 검색(3분할). 알람: 표준 CRUD Confirm/Success/Error 패턴
+- adapter-custom-setup/index.vue — 어댑터 커스텀 코드값(Source Value/Attribute Value) 관리(3단). 알람: 표준 CRUD 패턴
+- admin/tool/relation-data/index.vue — Setup Admin 전용, 유효하지 않은 Relation 데이터 조회/일괄삭제 진단도구. 알람: 프로젝트미선택, 조회실패, 삭제확인/성공/실패
+- admin/tool/pub-wrk-data/index.vue(+구버전 "index copy.vue") — Tag 목록과 Attribute값을 Working/Published 기준 조회하는 진단도구. 알람: 데이터 로드 실패 에러
+- index.vue — SystemAdmin 전용 프로젝트(호선) 마스터 목록 관리 래퍼. 알람 없음(하위 위임)
+- index_ORG_260226.vue — 구버전 백업(Modal 기반 프로젝트 복사 UI), 현재 미사용 추정
+- components/ProjectManagement.vue — 프로젝트(호선) 마스터 CRUD 그리드(생성/다중생성/삭제/복사/저장, 드래그 정렬). 알람: 초기로드 실패, 삭제확인/결과, 저장검증(PROJ_NO 필수/중복, DESC 필수), 저장성공/실패, 복사 사전검증 다수, 복사실행 확인/성공/실패
+- index.vue — 멤버십 관리 화면 placeholder(타이틀만 존재, 미구현). 알람 없음
+### template/component-template/index.vue
+### template/copy-project-data/index.vue
+### template/general-designer/index.vue
+### template/general-spread/index.vue
+### template/grid-template/index.vue
+### template/import-excel-data/index.vue
+### template/signal-type-list/index.vue
+### template/spread-template-composite/index.vue
+### template/spread-template/index.vue
+### template/spread-template/components/modals/ExportPDFOptionBox.vue
+### template/spread-template/index-test.vue (참고용 — 미사용 개발자 테스트 파일)
+- 목적/개요: 운영페이지 spread-template/index.vue를 복제한 개발자 개인 성능/기능 실험용 사본. **라우터에 연결되어 있지 않은 미사용(dead) 파일**(2025-11-18 생성, 이후 방치되어 운영본보다 뒤처짐)
