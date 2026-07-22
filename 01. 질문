@@ -1,1 +1,5 @@
-Latest Publish Version: <b>${curRevNo}</b><br /><br />
+   const confirmMsg = `
+      Latest Publish Version: <b>${curRevNo}</b><br /><br />
+      Selected Publish Version: <b>${revNo}</b><br /><br />
+      Do you want to proceed?
+    `
