@@ -1,4 +1,1 @@
-      const confirmMsg = `
-      Latest Publish Version: ${curRevNo}
-      Selected Publish Version: ${revNo}
-      Do yo
+Latest Publish Version: <b>${curRevNo}</b><br /><br />
