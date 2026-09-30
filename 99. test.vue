@@ -999,3 +999,46 @@
               failMsgList.push(`[${regTypeId}] 'Class Map' cannot hav different root classes.`)
             }
        
+
+
+    // if (!params.source) { return; } // 코드에 의한 변경은 처리하지 않음
+    dataItem._STATUS = (
+      dataItem._STATUS && dataItem._STATUS !== 'M'
+    ) ? dataItem._STATUS :(!modRowData ? null : 'M')
+    node.setSelected(true)
+    onRefreshCells({
+      force: true,
+      suppressFlash: true,
+      rowNodes: [node],
+      columns: ['_STATUS', 'NEW_TAG_YN'],
+    })
+  }
+
+  // Keydown 단축키 Ctrl + S 저장 단축키
+  const onKeyDown = event => {
+    if (event.ctrlKey && event.key === 's') {
+      event.preventDefault() //브라우저 기본 저장 동작 방지
+      saveData()
+    }
+  }
+
+  const gridBindRef = ref({
+    columnDefs: gridColDefsRef,
+    rowData: gridDataRef,
+    class: `ag-theme-custom w-100 h-100`,
+    rowSelection: 'single',
+    isRowSelectable: params => {
+      return (
+        params.data?.PROJ_NO === currentProjNo.value &&
+        (!epDictRef.value?.[params.data?.EP_ID] ||
+          isSetupAdmin.value ||
+          projectPermissions.value?.some(v => v.EP_ID === params.data?.EP_ID && v.Role === 'Manager'))
+      )
+    },
+    // rowDragManaged: true,
+    cellSelection: true,
+    enableFillHandle: true,
+    enableRangeSelection: true,
+    // suppressRowClickSelection: true, // deprecated
+    rowMultiSelectWithClick: false,
+    suppressLastEmptyL
