@@ -1,13 +1,607 @@
-Summary
-Root cause: In RelationSetup.vue's makeComboRender() (used for the LEFT_CLS_IDS / REG_TYPE_ID cell renderers), when the linkParam array is empty — exactly the case for a brand-new row created via "Create," which starts with LEFT_CLS_IDS: null — the code did:
+<template>
+  <div ref="_PageWrapperRef" class="content-layout">
+    <template v-if="!isPreErrorRef">
+      <PageTitle
+        icon="fa-sliders"
+        :title="safeTranslate('navbar.ep.composite_register_mapping')"
+        :subtitle="currentProjNo || ''"
+      >
+        <template #actions>
+          <NewBasicToolBar v-bind="toolbarBindRef" v-on="toolbarEventsRef" />
+        </template>
+      </PageTitle>
+      <Splitter class="title-content-layout" :key="_ReloadKeyRef">
+        <SplitterPanel :size="35" :minSize="10">
+          <ComplexRegisterMappingSetup ref="mainRef" v-bind="mainBindRef" v-on="mainEventsRef" />
+        </SplitterPanel>
+        <SplitterPanel :size="65">
+          <ComplexRegisterNav ref="subRef" v-bind="subBindRef" v-on="subEventsRef" />
+        </SplitterPanel>
+      </Splitter>
+    </template>
+    <template v-else>
+      <NoData :preErrorRef="PreErrorRef" @on-refresh="onRefresh" />
+    </template>
+  </div>
+</template>
 
+<script setup>
+  // Library - Common
+  import { ref, shallowRef, computed, watch, onBeforeMount, onMounted } from 'vue'
+  import { storeToRefs } from 'pinia'
 
-linkParam.forEach(v => { ... })          // no iterations, nothing appended
-if (link.lastChild.nodeType == ...)      // link.lastChild is null → throws
-That TypeError: Cannot read properties of null (reading 'nodeType') matches exactly the console error you shared. It's thrown inside AG Grid's cellRenderer, called synchronously from grid.ensureIndexVisible(...) — the last line of insertRows(), right after onShowLoading() had already set the grid's loading flag to true. Since the exception aborted the function before onHideLoading() could run, the grid loading overlay was left stuck forever. It only reproduces on grids with lots of existing data because that's when the new row needs fresh cell rendering (via scroll-into-view) instead of reusing an already-rendered cell.
+  // Library - Component
+  import Splitter from 'primevue/splitter'
+  import SplitterPanel from 'primevue/splitterpanel'
 
-Fix applied in RelationSetup.vue:
+  // Library - Utils
+  import * as _ from 'lodash-es'
 
-Line 1163: guarded link.lastChild?.nodeType against null.
-Wrapped insertRows's body in try/finally so onHideLoading() always runs even if a future rendering error occurs — prevents this class of bug from causing a stuck spinner again.
-No further AG Grid destroyed-instance or Brotli console messages you saw are related to this (those are unrelated background noise). Please retest Create on the same data-heavy grid to confirm.
+  // Store
+  import { useAppAuthenticationStore } from '@/stores/app-authentication'
+  import { useAppPermissionStore } from '@/stores/app-permission'
+  import { useAppMenuStore } from '@/stores/app-menu'
+
+  // Helpers
+  import { ApiCommon } from '@/utils/axios/api-common'
+  import { dataUtil as DU } from '@/utils/functions/data-utility'
+  import { toast } from '@/composables/useToast'
+  import useI18nExtends from '@/composables/useI18nExtends'
+  import global from '@/constants/enums/global'
+
+  // Custom Components
+  import PageTitle from '@/components/toolBar/PageTitle.vue'
+  import NoData from '@/views/common/noData'
+  import NewBasicToolBar from '@/components/toolBar/NewBasicToolBar.vue'
+  import ComplexRegisterMappingSetup from '@/views/management/epSetup/composite-register-mapping-setup/components/ComplexRegisterMappingSetup.vue'
+  import ComplexRegisterNav from '@/views/management/epSetup/composite-register-mapping-setup/components/ComplexRegisterNav.vue'
+  import { useContentLoading } from '@/composables/useContentLoading'
+
+  const { safeTranslate } = useI18nExtends()
+
+  const { userInfo } = storeToRefs(useAppAuthenticationStore())
+  const { currentProjNo, currentEpId } = storeToRefs(useAppMenuStore())
+  const { isSetupAdmin, projectPermissions, isProjectAdmin, currentEPRole } = storeToRefs(useAppPermissionStore())
+
+  // prettier-ignore
+  onBeforeMount(() => { toast.closeAll() })
+  // prettier-ignore
+  onMounted(() => { onPreInitialize() })
+
+  //#region WRAPPER
+  /////////////////////////////////////////////////////////////////////////////
+  const _ReloadKeyRef = shallowRef(0)
+  const _PageWrapperRef = shallowRef()
+  const onShowOverlay = config => {
+    const pageWrapper = _PageWrapperRef.value
+    const loadConfig = pageWrapper ? { target: pageWrapper } : {}
+    useContentLoading?.startLoading({ ...loadConfig, ...config })
+  }
+  const onHideOverlay = () => {
+    useContentLoading?.stopLoading()
+  }
+  //#endregion WRAPPER
+  /////////////////////////////////////////////////////////////////////////////
+
+  //#region BUTTONS
+  /////////////////////////////////////////////////////////////////////////////
+  const toolbarBindRef = computed(() => ({
+    showRefresh: true,
+    showSave: true,
+    blockSave: !mainRef.value?.IS_MANAGER_DATA,
+  }))
+  const toolbarEventsRef = computed(() => ({
+    execSave: mainRef.value?.ON_SAVE_DATA,
+    execRefresh: onRefresh,
+  }))
+  //#endregion BUTTONS
+  /////////////////////////////////////////////////////////////////////////////
+
+  //#region PRE_LOAD
+  /////////////////////////////////////////////////////////////////////////////
+  // PRE_LOAD_INFO
+  const isPreLoadingRef = shallowRef(false)
+  const isPreErrorRef = shallowRef(false)
+  const PreErrorRef = shallowRef()
+  // UTILS
+  const isConvertByUomFactorLnkRef = shallowRef(false) // DEF_VAL, MIN_VAL, MAX_VAL
+  const isConvertByUomFactorMapRef = shallowRef(true) // OPER-VALUE
+  // SUB_INFO
+  const projListRef = shallowRef([])
+  const projDictRef = shallowRef({})
+  const regListRef = shallowRef([])
+  const regDictRef = shallowRef({})
+  const epListRef = shallowRef([])
+  const epDictRef = shallowRef({})
+  const clsListRef = shallowRef([])
+  const clsDictRef = shallowRef({})
+  const tagTypeListRef = shallowRef([])
+  const tagTypeDictRef = shallowRef({})
+  const uomListRef = shallowRef([])
+  const uomTreeRef = shallowRef([])
+  const uomDictRef = shallowRef({})
+  const attDictRef = shallowRef({})
+  const relListRef = shallowRef([])
+  const relDictRef = shallowRef({})
+  const pbsListRef = shallowRef({})
+  const pbsDictRef = shallowRef({})
+  const pbsSysListRef = computed(() => pbsListRef.value?.SYSTEM_NAME)
+  const pbsSysDictRef = computed(() => pbsDictRef.value?.SYSTEM_NAME)
+  const pbsAsmListRef = computed(() => pbsListRef.value?.ASSEMBLY_NAME)
+  const pbsAsmDictRef = computed(() => pbsDictRef.value?.ASSEMBLY_NAME)
+  const onRefresh = function () {
+    _ReloadKeyRef.value += 1
+    onPreInitialize()
+  }
+  // prettier-ignore
+  const onPreInitialize = async function () {
+    const onFinally = (IS_SUCCESS, ERROR) => {
+      isPreLoadingRef.value = false
+      isPreErrorRef.value = IS_SUCCESS === false
+      PreErrorRef.value = ERROR
+      onHideOverlay()
+    }
+
+    onShowOverlay()
+    isPreLoadingRef.value = true
+
+    const projNo = currentProjNo.value
+    if (!projNo) { return onFinally(false, new Error('No Project')); }
+
+    try {
+      await Promise.all([
+        getProjectList(),
+        getRegisterList(),
+        getEPList(),
+        getObjectClassList(),
+        getTagTypeList(),
+        getUOMList(),
+        getAttDict(),
+        getPBSList(),
+        getRelationList(),
+      ])
+    } catch (error) {
+      return onFinally(false, new Error(error.response?.data?.Message || error.message))
+    }
+
+    return onFinally(true)
+  }
+  const getProjectList = async function () {
+    projDictRef.value = {}
+    projListRef.value = []
+
+    const response = await ApiCommon.getProjectGet()
+
+    const basicDict = {}
+    const basicList = []
+    response?.forEach(v => {
+      if (!v.DELETED && v.USE_YN && v.PROJ_NO) {
+        basicDict[v.PROJ_NO] = {
+          PROJ_NO: v.PROJ_NO,
+          DESC: v.DESC,
+          code: v.PROJ_NO,
+          label: `(${v.PROJ_NO}) ${v.DESC ?? ''}`,
+        }
+        basicList.push(basicDict[v.PROJ_NO])
+      }
+    })
+    projDictRef.value = basicDict
+    projListRef.value = basicList
+  }
+  const getRegisterList = async function () {
+    regDictRef.value = {}
+    regListRef.value = []
+
+    const response = await ApiCommon.postRegisterGet({ ProjectNo: currentProjNo.value })
+
+    const basicDict = {}
+    const basicList = []
+    response?.forEach(v => {
+      if (!v.DELETED && v.TYPE_ID) {
+        basicDict[v.TYPE_ID] = {
+          TYPE_ID: v.TYPE_ID,
+          DESC: v.DESC,
+          EP_ID: v.EP_ID,
+          NEW_TAG_YN: v.NEW_TAG_YN,
+          ALL_TAG_YN: v.ALL_TAG_YN,
+          MAP_TAG_TYPE: v.MAP_TAG_TYPE,
+          MAP_REL: v.MAP_REL,
+          MAP_OPER: v.MAP_OPER,
+          MAP_CLS_ID: v.MAP_CLS_ID,
+          MAP_ATT: v.MAP_ATT,
+          LNK_ATT: v.LNK_ATT,
+          JOIN_TABLS: v.JOIN_TABLS,
+          PROJ_NO: v.PROJ_NO,
+          code: v.TYPE_ID,
+          label: `(${v.TYPE_ID}) ${v.DESC ?? ''}`,
+        }
+        basicList.push(basicDict[v.TYPE_ID])
+      }
+    })
+    regDictRef.value = basicDict
+    regListRef.value = basicList
+  }
+  const getEPList = async function () {
+    epDictRef.value = {}
+    epListRef.value = []
+
+    const response = await ApiCommon.postEPGet({ ProjectNo: currentProjNo.value })
+
+    const basicDict = {}
+    const basicList = []
+    response?.forEach(v => {
+      if (!v.DELETED && v.EP_ID) {
+        basicDict[v.EP_ID] = {
+          EP_ID: v.EP_ID,
+          DESC: v.DESC,
+          PROJ_NO: v.PROJ_NO,
+          code: v.EP_ID,
+          label: `(${v.EP_ID}) ${v.DESC ?? ''}`,
+        }
+        basicList.push(basicDict[v.EP_ID])
+      }
+    })
+    epDictRef.value = basicDict
+    epListRef.value = basicList
+  }
+  const getObjectClassList = async function () {
+    clsDictRef.value = {}
+    clsListRef.value = []
+
+    const response = await ApiCommon.postObjectClassGet({ ProjectNo: currentProjNo.value })
+
+    const basicDict = {}
+    const basicList = []
+    response?.forEach((data, index) => {
+      data._ROW_ID = `ROW_${String(index).padStart(6, '0')}`
+      data._IS_ROOT = !data.PRT_CLS_ID === true
+      data.LNK_ATT = _.sortBy(data.LNK_ATT ?? [], ['SEQ', 'ATT_ID'])
+      data.LNK_ATT.forEach((v, i) => ((v.SEQ = i + 1), (v.CLS_ID = data.CLS_ID)))
+      basicDict[data.CLS_ID] = data
+    })
+    // PARENT LNK_ATT 추가
+    response?.forEach(v => {
+      let prtClsId = basicDict[v.CLS_ID].PRT_CLS_ID
+      const path = [v.CLS_ID]
+      while (prtClsId) {
+        path.unshift(prtClsId)
+        const prtLnkAtt = basicDict[prtClsId]?.LNK_ATT ?? []
+        basicDict[v.CLS_ID].LNK_ATT = basicDict[v.CLS_ID].LNK_ATT.filter(
+          v => !prtLnkAtt.some(pv => pv.ATT_ID === v.ATT_ID)
+        )
+        basicDict[v.CLS_ID].LNK_ATT.unshift(...prtLnkAtt.map(v => ({ ...v, SEQ: 0 })))
+        prtClsId = basicDict[prtClsId]?.PRT_CLS_ID
+      }
+      basicDict[v.CLS_ID].path = path
+      basicList.push(basicDict[v.CLS_ID])
+    })
+    clsDictRef.value = basicDict
+    clsListRef.value = _.sortBy(basicList, 'path') // autoGroupColumnDef의 field 미설정시 Group Name은 Sort후 표현
+  }
+  const getTagTypeList = async function () {
+    tagTypeDictRef.value = {}
+    tagTypeListRef.value = []
+
+    const response = await ApiCommon.postTagTypeGet({ ProjectNo: currentProjNo.value })
+
+    const basicDict = {}
+    const basicList = []
+    response?.forEach(v => {
+      if (!v.DELETED && v.TYPE_ID) {
+        basicDict[v.TYPE_ID] = {
+          TYPE_ID: v.TYPE_ID,
+          PROJ_NO: v.PROJ_NO,
+          SEQ: v.SEQ,
+          DESC: v.DESC,
+          REMARK: v.REMARK,
+          LNK_CODE: v.LNK_CODE,
+          code: v.TYPE_ID,
+          label: `(${v.TYPE_ID}) ${v.DESC ?? ''}`,
+        }
+        basicList.push(basicDict[v.TYPE_ID])
+      }
+    })
+    tagTypeDictRef.value = basicDict
+    tagTypeListRef.value = basicList
+  }
+  const getUOMList = async function () {
+    uomDictRef.value = {}
+    uomListRef.value = []
+    uomTreeRef.value = []
+
+    const response = await ApiCommon.postUOMGet({ ProjectNo: currentProjNo.value })
+
+    const basicDict = {}
+    const basicList = []
+    const basicTree = []
+    const groupDict = {}
+    response?.forEach(v => {
+      if (!v.DELETED && v.USE_YN && v.UOM_ID && v.FACTOR !== 0) {
+        basicDict[v.UOM_ID] = {
+          UOM_ID: v.UOM_ID,
+          GROUP: v.GROUP,
+          SYMBOL: v.SYMBOL,
+          FACTOR: v.FACTOR,
+          FOMULA: v.FOMULA,
+          REVERSE_FOMULA: v.REVERSE_FOMULA,
+          SEQ: v.SEQ,
+          USE_YN: v.USE_YN,
+          DESC: v.DESC,
+          PROJ_NO: v.PROJ_NO,
+          code: v.UOM_ID,
+          label: v.SYMBOL ?? v.UOM_ID,
+          key: `${v.GROUP}-${v.UOM_ID}`, // USE TreeSelect
+        }
+        basicList.push(basicDict[v.UOM_ID])
+        if (v.GROUP) {
+          if (!groupDict[v.GROUP]) {
+            groupDict[v.GROUP] = {
+              GROUP: v.GROUP,
+              code: v.GROUP,
+              label: v.GROUP,
+              children: [], // USE TreeSelect
+              key: v.GROUP, // USE TreeSelect
+              selectable: false, // USE TreeSelect
+            }
+          }
+          groupDict[v.GROUP].children.push(basicDict[v.UOM_ID])
+          basicTree.push(v.GROUP)
+        }
+      }
+    })
+    uomDictRef.value = basicDict
+    uomListRef.value = basicList
+    uomTreeRef.value = Array.from(new Set(basicTree)).map(v => groupDict[v])
+  }
+  const getAttDict = async function () {
+    attDictRef.value = {}
+    // attListRef.value = []
+
+    const response = await ApiCommon.postAttributesGet({ ProjectNo: currentProjNo.value })
+
+    const basicDict = {}
+    // const basicList = []
+    // const groupDict = {}
+    // const groupList = []
+    response?.forEach(v => {
+      if (!v.DELETED && v.ATT_ID) {
+        basicDict[v.ATT_ID] = {
+          ATT_ID: v.ATT_ID,
+          DESC: v.DESC,
+          UOM_ID: v.UOM_ID,
+          VAL_TYPE: v.VAL_TYPE,
+          DEF_VAL: v.DEF_VAL,
+          ALLOW_STRS: v.ALLOW_STRS,
+          CL_ID: v.CL_ID,
+          FORMAT: v.FORMAT,
+          REG_EXPS: v.REG_EXPS,
+          GROUP: v.GROUP,
+          PROJ_NO: v.PROJ_NO,
+          code: v.ATT_ID,
+          label: `(${v.ATT_ID}) ${v.DESC ?? ''}`,
+        }
+        // basicList.push(basicDict[v.ATT_ID])
+        // if (!DU.isNullOrEmpty(v.GROUP) && DU.isArray(v.GROUP)) {
+        //   v.GROUP.forEach(group => {
+        //     if (!groupDict[group]) {
+        //       groupList.push(group)
+        //       groupDict[group] = []
+        //     }
+        //     groupDict[group].push(v.ATT_ID)
+        //   })
+        // }
+      }
+    })
+    // Object.keys(groupDict).forEach(group => {
+    //   groupDict[group] = _.sortBy(groupDict[group] ?? [])
+    // })
+    attDictRef.value = basicDict
+    // attListRef.value = basicList
+  }
+  const getPBSList = async function () {
+    pbsDictRef.value = {}
+    pbsListRef.value = {}
+
+    const response = await ApiCommon.postDataGetPubDataByClass({
+      ProjectNo: currentProjNo.value,
+      CLS_ID: 'PBS_CLAS',
+    })
+
+    // Create Parents, Data Flatten
+    const parents = []
+    const flatten = response?.map(item => {
+      const tagIdx = item.TAG_IDX
+      const prntTag = item.PRNT_TAG_IDX
+      const newData = {}
+      Object.keys(item).forEach(attId => {
+        if (attId !== 'ATTRIBUTES') {
+          newData[attId] = item[attId]
+          return
+        }
+        item[attId].forEach(attr => {
+          newData[attr.ATT_ID] = attr.VALUE
+        })
+      })
+      if (!prntTag && tagIdx) {
+        parents.push(newData)
+      }
+      return newData
+    })
+    // if (parents.length === 0) { return null; }
+
+    // Sub Function
+    const getChilds = function (FIND_DATA, PRNT_TAG) {
+      const list = []
+      if (!PRNT_TAG || !FIND_DATA || !DU.isArray(FIND_DATA)) {
+        return list
+      }
+      FIND_DATA.forEach(item => {
+        if (item.PRNT_TAG_IDX !== PRNT_TAG) {
+          return
+        }
+        list.push(item, ...getChilds(FIND_DATA, item.TAG_IDX))
+      })
+      return list
+    }
+
+    // Create Return Data
+    const basicDict = {
+      SYSTEM_NAME: {},
+      ASSEMBLY_NAME: {},
+    }
+    const basicList = {
+      SYSTEM_NAME: [],
+      ASSEMBLY_NAME: [],
+    }
+    parents.forEach(item => {
+      const tagNo = item.TAG_NO
+      const tagIdx = item.TAG_IDX
+      let name = null
+      if (tagNo.indexOf('SYSTEM') > -1) {
+        name = 'SYSTEM_NAME'
+      } else if (tagNo.indexOf('ASSEMBLY') > -1) {
+        name = 'ASSEMBLY_NAME'
+      } else {
+        return
+      }
+      const childs = getChilds(flatten, tagIdx)
+      childs.forEach(child => {
+        const cCode = child.CODE
+        const cHasObj = child.HASOBJECT === 'true'
+        const cTagIdx = child.TAG_IDX
+        if (!cCode || !cHasObj) {
+          return
+        }
+        basicDict[name][cTagIdx] = {
+          TAG_IDX: cTagIdx,
+          TAG_NO: cCode,
+          code: cTagIdx,
+          label: cCode,
+        }
+        basicList[name].push(basicDict[name][cTagIdx])
+      })
+    })
+    pbsDictRef.value = basicDict
+    pbsListRef.value = basicList
+  }
+  const getRelationList = async function () {
+    relDictRef.value = {}
+    relListRef.value = []
+
+    const response = await ApiCommon.postRelationGet({ ProjectNo: currentProjNo.value })
+
+    const basicDict = {}
+    const basicList = []
+    response?.forEach(v => {
+      if (!v.DELETED && v.REL_ID) {
+        basicDict[v.REL_ID] = {
+          REL_ID: v.REL_ID,
+          NAME: v.NAME,
+          PROJ_NO: v.PROJ_NO,
+          LEFT_CLS_IDS: v.LEFT_CLS_IDS,
+          LEFT_UNIQ_YN: v.LEFT_UNIQ_YN,
+          RIGHT_CLS_ID: v.RIGHT_CLS_ID,
+          RIGHT_UNIQ_YN: v.RIGHT_UNIQ_YN,
+          code: v.REL_ID,
+          label: `(${v.REL_ID}) ${v.NAME ?? ''}`,
+        }
+        basicList.push(basicDict[v.REL_ID])
+      }
+    })
+
+    relDictRef.value = basicDict
+    relListRef.value = basicList
+  }
+  //#endregion PRE_LOAD
+  /////////////////////////////////////////////////////////////////////////////
+
+  //#region MAIN
+  /////////////////////////////////////////////////////////////////////////////
+  const mainRef = shallowRef()
+  const mainBindRef = computed(() => ({
+    // UTILS
+    IS_CONVERT_BY_UOM_FACTOR_LNK: isConvertByUomFactorLnkRef.value,
+    IS_CONVERT_BY_UOM_FACTOR_MAP: isConvertByUomFactorMapRef.value,
+    // PRE_LOAD_DATA
+    PROJ_LIST: projListRef.value,
+    PROJ_DICT: projDictRef.value,
+    REG_LIST: regListRef.value,
+    REG_DICT: regDictRef.value,
+    EP_LIST: epListRef.value,
+    EP_DICT: epDictRef.value,
+    CLS_LIST: clsListRef.value,
+    CLS_DICT: clsDictRef.value,
+    TAG_TYPE_LIST: tagTypeListRef.value,
+    TAG_TYPE_DICT: tagTypeDictRef.value,
+    UOM_LIST: uomListRef.value,
+    UOM_TREE: uomTreeRef.value,
+    UOM_DICT: uomDictRef.value,
+    ATT_DICT: attDictRef.value,
+    PBS_SYS_LIST: pbsSysListRef.value,
+    PBS_SYS_DICT: pbsSysDictRef.value,
+    PBS_ASM_LIST: pbsAsmListRef.value,
+    PBS_ASM_DICT: pbsAsmDictRef.value,
+    // SUB_INFO
+    // ACTIVE_SUB_REF: navActiveRef.value,
+    IS_SUB_EDITED: regLnkRegRef.value?.IS_EDITED,
+    SUB_DATA_LIST: regLnkRegRef.value?.DATA_LIST,
+  }))
+  const mainEventsRef = computed(() => ({
+    showOverlay: onShowOverlay,
+    hideOverlay: onHideOverlay,
+    onPreInitialize: onPreInitialize,
+    onSubRefresh: regLnkRegRef.value?.ON_REFRESH,
+    onSubStopEditing: regLnkRegRef.value?.ON_STOP_EDITING,
+  }))
+  //#endregion MAIN
+  /////////////////////////////////////////////////////////////////////////////
+
+  //#region SUB
+  /////////////////////////////////////////////////////////////////////////////
+  const subRef = shallowRef()
+  const navActiveIndexRef = computed(() => subRef.value?.ACTIVE_INDEX)
+  const navActiveRef = computed(() => subRef.value?.ACTIVE_REF)
+  // ComplexRegisterLinkedRegister
+  const regLnkRegRef = computed(() => subRef.value?.REG_LNK_REG_REF)
+  // ComplexRegisterRefer
+  const regReferRef = computed(() => subRef.value?.REG_REFER_REF)
+  const subBindRef = computed(() => ({
+    // UTILS
+    IS_CONVERT_BY_UOM_FACTOR_LNK: isConvertByUomFactorLnkRef.value,
+    IS_CONVERT_BY_UOM_FACTOR_MAP: isConvertByUomFactorMapRef.value,
+    // PRE_LOAD_DATA
+    PROJ_LIST: projListRef.value,
+    PROJ_DICT: projDictRef.value,
+    REG_LIST: regListRef.value,
+    REG_DICT: regDictRef.value,
+    EP_LIST: epListRef.value,
+    EP_DICT: epDictRef.value,
+    CLS_LIST: clsListRef.value,
+    CLS_DICT: clsDictRef.value,
+    TAG_TYPE_LIST: tagTypeListRef.value,
+    TAG_TYPE_DICT: tagTypeDictRef.value,
+    UOM_LIST: uomListRef.value,
+    UOM_TREE: uomTreeRef.value,
+    UOM_DICT: uomDictRef.value,
+    ATT_DICT: attDictRef.value,
+    REL_LIST: relListRef.value,
+    REL_DICT: relDictRef.value,
+    PBS_SYS_LIST: pbsSysListRef.value,
+    PBS_SYS_DICT: pbsSysDictRef.value,
+    PBS_ASM_LIST: pbsAsmListRef.value,
+    PBS_ASM_DICT: pbsAsmDictRef.value,
+    // MAIN_DATA
+    MAIN_FOCUS_DATA: mainRef.value?.FOCUS_DATA,
+    MAIN_ORG_FOCUS_DATA: mainRef.value?.ORG_FOCUS_DATA,
+    IS_MANAGER_DATA: mainRef.value?.IS_MANAGER_DATA,
+  }))
+  const subEventsRef = computed(() => ({
+    showOverlay: onShowOverlay,
+    hideOverlay: onHideOverlay,
+    onMainSaveData: mainRef.value?.ON_SAVE_DATA,
+  }))
+  //#endregion SUB
+  /////////////////////////////////////////////////////////////////////////////
+</script>
+
+<style scoped lang="scss"></style>
