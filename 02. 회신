@@ -134,7 +134,6 @@
         title: safeTranslate('menu.worksheet.NoRowsSelected'),
         duration: 5000,
       })
-
       return
     }
 
@@ -157,15 +156,7 @@
     const selectedRow = selectedRows?.[0]
     if (!selectedRow) return
 
-    let defaultCode = ''
-    if (selectedRow.path?.length === 1) {
-      defaultCode = new_tag_no
-    } else if (selectedRow.path?.length > 1) {
-      const remainingElements = selectedRow.path.slice(1)
-      const joinedString = remainingElements.join('')
-      const resultString = joinedString + new_tag_no
-      defaultCode = resultString
-    }
+    let defaultCode = new_tag_no
 
     let response
     try {
@@ -196,9 +187,8 @@
       const titleCode = errorInfo.code
         ? `[${safeTranslate('menu.worksheet.Error')}]`
         : `[${safeTranslate('menu.worksheet.Failed')}]`
-      const errorTitle = ''
       toast.fail({
-        title: `${titleCode} ${errorTitle}`,
+        title: `${titleCode}`,
         content: errorInfo.message,
         code: errorInfo.code,
         okText: safeTranslate('toast.button.Ok'),
@@ -215,15 +205,7 @@
       return
     }
 
-    let addPath = null
-    gridApi.forEachNode(node => {
-      if (node.data?.TAG_IDX === newData.PRNT_TAG_IDX) {
-        addPath = [...node.data.path, newData.TAG_NO]
-      }
-    })
-
     const addData = {
-      path: addPath,
       PROJ_NO: newData.PROJ_NO,
       CLS_ID: newData.CLS_ID,
       PIC_NO: newData.PIC_NO,
@@ -234,7 +216,7 @@
       ATTRIBUTES: newData.ATTRIBUTES,
       _id: newData._id,
     }
-    newData.ATTRIBUTES.forEach(attr => (addData[attr.ATT_ID] = attr.VALUE))
+    newData.ATTRIBUTES?.forEach(attr => (addData[attr.ATT_ID] = attr.VALUE))
 
     const result = gridApi.applyTransaction({ add: [addData] })
     gridApi.setNodesSelected({
@@ -282,7 +264,7 @@
     }
 
     try {
-      const response = await axiosWrapper.post(`/api/Data/PublishDirectUpdate`, {
+      await axiosWrapper.post(`/api/Data/PublishDirectUpdate`, {
         data: [
           {
             _id: selectedRow._id,
@@ -318,9 +300,8 @@
       const titleCode = errorInfo.code
         ? `[${safeTranslate('menu.worksheet.Error')}]`
         : `[${safeTranslate('menu.worksheet.Failed')}]`
-      const errorTitle = ''
       toast.fail({
-        title: `${titleCode} ${errorTitle}`,
+        title: `${titleCode}`,
         content: errorInfo.message,
         code: errorInfo.code,
         okText: safeTranslate('toast.button.Ok'),
@@ -352,7 +333,7 @@
     }
 
     const newRowNode = gridApi.getRowNode(selectedRow._id)
-    if (newRowNode.group) {
+    if (newRowNode?.group) {
       toast.warning({
         title: safeTranslate('menu.worksheet.panel.UnableModifyPBSHasSub'),
         duration: 5000,
@@ -396,9 +377,8 @@
       const titleCode = errorInfo.code
         ? `[${safeTranslate('menu.worksheet.Error')}]`
         : `[${safeTranslate('menu.worksheet.Failed')}]`
-      const errorTitle = ''
       toast.fail({
-        title: `${titleCode} ${errorTitle}`,
+        title: `${titleCode}`,
         content: errorInfo.message,
         code: errorInfo.code,
         okText: safeTranslate('toast.button.Ok'),
@@ -443,7 +423,7 @@
     if (!saveData.length) return
 
     try {
-      const response = await axiosWrapper.post(`/api/Data/PublishDirectUpdate`, {
+      await axiosWrapper.post(`/api/Data/PublishDirectUpdate`, {
         data: saveData,
       })
       toast.success({
@@ -455,9 +435,8 @@
       const titleCode = errorInfo.code
         ? `[${safeTranslate('menu.worksheet.Error')}]`
         : `[${safeTranslate('menu.worksheet.Failed')}]`
-      const errorTitle = ''
       toast.fail({
-        title: `${titleCode} ${errorTitle}`,
+        title: `${titleCode}`,
         content: errorInfo.message,
         code: errorInfo.code,
         okText: safeTranslate('toast.button.Ok'),
@@ -481,8 +460,8 @@
       }
     }
 
-    const isRoot = !node.data.PRNT_TAG_IDX ? true : false
-    const rootId = node.data?.path?.[0]
+    const isRoot = !node.data.PRNT_TAG_IDX
+    const rootId = node.data?.TAG_IDX
     const sendData = [{ TAG_IDX: node.data.TAG_IDX, CODE: node.data.CODE }]
     node.allLeafChildren?.forEach(n => {
       if (n.data?.TAG_IDX) sendData.push({ TAG_IDX: n.data.TAG_IDX, CODE: node.data.CODE })
@@ -490,18 +469,19 @@
     if (props.fn_filterFromPBS) props.fn_filterFromPBS(isRoot, sendData, rootId)
   }
 
-  // 싱글 선택 및 키보드(↑/↓) 이동 시에도 이벤트를 감지할 수 있도록 수정
   const onSelectionChanged = event => {
-    const selectedNodes = event.api.getSelectedNodes()
-    if (selectedNodes.length > 0) {
-      const node = selectedNodes[0]
-      if (!node.data) return
+    const source = event.source
+    if (source === 'checkboxSelected') {
+      const selectedNodes = event.api.getSelectedNodes()
+      if (selectedNodes.length > 0) {
+        const node = selectedNodes[0]
 
-      const isRoot = !node.data.PRNT_TAG_IDX ? true : false
-      const rootId = node.data?.path?.[0]
-      const sendData = [node.data.TAG_IDX]
-      node.allLeafChildren?.forEach(n => (n.data?.TAG_IDX ? sendData.push(n.data?.TAG_IDX) : null))
-      if (props.fn_filterFromPBS) props.fn_filterFromPBS(isRoot, sendData, rootId)
+        const isRoot = !node.data.PRNT_TAG_IDX
+        const rootId = node.data?.TAG_IDX
+        const sendData = [node.data.TAG_IDX]
+        node.allLeafChildren?.forEach(n => (n.data?.TAG_IDX ? sendData.push(n.data?.TAG_IDX) : null))
+        if (props.fn_filterFromPBS) props.fn_filterFromPBS(isRoot, sendData, rootId)
+      }
     }
   }
 
@@ -547,12 +527,31 @@
       rowNodes: [params.node],
     })
   }
+
+  // Tree Data with Parent ID - Row Drag Drop Position Indicator
+  const onRowDragMove = params => {
+    if (params.api && typeof params.api.setRowDropPositionIndicator === 'function') {
+      params.api.setRowDropPositionIndicator(params.y, params.overNode)
+    }
+  }
+
+  const onRowDragLeave = params => {
+    if (params.api && typeof params.api.setRowDropPositionIndicator === 'function') {
+      params.api.setRowDropPositionIndicator(null, null)
+    }
+  }
+
+  const onRowDragEnd = params => {
+    if (params.api && typeof params.api.setRowDropPositionIndicator === 'function') {
+      params.api.setRowDropPositionIndicator(null, null)
+    }
+  }
   //#endregion AG Grid 이벤트
 
   //#region Function
   const getHeaderData = async () => {
     colDefs.value = [
-      { field: 'TAG_DESC', headerName: 'PBS Desc', minWidth: 100, editable: true },
+      { field: 'TAG_DESC', headerName: 'PBS Desc', minWidth: 100, editable: true, rowDrag: true },
       { field: '_id', hide: true },
     ]
     if (!currProjNoRef.value) return
@@ -568,9 +567,8 @@
       const titleCode = errorInfo.code
         ? `[${safeTranslate('menu.worksheet.Error')}]`
         : `[${safeTranslate('menu.worksheet.Failed')}]`
-      const errorTitle = ''
       toast.fail({
-        title: `${titleCode} ${errorTitle}`,
+        title: `${titleCode}`,
         content: errorInfo.message,
         code: errorInfo.code,
         okText: safeTranslate('toast.button.Ok'),
@@ -643,9 +641,8 @@
         const titleCode = errorInfo.code
           ? `[${safeTranslate('menu.worksheet.Error')}]`
           : `[${safeTranslate('menu.worksheet.Failed')}]`
-        const errorTitle = ''
         toast.fail({
-          title: `${titleCode} ${errorTitle}`,
+          title: `${titleCode}`,
           content: errorInfo.message,
           code: errorInfo.code,
           okText: safeTranslate('toast.button.Ok'),
@@ -653,45 +650,36 @@
         return onFinally()
       }
 
-      const paths = []
-      const findPath = (item, path) => {
-        path.push(item.TAG_NO)
-        paths.push({ ...item, path: [...path] })
-        for (const c of list) {
-          if (c?.PRNT_TAG_IDX === item.TAG_IDX) findPath(c, path)
-        }
-        path.pop()
-      }
-
-      const rootTagIdxs = []
-      for (const item of list) {
-        if (item?.TAG_IDX && !item.PRNT_TAG_IDX) {
-          rootTagIdxs.push(item.TAG_IDX)
-          findPath(item, [])
-        }
-      }
-
-      const map = {}
-      paths.forEach(v => {
-        if (v?.TAG_IDX) map[v.TAG_IDX] = { ...v, children: [] }
+      // Parent ID Tree 구조 매핑
+      const flatList = list.map(item => {
+        const { ATTRIBUTES, ...rest } = item
+        const row = { ...rest }
+        ATTRIBUTES?.forEach(attr => {
+          row[attr.ATT_ID] = attr.VALUE
+        })
+        return row
       })
 
-      paths.forEach(v => {
-        if (v?.TAG_IDX && v.PRNT_TAG_IDX && map[v.PRNT_TAG_IDX]) {
-          map[v.PRNT_TAG_IDX].children.push(map[v.TAG_IDX])
+      const rootNodes = flatList.filter(item => !item.PRNT_TAG_IDX)
+      const getSubTree = parentId => {
+        let result = []
+        const children = flatList.filter(item => item.PRNT_TAG_IDX === parentId)
+        for (const child of children) {
+          result.push(child)
+          result = result.concat(getSubTree(child.TAG_IDX))
         }
-      })
-
-      const collectSubtrees = function (item, result = []) {
-        const { ATTRIBUTES, ...flat } = item
-        ATTRIBUTES?.forEach(v => (flat[v.ATT_ID] = v.VALUE))
-
-        result.push(flat)
-        item.children.forEach(c => collectSubtrees(c, result))
         return result
       }
 
-      const [data1, data2] = rootTagIdxs.map(v => collectSubtrees(map[v]))
+      let data1 = []
+      let data2 = []
+
+      if (rootNodes[0]) {
+        data1 = [rootNodes[0], ...getSubTree(rootNodes[0].TAG_IDX)]
+      }
+      if (rootNodes[1]) {
+        data2 = [rootNodes[1], ...getSubTree(rootNodes[1].TAG_IDX)]
+      }
 
       const data1Tag = data1?.[0]?.TAG_NO
       const data2Tag = data2?.[0]?.TAG_NO
@@ -720,9 +708,8 @@
       const titleCode = errorInfo.code
         ? `[${safeTranslate('menu.worksheet.Error')}]`
         : `[${safeTranslate('menu.worksheet.Failed')}]`
-      const errorTitle = ''
       toast.fail({
-        title: `${titleCode} ${errorTitle}`,
+        title: `${titleCode}`,
         content: errorInfo.message,
         code: errorInfo.code,
         okText: safeTranslate('toast.button.Ok'),
@@ -768,9 +755,8 @@
         const titleCode = errorInfo.code
           ? `[${safeTranslate('menu.worksheet.Error')}]`
           : `[${safeTranslate('menu.worksheet.Failed')}]`
-        const errorTitle = ''
         toast.fail({
-          title: `${titleCode} ${errorTitle}`,
+          title: `${titleCode}`,
           content: errorInfo.message,
           code: errorInfo.code,
           okText: safeTranslate('toast.button.Ok'),
@@ -802,25 +788,25 @@
       headerName: 'PBS ID',
       minWidth: 200,
       cellRendererParams: {
-        checkbox: false, // 다중 선택 방지 및 싱글 스타일을 위해 기본 체크박스 비활성화
+        checkbox: true,
         innerRenderer: params => {
-          // AG Grid 표준 트리 아이콘 스타일 적용
-          const iconClass = params.node.expanded ? 'ag-icon-tree-open' : 'ag-icon-tree-closed'
           return `
-            <span class="ag-icon ${iconClass} me-1" role="presentation"></span>
-            <span class="text-primary fw-bolder">${params.value ?? ''}</span>
+            <i class="fas fa-folder${params.node.expanded ? '-open' : ''} text-warning me-1 fs-13px" style="line-height: inherit;"></i>
+            <span class="text-primary fw-bolder">${params.value ?? params.data?.TAG_NO ?? ''}</span>
           `
         },
         suppressCount: true,
       },
     },
+    // Tree Data with Parent ID
     treeData: true,
+    treeDataPath: false,
+    treeDataParentIdField: 'PRNT_TAG_IDX',
+    treeDataIdField: 'TAG_IDX',
     groupDefaultExpanded: -1,
     enableGroupEdit: true,
-    getDataPath: data => data.path,
     class: 'ag-theme-custom w-100 h-100',
-    rowSelection: 'single', // 단일 선택 고정
-    rowMultiSelectWithClick: false, // 클릭에 의한 멀티 선택 해제
+    rowSelection: 'single',
     loadingOverlayComponent: AggridLoadingOverlay,
     loadingOverlayComponentParams: {
       loadingMessage: 'Loading...',
@@ -835,8 +821,9 @@
     suppressRowTransform: true,
     pagination: false,
     rowDragManaged: true,
+    rowMultiSelectWithClick: false,
     columnHoverHighlight: true,
-    suppressRowClickSelection: false, // Row 클릭 및 키보드로 행 이동/선택 가능
+    suppressRowClickSelection: false,
     suppressLastEmptyLineOnPaste: true,
     enableRangeSelection: false,
     undoRedoCellEditing: true,
@@ -896,6 +883,9 @@
     modelUpdated: params => params.api.refreshCells({ force: true }),
     cellClicked: onCellClicked,
     cellValueChanged: onCellValueChanged,
+    rowDragMove: onRowDragMove,
+    rowDragLeave: onRowDragLeave,
+    rowDragEnd: onRowDragEnd,
   }
 
   const gridEvents2 = {
@@ -903,6 +893,9 @@
     modelUpdated: params => params.api.refreshCells({ force: true }),
     cellClicked: onCellClicked,
     cellValueChanged: onCellValueChanged,
+    rowDragMove: onRowDragMove,
+    rowDragLeave: onRowDragLeave,
+    rowDragEnd: onRowDragEnd,
   }
   //#endregion AG Grid Define
 
@@ -915,7 +908,6 @@
     components: { AgCustomFilter },
     inheritAttrs: false,
   })
-
   defineExpose({
     CONTENTS_ACTION: contentsActionRef,
     CONTENTS_ACTION_PROPS: contentsActionPropsRef,
