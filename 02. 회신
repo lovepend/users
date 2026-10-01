@@ -1,1 +1,1027 @@
-13131313
+<template>
+  <div class="tab-content w-100 h-100">
+    <div class="tab-pane active w-100 h-100" v-if="dataRef_1?.length && activeTab === TAB_1_ID">
+      <ag-grid-vue v-bind="gridProps1" v-on="gridEvents1" />
+    </div>
+    <div class="tab-pane active w-100 h-100" v-if="dataRef_2?.length && activeTab === TAB_2_ID">
+      <ag-grid-vue v-bind="gridProps2" v-on="gridEvents2" />
+    </div>
+  </div>
+</template>
+
+<script setup>
+  // Common
+  import { onMounted, shallowRef, ref, computed, watch } from 'vue'
+  import { storeToRefs } from 'pinia'
+
+  // Store
+  import { useAppAuthenticationStore } from '@/stores/app-authentication'
+
+  // Helpers
+  import { ApiCommon } from '@/utils/axios/api-common'
+  import { axiosWrapper } from '@/utils/axios/axios-wrapper'
+  import { toast } from '@/composables/useToast'
+  import useI18nExtends from '@/composables/useI18nExtends'
+  import global from '@/constants/enums/global'
+
+  // Custom Component
+  import NewBasicToolBar from '@/components/toolBar/NewBasicToolBar.vue'
+  import AggridLoadingOverlay from '@/components/aggrid/AgGridLoadingOverlay.vue'
+  import AgCustomFilter from '@/components/aggrid/AgCustomFilter.vue'
+
+  // Global Instance & Variable
+  const { userInfo } = storeToRefs(useAppAuthenticationStore())
+  const { safeTranslate, translateItems } = useI18nExtends()
+
+  const props = defineProps({
+    proj_no: { type: [String, Object], required: false, default: null },
+    fn_filterFromPBS: { type: [Function], required: false, default: null },
+
+    // Auto Created by Modal Wrapper
+    var_isModal: { type: [Boolean], required: false, default: null },
+    fn_onActionApply: { type: [Function], required: false, default: null },
+    fn_onActionClose: { type: [Function], required: false, default: null },
+    fn_onShowOverlay: { type: [Function], required: false, default: null },
+    fn_onHideOverlay: { type: [Function], required: false, default: null },
+    fn_onSetAutoHeight: { type: [Function], required: false, default: null },
+  })
+
+  const currProjNoRef = computed(() => props.proj_no)
+
+  // Single / Multi 선택 모드 상태 (기본값: false = Single 모드)
+  const isMultiSelect = ref(false)
+
+  // 모드 토글 함수
+  const toggleSelectMode = () => {
+    isMultiSelect.value = !isMultiSelect.value
+    
+    // 모드 변경 시 기존 선택 해제
+    gridRef_1.value?.deselectAll()
+    gridRef_2.value?.deselectAll()
+    
+    toast.info({
+      title: isMultiSelect.value ? 'Multi 선택 모드' : 'Single 선택 모드',
+      duration: 2000,
+    })
+  }
+
+  const onShowLoading = () => {
+    gridRef_1.value?.setGridOption('loading', true)
+    gridRef_2.value?.setGridOption('loading', true)
+  }
+  const onHideLoading = () => {
+    gridRef_1.value?.setGridOption('loading', false)
+    gridRef_2.value?.setGridOption('loading', false)
+  }
+
+  // TOOLBAR BUTTON
+  const toolbarBindRef = computed(() => ({
+    // ---------- Button Wrapper Style ----------------------------------------
+    toolbarClass: {},
+    toolbarStyle: {},
+    // ---------- BUTTON - Visible --------------------------------------------
+    showCreate: true,
+    showDelete: true,
+    showUpdate: true,
+    showSave: true,
+    
+    // Custom 버튼 옵션 (NewBasicToolBar 컴포넌트 스펙에 맞게 커스텀 버튼 라벨/이벤트 전달)
+    // 만약 NewBasicToolBar에 커스텀 버튼 prop이 지원된다면 커스텀 라벨을 바인딩합니다.
+    selectModeText: isMultiSelect.value ? 'Multi' : 'Single',
+  }))
+
+  const toolbarEventsRef = computed(() => ({
+    execCreate: preCreatePBS,
+    execDelete: deletePBS,
+    execUpdate: updatePBS,
+    execToggleMode: toggleSelectMode, // Save 왼쪽에 배치할 토글 버튼 이벤트
+    execSave: savePBS,
+  }))
+
+  const TAB_1_ID = 1
+  const TAB_2_ID = 2
+  const contentsActionRef = computed(() => NewBasicToolBar)
+  const contentsActionPropsRef = computed(() => toolbarBindRef.value)
+  const contentsActionEventsRef = computed(() => toolbarEventsRef.value)
+  const contentsTabsRef = computed(() => {
+    const tabs = []
+    const dataList1 = dataRef_1.value
+    const dataList2 = dataRef_2.value
+    if (dataList1?.length) {
+      tabs.push({
+        id: TAB_1_ID,
+        name: dataList1.find(i => !i.PRNT_TAG_IDX)?.TAG_NO,
+        icon: '',
+      })
+    }
+    if (dataList2?.length) {
+      tabs.push({
+        id: TAB_2_ID,
+        name: dataList2.find(i => !i.PRNT_TAG_IDX)?.TAG_NO,
+        icon: '',
+      })
+    }
+    return tabs
+  })
+
+  const activeTab = shallowRef(0)
+  const onTabChange = (event, tab) => {
+    activeTab.value = tab.id
+  }
+
+  //#region 버튼 이벤트
+  const preCreatePBS = async function (event) {
+    const gridApi =
+      activeTab.value === TAB_1_ID ? gridRef_1.value : activeTab.value === TAB_2_ID ? gridRef_2.value : null
+    if (!gridApi) return
+
+    gridApi.stopEditing()
+    const selectedRows = gridApi.getSelectedRows()
+    if (!selectedRows.length) {
+      toast.warning({
+        title: safeTranslate('menu.worksheet.NoRowsSelected'),
+        duration: 5000,
+      })
+      return
+    }
+
+    toast
+      .confirm({
+        title: safeTranslate('menu.worksheet.panel.EnterPBSID'),
+        input: 'text',
+      })
+      .then(result => {
+        if (result.isConfirmed) {
+          const newTagNo = String(result.value || '').trim()
+          if (newTagNo) createPBS(gridApi, newTagNo)
+        }
+      })
+  }
+
+  const createPBS = async (gridApi, new_tag_no) => {
+    const selectedRows = gridApi.getSelectedRows()
+    const selectedRow = selectedRows?.[0]
+    if (!selectedRow) return
+
+    let defaultCode = ''
+    if (selectedRow.path?.length === 1) {
+      defaultCode = new_tag_no
+    } else if (selectedRow.path?.length > 1) {
+      const remainingElements = selectedRow.path.slice(1)
+      const joinedString = remainingElements.join('')
+      const resultString = joinedString + new_tag_no
+      defaultCode = resultString
+    }
+
+    let response
+    try {
+      response = await axiosWrapper.post(`/api/Data/PublishDirectCreate`, {
+        data: [
+          {
+            CRTER_NO: userInfo.value.UserID,
+            PROJ_NO: currProjNoRef.value,
+            TAG_NO: new_tag_no,
+            CLS_ID: 'PBS_CLAS',
+            PIC_NO: userInfo.value.UserID,
+            PRNT_TAG_IDX: selectedRow.TAG_IDX,
+            ATTRIBUTES: colDefs.value
+              .map(v =>
+                ['CODE'].includes(v?.field)
+                  ? {
+                      ATT_ID: v.field,
+                      VALUE: defaultCode,
+                    }
+                  : null
+              )
+              .filter(Boolean),
+          },
+        ],
+      })
+    } catch (error) {
+      const errorInfo = global.getErrorInfo(error)
+      const titleCode = errorInfo.code
+        ? `[${safeTranslate('menu.worksheet.Error')}]`
+        : `[${safeTranslate('menu.worksheet.Failed')}]`
+      toast.fail({
+        title: `${titleCode}`,
+        content: errorInfo.message,
+        code: errorInfo.code,
+        okText: safeTranslate('toast.button.Ok'),
+      })
+      return
+    }
+
+    const newData = response?.[0]
+    if (!newData) {
+      toast.warning({
+        title: safeTranslate('menu.worksheet.panel.PBSCreateFailed'),
+        duration: 5000,
+      })
+      return
+    }
+
+    let addPath = null
+    gridApi.forEachNode(node => {
+      if (node.data?.TAG_IDX === newData.PRNT_TAG_IDX) {
+        addPath = [...node.data.path, newData.TAG_NO]
+      }
+    })
+
+    const addData = {
+      path: addPath,
+      PROJ_NO: newData.PROJ_NO,
+      CLS_ID: newData.CLS_ID,
+      PIC_NO: newData.PIC_NO,
+      TAG_NO: newData.TAG_NO,
+      TAG_DESC: newData.TAG_DESC,
+      TAG_IDX: newData.TAG_IDX,
+      PRNT_TAG_IDX: newData.PRNT_TAG_IDX,
+      ATTRIBUTES: newData.ATTRIBUTES,
+      _id: newData._id,
+    }
+    newData.ATTRIBUTES.forEach(attr => (addData[attr.ATT_ID] = attr.VALUE))
+
+    const result = gridApi.applyTransaction({ add: [addData] })
+    gridApi.setNodesSelected({
+      nodes: result.add,
+      newValue: true,
+    })
+  }
+
+  const updatePBS = async () => {
+    const gridApi =
+      activeTab.value === TAB_1_ID ? gridRef_1.value : activeTab.value === TAB_2_ID ? gridRef_2.value : null
+    if (!gridApi) return
+
+    gridApi.stopEditing()
+    const selectedRows = gridApi.getSelectedRows()
+    const selectedRow = selectedRows?.[0]
+    if (!selectedRows.length || !selectedRow) {
+      toast.warning({
+        title: safeTranslate('menu.worksheet.NoRowsSelected'),
+        duration: 5000,
+      })
+      return
+    } else if (!selectedRow.PRNT_TAG_IDX) {
+      toast.warning({
+        title: safeTranslate('menu.worksheet.panel.UnableModifyRootPBS'),
+        duration: 5000,
+      })
+      return
+    }
+
+    const confirmItem = await toast.confirm({
+      title: safeTranslate('menu.worksheet.panel.EnterPBSIDToChange'),
+      input: 'text',
+      inputValue: selectedRow.TAG_NO,
+    })
+    const update_tag_no = confirmItem.value
+    if (!update_tag_no) return
+    if (selectedRow.TAG_NO === update_tag_no) {
+      toast.warning({
+        title: safeTranslate('menu.worksheet.panel.PBSIDIsDuplicated'),
+        duration: 5000,
+      })
+      return
+    }
+
+    try {
+      await axiosWrapper.post(`/api/Data/PublishDirectUpdate`, {
+        data: [
+          {
+            _id: selectedRow._id,
+            CRTER_NO: userInfo.value?.UserID,
+            CHGER_NO: userInfo.value?.UserID,
+            PROJ_NO: selectedRow.PROJ_NO,
+            TAG_IDX: selectedRow.TAG_IDX,
+            TAG_NO: update_tag_no,
+            CLS_ID: selectedRow.CLS_ID,
+            TAG_DESC: selectedRow.TAG_DESC,
+            PIC_NO: userInfo.value?.UserID,
+            PRNT_TAG_IDX: selectedRow.PRNT_TAG_IDX,
+            ATTRIBUTES: colDefs.value
+              .map(item =>
+                !['TAG_DESC', '_id'].includes(item.field)
+                  ? {
+                      ATT_ID: item.field,
+                      VALUE: selectedRow[item.field] ? selectedRow[item.field] : '',
+                    }
+                  : null
+              )
+              .filter(Boolean),
+          },
+        ],
+      })
+      getGridData()
+      toast.success({
+        title: safeTranslate('menu.worksheet.panel.PBSIDSaved'),
+        duration: 4000,
+      })
+    } catch (error) {
+      const errorInfo = global.getErrorInfo(error)
+      const titleCode = errorInfo.code
+        ? `[${safeTranslate('menu.worksheet.Error')}]`
+        : `[${safeTranslate('menu.worksheet.Failed')}]`
+      toast.fail({
+        title: `${titleCode}`,
+        content: errorInfo.message,
+        code: errorInfo.code,
+        okText: safeTranslate('toast.button.Ok'),
+      })
+    }
+  }
+
+  const deletePBS = async () => {
+    const gridApi =
+      activeTab.value === TAB_1_ID ? gridRef_1.value : activeTab.value === TAB_2_ID ? gridRef_2.value : null
+    if (!gridApi) return
+
+    gridApi.stopEditing()
+    const selectedRows = gridApi.getSelectedRows()
+    const selectedRow = selectedRows?.[0]
+    if (!selectedRows.length || !selectedRow) {
+      toast.warning({
+        title: safeTranslate('menu.worksheet.NoRowsSelected'),
+        duration: 5000,
+      })
+      return
+    } else if (!selectedRow.PRNT_TAG_IDX) {
+      toast.warning({
+        title: safeTranslate('menu.worksheet.panel.UnableModifyRootPBS'),
+        duration: 5000,
+      })
+      return
+    }
+
+    const newRowNode = gridApi.getRowNode(selectedRow._id)
+    if (newRowNode.group) {
+      toast.warning({
+        title: safeTranslate('menu.worksheet.panel.UnableModifyPBSHasSub'),
+        duration: 5000,
+      })
+      return
+    }
+
+    const confirmResult = await new Promise(resolve => {
+      toast.warning({
+        title: safeTranslate('menu.worksheet.NoticeDeleteImmediately'),
+        content: safeTranslate('menu.worksheet.ConfirmDelete'),
+        okText: safeTranslate('toast.button.Ok'),
+        cancelText: safeTranslate('toast.button.Cancel'),
+        onOk: () => resolve({ isConfirmed: true }),
+        onCancel: () => resolve({ isConfirmed: false }),
+      })
+    })
+    if (!confirmResult?.isConfirmed) return
+
+    try {
+      const response = await axiosWrapper.post(`/api/Data/PublishDirectDelete`, {
+        data: [
+          {
+            _id: selectedRow._id,
+            PROJ_NO: selectedRow.PROJ_NO,
+            TAG_IDX: selectedRow.TAG_IDX,
+            TAG_NO: selectedRow.TAG_NO,
+            CLS_ID: selectedRow.CLS_ID,
+            TAG_DESC: selectedRow.TAG_DESC,
+            PIC_NO: selectedRow.PIC_NO,
+            PRNT_TAG_IDX: selectedRow.PRNT_TAG_IDX,
+            DELETED: true,
+            DEL_USER: userInfo.value?.UserID,
+          },
+        ],
+      })
+
+      if (response?.[0]?.DELETED === true) gridApi.applyTransaction({ remove: selectedRows })
+    } catch (error) {
+      const errorInfo = global.getErrorInfo(error)
+      const titleCode = errorInfo.code
+        ? `[${safeTranslate('menu.worksheet.Error')}]`
+        : `[${safeTranslate('menu.worksheet.Failed')}]`
+      toast.fail({
+        title: `${titleCode}`,
+        content: errorInfo.message,
+        code: errorInfo.code,
+        okText: safeTranslate('toast.button.Ok'),
+      })
+    }
+  }
+
+  const savePBS = async () => {
+    const gridApi =
+      activeTab.value === TAB_1_ID ? gridRef_1.value : activeTab.value === TAB_2_ID ? gridRef_2.value : null
+    if (!gridApi) return
+
+    gridApi.stopEditing()
+
+    const saveData = []
+    gridApi.forEachNode(node => {
+      if (!node.data) return
+      saveData.push({
+        _id: node.data._id,
+        CRTER_NO: userInfo.value?.UserID,
+        CHGER_NO: userInfo.value?.UserID,
+        PROJ_NO: node.data.PROJ_NO,
+        TAG_IDX: node.data.TAG_IDX,
+        TAG_NO: node.data.TAG_NO,
+        CLS_ID: node.data.CLS_ID,
+        TAG_DESC: node.data.TAG_DESC,
+        PIC_NO: userInfo.value?.UserID,
+        PRNT_TAG_IDX: node.data.PRNT_TAG_IDX,
+        ATTRIBUTES: colDefs.value
+          .map(item =>
+            !['TAG_DESC', '_id'].includes(item.field)
+              ? {
+                  ATT_ID: item.field,
+                  VALUE: node.data[item.field] ? node.data[item.field] : '',
+                }
+              : null
+          )
+          .filter(Boolean),
+      })
+    })
+    if (!saveData.length) return
+
+    try {
+      await axiosWrapper.post(`/api/Data/PublishDirectUpdate`, {
+        data: saveData,
+      })
+      toast.success({
+        title: safeTranslate('menu.worksheet.panel.PBSDataSaved'),
+        duration: 4000,
+      })
+    } catch (error) {
+      const errorInfo = global.getErrorInfo(error)
+      const titleCode = errorInfo.code
+        ? `[${safeTranslate('menu.worksheet.Error')}]`
+        : `[${safeTranslate('menu.worksheet.Failed')}]`
+      toast.fail({
+        title: `${titleCode}`,
+        content: errorInfo.message,
+        code: errorInfo.code,
+        okText: safeTranslate('toast.button.Ok'),
+      })
+    }
+  }
+  //#endregion 버튼 이벤트
+
+  //#region AG Grid 이벤트
+  const onRowDragEnd = event => {
+    const movingNode = event.node
+    const overNode = event.overNode
+
+    if (!overNode || movingNode === overNode) return
+
+    if (!movingNode.data.PRNT_TAG_IDX) {
+      toast.warning({
+        title: safeTranslate('menu.worksheet.panel.UnableModifyRootPBS'),
+        duration: 3000,
+      })
+      return
+    }
+
+    const newParentNode = overNode
+    const newParentData = newParentNode.data
+
+    if (newParentData.path.includes(movingNode.data.TAG_NO)) {
+      toast.warning({
+        title: '하위 노드로 이동할 수 없습니다.',
+        duration: 3000,
+      })
+      return
+    }
+
+    const updatePathAndParent = (targetNode, parentPath, newParentIdx) => {
+      const updatedPath = [...parentPath, targetNode.data.TAG_NO]
+      targetNode.setDataValue('path', updatedPath)
+      if (newParentIdx !== undefined) {
+        targetNode.setDataValue('PRNT_TAG_IDX', newParentIdx)
+      }
+
+      if (targetNode.childrenAfterGroup) {
+        targetNode.childrenAfterGroup.forEach(child => {
+          updatePathAndParent(child, updatedPath)
+        })
+      }
+    }
+
+    updatePathAndParent(movingNode, newParentData.path, newParentData.TAG_IDX)
+    event.api.refreshClientSideRowModel('treeData')
+  }
+
+  // 데이터 전달 공통 로직 (Single/Multi 모드 대응)
+  const emitSelectedPBSData = (api) => {
+    if (!props.fn_filterFromPBS || !api) return
+
+    const selectedNodes = api.getSelectedNodes()
+    if (!selectedNodes.length) {
+      props.fn_filterFromPBS(false, [], null)
+      return
+    }
+
+    const sendDataMap = new Map()
+    let isRoot = false
+    let rootId = null
+
+    selectedNodes.forEach(node => {
+      if (!node.data) return
+      
+      if (!node.data.PRNT_TAG_IDX) isRoot = true
+      if (!rootId && node.data?.path?.[0]) rootId = node.data.path[0]
+
+      // 자기 자신 추가
+      if (node.data.TAG_IDX && !sendDataMap.has(node.data.TAG_IDX)) {
+        sendDataMap.set(node.data.TAG_IDX, { TAG_IDX: node.data.TAG_IDX, CODE: node.data.CODE })
+      }
+
+      // 하위 모든 Leaf 자식 노드들 추가
+      node.allLeafChildren?.forEach(n => {
+        if (n.data?.TAG_IDX && !sendDataMap.has(n.data.TAG_IDX)) {
+          sendDataMap.set(n.data.TAG_IDX, { TAG_IDX: n.data.TAG_IDX, CODE: n.data.CODE })
+        }
+      })
+    })
+
+    const sendData = Array.from(sendDataMap.values())
+    props.fn_filterFromPBS(isRoot, sendData, rootId)
+  }
+
+  // cellClicked 이벤트
+  const onCellClicked = event => {
+    const node = event.node
+    const headerName = event.colDef.headerName
+
+    if (headerName === 'HASOBJECT') {
+      const cellElement = event.event.target.closest('.ag-cell')
+      if (cellElement) {
+        const customTag = cellElement.querySelector('.form-check-input')
+        if (customTag) {
+          const newValue = customTag.checked ? 'true' : 'false'
+          node.setDataValue('HASOBJECT', newValue)
+        }
+      }
+    }
+
+    // Single 모드일 때는 클릭만 해도 셀렉션 상태 갱신 후 이벤트 전달
+    if (!isMultiSelect.value) {
+      emitSelectedPBSData(event.api)
+    }
+  }
+
+  // onSelectionChanged 이벤트
+  const onSelectionChanged = event => {
+    // 체크박스 클릭 혹은 Multi 선택 변경 시 최신 선택 정보 전달
+    emitSelectedPBSData(event.api)
+  }
+
+  // cellValueChanged 이벤트
+  const onCellValueChanged = async params => {
+    if (params.colDef.field === 'CODE') {
+      if (params.rowIndex === 0) {
+        params.data.CODE = ''
+        toast.warning({
+          title: safeTranslate('menu.worksheet.panel.CannotChangeRootCode'),
+          duration: 5000,
+        })
+        return
+      } else {
+        if (!params.newValue) {
+          params.data.CODE = params.oldValue
+          toast.warning({
+            title: safeTranslate('menu.worksheet.panel.CodeIsRequired'),
+            duration: 5000,
+          })
+          return
+        } else {
+          let isDuplicate = false
+          params.api.forEachNode(n => {
+            if (n.data && n.id !== params.node.id) {
+              if (n.data.CODE === params.newValue) isDuplicate = true
+            }
+          })
+          if (isDuplicate) {
+            params.data.CODE = params.oldValue
+            toast.warning({
+              title: safeTranslate('menu.worksheet.panel.CodeIsDuplicated'),
+              duration: 5000,
+            })
+            return
+          }
+        }
+      }
+    }
+
+    params.api.refreshCells({
+      force: true,
+      suppressFlash: true,
+      rowNodes: [params.node],
+    })
+  }
+  //#endregion AG Grid 이벤트
+
+  //#region Function
+  const getHeaderData = async () => {
+    colDefs.value = [
+      { field: 'TAG_DESC', headerName: 'PBS Desc', minWidth: 100, editable: true },
+      { field: '_id', hide: true },
+    ]
+    if (!currProjNoRef.value) return
+
+    let response
+    try {
+      response = await ApiCommon.postObjectClassGet({
+        ProjectNo: currProjNoRef.value,
+        ContainDeleted: false,
+      })
+    } catch (error) {
+      const errorInfo = global.getErrorInfo(error)
+      const titleCode = errorInfo.code
+        ? `[${safeTranslate('menu.worksheet.Error')}]`
+        : `[${safeTranslate('menu.worksheet.Failed')}]`
+      toast.fail({
+        title: `${titleCode}`,
+        content: errorInfo.message,
+        code: errorInfo.code,
+        okText: safeTranslate('toast.button.Ok'),
+      })
+      return
+    }
+    if (!response?.length) return
+
+    const lnkAtts = response.find(i => i.CLS_ID === 'PBS_CLAS')?.LNK_ATT
+    lnkAtts?.forEach(v => {
+      if (v.ATT_ID === 'HASOBJECT') {
+        colDefs.value.push({
+          field: v.ATT_ID,
+          headerName: v.ATT_ID,
+          width: 100,
+          cellRenderer: params => {
+            return `
+              <div>
+                <input class="form-check-input custom-form-check-input-pbs mt-1" type="checkbox"
+                ${String(params.value ?? '').toLowerCase() === 'true' ? 'checked' : ''}
+                />
+              </div>
+            `
+          },
+        })
+      } else {
+        colDefs.value.push({ field: v.ATT_ID, headerName: v.ATT_ID, minWidth: 100, flex: 1, editable: true })
+      }
+    })
+  }
+
+  const getGridData = async () => {
+    const onFinally = () => {
+      onHideLoading()
+    }
+    onShowLoading()
+
+    dataRef_1.value = []
+    dataRef_2.value = []
+
+    if (!currProjNoRef.value) {
+      toast.warning({
+        title: safeTranslate('menu.worksheet.MessageIsEmpty', {
+          message: safeTranslate('menu.worksheet.Project'),
+        }),
+        duration: 5000,
+      })
+      return onFinally()
+    }
+
+    const dataGetParam = {
+      ProjectNo: currProjNoRef.value,
+      CLS_ID: 'PBS_CLAS',
+      ContainDeleted: false,
+    }
+
+    const applyFinalGridData = async pubData => {
+      let list
+      try {
+        list = pubData || (await ApiCommon.postDataGetPubDataByClass(dataGetParam))
+        if (!list?.length) {
+          toast.warning({
+            title: safeTranslate('menu.worksheet.NotFoundPBSData'),
+            duration: 5000,
+          })
+          return onFinally()
+        }
+      } catch (error) {
+        const errorInfo = global.getErrorInfo(error)
+        const titleCode = errorInfo.code
+          ? `[${safeTranslate('menu.worksheet.Error')}]`
+          : `[${safeTranslate('menu.worksheet.Failed')}]`
+        toast.fail({
+          title: `${titleCode}`,
+          content: errorInfo.message,
+          code: errorInfo.code,
+          okText: safeTranslate('toast.button.Ok'),
+        })
+        return onFinally()
+      }
+
+      const paths = []
+      const findPath = (item, path) => {
+        path.push(item.TAG_NO)
+        paths.push({ ...item, path: [...path] })
+        for (const c of list) {
+          if (c?.PRNT_TAG_IDX === item.TAG_IDX) findPath(c, path)
+        }
+        path.pop()
+      }
+
+      const rootTagIdxs = []
+      for (const item of list) {
+        if (item?.TAG_IDX && !item.PRNT_TAG_IDX) {
+          rootTagIdxs.push(item.TAG_IDX)
+          findPath(item, [])
+        }
+      }
+
+      const map = {}
+      paths.forEach(v => {
+        if (v?.TAG_IDX) map[v.TAG_IDX] = { ...v, children: [] }
+      })
+
+      paths.forEach(v => {
+        if (v?.TAG_IDX && v.PRNT_TAG_IDX && map[v.PRNT_TAG_IDX]) {
+          map[v.PRNT_TAG_IDX].children.push(map[v.TAG_IDX])
+        }
+      })
+
+      const collectSubtrees = function (item, result = []) {
+        const { ATTRIBUTES, ...flat } = item
+        ATTRIBUTES?.forEach(v => (flat[v.ATT_ID] = v.VALUE))
+
+        result.push(flat)
+        item.children.forEach(c => collectSubtrees(c, result))
+        return result
+      }
+
+      const [data1, data2] = rootTagIdxs.map(v => collectSubtrees(map[v]))
+
+      const data1Tag = data1?.[0]?.TAG_NO
+      const data2Tag = data2?.[0]?.TAG_NO
+      const isFirstSection = (data1Tag?.indexOf('SYSTEM') ?? -1) > -1 || (data2Tag?.indexOf('SYSTEM') ?? -1) < 0
+      dataRef_1.value = (isFirstSection ? data1 : data2) ?? []
+      dataRef_2.value = (isFirstSection ? data2 : data1) ?? []
+
+      const size1 = dataRef_1.value?.length
+      const size2 = dataRef_2.value?.length
+      if (activeTab.value === TAB_1_ID && !size1) {
+        activeTab.value = !size2 ? 0 : TAB_2_ID
+      } else if (activeTab.value === TAB_2_ID && !size2) {
+        activeTab.value = !size1 ? 0 : TAB_1_ID
+      } else {
+        activeTab.value = size1 ? TAB_1_ID : size2 ? TAB_2_ID : 0
+      }
+
+      return onFinally()
+    }
+
+    let response
+    try {
+      response = await ApiCommon.postDataGetPubDataByClass(dataGetParam)
+    } catch (error) {
+      const errorInfo = global.getErrorInfo(error)
+      const titleCode = errorInfo.code
+        ? `[${safeTranslate('menu.worksheet.Error')}]`
+        : `[${safeTranslate('menu.worksheet.Failed')}]`
+      toast.fail({
+        title: `${titleCode}`,
+        content: errorInfo.message,
+        code: errorInfo.code,
+        okText: safeTranslate('toast.button.Ok'),
+      })
+      return onFinally()
+    }
+
+    if (!response?.length) {
+      const confirmResult = await new Promise(resolve => {
+        toast.warning({
+          title: '현재 프로젝트에는 PBS Data가 없습니다. 기본 PBS를 생성하시겠습니까?',
+          okText: safeTranslate('toast.button.Ok'),
+          cancelText: safeTranslate('toast.button.Cancel'),
+          onOk: () => resolve({ isConfirmed: true }),
+          onCancel: () => resolve({ isConfirmed: false }),
+        })
+      })
+      if (!confirmResult?.isConfirmed) return onFinally()
+
+      try {
+        await axiosWrapper.post(`/api/Data/PublishDirectCreate`, {
+          data: [
+            {
+              CRTER_NO: userInfo.value?.UserID,
+              PROJ_NO: currProjNoRef.value,
+              TAG_NO: `SYSTEM PBS`,
+              CLS_ID: 'PBS_CLAS',
+              PIC_NO: userInfo.value?.UserID,
+              ATTRIBUTES: [],
+            },
+            {
+              CRTER_NO: userInfo.value?.UserID,
+              PROJ_NO: currProjNoRef.value,
+              TAG_NO: `ASSEMBLY PBS`,
+              CLS_ID: 'PBS_CLAS',
+              PIC_NO: userInfo.value?.UserID,
+              ATTRIBUTES: [],
+            },
+          ],
+        })
+      } catch (error) {
+        const errorInfo = global.getErrorInfo(error)
+        const titleCode = errorInfo.code
+          ? `[${safeTranslate('menu.worksheet.Error')}]`
+          : `[${safeTranslate('menu.worksheet.Failed')}]`
+        toast.fail({
+          title: `${titleCode}`,
+          content: errorInfo.message,
+          code: errorInfo.code,
+          okText: safeTranslate('toast.button.Ok'),
+        })
+        return onFinally()
+      }
+      await applyFinalGridData()
+
+      return
+    } else {
+      await applyFinalGridData(response)
+    }
+  }
+  //#endregion Function
+
+  //#region AG Grid Define
+  const dataRef_1 = ref([])
+  const dataRef_2 = ref([])
+
+  const gridRef_1 = shallowRef(null)
+  const gridRef_2 = shallowRef(null)
+
+  const colDefs = ref([])
+
+  const COMMON_PROPS = computed(() => ({
+    onSelectionChanged: onSelectionChanged,
+    getRowId: params => params.data?._id,
+    autoGroupColumnDef: {
+      headerName: 'PBS ID',
+      minWidth: 220,
+      rowDrag: true,
+      cellRendererParams: {
+        checkbox: true,
+        innerRenderer: params => {
+          return `
+            <i class="fas fa-folder${params.node.expanded ? '-open' : ''} text-warning me-1 fs-13px" style="line-height: inherit;"></i>
+            <span class="text-primary fw-bolder">${params.value ?? ''}</span>
+          `
+        },
+        suppressCount: true,
+      },
+    },
+    treeData: true,
+    groupDefaultExpanded: -1,
+    enableGroupEdit: true,
+    getDataPath: data => data.path,
+    class: 'ag-theme-custom w-100 h-100',
+    // isMultiSelect 값에 맞춰 동적으로 rowSelection 옵션 변경 ('single' 또는 'multiple')
+    rowSelection: isMultiSelect.value ? 'multiple' : 'single',
+    loadingOverlayComponent: AggridLoadingOverlay,
+    loadingOverlayComponentParams: {
+      loadingMessage: 'Loading...',
+    },
+    statusBar: {
+      statusPanels: [
+        { statusPanel: 'agTotalRowCountComponent' },
+        { statusPanel: 'agFilteredRowCountComponent' },
+        { statusPanel: 'agSelectedRowCountComponent' },
+      ],
+    },
+    suppressRowTransform: true,
+    pagination: false,
+    rowDragManaged: true,
+    rowMultiSelectWithClick: false,
+    columnHoverHighlight: true,
+    suppressRowClickSelection: false,
+    suppressLastEmptyLineOnPaste: true,
+    enableRangeSelection: false,
+    undoRedoCellEditing: true,
+    undoRedoCellEditingLimit: 20,
+  }))
+
+  const gridProps1 = computed(() => ({
+    ...COMMON_PROPS.value,
+    columnDefs: colDefs.value,
+    rowData: dataRef_1.value,
+    defaultColDef: {
+      editable: false,
+      filter: 'agMultiColumnFilter',
+      floatingFilter: true,
+      filterParams: {
+        filters: [
+          {
+            filter: 'agTextColumnFilter',
+            filterParams: { buttons: ['reset'] },
+          },
+          {
+            filter: 'agSetColumnFilter',
+            filterParams: {
+              comparator: (a, b) => {
+                const valA = parseInt(a)
+                const valB = parseInt(b)
+                if (valA === valB) return 0
+                return valA > valB ? 1 : -1
+              },
+              buttons: ['reset'],
+            },
+          },
+          {
+            filter: 'AgCustomFilter',
+            filterParams: { buttons: ['reset'] },
+          },
+        ],
+      },
+    },
+  }))
+
+  const gridProps2 = computed(() => ({
+    ...COMMON_PROPS.value,
+    columnDefs: colDefs.value,
+    rowData: dataRef_2.value,
+    defaultColDef: {
+      editable: false,
+    },
+  }))
+
+  const gridEvents1 = {
+    gridReady: params => (gridRef_1.value = params.api),
+    modelUpdated: params => params.api.refreshCells({ force: true }),
+    cellClicked: onCellClicked,
+    cellValueChanged: onCellValueChanged,
+    rowDragEnd: onRowDragEnd,
+  }
+
+  const gridEvents2 = {
+    gridReady: params => (gridRef_2.value = params.api),
+    modelUpdated: params => params.api.refreshCells({ force: true }),
+    cellClicked: onCellClicked,
+    cellValueChanged: onCellValueChanged,
+    rowDragEnd: onRowDragEnd,
+  }
+  //#endregion AG Grid Define
+
+  onMounted(() => {
+    getHeaderData().then(getGridData)
+  })
+
+  defineOptions({
+    name: 'CommonPbsTree',
+    components: { AgCustomFilter },
+    inheritAttrs: false,
+  })
+
+  defineExpose({
+    CONTENTS_ACTION: contentsActionRef,
+    CONTENTS_ACTION_PROPS: contentsActionPropsRef,
+    CONTENTS_ACTION_EVENTS: contentsActionEventsRef,
+    CONTENTS_TABS: contentsTabsRef,
+    CONTENTS_TAB_CHANGE: onTabChange,
+  })
+</script>
+
+<style scoped lang="scss">
+  .custom-nav-pbs.nav-pills .nav-link.active {
+    background-color: white;
+  }
+
+  .custom-form-check-input-pbs.form-check-input {
+    background-color: var(--ag-checkbox-unchecked-background-color);
+    border: solid var(--ag-checkbox-border-width) var(--ag-checkbox-unchecked-border-color);
+    border-radius: initial;
+  }
+
+  .custom-form-check-input-pbs.form-check-input:checked {
+    background-color: var(--ag-checkbox-checked-background-color);
+    border-color: var(--ag-checkbox-checked-border-color);
+  }
+
+  :deep(.ag-row) {
+    border-bottom: none !important;
+  }
+
+  :deep(.ag-cell) {
+    border-bottom: none !important;
+  }
+
+  :deep(.ag-cell-wrapper) {
+    border-bottom: none !important;
+    align-items: center;
+    > .ag-group-checkbox {
+      margin-right: var(--ag-cell-widget-spacing);
+    }
+  }
+
+  :deep(.ag-root-wrapper) {
+    border: none !important;
+  }
+</style>
