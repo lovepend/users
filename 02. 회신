@@ -32,7 +32,7 @@
 
 <script setup>
   // Common
-  import { onMounted, shallowRef, ref, computed, watch } from 'vue'
+  import { onMounted, shallowRef, ref, computed } from 'vue'
   import { storeToRefs } from 'pinia'
 
   // Store
@@ -52,7 +52,7 @@
 
   // Global Instance & Variable
   const { userInfo } = storeToRefs(useAppAuthenticationStore())
-  const { safeTranslate, translateItems } = useI18nExtends()
+  const { safeTranslate } = useI18nExtends()
 
   const props = defineProps({
     proj_no: { type: [String, Object], required: false, default: null },
@@ -76,7 +76,7 @@
   const toggleSelectMode = () => {
     isMultiSelect.value = !isMultiSelect.value
     
-    // 모드 변경 시 기존 선택 상태 초기화
+    // 모드 변경 시 기존 선택 상태 초기증
     if (gridRef_1.value) gridRef_1.value.deselectAll()
     if (gridRef_2.value) gridRef_2.value.deselectAll()
     
@@ -97,16 +97,12 @@
 
   // TOOLBAR BUTTON
   const toolbarBindRef = computed(() => ({
-    // ---------- Button Wrapper Style ----------------------------------------
     toolbarClass: {},
     toolbarStyle: {},
-    // ---------- BUTTON - Visible --------------------------------------------
     showCreate: true,
     showDelete: true,
     showUpdate: true,
     showSave: true,
-    
-    // 커스텀 라벨 바인딩
     selectModeText: isMultiSelect.value ? 'Multi' : 'Single',
   }))
 
@@ -150,7 +146,7 @@
   }
 
   //#region 버튼 이벤트
-  const preCreatePBS = async function (event) {
+  const preCreatePBS = async function () {
     const gridApi =
       activeTab.value === TAB_1_ID ? gridRef_1.value : activeTab.value === TAB_2_ID ? gridRef_2.value : null
     if (!gridApi) return
@@ -486,7 +482,6 @@
   //#endregion 버튼 이벤트
 
   //#region AG Grid 이벤트
-  // ★ 드래그 앤 드롭 UI 렌더링 수정 반영 ★
   const onRowDragEnd = event => {
     const movingNode = event.node
     const overNode = event.overNode
@@ -513,7 +508,7 @@
     const currentTargetRef = activeTab.value === TAB_1_ID ? dataRef_1 : dataRef_2
     const currentGridApi = event.api
 
-    // 1. 순환 탐색하며 path 및 PRNT_TAG_IDX 재구성
+    // 순환 탐색하며 path 및 PRNT_TAG_IDX 재구성
     const updatePathRecursive = (targetTagIdx, parentPath, newParentIdx) => {
       const targetItem = currentTargetRef.value.find(item => item.TAG_IDX === targetTagIdx)
       if (!targetItem) return
@@ -528,15 +523,14 @@
       children.forEach(child => updatePathRecursive(child.TAG_IDX, updatedPath))
     }
 
-    // 2. 이동 대상 데이터 업데이트
+    // 이동 대상 데이터 업데이트
     updatePathRecursive(movingNode.data.TAG_IDX, newParentData.path, newParentData.TAG_IDX)
 
-    // 3. rowData 상태를 새로 할당 및 setGridOption으로 전달하여 완벽 재렌더링
+    // rowData 상태 업데이트 및 setGridOption으로 재렌더링
     currentTargetRef.value = [...currentTargetRef.value]
     currentGridApi.setGridOption('rowData', currentTargetRef.value)
   }
 
-  // ★ 선택 데이터 전달 통합 로직 (Single/Multi 모드 대응) ★
   const emitSelectedPBSData = api => {
     if (!props.fn_filterFromPBS || !api) return
 
@@ -556,12 +550,10 @@
       if (!node.data.PRNT_TAG_IDX) isRoot = true
       if (!rootId && node.data?.path?.[0]) rootId = node.data.path[0]
 
-      // 현재 선택된 노드 추가
       if (node.data.TAG_IDX && !sendDataMap.has(node.data.TAG_IDX)) {
         sendDataMap.set(node.data.TAG_IDX, { TAG_IDX: node.data.TAG_IDX, CODE: node.data.CODE })
       }
 
-      // 하위 모든 Leaf 자식 노드들 추가
       node.allLeafChildren?.forEach(n => {
         if (n.data?.TAG_IDX && !sendDataMap.has(n.data.TAG_IDX)) {
           sendDataMap.set(n.data.TAG_IDX, { TAG_IDX: n.data.TAG_IDX, CODE: node.data.CODE })
@@ -573,7 +565,6 @@
     props.fn_filterFromPBS(isRoot, sendData, rootId)
   }
 
-  // cellClicked 이벤트
   const onCellClicked = event => {
     const node = event.node
     const headerName = event.colDef.headerName
@@ -589,7 +580,6 @@
       }
     }
 
-    // Single 모드일 때는 클릭한 노드만 셀렉션 처리 후 전달
     if (!isMultiSelect.value) {
       event.api.deselectAll()
       node.setSelected(true)
@@ -597,15 +587,12 @@
     }
   }
 
-  // onSelectionChanged 이벤트
   const onSelectionChanged = event => {
-    // Multi 모드 및 체크박스 선택 변경 시 데이터 전달
     if (isMultiSelect.value) {
       emitSelectedPBSData(event.api)
     }
   }
 
-  // cellValueChanged 이벤트
   const onCellValueChanged = async params => {
     if (params.colDef.field === 'CODE') {
       if (params.rowIndex === 0) {
@@ -898,7 +885,7 @@
     autoGroupColumnDef: {
       headerName: 'PBS ID',
       minWidth: 220,
-      rowDrag: true,
+      rowDrag: true, // 그룹 컬럼에 드래그 핸들 추가
       cellRendererParams: {
         checkbox: true,
         innerRenderer: params => {
@@ -915,7 +902,6 @@
     enableGroupEdit: true,
     getDataPath: data => data.path,
     class: 'ag-theme-custom w-100 h-100',
-    // isMultiSelect 반응형 상태에 따른 동적 선택 옵션 ('single' 또는 'multiple')
     rowSelection: isMultiSelect.value ? 'multiple' : 'single',
     loadingOverlayComponent: AggridLoadingOverlay,
     loadingOverlayComponentParams: {
@@ -930,7 +916,11 @@
     },
     suppressRowTransform: true,
     pagination: false,
-    rowDragManaged: true,
+    
+    // ★ 유료(Enterprise) 버전 트리 드래그 옵션 적용 ★
+    rowDragManaged: true, // 자동 행 순서 제어 허용
+    suppressMoveWhenRowDragging: true, // 드래그 중 실시간 행 이동 애니메이션 억제 (라인 표시 전용)
+    
     rowMultiSelectWithClick: false,
     columnHoverHighlight: true,
     suppressRowClickSelection: false,
