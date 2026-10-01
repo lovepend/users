@@ -1,31 +1,10 @@
 <template>
-  <div class="tab-content w-100 h-100 d-flex flex-column">
-    <!-- 상단 툴바 및 Single/Multi 토글 버튼 영역 -->
-    <div class="d-flex align-items-center justify-content-between p-2 border-bottom bg-light">
-      <component
-        :is="contentsActionRef"
-        v-bind="contentsActionPropsRef"
-        v-on="contentsActionEventsRef"
-      />
-      <!-- Save 버튼 왼쪽에 위치하는 Single / Multi 토글 버튼 -->
-      <button
-        class="btn btn-sm fw-bold px-3 ms-auto me-2"
-        :class="isMultiSelect ? 'btn-warning text-dark' : 'btn-info text-white'"
-        @click="toggleSelectMode"
-      >
-        <i :class="isMultiSelect ? 'fas fa-tasks me-1' : 'fas fa-mouse-pointer me-1'"></i>
-        {{ isMultiSelect ? 'Multi Mode' : 'Single Mode' }}
-      </button>
+  <div class="tab-content w-100 h-100">
+    <div class="tab-pane active w-100 h-100" v-if="dataRef_1?.length && activeTab === TAB_1_ID">
+      <ag-grid-vue v-bind="gridProps1" v-on="gridEvents1" />
     </div>
-
-    <!-- 그리드 영역 -->
-    <div class="flex-grow-1 w-100 h-100 overflow-hidden">
-      <div class="tab-pane active w-100 h-100" v-if="dataRef_1?.length && activeTab === TAB_1_ID">
-        <ag-grid-vue v-bind="gridProps1" v-on="gridEvents1" />
-      </div>
-      <div class="tab-pane active w-100 h-100" v-if="dataRef_2?.length && activeTab === TAB_2_ID">
-        <ag-grid-vue v-bind="gridProps2" v-on="gridEvents2" />
-      </div>
+    <div class="tab-pane active w-100 h-100" v-if="dataRef_2?.length && activeTab === TAB_2_ID">
+      <ag-grid-vue v-bind="gridProps2" v-on="gridEvents2" />
     </div>
   </div>
 </template>
@@ -52,7 +31,7 @@
 
   // Global Instance & Variable
   const { userInfo } = storeToRefs(useAppAuthenticationStore())
-  const { safeTranslate } = useI18nExtends()
+  const { safeTranslate, translateItems } = useI18nExtends()
 
   const props = defineProps({
     proj_no: { type: [String, Object], required: false, default: null },
@@ -69,23 +48,6 @@
 
   const currProjNoRef = computed(() => props.proj_no)
 
-  // Single / Multi 선택 모드 상태 (기본값: false = Single 모드)
-  const isMultiSelect = ref(false)
-
-  // 모드 토글 함수
-  const toggleSelectMode = () => {
-    isMultiSelect.value = !isMultiSelect.value
-    
-    // 모드 변경 시 기존 선택 상태 초기증
-    if (gridRef_1.value) gridRef_1.value.deselectAll()
-    if (gridRef_2.value) gridRef_2.value.deselectAll()
-    
-    toast.info({
-      title: isMultiSelect.value ? 'Multi 선택 모드로 변경되었습니다.' : 'Single 선택 모드로 변경되었습니다.',
-      duration: 2000,
-    })
-  }
-
   const onShowLoading = () => {
     gridRef_1.value?.setGridOption('loading', true)
     gridRef_2.value?.setGridOption('loading', true)
@@ -97,23 +59,36 @@
 
   // TOOLBAR BUTTON
   const toolbarBindRef = computed(() => ({
+    // ---------- Button Wrapper Style ----------------------------------------
     toolbarClass: {},
     toolbarStyle: {},
+    // areaGap: 10,
+    // ---------- BUTTON - Visible --------------------------------------------
     showCreate: true,
+    // showMultiCreate: isSetupAdmin.value,
     showDelete: true,
     showUpdate: true,
+    // showCopy: isSetupAdmin.value,
+    // showRefresh: true,
     showSave: true,
-    selectModeText: isMultiSelect.value ? 'Multi' : 'Single',
+    // ---------- BUTTON - Disabled -------------------------------------------
+    // blockCreate: !isSetupAdmin.value,
+    // blockMultiCreate: !isSetupAdmin.value,
+    // blockDelete: !isSetupAdmin.value || isDisabledDeleteBtn.value,
+    // blockUpdate: !isSetupAdmin.value,
+    // blockCopy: !isSetupAdmin.value,
+    // blockRefresh: false,
+    // blockSave: !isSetupAdmin.value,
   }))
-
   const toolbarEventsRef = computed(() => ({
     execCreate: preCreatePBS,
+    // execMultiCreate: onCreateMultiRows,
     execDelete: deletePBS,
     execUpdate: updatePBS,
-    execToggleMode: toggleSelectMode,
+    // execCopy: onCopy,
     execSave: savePBS,
+    // execRefresh: onInitialize,
   }))
-
   const TAB_1_ID = 1
   const TAB_2_ID = 2
   const contentsActionRef = computed(() => NewBasicToolBar)
@@ -146,7 +121,8 @@
   }
 
   //#region 버튼 이벤트
-  const preCreatePBS = async function () {
+  // New/Create 버튼 클릭
+  const preCreatePBS = async function (event) {
     const gridApi =
       activeTab.value === TAB_1_ID ? gridRef_1.value : activeTab.value === TAB_2_ID ? gridRef_2.value : null
     if (!gridApi) return
@@ -158,6 +134,7 @@
         title: safeTranslate('menu.worksheet.NoRowsSelected'),
         duration: 5000,
       })
+
       return
     }
 
@@ -174,6 +151,7 @@
       })
   }
 
+  // PBS 생성
   const createPBS = async (gridApi, new_tag_no) => {
     const selectedRows = gridApi.getSelectedRows()
     const selectedRow = selectedRows?.[0]
@@ -218,8 +196,9 @@
       const titleCode = errorInfo.code
         ? `[${safeTranslate('menu.worksheet.Error')}]`
         : `[${safeTranslate('menu.worksheet.Failed')}]`
+      const errorTitle = ''
       toast.fail({
-        title: `${titleCode}`,
+        title: `${titleCode} ${errorTitle}`,
         content: errorInfo.message,
         code: errorInfo.code,
         okText: safeTranslate('toast.button.Ok'),
@@ -264,6 +243,7 @@
     })
   }
 
+  // PBS ID 업데이트
   const updatePBS = async () => {
     const gridApi =
       activeTab.value === TAB_1_ID ? gridRef_1.value : activeTab.value === TAB_2_ID ? gridRef_2.value : null
@@ -302,7 +282,7 @@
     }
 
     try {
-      await axiosWrapper.post(`/api/Data/PublishDirectUpdate`, {
+      const response = await axiosWrapper.post(`/api/Data/PublishDirectUpdate`, {
         data: [
           {
             _id: selectedRow._id,
@@ -338,8 +318,9 @@
       const titleCode = errorInfo.code
         ? `[${safeTranslate('menu.worksheet.Error')}]`
         : `[${safeTranslate('menu.worksheet.Failed')}]`
+      const errorTitle = ''
       toast.fail({
-        title: `${titleCode}`,
+        title: `${titleCode} ${errorTitle}`,
         content: errorInfo.message,
         code: errorInfo.code,
         okText: safeTranslate('toast.button.Ok'),
@@ -347,6 +328,7 @@
     }
   }
 
+  // PBS 삭제
   const deletePBS = async () => {
     const gridApi =
       activeTab.value === TAB_1_ID ? gridRef_1.value : activeTab.value === TAB_2_ID ? gridRef_2.value : null
@@ -414,8 +396,9 @@
       const titleCode = errorInfo.code
         ? `[${safeTranslate('menu.worksheet.Error')}]`
         : `[${safeTranslate('menu.worksheet.Failed')}]`
+      const errorTitle = ''
       toast.fail({
-        title: `${titleCode}`,
+        title: `${titleCode} ${errorTitle}`,
         content: errorInfo.message,
         code: errorInfo.code,
         okText: safeTranslate('toast.button.Ok'),
@@ -423,6 +406,7 @@
     }
   }
 
+  // PBS 전체 업데이트
   const savePBS = async () => {
     const gridApi =
       activeTab.value === TAB_1_ID ? gridRef_1.value : activeTab.value === TAB_2_ID ? gridRef_2.value : null
@@ -459,7 +443,7 @@
     if (!saveData.length) return
 
     try {
-      await axiosWrapper.post(`/api/Data/PublishDirectUpdate`, {
+      const response = await axiosWrapper.post(`/api/Data/PublishDirectUpdate`, {
         data: saveData,
       })
       toast.success({
@@ -471,8 +455,9 @@
       const titleCode = errorInfo.code
         ? `[${safeTranslate('menu.worksheet.Error')}]`
         : `[${safeTranslate('menu.worksheet.Failed')}]`
+      const errorTitle = ''
       toast.fail({
-        title: `${titleCode}`,
+        title: `${titleCode} ${errorTitle}`,
         content: errorInfo.message,
         code: errorInfo.code,
         okText: safeTranslate('toast.button.Ok'),
@@ -482,93 +467,9 @@
   //#endregion 버튼 이벤트
 
   //#region AG Grid 이벤트
-  const onRowDragEnd = event => {
-    const movingNode = event.node
-    const overNode = event.overNode
-
-    if (!overNode || movingNode === overNode) return
-
-    if (!movingNode.data.PRNT_TAG_IDX) {
-      toast.warning({
-        title: safeTranslate('menu.worksheet.panel.UnableModifyRootPBS'),
-        duration: 3000,
-      })
-      return
-    }
-
-    const newParentData = overNode.data
-    if (newParentData.path.includes(movingNode.data.TAG_NO)) {
-      toast.warning({
-        title: '하위 노드로 이동할 수 없습니다.',
-        duration: 3000,
-      })
-      return
-    }
-
-    const currentTargetRef = activeTab.value === TAB_1_ID ? dataRef_1 : dataRef_2
-    const currentGridApi = event.api
-
-    // 순환 탐색하며 path 및 PRNT_TAG_IDX 재구성
-    const updatePathRecursive = (targetTagIdx, parentPath, newParentIdx) => {
-      const targetItem = currentTargetRef.value.find(item => item.TAG_IDX === targetTagIdx)
-      if (!targetItem) return
-
-      const updatedPath = [...parentPath, targetItem.TAG_NO]
-      targetItem.path = updatedPath
-      if (newParentIdx !== undefined) {
-        targetItem.PRNT_TAG_IDX = newParentIdx
-      }
-
-      const children = currentTargetRef.value.filter(item => item.PRNT_TAG_IDX === targetTagIdx)
-      children.forEach(child => updatePathRecursive(child.TAG_IDX, updatedPath))
-    }
-
-    // 이동 대상 데이터 업데이트
-    updatePathRecursive(movingNode.data.TAG_IDX, newParentData.path, newParentData.TAG_IDX)
-
-    // rowData 상태 업데이트 및 setGridOption으로 재렌더링
-    currentTargetRef.value = [...currentTargetRef.value]
-    currentGridApi.setGridOption('rowData', currentTargetRef.value)
-  }
-
-  const emitSelectedPBSData = api => {
-    if (!props.fn_filterFromPBS || !api) return
-
-    const selectedNodes = api.getSelectedNodes()
-    if (!selectedNodes.length) {
-      props.fn_filterFromPBS(false, [], null)
-      return
-    }
-
-    const sendDataMap = new Map()
-    let isRoot = false
-    let rootId = null
-
-    selectedNodes.forEach(node => {
-      if (!node.data) return
-
-      if (!node.data.PRNT_TAG_IDX) isRoot = true
-      if (!rootId && node.data?.path?.[0]) rootId = node.data.path[0]
-
-      if (node.data.TAG_IDX && !sendDataMap.has(node.data.TAG_IDX)) {
-        sendDataMap.set(node.data.TAG_IDX, { TAG_IDX: node.data.TAG_IDX, CODE: node.data.CODE })
-      }
-
-      node.allLeafChildren?.forEach(n => {
-        if (n.data?.TAG_IDX && !sendDataMap.has(n.data.TAG_IDX)) {
-          sendDataMap.set(n.data.TAG_IDX, { TAG_IDX: n.data.TAG_IDX, CODE: node.data.CODE })
-        }
-      })
-    })
-
-    const sendData = Array.from(sendDataMap.values())
-    props.fn_filterFromPBS(isRoot, sendData, rootId)
-  }
-
   const onCellClicked = event => {
     const node = event.node
     const headerName = event.colDef.headerName
-
     if (headerName === 'HASOBJECT') {
       const cellElement = event.event.target.closest('.ag-cell')
       if (cellElement) {
@@ -580,16 +481,27 @@
       }
     }
 
-    if (!isMultiSelect.value) {
-      event.api.deselectAll()
-      node.setSelected(true)
-      emitSelectedPBSData(event.api)
-    }
+    const isRoot = !node.data.PRNT_TAG_IDX ? true : false
+    const rootId = node.data?.path?.[0]
+    const sendData = [{ TAG_IDX: node.data.TAG_IDX, CODE: node.data.CODE }]
+    node.allLeafChildren?.forEach(n => {
+      if (n.data?.TAG_IDX) sendData.push({ TAG_IDX: n.data.TAG_IDX, CODE: node.data.CODE })
+    })
+    if (props.fn_filterFromPBS) props.fn_filterFromPBS(isRoot, sendData, rootId)
   }
 
+  // 싱글 선택 및 키보드(↑/↓) 이동 시에도 이벤트를 감지할 수 있도록 수정
   const onSelectionChanged = event => {
-    if (isMultiSelect.value) {
-      emitSelectedPBSData(event.api)
+    const selectedNodes = event.api.getSelectedNodes()
+    if (selectedNodes.length > 0) {
+      const node = selectedNodes[0]
+      if (!node.data) return
+
+      const isRoot = !node.data.PRNT_TAG_IDX ? true : false
+      const rootId = node.data?.path?.[0]
+      const sendData = [node.data.TAG_IDX]
+      node.allLeafChildren?.forEach(n => (n.data?.TAG_IDX ? sendData.push(n.data?.TAG_IDX) : null))
+      if (props.fn_filterFromPBS) props.fn_filterFromPBS(isRoot, sendData, rootId)
     }
   }
 
@@ -656,8 +568,9 @@
       const titleCode = errorInfo.code
         ? `[${safeTranslate('menu.worksheet.Error')}]`
         : `[${safeTranslate('menu.worksheet.Failed')}]`
+      const errorTitle = ''
       toast.fail({
-        title: `${titleCode}`,
+        title: `${titleCode} ${errorTitle}`,
         content: errorInfo.message,
         code: errorInfo.code,
         okText: safeTranslate('toast.button.Ok'),
@@ -730,8 +643,9 @@
         const titleCode = errorInfo.code
           ? `[${safeTranslate('menu.worksheet.Error')}]`
           : `[${safeTranslate('menu.worksheet.Failed')}]`
+        const errorTitle = ''
         toast.fail({
-          title: `${titleCode}`,
+          title: `${titleCode} ${errorTitle}`,
           content: errorInfo.message,
           code: errorInfo.code,
           okText: safeTranslate('toast.button.Ok'),
@@ -806,8 +720,9 @@
       const titleCode = errorInfo.code
         ? `[${safeTranslate('menu.worksheet.Error')}]`
         : `[${safeTranslate('menu.worksheet.Failed')}]`
+      const errorTitle = ''
       toast.fail({
-        title: `${titleCode}`,
+        title: `${titleCode} ${errorTitle}`,
         content: errorInfo.message,
         code: errorInfo.code,
         okText: safeTranslate('toast.button.Ok'),
@@ -853,8 +768,9 @@
         const titleCode = errorInfo.code
           ? `[${safeTranslate('menu.worksheet.Error')}]`
           : `[${safeTranslate('menu.worksheet.Failed')}]`
+        const errorTitle = ''
         toast.fail({
-          title: `${titleCode}`,
+          title: `${titleCode} ${errorTitle}`,
           content: errorInfo.message,
           code: errorInfo.code,
           okText: safeTranslate('toast.button.Ok'),
@@ -879,18 +795,19 @@
 
   const colDefs = ref([])
 
-  const COMMON_PROPS = computed(() => ({
+  const COMMON_PROPS = {
     onSelectionChanged: onSelectionChanged,
     getRowId: params => params.data?._id,
     autoGroupColumnDef: {
       headerName: 'PBS ID',
-      minWidth: 220,
-      rowDrag: true, // 그룹 컬럼에 드래그 핸들 추가
+      minWidth: 200,
       cellRendererParams: {
-        checkbox: true,
+        checkbox: false, // 다중 선택 방지 및 싱글 스타일을 위해 기본 체크박스 비활성화
         innerRenderer: params => {
+          // AG Grid 표준 트리 아이콘 스타일 적용
+          const iconClass = params.node.expanded ? 'ag-icon-tree-open' : 'ag-icon-tree-closed'
           return `
-            <i class="fas fa-folder${params.node.expanded ? '-open' : ''} text-warning me-1 fs-13px" style="line-height: inherit;"></i>
+            <span class="ag-icon ${iconClass} me-1" role="presentation"></span>
             <span class="text-primary fw-bolder">${params.value ?? ''}</span>
           `
         },
@@ -902,7 +819,8 @@
     enableGroupEdit: true,
     getDataPath: data => data.path,
     class: 'ag-theme-custom w-100 h-100',
-    rowSelection: isMultiSelect.value ? 'multiple' : 'single',
+    rowSelection: 'single', // 단일 선택 고정
+    rowMultiSelectWithClick: false, // 클릭에 의한 멀티 선택 해제
     loadingOverlayComponent: AggridLoadingOverlay,
     loadingOverlayComponentParams: {
       loadingMessage: 'Loading...',
@@ -916,24 +834,19 @@
     },
     suppressRowTransform: true,
     pagination: false,
-    
-    // ★ 유료(Enterprise) 버전 트리 드래그 옵션 적용 ★
-    rowDragManaged: true, // 자동 행 순서 제어 허용
-    suppressMoveWhenRowDragging: true, // 드래그 중 실시간 행 이동 애니메이션 억제 (라인 표시 전용)
-    
-    rowMultiSelectWithClick: false,
+    rowDragManaged: true,
     columnHoverHighlight: true,
-    suppressRowClickSelection: false,
+    suppressRowClickSelection: false, // Row 클릭 및 키보드로 행 이동/선택 가능
     suppressLastEmptyLineOnPaste: true,
     enableRangeSelection: false,
     undoRedoCellEditing: true,
     undoRedoCellEditingLimit: 20,
-  }))
+  }
 
-  const gridProps1 = computed(() => ({
-    ...COMMON_PROPS.value,
-    columnDefs: colDefs.value,
-    rowData: dataRef_1.value,
+  const gridProps1 = ref({
+    ...COMMON_PROPS,
+    columnDefs: colDefs,
+    rowData: dataRef_1,
     defaultColDef: {
       editable: false,
       filter: 'agMultiColumnFilter',
@@ -942,7 +855,9 @@
         filters: [
           {
             filter: 'agTextColumnFilter',
-            filterParams: { buttons: ['reset'] },
+            filterParams: {
+              buttons: ['reset'],
+            },
           },
           {
             filter: 'agSetColumnFilter',
@@ -958,28 +873,29 @@
           },
           {
             filter: 'AgCustomFilter',
-            filterParams: { buttons: ['reset'] },
+            filterParams: {
+              buttons: ['reset'],
+            },
           },
         ],
       },
     },
-  }))
+  })
 
-  const gridProps2 = computed(() => ({
-    ...COMMON_PROPS.value,
-    columnDefs: colDefs.value,
-    rowData: dataRef_2.value,
+  const gridProps2 = ref({
+    ...COMMON_PROPS,
+    columnDefs: colDefs,
+    rowData: dataRef_2,
     defaultColDef: {
       editable: false,
     },
-  }))
+  })
 
   const gridEvents1 = {
     gridReady: params => (gridRef_1.value = params.api),
     modelUpdated: params => params.api.refreshCells({ force: true }),
     cellClicked: onCellClicked,
     cellValueChanged: onCellValueChanged,
-    rowDragEnd: onRowDragEnd,
   }
 
   const gridEvents2 = {
@@ -987,7 +903,6 @@
     modelUpdated: params => params.api.refreshCells({ force: true }),
     cellClicked: onCellClicked,
     cellValueChanged: onCellValueChanged,
-    rowDragEnd: onRowDragEnd,
   }
   //#endregion AG Grid Define
 
@@ -1011,16 +926,19 @@
 </script>
 
 <style scoped lang="scss">
+  /* 활성화 탭 */
   .custom-nav-pbs.nav-pills .nav-link.active {
     background-color: white;
   }
 
+  /* AG Grid HASOBJECT Custom Checkbox */
   .custom-form-check-input-pbs.form-check-input {
     background-color: var(--ag-checkbox-unchecked-background-color);
     border: solid var(--ag-checkbox-border-width) var(--ag-checkbox-unchecked-border-color);
     border-radius: initial;
   }
 
+  /* AG Grid HASOBJECT Custom Checkbox : checked */
   .custom-form-check-input-pbs.form-check-input:checked {
     background-color: var(--ag-checkbox-checked-background-color);
     border-color: var(--ag-checkbox-checked-border-color);
